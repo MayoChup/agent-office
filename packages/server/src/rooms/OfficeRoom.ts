@@ -725,8 +725,11 @@ Kalau tugas ini ternyata memerlukan salah satu hal tersebut, hentikan, tandai bl
         this.state.officeTime = new Date().toISOString();
         const now = Date.now();
 
-        // Jadwal berpikir.
-        for (const m of this.members.values()) {
+        // Jadwal berpikir. Agen yang sedang disapa Pak Rico didahulukan.
+        const queue = Array.from(this.members.values()).sort(
+            (a, b) => Number(b.inbox.some((i) => i.fromOwner)) - Number(a.inbox.some((i) => i.fromOwner))
+        );
+        for (const m of queue) {
             if (m.thinking || now < m.nextThinkAt) continue;
             const hasOwnerMsg = m.inbox.some((i) => i.fromOwner);
             // Saat bekerja di tugas nyata, agen fokus (tidak memakai kuota) kecuali disapa pemilik.
@@ -744,7 +747,7 @@ Kalau tugas ini ternyata memerlukan salah satu hal tersebut, hentikan, tandai bl
                     const st = this.state.agents.get(m.id);
                     if (st) { st.action = 'sleep'; st.thought = 'Kuota AI gratis hari ini habis. Lanjut besok 😴'; }
                 }
-                m.nextThinkAt = now + (this.llm.remainingToday() <= 0 ? 30 * 60_000 : 30_000);
+                m.nextThinkAt = now + (this.llm.remainingToday() <= 0 ? 30 * 60_000 : hasOwnerMsg ? 3_000 : 30_000);
                 continue;
             }
             this.think(m).catch(() => undefined);
