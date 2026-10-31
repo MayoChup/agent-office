@@ -89,15 +89,21 @@ ssh -L 3000:localhost:3000 kantor@IP_VPS
 
 Biarkan jendela itu terbuka, lalu buka **http://localhost:3000** di browser.
 
-## 7. Update ke versi terbaru
+## 7. Update otomatis dari GitHub
+
+VPS mengecek GitHub setiap 3 menit. Kalau ada versi baru, VPS mengunduh dan memasangnya sendiri, lalu mengirim kabar ke Telegram kamu lewat bot Joni. Kalau versi baru gagal jalan, VPS otomatis kembali ke versi lama.
 
 ```bash
-cd ~/kantor-virtual
-curl -fsSL https://github.com/MayoChup/agent-office/releases/download/kantor-latest/kantor-virtual-linux-x64.tar.gz | tar xz
-systemctl --user restart kantor-virtual
+cp ~/kantor-virtual/kantor-update.service ~/kantor-virtual/kantor-update.timer ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now kantor-update.timer
+systemctl --user list-timers | grep kantor
 ```
 
-`kantor.config.json`, `.env`, dan folder `data/` tidak tertimpa saat update.
+- Cek sekarang juga (tanpa menunggu 3 menit): `systemctl --user start kantor-update`
+- Log update: `journalctl --user -u kantor-update -n 30`
+- `kantor.config.json`, `.env`, dan folder `data/` tidak pernah tertimpa.
+- VPS yang **menarik** update dari GitHub, jadi tidak ada kunci VPS yang disimpan di GitHub.
 
 ---
 

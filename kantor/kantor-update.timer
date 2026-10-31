@@ -1,0 +1,10 @@
+[Unit]
+Description=Cek update Kantor Virtual setiap 3 menit
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=3min
+RandomizedDelaySec=20s
+
+[Install]
+WantedBy=timers.target

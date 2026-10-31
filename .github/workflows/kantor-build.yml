@@ -52,6 +52,8 @@ jobs:
           cp kantor/env.example release/.env.example
           cp kantor/kantor-virtual.service release/
           cp kantor/README-KANTOR.md release/
+          cp kantor/kantor-update.sh kantor/kantor-update.service kantor/kantor-update.timer release/
+          chmod +x release/kantor-update.sh
           cd release
           npm init -y > /dev/null
           bash ../kantor/ci-run.sh "sqlite3" npm install sqlite3@5.1.7 --omit=dev --no-audit --no-fund

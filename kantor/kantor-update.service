@@ -1,0 +1,6 @@
+[Unit]
+Description=Cek & pasang update Kantor Virtual dari GitHub
+
+[Service]
+Type=oneshot
+ExecStart=%h/kantor-virtual/kantor-update.sh
