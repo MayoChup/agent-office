@@ -1,0 +1,18 @@
+{
+  "officeName": "Kantor Virtual Pak Rico",
+  "ownerName": "Pak Rico",
+  "agents": {
+    "default": { "name": "Joni", "role": "Kepala Kantor" },
+    "keuangan": { "name": "Uang", "role": "Divisi Keuangan" },
+    "eca": { "name": "Eca", "role": "Editor Excel & Spreadsheet" }
+  },
+  "maxAgents": 8,
+  "model": "auto",
+  "thinkIntervalMinutes": 10,
+  "dailyRequestLimit": 900,
+  "perMinuteLimit": 12,
+  "allowAutonomousTasks": true,
+  "dailyAutonomousTaskLimit": 3,
+  "dailyHireProposalLimit": 1,
+  "protectedProfiles": ["keuangan"]
+}

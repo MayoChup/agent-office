@@ -25,12 +25,30 @@ function resolveWsEndpoint(): string {
     if (globalEndpoint && globalEndpoint.trim()) return globalEndpoint.trim();
     if (typeof window !== 'undefined') {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        return `${protocol}//${window.location.hostname}:3000`;
+        // Mode pengembangan (vite di 5173) → server di 3000. Selain itu: server yang sama dengan halaman.
+        if (window.location.port === '5173') return `${protocol}//${window.location.hostname}:3000`;
+        return `${protocol}//${window.location.host}`;
     }
     return 'ws://localhost:3000';
 }
 
+/** Posisi meja (piksel, pojok kiri atas). Harus sama dengan server/src/kantor/layout.ts. */
+const DESK_SLOTS: Array<[number, number]> = [
+    [64, 240], [136, 240],
+    [64, 320], [136, 320],
+    [64, 400], [136, 400], [208, 400],
+    [64, 480], [136, 480], [208, 480]
+];
+const SKINS = 6;
+
+const EMOTES: Record<string, string> = {
+    work: '💻', talk: '💬', idle: '😌', walk: '🚶', think: '💡',
+    blocked: '⚠️', review: '📝', queued: '⏳', done: '✅', sleep: '😴', use_tool: '🔧'
+};
+const STICKY_EMOTES = new Set(['work', 'blocked', 'review', 'queued', 'sleep', 'think']);
+
 export class OfficeScene extends Phaser.Scene {
+    private deskLabels: Phaser.GameObjects.Text[] = [];
     private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
     private room?: Colyseus.Room;
     private agentSprites: Map<string, Phaser.GameObjects.Container> = new Map();
@@ -50,39 +68,32 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     preload() {
-        this.load.spritesheet('char_0', '/assets/characters/char_0.png', {
-            frameWidth: 16,
-            frameHeight: 32
-        });
-        this.load.spritesheet('char_1', '/assets/characters/char_1.png', {
-            frameWidth: 16,
-            frameHeight: 32
-        });
+        for (let i = 0; i < SKINS; i++) {
+            this.load.spritesheet(`char_${i}`, `/assets/characters/char_${i}.png`, {
+                frameWidth: 16,
+                frameHeight: 32
+            });
+        }
     }
 
     create() {
         try {
             console.log("Phaser create() started");
-            this.statusText = this.add.text(10, 10, 'Colyseus Sync: Connecting...', { color: '#ffffaa', fontSize: '14px' });
+            this.statusText = this.add.text(10, 10, 'Menyambung ke kantor...', { color: '#ffffaa', fontSize: '14px' });
             this.statusText.setScrollFactor(0);
             this.statusText.setDepth(100);
 
             let hasAnims = false;
 
-            // Create animations for character 0
-            if (this.textures.exists('char_0')) {
+            // Animasi jalan untuk setiap karakter
+            for (let i = 0; i < SKINS; i++) {
+                const key = `char_${i}`;
+                if (!this.textures.exists(key)) continue;
                 const anims = this.anims;
-                anims.create({ key: 'char_0-walk-down', frames: anims.generateFrameNumbers('char_0', { start: 0, end: 2 }), frameRate: 8, repeat: -1 });
-                anims.create({ key: 'char_0-walk-up', frames: anims.generateFrameNumbers('char_0', { start: 7, end: 9 }), frameRate: 8, repeat: -1 });
-                anims.create({ key: 'char_0-walk-right', frames: anims.generateFrameNumbers('char_0', { start: 14, end: 16 }), frameRate: 8, repeat: -1 });
+                anims.create({ key: `${key}-walk-down`, frames: anims.generateFrameNumbers(key, { start: 0, end: 2 }), frameRate: 8, repeat: -1 });
+                anims.create({ key: `${key}-walk-up`, frames: anims.generateFrameNumbers(key, { start: 7, end: 9 }), frameRate: 8, repeat: -1 });
+                anims.create({ key: `${key}-walk-right`, frames: anims.generateFrameNumbers(key, { start: 14, end: 16 }), frameRate: 8, repeat: -1 });
                 hasAnims = true;
-            }
-            // Create animations for character 1
-            if (this.textures.exists('char_1')) {
-                const anims = this.anims;
-                anims.create({ key: 'char_1-walk-down', frames: anims.generateFrameNumbers('char_1', { start: 0, end: 2 }), frameRate: 8, repeat: -1 });
-                anims.create({ key: 'char_1-walk-up', frames: anims.generateFrameNumbers('char_1', { start: 7, end: 9 }), frameRate: 8, repeat: -1 });
-                anims.create({ key: 'char_1-walk-right', frames: anims.generateFrameNumbers('char_1', { start: 14, end: 16 }), frameRate: 8, repeat: -1 });
             }
 
             console.log("Animations created: ", hasAnims);
@@ -144,9 +155,9 @@ export class OfficeScene extends Phaser.Scene {
             g.fillRect(350, 410, 4, 40);
 
             // Room labels
-            this.add.text(132, 46, '🏢 Meeting Room', { fontSize: '10px', color: '#b8a9d4' }).setOrigin(0.5);
-            this.add.text(380, 46, '💡 Collab Area', { fontSize: '10px', color: '#e8a87c' }).setOrigin(0.5);
-            this.add.text(438, 364, '☕ Coffee & Pantry', { fontSize: '10px', color: '#7fcdaa' }).setOrigin(0.5);
+            this.add.text(132, 46, '🏢 Ruang Rapat', { fontSize: '10px', color: '#b8a9d4' }).setOrigin(0.5);
+            this.add.text(380, 46, '💡 Area Santai', { fontSize: '10px', color: '#e8a87c' }).setOrigin(0.5);
+            this.add.text(438, 364, '☕ Pantry', { fontSize: '10px', color: '#7fcdaa' }).setOrigin(0.5);
 
             // ═══════════════════════════════════════════
             //  MEETING ROOM FURNITURE
@@ -276,12 +287,10 @@ export class OfficeScene extends Phaser.Scene {
                 g.fillCircle(x + 22, y + 38, 6);
 
                 // Label
-                this.add.text(x + 28, y - 6, label, { fontSize: '8px', color: '#a0a0c0' }).setOrigin(0.5);
+                return this.add.text(x + 28, y - 6, label, { fontSize: '8px', color: '#a0a0c0' }).setOrigin(0.5);
             };
 
-            drawWorkstation(64, 240, '💻 Alice\'s Desk', true);
-            drawWorkstation(64, 320, '💻 Bob\'s Desk', true);
-            drawWorkstation(64, 400, '💻 Vacant', false);
+            this.deskLabels = DESK_SLOTS.map(([dx, dy]) => drawWorkstation(dx, dy, 'Meja kosong', false));
 
             // ═══════════════════════════════════════════
             //  COFFEE & PANTRY AREA
@@ -505,49 +514,62 @@ export class OfficeScene extends Phaser.Scene {
         try {
             console.log("Connecting to Colyseus...");
             const wsEndpoint = resolveWsEndpoint();
-            this.statusText.setText(`Colyseus Sync: Connecting to ${wsEndpoint}...`).setColor('#ffffaa');
+            this.statusText.setText('Menyambung ke kantor...').setColor('#ffffaa');
             const client = new Colyseus.Client(wsEndpoint);
             this.room = await client.joinOrCreate('office');
 
             console.log("Room joined successfully!", this.room.sessionId);
-            this.statusText.setText('Colyseus Sync: Connected (Waiting for state...)').setColor('#aaffaa');
+            this.statusText.setText('Tersambung, memuat kantor...').setColor('#aaffaa');
+
+            activeRoom = this.room as Colyseus.Room<OfficeState>;
+            // Daftarkan semua pesan SEBELUM state pertama datang, supaya tidak ada yang terlewat.
+            // Bind chat bus
+            this.room.onMessage('chat', (message: any) => {
+                eventBus.dispatchEvent(new CustomEvent('chat-message', { detail: message }));
+            });
+            this.room.onMessage('highlight-event', (message: any) => {
+                eventBus.dispatchEvent(new CustomEvent('highlight-event', { detail: message }));
+                if (this.cinematicMode && message?.agentId) {
+                    this.focusAgentTemporarily(message.agentId);
+                }
+            });
+            this.room.onMessage('scenario-event', (message: any) => {
+                eventBus.dispatchEvent(new CustomEvent('scenario-event', { detail: message }));
+            });
+            this.room.onMessage('relationship-update', (message: any) => {
+                eventBus.dispatchEvent(new CustomEvent('relationship-update', { detail: message }));
+            });
+            this.room.onMessage('usage', (message: any) => {
+                eventBus.dispatchEvent(new CustomEvent('usage', { detail: message }));
+            });
+            this.room.onMessage('office-info', (message: any) => {
+                eventBus.dispatchEvent(new CustomEvent('office-info', { detail: message }));
+            });
+            this.room.onMessage('tasks-sync', (message: any) => {
+                eventBus.dispatchEvent(new CustomEvent('tasks-sync', { detail: message }));
+            });
+            this.room.onMessage('layout-sync', (message: any) => {
+                this.layoutItems = Array.isArray(message?.layout) ? message.layout : [];
+                this.renderCustomLayout(this.layoutItems);
+                eventBus.dispatchEvent(new CustomEvent('layout-sync', { detail: { items: this.layoutItems } }));
+            });
+
 
             // Wait for the first actual state payload from the server before reading
             this.room.onStateChange.once((state: any) => {
-                activeRoom = this.room as Colyseus.Room<OfficeState>;
                 console.log("First state payload arrived!", state.toJSON());
                 console.log("Agents map size:", state.agents?.size);
-                this.statusText.setText('Colyseus Sync: Active!').setColor('#00ff00');
-
-                // Bind chat bus
-                this.room!.onMessage('chat', (message: any) => {
-                    eventBus.dispatchEvent(new CustomEvent('chat-message', { detail: message }));
-                });
-                this.room!.onMessage('highlight-event', (message: any) => {
-                    eventBus.dispatchEvent(new CustomEvent('highlight-event', { detail: message }));
-                    if (this.cinematicMode && message?.agentId) {
-                        this.focusAgentTemporarily(message.agentId);
-                    }
-                });
-                this.room!.onMessage('scenario-event', (message: any) => {
-                    eventBus.dispatchEvent(new CustomEvent('scenario-event', { detail: message }));
-                });
-                this.room!.onMessage('relationship-update', (message: any) => {
-                    eventBus.dispatchEvent(new CustomEvent('relationship-update', { detail: message }));
-                });
-                this.room!.onMessage('layout-sync', (message: any) => {
-                    this.layoutItems = Array.isArray(message?.layout) ? message.layout : [];
-                    this.renderCustomLayout(this.layoutItems);
-                    eventBus.dispatchEvent(new CustomEvent('layout-sync', { detail: { items: this.layoutItems } }));
-                });
+                this.statusText.setText('🟢 Kantor aktif').setColor('#00ff00');
 
                 state.agents.onAdd((agent: AgentState, sessionId: string) => {
                     console.log(`[Colyseus] Agent added: ${agent.name} at (${agent.x}, ${agent.y})`);
                     const container = this.add.container(agent.x * 16, agent.y * 16);
 
                     let sprite;
-                    let charKey = 'char_0';
-                    if (agent.name.includes('Bob')) charKey = 'char_1';
+                    const charKey = `char_${Math.abs(Number(agent.skin) || 0) % SKINS}`;
+                    const deskLabel = this.deskLabels[Number(agent.desk) || 0];
+                    deskLabel?.setText(`💻 ${agent.name}`).setColor('#e0e0ff');
+                    eventBus.dispatchEvent(new CustomEvent('agents-changed'));
 
                     if (this.textures.exists(charKey)) {
                         sprite = this.add.sprite(0, -8, charKey, 0);
@@ -611,6 +633,10 @@ export class OfficeScene extends Phaser.Scene {
                     let prevX = agent.x;
                     let prevY = agent.y;
                     let lastAction = '';
+                    let lastThought = '';
+                    let lastName = agent.name;
+                    let emoteHide: Phaser.Time.TimerEvent | null = null;
+                    let thoughtHide: Phaser.Time.TimerEvent | null = null;
 
                     agent.onChange(() => {
                         this.tweens.add({
@@ -635,28 +661,40 @@ export class OfficeScene extends Phaser.Scene {
                             else { s.stop(); }
                         }
 
-                        // --- EMOTE BUBBLES based on action ---
-                        const emoteMap: Record<string, string> = {
-                            'work': '💻', 'talk': '💬', 'idle': '😌',
-                            'use_tool': '🔧', 'move': '🚶', 'think': '💡'
-                        };
-                        const emote = emoteMap[agent.action] || '';
-                        if (emote && agent.action !== lastAction) {
-                            emoteBubble.setText(emote);
-                            emoteBubble.setVisible(true);
-                            // Auto-hide after 3s
-                            this.time.delayedCall(3000, () => emoteBubble.setVisible(false));
+                        // Nama berubah (misalnya nama panggilan diganti)
+                        if (agent.name !== lastName) {
+                            lastName = agent.name;
+                            label.setText(agent.name);
+                            this.deskLabels[Number(agent.desk) || 0]?.setText(`💻 ${agent.name}`);
+                            eventBus.dispatchEvent(new CustomEvent('agents-changed'));
                         }
 
-                        // Thought bubble
-                        if (agent.thought && agent.thought !== '') {
+                        // --- Emoji status di atas kepala ---
+                        const emote = EMOTES[agent.action] || '';
+                        if (agent.action !== lastAction) {
+                            emoteHide?.remove();
+                            emoteHide = null;
+                            if (emote && agent.action !== 'walk') {
+                                emoteBubble.setText(emote);
+                                emoteBubble.setVisible(true);
+                                if (!STICKY_EMOTES.has(agent.action)) {
+                                    emoteHide = this.time.delayedCall(4000, () => emoteBubble.setVisible(false));
+                                }
+                            } else {
+                                emoteBubble.setVisible(false);
+                            }
+                        }
+
+                        // Gelembung pikiran: hanya saat isinya berubah
+                        if (agent.thought && agent.thought !== lastThought) {
+                            thoughtHide?.remove();
                             thoughtBubble.setText(agent.thought);
                             thoughtBubble.setVisible(true);
-                            this.time.delayedCall(6000, () => thoughtBubble.setVisible(false));
+                            thoughtHide = this.time.delayedCall(9000, () => thoughtBubble.setVisible(false));
                         }
 
                         // --- SYSTEM LOG EVENT ---
-                        if (agent.action !== lastAction || agent.thought !== '') {
+                        if ((agent.action !== lastAction && agent.action !== 'walk') || agent.thought !== lastThought) {
                             eventBus.dispatchEvent(new CustomEvent('activity-log', {
                                 detail: {
                                     agent: agent.name,
@@ -679,12 +717,15 @@ export class OfficeScene extends Phaser.Scene {
                         }));
 
                         lastAction = agent.action;
+                        lastThought = agent.thought;
                         prevX = agent.x;
                         prevY = agent.y;
                     });
                 });
 
                 state.agents.onRemove((agent: AgentState, sessionId: string) => {
+                    this.deskLabels[Number(agent.desk) || 0]?.setText('Meja kosong').setColor('#a0a0c0');
+                    eventBus.dispatchEvent(new CustomEvent('agents-changed'));
                     const sprite = this.agentSprites.get(sessionId);
                     if (sprite) {
                         sprite.destroy();
@@ -696,7 +737,7 @@ export class OfficeScene extends Phaser.Scene {
         } catch (e) {
             console.error(e);
             const wsEndpoint = resolveWsEndpoint();
-            this.statusText.setText(`Colyseus Sync: Failed (${wsEndpoint})`).setColor('#ffaaaa');
+            this.statusText.setText(`Gagal tersambung ke kantor (${wsEndpoint}). Muat ulang halaman.`).setColor('#ffaaaa');
         }
     }
 

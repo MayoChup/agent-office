@@ -1,48 +1,58 @@
+import fs from 'fs';
+import path from 'path';
 import express from 'express';
-import { Server } from 'colyseus';
+import { Server, matchMaker } from 'colyseus';
 import { createServer } from 'http';
 import { OfficeRoom } from './rooms/OfficeRoom';
+import { loadConfig } from './kantor/config';
 
-// Setup Express
+const config = loadConfig();
+OfficeRoom.config = config;
+
 const app = express();
 app.use(express.json());
 
-// Basic REST API for Office Management
-app.get('/api/offices', (req, res) => {
-    res.json({ status: 'ok', offices: [] });
-});
-
-app.post('/api/vote-chaos', (req, res) => {
+// Status ringkas (dipakai juga untuk mengecek server hidup).
+app.get('/api/kantor/status', (_req, res) => {
     const room = OfficeRoom.getActiveRoom();
     if (!room) {
-        res.status(503).json({ ok: false, error: 'No active office room.' });
+        res.status(503).json({ ok: false, error: 'Kantor belum siap.' });
         return;
     }
-    const { event, voterId } = req.body || {};
-    const result = room.registerAudienceVote(event || 'server_outage', voterId);
-    res.json({ ok: true, ...result });
+    res.json({ ok: true, ...room.statusPayload() });
 });
 
-app.get('/api/episode-recap', (req, res) => {
-    const room = OfficeRoom.getActiveRoom();
-    if (!room) {
-        res.status(503).json({ ok: false, error: 'No active office room.' });
-        return;
-    }
-    res.json({ ok: true, recap: room.getEpisodeRecap() });
-});
+// Tampilan kantor (hasil build UI) disajikan dari server yang sama.
+const uiCandidates = [config.uiDistDir, path.join(__dirname, 'ui'), path.resolve(__dirname, '../../ui/dist')];
+const uiDir = uiCandidates.find((dir) => fs.existsSync(path.join(dir, 'index.html')));
+if (uiDir) {
+    app.use(express.static(uiDir));
+    app.get('*', (req, res, next) => {
+        if (req.path.startsWith('/api/') || req.path.startsWith('/matchmake')) return next();
+        res.sendFile(path.join(uiDir, 'index.html'));
+    });
+    console.log(`[Kantor] Tampilan disajikan dari ${uiDir}`);
+} else {
+    console.warn('[Kantor] Folder tampilan (ui) tidak ditemukan. Hanya server yang berjalan.');
+}
 
-// Create HTTP and Colyseus server
 const httpServer = createServer(app);
-const colyseusServer = new Server({
-    server: httpServer,
+const gameServer = new Server({ server: httpServer });
+gameServer.define('office', OfficeRoom);
+
+gameServer.listen(config.port, config.host).then(async () => {
+    // Kantor langsung dibuka, walau belum ada yang menonton, supaya agen tetap "hidup".
+    await matchMaker.createRoom('office', {});
+    console.log(`[Kantor] Buka http://${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.port}`);
+    if (config.host !== '127.0.0.1' && config.host !== 'localhost') {
+        console.warn('[Kantor] PERINGATAN: server tidak hanya mendengarkan localhost. Pastikan port ini TIDAK terbuka ke internet.');
+    }
 });
 
-// Define Rooms
-colyseusServer.define('office', OfficeRoom);
-
-// Start listening
-const PORT = Number(process.env.PORT || 3000);
-colyseusServer.listen(PORT).then(() => {
-    console.log(`[Server] AgentOffice Engine listening on ws://localhost:${PORT}`);
-});
+const shutdown = async () => {
+    console.log('[Kantor] Mematikan...');
+    try { await gameServer.gracefullyShutdown(false); } catch { /* */ }
+    process.exit(0);
+};
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);

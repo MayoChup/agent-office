@@ -13,9 +13,10 @@ function cosineSimilarity(a: number[], b: number[]): number {
 
 export class MemoryStore {
     private db?: Database;
-    private ollamaUrl: string;
+    private ollamaUrl: string | null;
 
-    constructor(ollamaUrl: string = 'http://localhost:11434') {
+    /** ollamaUrl null = tanpa embedding (tidak memanggil Ollama sama sekali). */
+    constructor(ollamaUrl: string | null = null) {
         this.ollamaUrl = ollamaUrl;
     }
 
@@ -75,6 +76,7 @@ export class MemoryStore {
     // --- Embedding Generation ---
 
     private async generateEmbedding(text: string): Promise<number[] | null> {
+        if (!this.ollamaUrl) return null;
         try {
             const res = await fetch(`${this.ollamaUrl}/api/embeddings`, {
                 method: 'POST',

@@ -74,7 +74,7 @@ export function SystemLog() {
             zIndex: 10
         }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <h3 style={{ margin: 0, fontSize: '13px' }}>📊 System Activity Log</h3>
+                <h3 style={{ margin: 0, fontSize: '13px' }}>📊 Log Aktivitas</h3>
                 <button onClick={() => setIsOpen(false)} style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer', fontSize: '14px' }}>✕</button>
             </div>
 

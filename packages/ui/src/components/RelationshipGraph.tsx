@@ -31,8 +31,8 @@ export function RelationshipGraph() {
     return (
         <FloatingPanel
             id="relationship-graph"
-            title="Relationship Graph"
-            subtitle="Alliances and rivalries"
+            title="Hubungan Tim"
+            subtitle="Siapa sering ngobrol dengan siapa"
             width={300}
             defaultDock="right"
             defaultY={220}

@@ -95,7 +95,7 @@ export function LayoutEditor() {
             <button
                 onClick={() => setIsOpen(true)}
                 style={{
-                    position: 'absolute', left: 20, bottom: 80,
+                    position: 'absolute', left: 300, bottom: 20,
                     padding: '8px 16px', borderRadius: 8, border: 'none',
                     backgroundColor: '#6c5ce7', color: 'white',
                     cursor: 'pointer', fontSize: '12px', fontWeight: 'bold',
@@ -103,7 +103,7 @@ export function LayoutEditor() {
                     zIndex: 10
                 }}
             >
-                🏗️ Layout Editor
+                🏗️ Atur Tata Letak
             </button>
         );
     }

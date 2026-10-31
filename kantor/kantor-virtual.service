@@ -1,0 +1,14 @@
+[Unit]
+Description=Kantor Virtual (tampilan pixel untuk tim Hermes)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=%h/kantor-virtual
+ExecStart=/usr/bin/node %h/kantor-virtual/kantor-server.js
+Environment=NODE_ENV=production
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

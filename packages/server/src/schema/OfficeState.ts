@@ -3,6 +3,9 @@ import { Schema, MapSchema, type } from '@colyseus/schema';
 export class AgentState extends Schema {
     @type('string') id: string;
     @type('string') name: string;
+    @type('string') role: string;
+    @type('number') desk: number;
+    @type('number') skin: number;
     @type('number') x: number;
     @type('number') y: number;
     @type('string') direction: 'up' | 'down' | 'left' | 'right';
@@ -18,6 +21,9 @@ export class AgentState extends Schema {
         super();
         this.id = id;
         this.name = name;
+        this.role = '';
+        this.desk = 0;
+        this.skin = 0;
         this.x = 0;
         this.y = 0;
         this.direction = 'down';

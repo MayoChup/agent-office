@@ -36,8 +36,8 @@ export function HighlightsFeed() {
     return (
         <FloatingPanel
             id="highlight-feed"
-            title="Highlight Timeline"
-            subtitle="Live dramatic moments"
+            title="Sorotan"
+            subtitle="Kejadian penting di kantor"
             width={320}
             defaultDock="right"
             defaultY={430}
