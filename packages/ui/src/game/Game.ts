@@ -174,7 +174,11 @@ export class OfficeScene extends Phaser.Scene {
         const availW = Math.max(200, this.scale.width - padLeft - padRight);
         const availH = Math.max(200, this.scale.height - padTop - padBottom);
         const worldW = this.layout.cols * T, worldH = this.layout.rows * T;
-        const zoom = Phaser.Math.Clamp(Math.min(availW / worldW, availH / worldH), 0.6, 4);
+        // Di HP (layar tegak) kantor terlalu kecil kalau dimuat penuh: perbesar, sisanya digeser jari.
+        const fit = mobile && this.scale.height > this.scale.width
+            ? Math.min(availH / worldH, (availW / worldW) * 2.2)
+            : Math.min(availW / worldW, availH / worldH);
+        const zoom = Phaser.Math.Clamp(fit, 0.6, 4);
         cam.setZoom(zoom);
         const cx = worldW / 2 - (padLeft - padRight) / 2 / zoom;
         const cy = worldH / 2 - (padTop - padBottom) / 2 / zoom;
@@ -243,7 +247,7 @@ export class OfficeScene extends Phaser.Scene {
                 if (isWall(x + 1, y)) mask |= 2;
                 if (isWall(x, y + 1)) mask |= 4;
                 if (isWall(x - 1, y)) mask |= 8;
-                const img = this.add.image(x * T, (y + 1) * T, 'walls', mask).setOrigin(0, 1).setDepth((y + 1) * T);
+                const img = this.add.image(x * T, (y + 1) * T, 'walls', mask).setOrigin(0, 1).setDepth((y + 1) * T).setTint(WALL_TINT);
                 this.layoutObjects.push(img);
             }
         }
@@ -415,6 +419,8 @@ export class OfficeScene extends Phaser.Scene {
         });
     }
 }
+
+const WALL_TINT = 0xcdbfa8;
 
 export function setupPhaser(parentId: string) {
     const config: Phaser.Types.Core.GameConfig = {
