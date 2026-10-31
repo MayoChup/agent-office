@@ -67,9 +67,12 @@ jobs:
           cd release
           mkdir -p /tmp/fakehermes/profiles/keuangan
           echo "description: Divisi Keuangan Pribadi" > /tmp/fakehermes/profiles/keuangan/profile.yaml
-          HERMES_HOME=/tmp/fakehermes PORT=3999 node kantor-server.js > /tmp/smoke.log 2>&1 &
+          HERMES_HOME=/tmp/fakehermes KANTOR_PASSWORD=tes-rahasia PORT=3999 node kantor-server.js > /tmp/smoke.log 2>&1 &
           sleep 8
-          if ! curl -sf http://127.0.0.1:3999/api/kantor/status > /tmp/status.json || ! curl -sf http://127.0.0.1:3999/ | grep -qi "<html"; then
+          TOKEN=$(curl -sf -X POST -H 'Content-Type: application/json' -d '{"password":"tes-rahasia"}' http://127.0.0.1:3999/api/kantor/login | python3 -c 'import sys,json; print(json.load(sys.stdin)["token"])' || true)
+          NOAUTH=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3999/api/kantor/status)
+          if [ "$NOAUTH" != "401" ]; then echo "::error title=smoke test::status tanpa login harus 401, dapat $NOAUTH"; exit 1; fi
+          if [ -z "$TOKEN" ] || ! curl -sf -H "Authorization: Bearer $TOKEN" http://127.0.0.1:3999/api/kantor/status > /tmp/status.json || ! curl -sf http://127.0.0.1:3999/ | grep -qi "<html"; then
             msg="$(tail -40 /tmp/smoke.log | sed -e 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')"
             echo "::error title=smoke test::${msg}"
             exit 1

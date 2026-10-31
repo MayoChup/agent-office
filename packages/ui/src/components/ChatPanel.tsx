@@ -1,56 +1,71 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { eventBus } from '../events';
-import { getColyseusRoom } from '../game/Game';
+import React, { useEffect, useRef, useState } from 'react';
+import { useKantor, setChatOpen } from '../kantor/store';
+import { getRoom } from '../kantor/connection';
+import { Avatar } from './Avatar';
+import { Panel } from './Panel';
 
-export function ChatPanel() {
-    const [messages, setMessages] = useState<{ sender: string, text: string }[]>([
-        { sender: 'Kantor', text: 'Ngobrol santai dengan tim. Awali dengan @Nama untuk menyapa divisi tertentu (misal: @Eca halo!). Tanpa @, pesan diterima Kepala Kantor.' }
-    ]);
-    const [input, setInput] = useState('');
+export function ChatPanel({ onClose, prefill }: { onClose: () => void; prefill: string }) {
+    const chat = useKantor((s) => s.chat);
+    const agents = useKantor((s) => s.agents);
+    const owner = useKantor((s) => s.owner);
+    const [text, setText] = useState(prefill);
     const endRef = useRef<HTMLDivElement>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
 
-    useEffect(() => {
-        const handleChat = (e: any) => {
-            setMessages(prev => [...prev, e.detail].slice(-200));
-        };
-        eventBus.addEventListener('chat-message', handleChat);
-        return () => eventBus.removeEventListener('chat-message', handleChat);
-    }, []);
+    useEffect(() => { setChatOpen(true); return () => setChatOpen(false); }, []);
+    useEffect(() => { if (prefill) { setText(prefill); inputRef.current?.focus(); } }, [prefill]);
+    useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chat.length]);
 
-    useEffect(() => {
-        endRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages]);
-
-    const send = () => {
-        if (!input.trim()) return;
-        const room = getColyseusRoom();
-        if (room) {
-            room.send('chat', { text: input });
-            setInput('');
-        } else {
-            setMessages(prev => [...prev, { sender: 'System', text: 'Belum tersambung ke kantor. Tunggu sebentar lalu coba lagi.' }]);
-        }
+    const send = (e: React.FormEvent) => {
+        e.preventDefault();
+        const room = getRoom();
+        if (!text.trim() || !room) return;
+        room.send('chat', { text: text.trim() });
+        setText('');
     };
 
+    const isSystem = (sender: string) => /Kantor|Kanban|Papan/.test(sender);
+    const skinOf = (name: string) => agents.find((a) => a.name === name)?.skin;
+
     return (
-        <div style={{ position: 'absolute', right: 20, bottom: 20, width: 300, height: '42vh', zIndex: 5, boxSizing: 'border-box', backgroundColor: 'rgba(0,0,0,0.8)', color: 'white', padding: 16, borderRadius: 8, display: 'flex', flexDirection: 'column' }}>
-            <h3 style={{ margin: '0 0 10px 0', fontSize: '14px' }}>💬 Obrolan Kantor</h3>
-            <div style={{ flex: 1, overflowY: 'auto', fontSize: '14px', marginBottom: 10, paddingRight: 4 }}>
-                {messages.map((m, i) => (
-                    <p key={i} style={{ margin: '6px 0', lineHeight: '1.4' }}>
-                        <strong style={{ color: /Kantor|Kanban|Papan/.test(m.sender) ? '#00eeff' : '#aaffaa' }}>{m.sender}:</strong> {m.text}
-                    </p>
-                ))}
+        <Panel
+            title="💬 Obrolan Kantor"
+            sub="Ngobrol santai (AI gratis) — bukan perintah kerja"
+            onClose={onClose}
+            footer={
+                <form onSubmit={send}>
+                    <div className="mentions">
+                        {agents.map((a) => (
+                            <button type="button" key={a.id} className="mention" onClick={() => { setText(`@${a.name} `); inputRef.current?.focus(); }}>
+                                <Avatar skin={a.skin} size={20} />{a.name}
+                            </button>
+                        ))}
+                    </div>
+                    <div className="row">
+                        <input ref={inputRef} className="input" placeholder="Ketik pesan… (@Nama untuk divisi tertentu)" value={text} onChange={(e) => setText(e.target.value)} />
+                        <button className="btn primary" type="submit" disabled={!text.trim()}>Kirim</button>
+                    </div>
+                </form>
+            }
+        >
+            <div className="chat-list">
+                <div className="msg sys">Tanpa @, pesan diterima Kepala Kantor. Untuk perintah kerja, pakai Papan Tugas atau Telegram.</div>
+                {chat.map((m) => {
+                    const me = m.sender === owner;
+                    if (isSystem(m.sender)) return <div key={m.id} className="msg sys">{m.sender}: {m.text}</div>;
+                    const skin = skinOf(m.sender);
+                    return (
+                        <div key={m.id} className="row" style={{ alignItems: 'flex-end', justifyContent: me ? 'flex-end' : 'flex-start' }}>
+                            {!me && skin !== undefined && <Avatar skin={skin} size={26} />}
+                            <div className={`msg ${me ? 'me' : ''}`}>
+                                {!me && <div className="msg-sender">{m.sender}</div>}
+                                {m.text}
+                            </div>
+                        </div>
+                    );
+                })}
                 <div ref={endRef} />
             </div>
-            <input
-                type="text"
-                placeholder="Ketik pesan… (@Nama untuk divisi tertentu)"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && send()}
-                style={{ width: '100%', padding: '10px', boxSizing: 'border-box', background: '#333', color: 'white', border: '1px solid #444', borderRadius: 4, outline: 'none' }}
-            />
-        </div>
+        </Panel>
     );
 }

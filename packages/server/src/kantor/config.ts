@@ -19,6 +19,14 @@ export interface AgentOverride {
     persona?: string;
     /** Nomor karakter 0-5 (opsional). */
     skin?: number;
+    /** Masuk divisi mana (id divisi). Bawaan: dari nama profil "<divisi>-<nama>". */
+    division?: string;
+}
+
+export interface DivisionConfig {
+    name?: string;
+    icon?: string;
+    color?: string;
 }
 
 export interface KantorConfig {
@@ -34,7 +42,13 @@ export interface KantorConfig {
 
     /** Profil Hermes → tampilan di kantor. Kunci "default" adalah si Kepala. */
     agents: Record<string, AgentOverride>;
+    divisions: Record<string, DivisionConfig>;
     maxAgents: number;
+
+    /** Kata sandi untuk membuka kantor (wajib kalau dibuka dari luar VPS). */
+    password: string;
+    /** Asal halaman yang boleh mengakses API (misalnya https://kantor.vercel.app). "*" = semua. */
+    allowedOrigins: string[];
 
     // ── Otak gratis (OpenRouter :free) ──
     openRouterApiKey: string;
@@ -122,6 +136,9 @@ export function loadConfig(): KantorConfig {
         uiDistDir: env.KANTOR_UI_DIST || file.uiDistDir || path.resolve(__dirname, '../../../ui/dist'),
 
         agents,
+        divisions: file.divisions && typeof file.divisions === 'object' ? file.divisions : {},
+        password: env.KANTOR_PASSWORD || '',
+        allowedOrigins: String(env.KANTOR_ALLOWED_ORIGINS || file.allowedOrigins || '*').split(',').map((s: string) => s.trim()).filter(Boolean),
         maxAgents: num(env.KANTOR_MAX_AGENTS || file.maxAgents, 8),
 
         openRouterApiKey: env.OPENROUTER_API_KEY || '',

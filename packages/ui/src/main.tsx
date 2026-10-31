@@ -1,14 +1,14 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import './styles.css';
 import { App } from './App';
 import { setupPhaser } from './game/Game';
+import { startConnection } from './kantor/connection';
 
-// Start React UI overlay
 const rootElement = document.getElementById('ui-root');
 if (rootElement) {
-    const root = ReactDOM.createRoot(rootElement);
-    root.render(<App />);
+    ReactDOM.createRoot(rootElement).render(<App />);
 }
 
-// Start Phaser Game Engine
 setupPhaser('phaser-container');
+startConnection();

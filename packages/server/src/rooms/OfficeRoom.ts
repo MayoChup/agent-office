@@ -1,12 +1,13 @@
 import fs from 'fs';
 import path from 'path';
-import { Room, Client } from 'colyseus';
+import { Room, Client, ServerError } from 'colyseus';
 import { OfficeState } from '../schema/OfficeState';
 import { MemoryStore } from '../memory/MemoryStore';
 import { KantorConfig } from '../kantor/config';
+import { KantorAuth } from '../kantor/auth';
 import { FreeLlm, extractJson } from '../kantor/freeLlm';
 import { HermesBridge, HermesProfile, KanbanTask } from '../kantor/hermes';
-import { DESK_SEATS, DOOR, PLACE_LABELS, Spot, pickSpot } from '../kantor/layout';
+import { DOOR, PLACE_LABELS, Spot, pickSpot, buildLayout, groupDivisions, walkableGrid, findPath, OfficeLayout, DivisionInfo } from '../kantor/layout';
 
 /**
  * Kantor Virtual — versi yang tersambung ke Hermes.
@@ -45,6 +46,8 @@ interface Member {
     place: string;
     goal: Spot | null;
     talkTarget: string | null;
+    path: Spot[];
+    pathKey: string;
     work: WorkStatus;
     workTitle: string;
     flash: string;
@@ -77,6 +80,7 @@ const MAX_PARALLEL_THINK = 2;       // maksimal agen berpikir bersamaan
 export class OfficeRoom extends Room<OfficeState> {
     private static activeRoom: OfficeRoom | null = null;
     static config: KantorConfig;
+    static auth: KantorAuth;
 
     maxClients = 20;
 
@@ -87,7 +91,9 @@ export class OfficeRoom extends Room<OfficeState> {
     private sessionId = `session_${Date.now()}`;
 
     private members = new Map<string, Member>();
-    private deskMap: Record<string, number> = {};
+    private layout!: OfficeLayout;
+    private grid: boolean[][] = [];
+    private knownDivisions = new Map<string, DivisionInfo>();
     private thinkingNow = 0;
     private moveTick = 0;
 
@@ -132,7 +138,6 @@ export class OfficeRoom extends Room<OfficeState> {
         });
         this.hermes = new HermesBridge(this.cfg.hermesHome, this.cfg.kanbanDbPath, this.cfg.hermesBin);
 
-        this.deskMap = this.readJsonFile('kantor-desks.json', {});
         this.autonomy = this.readJsonFile('kantor-autonomy.json', { date: '', tasks: 0, hires: 0 });
 
         if (!this.llm.enabled) {
@@ -250,28 +255,12 @@ export class OfficeRoom extends Room<OfficeState> {
         return undefined;
     }
 
-    private allocateDesk(id: string): number {
-        if (this.deskMap[id] !== undefined && this.deskMap[id] < DESK_SEATS.length) {
-            const owner = Object.entries(this.deskMap).find(([other, d]) => d === this.deskMap[id] && other !== id && this.members.has(other));
-            if (!owner) return this.deskMap[id];
-        }
-        const used = new Set(Array.from(this.members.values()).map((m) => m.desk));
-        for (let i = 0; i < DESK_SEATS.length; i++) {
-            if (!used.has(i)) {
-                this.deskMap[id] = i;
-                this.writeJsonFile('kantor-desks.json', this.deskMap);
-                return i;
-            }
-        }
-        return 0;
-    }
-
     private async syncProfiles(initial: boolean) {
         let profiles: HermesProfile[] = this.hermes.listProfiles();
         if (profiles.length === 0 && initial) {
             console.warn(`[Kantor] Tidak menemukan Hermes di ${this.cfg.hermesHome}. Cek HERMES_HOME.`);
         }
-        const limit = Math.min(this.cfg.maxAgents, DESK_SEATS.length);
+        const limit = this.cfg.maxAgents;
         if (profiles.length > limit) {
             console.warn(`[Kantor] Ada ${profiles.length} divisi, yang ditampilkan hanya ${limit} (maxAgents).`);
             profiles = profiles.slice(0, limit);
@@ -299,16 +288,51 @@ export class OfficeRoom extends Room<OfficeState> {
                 const m = this.members.get(id)!;
                 this.members.delete(id);
                 this.state.removeAgent(id);
-                this.broadcast('chat', { sender: '🏢 Kantor', text: `${m.name} tidak lagi terdaftar sebagai divisi.` });
+                this.broadcast('chat', { sender: '🏢 Kantor', text: `${m.name} tidak lagi terdaftar di kantor.` });
             }
         }
+        this.rebuildLayout(initial);
         this.rebuildRelationshipGraph();
     }
 
+    /** Bangun ulang denah dari divisi yang ada. Mengumumkan divisi baru / yang dihapus. */
+    private rebuildLayout(initial: boolean) {
+        const list = Array.from(this.members.values()).map((m) => ({ id: m.id, name: m.name, role: m.role }));
+        const memberDivision: Record<string, string | undefined> = {};
+        for (const m of this.members.values()) memberDivision[m.id] = this.cfg.agents[m.id]?.division;
+        const divisions = groupDivisions(list, memberDivision, this.cfg.divisions);
+        const headName = this.members.get('default')?.name || 'Kepala';
+        const layout = buildLayout(list, divisions, headName);
+        if (this.layout && this.layout.revision === layout.revision) return;
+
+        if (!initial && this.layout) {
+            for (const d of divisions) {
+                if (!this.knownDivisions.has(d.id)) {
+                    this.broadcast('division-event', { type: 'added', division: d });
+                    this.emitHighlight('hiring', `Divisi baru: ${d.icon} ${d.name}`, `Ruangan ${d.name} sudah disiapkan di kantor.`, d.headId);
+                }
+            }
+            for (const [id, d] of this.knownDivisions) {
+                if (!divisions.some((x) => x.id === id)) {
+                    this.broadcast('division-event', { type: 'removed', division: d });
+                    this.emitHighlight('chaos', `Divisi ditutup: ${d.icon} ${d.name}`, `Ruangan ${d.name} dikosongkan.`);
+                }
+            }
+        }
+        this.knownDivisions = new Map(divisions.map((d) => [d.id, d]));
+        this.layout = layout;
+        this.grid = walkableGrid(layout);
+        for (const m of this.members.values()) { m.path = []; m.pathKey = ''; }
+        this.broadcast('office-layout', layout);
+    }
+
+    private seatOf(id: string): Spot {
+        return this.layout?.seats[id] || DOOR;
+    }
+
     private async addMember(p: HermesProfile, name: string, role: string, persona: string, skin: number | undefined, initial: boolean) {
-        const desk = this.allocateDesk(p.id);
-        const seat = DESK_SEATS[desk];
         const n = this.members.size;
+        const desk = n;
         const interval = this.cfg.thinkIntervalMinutes * 60_000;
 
         const member: Member = {
@@ -324,6 +348,8 @@ export class OfficeRoom extends Room<OfficeState> {
             place: 'desk',
             goal: null,
             talkTarget: null,
+            path: [],
+            pathKey: '',
             work: null,
             workTitle: '',
             flash: '',
@@ -337,7 +363,7 @@ export class OfficeRoom extends Room<OfficeState> {
         st.role = role;
         st.desk = desk;
         st.skin = member.skin;
-        if (initial) { st.x = seat.x; st.y = seat.y; }
+        if (initial) { st.x = DOOR.x; st.y = DOOR.y; }
         else {
             st.x = DOOR.x; st.y = DOOR.y;
             this.broadcast('chat', { sender: '🏢 Kantor', text: `🎉 Selamat datang, ${name} (${role})!` });
@@ -425,6 +451,9 @@ export class OfficeRoom extends Room<OfficeState> {
             id: t.id,
             title: t.title,
             assigned_to: (t.assignee && this.members.get(t.assignee)?.name) || t.assignee || '',
+            assignee_id: t.assignee || '',
+            created_by: t.createdBy || '',
+            completed_at: t.completedAt || null,
             status: this.uiStatus(t.status)
         }));
         const hash = JSON.stringify(payload);
@@ -579,7 +608,7 @@ Apa yang kamu lakukan sekarang?`;
         const place = String(d.place || '').toLowerCase();
         if (place && (place === 'desk' || PLACE_LABELS[place])) {
             m.place = place;
-            m.goal = place === 'desk' ? null : pickSpot(place, this.takenSpots(m.id));
+            m.goal = place === 'desk' || !this.layout ? null : pickSpot(this.layout, place, this.takenSpots(m.id));
             m.talkTarget = null;
         }
 
@@ -690,7 +719,7 @@ Kalau tugas ini ternyata memerlukan salah satu hal tersebut, hentikan, tandai bl
         if (!name || !role) return;
         if (left.hires <= 0) return;
         if (this.knownTitles.has(this.normTitle(`rekrut ${name} (${role})`)) || this.findMember(name)) return;
-        if (this.members.size >= Math.min(this.cfg.maxAgents, DESK_SEATS.length)) {
+        if (this.members.size >= this.cfg.maxAgents) {
             this.broadcast('chat', { sender: m.name, text: `Saya ingin mengusulkan rekrut ${name} (${role}), tapi kantor sudah penuh (maks ${this.cfg.maxAgents} divisi).` });
             return;
         }
@@ -753,32 +782,43 @@ Kalau tugas ini ternyata memerlukan salah satu hal tersebut, hentikan, tandai bl
             this.think(m).catch(() => undefined);
         }
 
-        // Gerak setiap 0,5 detik.
+        // Gerak: satu petak tiap 0,3 detik, mengikuti lorong (tidak menembus dinding).
         this.moveTick++;
-        if (this.moveTick < 5) return;
+        if (this.moveTick < 3) return;
         this.moveTick = 0;
+        if (!this.layout) return;
 
         for (const m of this.members.values()) {
             const st = this.state.agents.get(m.id);
             if (!st) continue;
 
-            let target: Spot = DESK_SEATS[m.desk];
+            let target: Spot = this.seatOf(m.id);
             if (m.work) {
-                target = DESK_SEATS[m.desk];
+                target = this.seatOf(m.id);
             } else if (m.talkTarget && this.state.agents.get(m.talkTarget)) {
                 const other = this.state.agents.get(m.talkTarget)!;
-                target = { x: other.x + (st.x <= other.x ? -1 : 1), y: other.y };
+                const options = [{ x: other.x - 1, y: other.y }, { x: other.x + 1, y: other.y }, { x: other.x, y: other.y + 1 }, { x: other.x, y: other.y - 1 }];
+                target = options.find((o) => this.grid[o.y]?.[o.x]) || target;
             } else if (m.goal) {
                 target = m.goal;
             }
 
+            const key = `${target.x},${target.y}`;
+            if (m.pathKey !== key) {
+                m.pathKey = key;
+                m.path = findPath(this.grid, { x: st.x, y: st.y }, target) || [];
+            }
             const before = `${st.x},${st.y}`;
-            if (st.x < target.x) st.x += 1;
-            else if (st.x > target.x) st.x -= 1;
-            else if (st.y < target.y) st.y += 1;
-            else if (st.y > target.y) st.y -= 1;
-            st.x = Math.max(1, Math.min(38, st.x));
-            st.y = Math.max(1, Math.min(38, st.y));
+            const next = m.path.shift();
+            if (next) {
+                st.direction = next.x > st.x ? 'right' : next.x < st.x ? 'left' : next.y > st.y ? 'down' : 'up';
+                st.x = next.x;
+                st.y = next.y;
+            } else if (st.x === target.x && st.y === target.y) {
+                const atSeat = target.x === this.seatOf(m.id).x && target.y === this.seatOf(m.id).y;
+                const facing = atSeat ? 'up' : 'down';
+                if (st.direction !== facing) st.direction = facing;
+            }
             const moved = before !== `${st.x},${st.y}`;
 
             // Aksi yang terlihat.
@@ -879,16 +919,26 @@ Kalau tugas ini ternyata memerlukan salah satu hal tersebut, hentikan, tandai bl
             hermesHome: this.cfg.hermesHome,
             kanbanConnected: this.hermes.kanbanAvailable,
             members: Array.from(this.members.values()).map((m) => ({
-                id: m.id, name: m.name, role: m.role, desk: m.desk,
+                id: m.id, name: m.name, role: m.role,
                 work: m.work, workTitle: m.workTitle, place: m.place,
                 nextThinkInSeconds: Math.max(0, Math.round((m.nextThinkAt - Date.now()) / 1000))
             })),
+            divisions: this.layout?.divisions || [],
             usage: this.usagePayload()
         };
     }
 
+    /** Hanya yang sudah login (punya token) boleh masuk ke kantor. */
+    onAuth(_client: Client, options: any) {
+        if (!OfficeRoom.auth.verify(options?.token)) {
+            throw new ServerError(401, 'Perlu login');
+        }
+        return true;
+    }
+
     onJoin(client: Client) {
         client.send('office-info', { officeName: this.cfg.officeName, owner: this.cfg.ownerName });
+        if (this.layout) client.send('office-layout', this.layout);
         client.send('tasks-sync', this.lastTasksPayload);
         client.send('relationship-update', this.buildRelationshipPayload());
         client.send('layout-sync', { name: 'default', layout: this.currentLayout });
