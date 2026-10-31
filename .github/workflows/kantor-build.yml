@@ -1,0 +1,84 @@
+name: Kantor Virtual - build & rilis
+
+on:
+  push:
+    branches: [kantor-rico]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: kantor-build
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Pasang dependensi
+        run: npm install --no-audit --no-fund
+
+      - name: Build core & adapters
+        run: |
+          npm run build --workspace=@agent-office/core
+          npm run build --workspace=@agent-office/adapters
+
+      - name: Cek tipe server
+        run: npx tsc -p packages/server/tsconfig.json --noEmit
+
+      - name: Build tampilan (UI)
+        run: npm run build --workspace=@agent-office/ui
+
+      - name: Satukan server jadi satu file
+        run: |
+          mkdir -p release
+          npx --yes esbuild@0.24.2 packages/server/src/index.ts \
+            --bundle --platform=node --target=node20 \
+            --tsconfig=packages/server/tsconfig.json \
+            --external:sqlite3 \
+            --outfile=release/kantor-server.js
+
+      - name: Siapkan paket rilis
+        run: |
+          cp -r packages/ui/dist release/ui
+          cp kantor/kantor.config.example.json release/
+          cp kantor/env.example release/.env.example
+          cp kantor/kantor-virtual.service release/
+          cp kantor/README-KANTOR.md release/
+          cd release
+          npm init -y > /dev/null
+          npm install sqlite3@5.1.7 --omit=dev --no-audit --no-fund
+          node -e "require('sqlite3'); console.log('sqlite3 siap')"
+          cd ..
+          tar czf kantor-virtual-linux-x64.tar.gz -C release .
+          ls -lh kantor-virtual-linux-x64.tar.gz
+
+      - name: Uji jalan sebentar (smoke test)
+        run: |
+          cd release
+          mkdir -p /tmp/fakehermes/profiles/keuangan
+          echo "description: Divisi Keuangan Pribadi" > /tmp/fakehermes/profiles/keuangan/profile.yaml
+          HERMES_HOME=/tmp/fakehermes PORT=3999 node kantor-server.js > /tmp/smoke.log 2>&1 &
+          sleep 8
+          curl -sf http://127.0.0.1:3999/api/kantor/status | tee /tmp/status.json
+          curl -sf http://127.0.0.1:3999/ | grep -qi "<html" && echo "UI tersaji"
+          kill %1 || true
+          cat /tmp/smoke.log | tail -20
+
+      - name: Terbitkan rilis "kantor-latest"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete kantor-latest --yes --cleanup-tag || true
+          gh release create kantor-latest kantor-virtual-linux-x64.tar.gz \
+            --target "$GITHUB_SHA" \
+            --title "Kantor Virtual (terbaru)" \
+            --notes "Paket siap pakai untuk VPS Linux x64 (Node 22). Dibangun dari commit $GITHUB_SHA." \
+            --prerelease
