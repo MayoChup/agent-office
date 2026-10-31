@@ -123,3 +123,44 @@ systemctl --user list-timers | grep kantor
 6. Database Hermes hanya **dibaca**. Tugas dibuat lewat perintah resmi `hermes kanban create`.
 
 Mau mematikan tugas otomatis sepenuhnya? Ubah `"allowAutonomousTasks": false`, lalu jalankan `systemctl --user restart kantor-virtual`.
+
+---
+
+## 8. Kata sandi kantor (wajib sejak versi bagan divisi)
+
+Kantor sekarang selalu minta login. Atur kata sandi di VPS:
+
+```bash
+nano ~/kantor-virtual/.env        # tambahkan baris: KANTOR_PASSWORD=isi-sandi-kamu
+systemctl --user restart kantor-virtual
+```
+
+Kalau tidak diisi, kantor membuat sandi acak sendiri. Lihat dengan:
+`cat ~/kantor-virtual/data/kantor-password.txt`
+
+## 9. Buka dari mana saja (Vercel + Tailscale Funnel)
+
+Tampilan kantor ada di Vercel, tapi datanya tetap dari VPS. Supaya HP/laptop
+mana pun bisa menyambung ke VPS lewat HTTPS, nyalakan Tailscale Funnel di VPS:
+
+```bash
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up                  # buka link yang muncul, login
+sudo tailscale funnel --bg 3000    # catat alamat https://....ts.net yang muncul
+```
+
+Lalu buka alamat Vercel kantor, isi **Alamat server** dengan alamat `https://….ts.net`
+tadi dan kata sandi kantor. Browser mengingat login 30 hari.
+
+Matikan akses publik kapan saja: `sudo tailscale funnel --bg 3000 off`
+
+## 10. Bagan divisi
+
+- Setiap profil Hermes (kecuali `default`) = satu divisi dengan ruangan sendiri.
+- Anggota tambahan sebuah divisi: beri nama profil `divisi-nama`, misalnya
+  `keuangan-pajak` otomatis masuk ruang Keuangan.
+- Bagan & ruangan berubah sendiri (±30 detik) saat profil dibuat atau dihapus.
+- Nama/ikon/warna divisi bisa diatur di `kantor.config.json`:
+  `"divisions": { "keuangan": { "name": "Keuangan Pribadi", "icon": "💰", "color": "#22c55e" } }`
+
+Aset pixel (lantai, dinding, furnitur, karakter) dari proyek *pixel-agents* oleh Pablo De Lucca (lisensi MIT).
