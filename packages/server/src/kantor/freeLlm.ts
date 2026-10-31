@@ -156,7 +156,8 @@ export class FreeLlm {
         if (!this.canCall()) return null;
         await this.refreshModels();
 
-        for (let attempt = 0; attempt < 3; attempt++) {
+        // Maksimal 2 percobaan per "berpikir": percobaan gagal ikut memakan kuota harian.
+        for (let attempt = 0; attempt < 2; attempt++) {
             const model = this.currentModel();
             if (!model) {
                 // Semua sedang cooldown: coba ambil ulang daftar sekali.
