@@ -149,7 +149,7 @@ sudo tailscale up                  # buka link yang muncul, login
 sudo tailscale funnel --bg 3000    # catat alamat https://....ts.net yang muncul
 ```
 
-Lalu buka alamat Vercel kantor, isi **Alamat server** dengan alamat `https://….ts.net`
+Lalu buka https://kantor-virtual.vercel.app, isi **Alamat server** dengan alamat `https://….ts.net`
 tadi dan kata sandi kantor. Browser mengingat login 30 hari.
 
 Matikan akses publik kapan saja: `sudo tailscale funnel --bg 3000 off`
