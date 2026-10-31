@@ -38,13 +38,14 @@ export function HighlightsFeed() {
             id="highlight-feed"
             title="Sorotan"
             subtitle="Kejadian penting di kantor"
-            width={320}
-            defaultDock="right"
-            defaultY={430}
+            width={300}
+            defaultDock="left"
+            defaultY={70}
+            defaultMinimized={true}
             zIndex={15}
         >
             {items.length === 0 && (
-                <div style={{ fontSize: 11, color: '#8ca4d6' }}>Waiting for dramatic moments...</div>
+                <div style={{ fontSize: 11, color: '#8ca4d6' }}>Belum ada kejadian penting.</div>
             )}
             {items.map((item) => (
                 <div key={item.id} style={{

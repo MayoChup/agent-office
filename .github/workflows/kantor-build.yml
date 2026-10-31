@@ -23,23 +23,23 @@ jobs:
           node-version: 22
 
       - name: Pasang dependensi
-        run: npm install --no-audit --no-fund
+        run: bash kantor/ci-run.sh "npm install" npm install --no-audit --no-fund
 
       - name: Build core & adapters
         run: |
-          npm run build --workspace=@agent-office/core
-          npm run build --workspace=@agent-office/adapters
+          bash kantor/ci-run.sh "build core" npm run build --workspace=@agent-office/core
+          bash kantor/ci-run.sh "build adapters" npm run build --workspace=@agent-office/adapters
 
       - name: Cek tipe server
-        run: npx tsc -p packages/server/tsconfig.json --noEmit
+        run: bash kantor/ci-run.sh "tsc server" npx tsc -p packages/server/tsconfig.json --noEmit
 
       - name: Build tampilan (UI)
-        run: npm run build --workspace=@agent-office/ui
+        run: bash kantor/ci-run.sh "build ui" npm run build --workspace=@agent-office/ui
 
       - name: Satukan server jadi satu file
         run: |
           mkdir -p release
-          npx --yes esbuild@0.24.2 packages/server/src/index.ts \
+          bash kantor/ci-run.sh "esbuild" npx --yes esbuild@0.24.2 packages/server/src/index.ts \
             --bundle --platform=node --target=node20 \
             --tsconfig=packages/server/tsconfig.json \
             --external:sqlite3 \
@@ -54,8 +54,8 @@ jobs:
           cp kantor/README-KANTOR.md release/
           cd release
           npm init -y > /dev/null
-          npm install sqlite3@5.1.7 --omit=dev --no-audit --no-fund
-          node -e "require('sqlite3'); console.log('sqlite3 siap')"
+          bash ../kantor/ci-run.sh "sqlite3" npm install sqlite3@5.1.7 --omit=dev --no-audit --no-fund
+          bash ../kantor/ci-run.sh "sqlite3 load" node -e "require('sqlite3'); console.log('sqlite3 siap')"
           cd ..
           tar czf kantor-virtual-linux-x64.tar.gz -C release .
           ls -lh kantor-virtual-linux-x64.tar.gz
@@ -67,10 +67,14 @@ jobs:
           echo "description: Divisi Keuangan Pribadi" > /tmp/fakehermes/profiles/keuangan/profile.yaml
           HERMES_HOME=/tmp/fakehermes PORT=3999 node kantor-server.js > /tmp/smoke.log 2>&1 &
           sleep 8
-          curl -sf http://127.0.0.1:3999/api/kantor/status | tee /tmp/status.json
-          curl -sf http://127.0.0.1:3999/ | grep -qi "<html" && echo "UI tersaji"
+          if ! curl -sf http://127.0.0.1:3999/api/kantor/status > /tmp/status.json || ! curl -sf http://127.0.0.1:3999/ | grep -qi "<html"; then
+            msg="$(tail -40 /tmp/smoke.log | sed -e 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')"
+            echo "::error title=smoke test::${msg}"
+            exit 1
+          fi
+          echo "::notice title=status kantor::$(cat /tmp/status.json | head -c 900)"
           kill %1 || true
-          cat /tmp/smoke.log | tail -20
+          tail -20 /tmp/smoke.log
 
       - name: Terbitkan rilis "kantor-latest"
         env:

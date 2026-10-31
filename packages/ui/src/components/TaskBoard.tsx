@@ -24,6 +24,7 @@ export function TaskBoard() {
     const [newTask, setNewTask] = useState('');
     const [targetAgent, setTargetAgent] = useState('default');
     const [sending, setSending] = useState(false);
+    const [collapsed, setCollapsed] = useState(false);
 
     useEffect(() => {
         const onTasks = (e: Event) => setTasks(((e as CustomEvent).detail || []) as TaskItem[]);
@@ -69,14 +70,21 @@ export function TaskBoard() {
 
     return (
         <div style={{
-            position: 'absolute', left: 20, top: 20, width: 290,
+            position: 'absolute', right: 20, top: 20, width: 300, boxSizing: 'border-box',
             backgroundColor: 'rgba(10,10,30,0.92)', color: 'white',
             padding: 16, borderRadius: 12,
             boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
             border: '1px solid rgba(108,92,231,0.3)',
-            maxHeight: '50vh', display: 'flex', flexDirection: 'column', zIndex: 5
+            maxHeight: '44vh', display: 'flex', flexDirection: 'column', zIndex: 5
         }}>
-            <h3 style={{ margin: '0 0 4px 0', fontSize: '14px' }}>📋 Papan Tugas (Hermes)</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ margin: '0 0 4px 0', fontSize: '14px' }}>📋 Papan Tugas (Hermes)</h3>
+                <button onClick={() => setCollapsed(!collapsed)} title={collapsed ? 'Buka' : 'Kecilkan'}
+                    style={{ background: 'none', border: 'none', color: '#aaa', cursor: 'pointer', fontSize: '14px' }}>
+                    {collapsed ? '+' : '−'}
+                </button>
+            </div>
+            {!collapsed && <>
             <p style={{ margin: '0 0 10px 0', fontSize: '10px', color: '#9aa' }}>
                 Tugas di sini = kerja nyata oleh divisi di Hermes.
             </p>
@@ -140,6 +148,7 @@ export function TaskBoard() {
                     </div>
                 ))}
             </div>
+            </>}
         </div>
     );
 }

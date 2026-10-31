@@ -33,7 +33,7 @@ export function ChatPanel() {
     };
 
     return (
-        <div style={{ position: 'absolute', right: 20, bottom: 20, width: 300, height: 400, backgroundColor: 'rgba(0,0,0,0.8)', color: 'white', padding: 16, borderRadius: 8, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ position: 'absolute', right: 20, bottom: 20, width: 300, height: '42vh', zIndex: 5, boxSizing: 'border-box', backgroundColor: 'rgba(0,0,0,0.8)', color: 'white', padding: 16, borderRadius: 8, display: 'flex', flexDirection: 'column' }}>
             <h3 style={{ margin: '0 0 10px 0', fontSize: '14px' }}>💬 Obrolan Kantor</h3>
             <div style={{ flex: 1, overflowY: 'auto', fontSize: '14px', marginBottom: 10, paddingRight: 4 }}>
                 {messages.map((m, i) => (

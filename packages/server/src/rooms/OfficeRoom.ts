@@ -95,6 +95,8 @@ export class OfficeRoom extends Room<OfficeState> {
     private kanbanSeeded = false;
     private lastTasksHash = '';
     private lastTasksPayload: any[] = [];
+    /** Judul tugas yang masih terbuka / baru selesai (untuk mencegah tugas dobel). */
+    private knownTitles = new Set<string>();
 
     private autonomy = { date: '', tasks: 0, hires: 0 };
 
@@ -414,6 +416,11 @@ export class OfficeRoom extends Room<OfficeState> {
         }
         this.kanbanSeeded = true;
 
+        const dayAgo = Math.floor(Date.now() / 1000) - 24 * 3600;
+        this.knownTitles = new Set(
+            tasks.filter((t) => t.status !== 'done' || (t.completedAt || 0) >= dayAgo).map((t) => this.normTitle(t.title))
+        );
+
         const payload = tasks.slice(0, 30).map((t) => ({
             id: t.id,
             title: t.title,
@@ -431,6 +438,10 @@ export class OfficeRoom extends Room<OfficeState> {
     // ════════════════════════════════════════════════════════
     //  OTONOMI: berpikir, ngobrol, mengusulkan
     // ════════════════════════════════════════════════════════
+
+    private normTitle(title: string) {
+        return title.replace(/^\[[^\]]*\]\s*/, '').replace(/^usulan rekrut divisi baru:\s*/i, 'rekrut ').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    }
 
     private todayKey() {
         return new Date().toISOString().slice(0, 10);
@@ -632,6 +643,11 @@ Kalau tugas ini ternyata memerlukan salah satu hal tersebut, hentikan, tandai bl
             this.remember(m, { content: `Saya ingin membuat tugas "${title}", tapi jatah tugas otomatis hari ini sudah habis.`, type: 'observation', timestamp: new Date().toISOString(), importance: 0.4 });
             return;
         }
+        if (this.knownTitles.has(this.normTitle(title))) {
+            // Tugas serupa sudah ada: tidak dibuat lagi, jatah tidak terpakai.
+            this.remember(m, { content: `Tugas "${title}" sudah ada di papan, jadi tidak saya buat lagi.`, type: 'observation', timestamp: new Date().toISOString(), importance: 0.5 });
+            return;
+        }
         const detail = String(task?.detail || '').slice(0, 800);
         let assignee = this.findMember(String(task?.assignee || '')) || this.members.get('default');
         if (!assignee) return;
@@ -650,9 +666,11 @@ Kalau tugas ini ternyata memerlukan salah satu hal tersebut, hentikan, tandai bl
             title: finalTitle,
             assignee: assignee.id,
             body: `${detail}${note}${this.guardFooter(m)}`,
-            createdBy: `kantor:${m.id}`
+            createdBy: `kantor:${m.id}`,
+            idempotencyKey: `kantor-${this.todayKey()}-${this.normTitle(title).slice(0, 80)}`
         });
         if (result.ok) {
+            this.knownTitles.add(this.normTitle(title));
             this.autonomy.tasks++;
             this.writeJsonFile('kantor-autonomy.json', this.autonomy);
             this.broadcast('chat', { sender: m.name, text: `📋 Saya membuat tugas untuk ${assignee.name}: "${finalTitle}"` });
@@ -671,6 +689,7 @@ Kalau tugas ini ternyata memerlukan salah satu hal tersebut, hentikan, tandai bl
         const reason = String(hire?.reason || '').trim().slice(0, 500);
         if (!name || !role) return;
         if (left.hires <= 0) return;
+        if (this.knownTitles.has(this.normTitle(`rekrut ${name} (${role})`)) || this.findMember(name)) return;
         if (this.members.size >= Math.min(this.cfg.maxAgents, DESK_SEATS.length)) {
             this.broadcast('chat', { sender: m.name, text: `Saya ingin mengusulkan rekrut ${name} (${role}), tapi kantor sudah penuh (maks ${this.cfg.maxAgents} divisi).` });
             return;
@@ -680,9 +699,11 @@ Kalau tugas ini ternyata memerlukan salah satu hal tersebut, hentikan, tandai bl
             title: `Usulan rekrut divisi baru: ${name} (${role})`,
             assignee: head?.id || 'default',
             body: `${m.name} mengusulkan divisi baru.\nNama panggilan: ${name}\nPeran: ${role}\nAlasan: ${reason}\n\nIkuti SOP REKRUT: sampaikan usulan ini ke ${this.cfg.ownerName} dan JANGAN membuat divisi sebelum ${this.cfg.ownerName} membalas OK.${this.guardFooter(m)}`,
-            createdBy: `kantor:${m.id}`
+            createdBy: `kantor:${m.id}`,
+            idempotencyKey: `kantor-rekrut-${name.toLowerCase()}`
         });
         if (result.ok) {
+            this.knownTitles.add(this.normTitle(`rekrut ${name} (${role})`));
             this.autonomy.hires++;
             this.writeJsonFile('kantor-autonomy.json', this.autonomy);
             this.broadcast('chat', { sender: m.name, text: `🤝 Saya mengusulkan rekrut ${name} sebagai ${role}. Menunggu persetujuan ${this.cfg.ownerName} lewat ${head?.name || 'Kepala'}.` });

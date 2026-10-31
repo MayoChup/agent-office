@@ -34,12 +34,13 @@ export function RelationshipGraph() {
             title="Hubungan Tim"
             subtitle="Siapa sering ngobrol dengan siapa"
             width={300}
-            defaultDock="right"
-            defaultY={220}
+            defaultDock="left"
+            defaultY={124}
+            defaultMinimized={true}
             zIndex={16}
         >
             {visible.length === 0 && (
-                <div style={{ fontSize: 11, color: '#cdbca4' }}>No strong alliances or rivalries yet.</div>
+                <div style={{ fontSize: 11, color: '#cdbca4' }}>Belum ada hubungan yang menonjol.</div>
             )}
             {visible.map((edge, idx) => {
                 const isAlliance = edge.status === 'alliance';

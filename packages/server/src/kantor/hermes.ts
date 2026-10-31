@@ -170,6 +170,7 @@ export class HermesBridge {
         body: string;
         createdBy: string;
         maxRuntime?: string;
+        idempotencyKey?: string;
     }): Promise<{ ok: boolean; id?: string; error?: string }> {
         const args = [
             'kanban', 'create', opts.title.slice(0, 200),
@@ -179,6 +180,7 @@ export class HermesBridge {
             '--max-runtime', opts.maxRuntime || '30m',
             '--json'
         ];
+        if (opts.idempotencyKey) args.push('--idempotency-key', opts.idempotencyKey.slice(0, 120));
         return new Promise((resolve) => {
             execFile(this.hermesBin, args, { timeout: 60_000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
                 if (err) {

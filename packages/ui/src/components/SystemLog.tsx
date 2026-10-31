@@ -16,7 +16,7 @@ const actionIcons: Record<string, string> = {
 
 export function SystemLog() {
     const [logs, setLogs] = useState<LogEntry[]>([]);
-    const [isOpen, setIsOpen] = useState(true);
+    const [isOpen, setIsOpen] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
     const idRef = useRef(0);
 
@@ -52,26 +52,26 @@ export function SystemLog() {
             <button
                 onClick={() => setIsOpen(true)}
                 style={{
-                    position: 'absolute', right: 20, top: 20,
+                    position: 'absolute', left: 24, top: 20,
                     padding: '6px 12px', borderRadius: 8, border: 'none',
                     backgroundColor: '#2d3436', color: '#aaa',
                     cursor: 'pointer', fontSize: '11px', zIndex: 10
                 }}
             >
-                📊 Activity Log
+                📊 Log Aktivitas
             </button>
         );
     }
 
     return (
         <div style={{
-            position: 'absolute', right: 20, top: 20, width: 260,
+            position: 'absolute', left: 24, top: 20, width: 300,
             backgroundColor: 'rgba(10,10,30,0.92)', color: 'white',
             padding: 12, borderRadius: 12,
             boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
             border: '1px solid rgba(108,92,231,0.3)',
             maxHeight: '35vh', display: 'flex', flexDirection: 'column',
-            zIndex: 10
+            zIndex: 30
         }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <h3 style={{ margin: 0, fontSize: '13px' }}>📊 Log Aktivitas</h3>
@@ -80,7 +80,7 @@ export function SystemLog() {
 
             <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', fontSize: '10px', lineHeight: 1.5 }}>
                 {logs.length === 0 && (
-                    <p style={{ color: '#555', fontStyle: 'italic', margin: 0 }}>Waiting for agent events...</p>
+                    <p style={{ color: '#555', fontStyle: 'italic', margin: 0 }}>Menunggu aktivitas agen...</p>
                 )}
                 {logs.map(log => (
                     <div key={log.id} style={{
