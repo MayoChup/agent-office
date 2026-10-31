@@ -14,6 +14,9 @@ export type ConnStatus = 'checking' | 'login' | 'connecting' | 'connected' | 'di
 const LS_SERVER = 'kantor:server';
 const LS_TOKEN = 'kantor:token';
 
+/** Alamat server bawaan, diisi lewat env Vercel VITE_KANTOR_SERVER (tidak disimpan di repo). */
+const DEFAULT_SERVER: string = String((import.meta as any).env?.VITE_KANTOR_SERVER || '').trim().replace(/\/+$/, '');
+
 let room: Colyseus.Room<any> | undefined;
 let status: ConnStatus = 'checking';
 let lastError = '';
@@ -49,7 +52,7 @@ export function normalizeServer(input: string): string {
 
 export function currentServer(): string {
     if (sameOriginServer && !safeGet(LS_SERVER)) return window.location.origin;
-    return safeGet(LS_SERVER) || (sameOriginServer ? window.location.origin : '');
+    return safeGet(LS_SERVER) || (sameOriginServer ? window.location.origin : DEFAULT_SERVER);
 }
 
 function wsEndpoint(server: string): string {
@@ -81,7 +84,8 @@ export async function login(serverInput: string, password: string): Promise<{ ok
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok || !data?.token) return { ok: false, error: data?.error || `Gagal login (HTTP ${res.status}).` };
-        safeSet(LS_SERVER, server === window.location.origin && sameOriginServer ? '' : server);
+        const isDefault = (server === window.location.origin && sameOriginServer) || server === DEFAULT_SERVER;
+        safeSet(LS_SERVER, isDefault ? '' : server);
         safeSet(LS_TOKEN, data.token);
         lastError = '';
         connect();

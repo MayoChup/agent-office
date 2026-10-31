@@ -6,7 +6,7 @@ export function LoginScreen() {
     const error = useKantor((s) => s.error);
     const sameOrigin = isSameOrigin();
     const [server, setServer] = useState(() => (sameOrigin ? '' : currentServer()));
-    const [showServer, setShowServer] = useState(!sameOrigin);
+    const [showServer, setShowServer] = useState(!sameOrigin && !currentServer());
     const [password, setPassword] = useState('');
     const [busy, setBusy] = useState(false);
     const [msg, setMsg] = useState('');
