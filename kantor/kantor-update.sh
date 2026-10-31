@@ -80,7 +80,10 @@ systemctl --user start kantor-virtual
 ok=""
 for _ in $(seq 1 15); do
   sleep 2
-  if curl -fsS -m 5 "http://127.0.0.1:${PORT}/api/kantor/status" > /dev/null 2>&1; then ok=1; break; fi
+  # /ping tidak butuh login. /status (versi lama) dianggap hidup kalau menjawab 200 atau 401.
+  if curl -fsS -m 5 "http://127.0.0.1:${PORT}/api/kantor/ping" > /dev/null 2>&1; then ok=1; break; fi
+  code="$(curl -s -o /dev/null -w '%{http_code}' -m 5 "http://127.0.0.1:${PORT}/api/kantor/status" 2>/dev/null || true)"
+  if [ "$code" = "200" ] || [ "$code" = "401" ]; then ok=1; break; fi
 done
 
 if [ -n "$ok" ]; then
@@ -91,7 +94,10 @@ else
   log "Versi baru gagal jalan. Kembali ke versi lama..."
   systemctl --user stop kantor-virtual || true
   rm -rf "$DIR/ui"
+  # Kembalikan versi lama, tapi pertahankan skrip update yang baru (yang sudah diperbaiki).
+  cp "$DIR/kantor-update.sh" "$tmp/update-baru.sh" 2>/dev/null || true
   cp -a "$DIR/.previous/." "$DIR/"
+  [ -f "$tmp/update-baru.sh" ] && cp "$tmp/update-baru.sh" "$DIR/kantor-update.sh" || true
   systemctl --user start kantor-virtual
   # Tandai versi ini supaya tidak dicoba berulang-ulang.
   echo "$asset_id" > "$STATE"
