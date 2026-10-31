@@ -17,6 +17,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -91,3 +93,8 @@ jobs:
             --title "Kantor Virtual (terbaru)" \
             --notes "Paket siap pakai untuk VPS Linux x64 (Node 22). Dibangun dari commit $GITHUB_SHA." \
             --prerelease
+
+      - name: Samakan cabang main (untuk Vercel)
+        run: |
+          git fetch --no-tags origin main || true
+          git push origin "$GITHUB_SHA:refs/heads/main" || echo "::warning::main tidak bisa disamakan otomatis"
