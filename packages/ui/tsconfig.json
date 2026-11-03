@@ -4,6 +4,7 @@
         "outDir": "./dist",
         "rootDir": "./src",
         "jsx": "react",
+        "module": "ESNext",
         "experimentalDecorators": true,
         "useDefineForClassFields": false
     },
