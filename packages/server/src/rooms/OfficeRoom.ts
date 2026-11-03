@@ -53,6 +53,8 @@ interface Member {
     flash: string;
     flashUntil: number;
     sleepingNoticeAt: number;
+    /** Kapan gerak-gerik harian berikutnya (pakai aturan, tanpa AI). */
+    nextIdleAt: number;
 }
 
 interface HighlightEvent {
@@ -74,8 +76,30 @@ interface RelationshipEdge {
 
 const SENSITIVE = /\b(e-?mail|gmail|kirim(kan)?\s+(pesan|email|wa|whatsapp)|posting|post\s+ke|upload|unggah|publish|terbitkan|tweet|transfer|bayar|beli|hapus|delete|rm\s+-|uninstall|reset|drop\s+table|password|pin|otp|broker|order\s+saham|jual\s+saham|beli\s+saham)\b/i;
 
-const MIN_GAP_MS = 2 * 60_000;     // jarak minimal antar "berpikir" satu agen
 const MAX_PARALLEL_THINK = 2;       // maksimal agen berpikir bersamaan
+/** Berapa kali sehari agen boleh "merencanakan" pakai AI (untuk usulan tugas/rekrut). */
+const DAILY_PLAN_THINKS = 12;
+/** Jarak minimal antar perencanaan satu agen. */
+const MIN_PLAN_MINUTES = 120;
+
+// ── Gerak-gerik harian tanpa AI ──────────────────────────────
+const pick = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
+const IDLE_THOUGHTS: Record<string, string[]> = {
+    desk: ['Merapikan catatan kerja 📝', 'Cek ulang daftar tugas', 'Baca-baca referensi sebentar', 'Siap kalau ada tugas baru 💪', 'Rapikan file di komputer'],
+    pantry: ['Ngopi dulu ☕', 'Ambil camilan 🍪', 'Isi tenaga sebentar', 'Bikin teh hangat 🍵'],
+    water: ['Minum air dulu 💧', 'Jangan lupa minum 💧'],
+    lounge: ['Istirahat sebentar di sofa 🛋️', 'Peregangan dulu 🙆', 'Cari ide sambil santai'],
+    bookshelf: ['Cari buku referensi 📚', 'Baca artikel menarik 📖'],
+    meeting: ['Siapkan bahan rapat 🗂️', 'Corat-coret ide di papan tulis']
+};
+const SMALL_TALK = [
+    ['Gimana kerjaan hari ini?', 'Lancar, aman 👍'],
+    ['Udah ngopi belum?', 'Belum nih, nanti ah ☕'],
+    ['Ada tugas baru dari Pak Rico?', 'Belum, lagi standby'],
+    ['Semangat ya hari ini!', 'Siap, kamu juga 💪'],
+    ['Laporanmu udah beres?', 'Hampir, tinggal dirapikan'],
+    ['Istirahat dulu yuk', 'Bentar lagi, nanggung']
+];
 
 export class OfficeRoom extends Room<OfficeState> {
     private static activeRoom: OfficeRoom | null = null;
@@ -104,7 +128,7 @@ export class OfficeRoom extends Room<OfficeState> {
     /** Judul tugas yang masih terbuka / baru selesai (untuk mencegah tugas dobel). */
     private knownTitles = new Set<string>();
 
-    private autonomy = { date: '', tasks: 0, hires: 0 };
+    private autonomy = { date: '', tasks: 0, hires: 0, plans: 0 };
 
     private highlights: HighlightEvent[] = [];
     private relationships: Map<string, RelationshipEdge> = new Map();
@@ -138,7 +162,7 @@ export class OfficeRoom extends Room<OfficeState> {
         });
         this.hermes = new HermesBridge(this.cfg.hermesHome, this.cfg.kanbanDbPath, this.cfg.hermesBin);
 
-        this.autonomy = this.readJsonFile('kantor-autonomy.json', { date: '', tasks: 0, hires: 0 });
+        this.autonomy = Object.assign({ date: '', tasks: 0, hires: 0, plans: 0 }, this.readJsonFile('kantor-autonomy.json', {}));
 
         if (!this.llm.enabled) {
             console.warn('[Kantor] OPENROUTER_API_KEY belum diisi: agen tetap tampil & mengikuti Kanban, tapi tidak berpikir/ngobrol.');
@@ -354,7 +378,8 @@ export class OfficeRoom extends Room<OfficeState> {
             workTitle: '',
             flash: '',
             flashUntil: 0,
-            sleepingNoticeAt: 0
+            sleepingNoticeAt: 0,
+            nextIdleAt: Date.now() + 8_000 + Math.random() * 30_000
         };
         this.members.set(p.id, member);
 
@@ -478,11 +503,12 @@ export class OfficeRoom extends Room<OfficeState> {
 
     private autonomyLeft() {
         if (this.autonomy.date !== this.todayKey()) {
-            this.autonomy = { date: this.todayKey(), tasks: 0, hires: 0 };
+            this.autonomy = { date: this.todayKey(), tasks: 0, hires: 0, plans: 0 };
         }
         return {
             tasks: this.cfg.allowAutonomousTasks ? Math.max(0, this.cfg.dailyAutonomousTaskLimit - this.autonomy.tasks) : 0,
-            hires: Math.max(0, this.cfg.dailyHireProposalLimit - this.autonomy.hires)
+            hires: Math.max(0, this.cfg.dailyHireProposalLimit - this.autonomy.hires),
+            plans: Math.max(0, DAILY_PLAN_THINKS - (this.autonomy.plans || 0))
         };
     }
 
@@ -558,7 +584,7 @@ Apa yang kamu lakukan sekarang?`;
     }
 
     private scheduleNext(m: Member) {
-        const interval = this.cfg.thinkIntervalMinutes * 60_000;
+        const interval = Math.max(this.cfg.thinkIntervalMinutes, MIN_PLAN_MINUTES) * 60_000;
         m.nextThinkAt = Date.now() + interval * (0.8 + Math.random() * 0.4);
     }
 
@@ -569,6 +595,11 @@ Apa yang kamu lakukan sekarang?`;
         const hadOwnerMessage = m.inbox.some((i) => i.fromOwner);
         try {
             if (st) st.action = 'think';
+            if (!hadOwnerMessage) {
+                this.autonomyLeft();
+                this.autonomy.plans = (this.autonomy.plans || 0) + 1;
+                this.writeJsonFile('kantor-autonomy.json', this.autonomy);
+            }
             const { system, user } = this.buildPrompts(m);
             const answer = await this.llm.complete(system, user);
             m.lastThinkAt = Date.now();
@@ -622,12 +653,11 @@ Apa yang kamu lakukan sekarang?`;
 
             if (target && target.id !== m.id) {
                 this.broadcast('chat', { sender: m.name, text: `💬 (ke ${target.name}) ${text}` });
-                target.inbox.push({ from: m.name, text, at: Date.now(), fromOwner: false });
-                if (target.inbox.length > 10) target.inbox.shift();
-                // Rekan membalas lebih cepat, tapi tetap ada jeda minimal.
-                const soonest = Math.max(target.lastThinkAt + MIN_GAP_MS, Date.now() + 40_000);
-                target.nextThinkAt = Math.min(target.nextThinkAt, soonest);
+                // Rekan tidak membalas pakai AI (hemat kuota): cukup balasan singkat.
+                const tst = this.state.agents.get(target.id);
+                if (tst && !target.work) tst.thought = pick(['Oke, siap 👍', 'Noted!', 'Boleh juga tuh', 'Nanti aku cek ya']);
                 m.talkTarget = target.id;
+                m.nextIdleAt = Date.now() + 90_000;
                 m.goal = null;
                 this.updateRelationship(m.id, target.id, 0.08);
                 this.emitHighlight('conversation', `${m.name} ngobrol dengan ${target.name}`, text.slice(0, 120), m.id);
@@ -750,6 +780,36 @@ Kalau tugas ini ternyata memerlukan salah satu hal tersebut, hentikan, tandai bl
         return spots;
     }
 
+    /** Satu langkah kegiatan santai tanpa AI: pindah tempat, atau ngobrol singkat dengan rekan. */
+    private idleStep(m: Member) {
+        const st = this.state.agents.get(m.id);
+        m.talkTarget = null;
+        if (!st || !this.layout) { m.nextIdleAt = Date.now() + 60_000; return; }
+
+        const friends = Array.from(this.members.values()).filter((o) => o.id !== m.id && !o.work && !o.thinking && !o.talkTarget);
+        const roll = Math.random();
+        if (friends.length && roll < 0.15) {
+            const other = pick(friends);
+            const [ask, reply] = pick(SMALL_TALK);
+            m.talkTarget = other.id;
+            m.goal = null;
+            st.thought = `💬 ${other.name}, ${ask.charAt(0).toLowerCase()}${ask.slice(1)}`;
+            const ost = this.state.agents.get(other.id);
+            if (ost) ost.thought = `💬 ${reply}`;
+            other.nextIdleAt = Math.max(other.nextIdleAt, Date.now() + 60_000);
+            this.updateRelationship(m.id, other.id, 0.02);
+            m.nextIdleAt = Date.now() + 60_000 + Math.random() * 30_000;
+            return;
+        }
+        const place = roll < 0.6 ? 'desk' : pick(['pantry', 'pantry', 'water', 'lounge', 'bookshelf', 'meeting']);
+        m.place = place;
+        m.goal = place === 'desk' ? null : pickSpot(this.layout, place, this.takenSpots(m.id));
+        if (!m.goal) m.place = 'desk';
+        st.thought = pick(IDLE_THOUGHTS[m.place] || IDLE_THOUGHTS.desk);
+        // Di meja lebih lama, di tempat lain sebentar saja.
+        m.nextIdleAt = Date.now() + (m.place === 'desk' ? 3 + Math.random() * 5 : 1 + Math.random() * 2) * 60_000;
+    }
+
     update() {
         this.state.officeTime = new Date().toISOString();
         const now = Date.now();
@@ -759,24 +819,32 @@ Kalau tugas ini ternyata memerlukan salah satu hal tersebut, hentikan, tandai bl
             (a, b) => Number(b.inbox.some((i) => i.fromOwner)) - Number(a.inbox.some((i) => i.fromOwner))
         );
         for (const m of queue) {
+            // Gerak-gerik harian: aturan biasa, TIDAK memakai kuota AI.
+            if (!m.thinking && !m.work && now >= m.nextIdleAt) this.idleStep(m);
+
             if (m.thinking || now < m.nextThinkAt) continue;
             const hasOwnerMsg = m.inbox.some((i) => i.fromOwner);
-            // Saat bekerja di tugas nyata, agen fokus (tidak memakai kuota) kecuali disapa pemilik.
-            if (m.work === 'running' && !hasOwnerMsg) {
-                const st = this.state.agents.get(m.id);
-                if (st) st.thought = `Mengerjakan: ${m.workTitle}`.slice(0, 140);
-                this.scheduleNext(m);
-                continue;
+            if (!hasOwnerMsg) {
+                // AI hanya dipakai untuk merencanakan usulan tugas/rekrut, dan hanya kalau jatahnya masih ada.
+                const left = this.autonomyLeft();
+                const wantsPlan = this.llm.enabled && !m.work && left.plans > 0 && (left.tasks > 0 || left.hires > 0)
+                    && this.llm.remainingToday() > 5;
+                if (m.work === 'running') {
+                    const st = this.state.agents.get(m.id);
+                    if (st) st.thought = `Mengerjakan: ${m.workTitle}`.slice(0, 140);
+                }
+                if (!wantsPlan) { this.scheduleNext(m); continue; }
             }
-            if (!this.llm.enabled) { this.scheduleNext(m); continue; }
+            if (!this.llm.enabled) { m.inbox = []; this.scheduleNext(m); continue; }
             if (this.thinkingNow >= MAX_PARALLEL_THINK) continue;
             if (!this.llm.canCall()) {
-                if (this.llm.remainingToday() <= 0 && now - m.sleepingNoticeAt > 60 * 60_000) {
-                    m.sleepingNoticeAt = now;
-                    const st = this.state.agents.get(m.id);
-                    if (st) { st.action = 'sleep'; st.thought = 'Kuota AI gratis hari ini habis. Lanjut besok 😴'; }
+                if (hasOwnerMsg && this.llm.remainingToday() <= 0) {
+                    this.broadcast('chat', { sender: m.name, text: '(Jatah AI gratis hari ini sudah habis, jadi saya belum bisa membalas di sini. Perintah kerja lewat Telegram tetap jalan seperti biasa 👍)' });
+                    m.inbox = [];
+                    this.scheduleNext(m);
+                } else {
+                    m.nextThinkAt = now + (hasOwnerMsg ? 3_000 : 30 * 60_000);
                 }
-                m.nextThinkAt = now + (this.llm.remainingToday() <= 0 ? 30 * 60_000 : hasOwnerMsg ? 3_000 : 30_000);
                 continue;
             }
             this.think(m).catch(() => undefined);
