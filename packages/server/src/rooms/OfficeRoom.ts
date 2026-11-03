@@ -357,8 +357,6 @@ export class OfficeRoom extends Room<OfficeState> {
     private async addMember(p: HermesProfile, name: string, role: string, persona: string, skin: number | undefined, initial: boolean) {
         const n = this.members.size;
         const desk = n;
-        const interval = this.cfg.thinkIntervalMinutes * 60_000;
-
         const member: Member = {
             id: p.id, name, role, persona,
             desk,
@@ -366,7 +364,8 @@ export class OfficeRoom extends Room<OfficeState> {
             inbox: [],
             memories: await this.memoryStore.loadMemories(p.id, 20) as MemoryEntry[],
             // Berpikir pertama tersebar supaya tidak menghabiskan kuota sekaligus.
-            nextThinkAt: Date.now() + 20_000 + (n * interval) / Math.max(1, this.cfg.maxAgents),
+            // Perencanaan AI pertama disebar 10–60 menit setelah menyala, supaya restart tidak menghabiskan kuota.
+            nextThinkAt: Date.now() + (10 + Math.random() * 50) * 60_000,
             lastThinkAt: 0,
             thinking: false,
             place: 'desk',
