@@ -2,5 +2,9 @@
     "framework": "vite",
     "buildCommand": "vite build",
     "outputDirectory": "dist",
-    "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+    "rewrites": [
+        { "source": "/privacy", "destination": "/privacy.html" },
+        { "source": "/tentang", "destination": "/tentang.html" },
+        { "source": "/(.*)", "destination": "/index.html" }
+    ]
 }
