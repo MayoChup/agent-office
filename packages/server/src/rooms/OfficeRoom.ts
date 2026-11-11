@@ -55,6 +55,8 @@ interface Member {
     sleepingNoticeAt: number;
     /** Kapan gerak-gerik harian berikutnya (pakai aturan, tanpa AI). */
     nextIdleAt: number;
+    /** Berapa kali balasan untuk pemilik sudah dicoba ulang karena AI gratis sibuk. */
+    ownerRetries: number;
 }
 
 interface HighlightEvent {
@@ -378,7 +380,8 @@ export class OfficeRoom extends Room<OfficeState> {
             flash: '',
             flashUntil: 0,
             sleepingNoticeAt: 0,
-            nextIdleAt: Date.now() + 8_000 + Math.random() * 30_000
+            nextIdleAt: Date.now() + 8_000 + Math.random() * 30_000,
+            ownerRetries: 0
         };
         this.members.set(p.id, member);
 
@@ -600,18 +603,30 @@ Apa yang kamu lakukan sekarang?`;
                 this.writeJsonFile('kantor-autonomy.json', this.autonomy);
             }
             const { system, user } = this.buildPrompts(m);
-            const answer = await this.llm.complete(system, user);
+            // Pesan pemilik: coba lebih banyak model gratis sebelum menyerah.
+            const answer = await this.llm.complete(system, user, 350, hadOwnerMessage ? 4 : 2);
             m.lastThinkAt = Date.now();
             this.scheduleNext(m);
 
             if (!answer) {
                 if (st) st.action = 'idle';
                 if (hadOwnerMessage) {
-                    this.broadcast('chat', { sender: m.name, text: '(…sedang tidak bisa berpikir: kuota AI gratis penuh atau model sibuk. Coba lagi nanti ya.)' });
-                    m.inbox = [];
+                    if (this.llm.remainingToday() > 0 && m.ownerRetries < 3) {
+                        // AI gratis sedang ramai: tunggu sebentar lalu coba lagi sendiri.
+                        if (m.ownerRetries === 0) {
+                            this.broadcast('chat', { sender: m.name, text: '(AI gratisnya lagi antre ramai, sebentar ya — saya coba lagi otomatis…)' });
+                        }
+                        m.ownerRetries++;
+                        m.nextThinkAt = Date.now() + 45_000 * m.ownerRetries;
+                    } else {
+                        this.broadcast('chat', { sender: m.name, text: '(Maaf, AI gratis sedang penuh terus. Coba lagi beberapa menit lagi, atau kirim lewat Telegram — di sana tetap jalan.)' });
+                        m.inbox = [];
+                        m.ownerRetries = 0;
+                    }
                 }
                 return;
             }
+            m.ownerRetries = 0;
             const d = extractJson(answer) || {};
             await this.applyDecision(m, d);
         } catch (err) {

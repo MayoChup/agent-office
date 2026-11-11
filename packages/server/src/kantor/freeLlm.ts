@@ -140,7 +140,7 @@ export class FreeLlm {
                 return i === -1 ? PREFERENCE.length : i;
             };
             free.sort((a, b) => rank(a.id) - rank(b.id) || b.ctx - a.ctx);
-            this.candidates = free.slice(0, 6).map((m) => m.id);
+            this.candidates = free.slice(0, 10).map((m) => m.id);
             console.log(`[FreeLlm] Model gratis tersedia: ${this.candidates.join(', ') || '(tidak ada)'}`);
         } catch (err: any) {
             this.lastError = `Gagal mengambil daftar model: ${err?.message || err}`;
@@ -152,12 +152,12 @@ export class FreeLlm {
      * Kirim prompt dan kembalikan teks jawaban, atau null kalau tidak bisa
      * (kuota habis, semua model sibuk, dsb.).
      */
-    async complete(system: string, user: string, maxTokens = 350): Promise<string | null> {
+    async complete(system: string, user: string, maxTokens = 350, attempts = 2): Promise<string | null> {
         if (!this.canCall()) return null;
         await this.refreshModels();
 
         // Maksimal 2 percobaan per "berpikir": percobaan gagal ikut memakan kuota harian.
-        for (let attempt = 0; attempt < 2; attempt++) {
+        for (let attempt = 0; attempt < attempts; attempt++) {
             const model = this.currentModel();
             if (!model) {
                 // Semua sedang cooldown: coba ambil ulang daftar sekali.
@@ -198,7 +198,7 @@ export class FreeLlm {
                     const body = (await res.text()).slice(0, 200);
                     this.lastError = `${model}: HTTP ${res.status} ${body}`;
                     // 429 = sibuk/kuota, 404/400 = model hilang, 5xx = gangguan
-                    const cooldown = res.status === 429 ? 10 * 60_000 : res.status >= 500 ? 5 * 60_000 : 60 * 60_000;
+                    const cooldown = res.status === 429 ? 3 * 60_000 : res.status >= 500 ? 5 * 60_000 : 60 * 60_000;
                     this.cooldownUntil.set(model, Date.now() + cooldown);
                     console.warn('[FreeLlm]', this.lastError);
                     continue;
