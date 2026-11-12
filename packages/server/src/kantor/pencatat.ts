@@ -216,8 +216,19 @@ export function parseEmail(input: { id: string; from: string; subject: string; h
         const acq = field(lines, ['Nama Acquirer']);
         if (acq) ket = `via ${acq}`;
     }
+    // Email biaya (admin, bulanan, dll.): pihaknya bank itu sendiri.
+    const biaya = input.subject.match(/dikenakan biaya\s*(.*)$/i);
+    if (biaya && !pihak) {
+        pihak = `Biaya ${bank}${biaya[1] ? ` – ${biaya[1].replace(/[\u{1F300}-\u{1FAFF}\u2600-\u27BF]/gu, '').trim()}` : ''}`;
+        ket = ket || 'Biaya bank';
+    }
     pihak = clean(pihak.replace(/\s+\d{10,}$/, ''));
 
+    // Cadangan: kalau label nominal tidak ketemu tapi di email hanya ada SATU angka rupiah, pakai itu.
+    if (!amountRaw) {
+        const found = Array.from(new Set((lines.join('\n').match(/(?:Rp\.?|IDR)\s?\d[\d.,]*/gi) || []).map((x) => parseRupiah(x)).filter((n) => n && n > 0)));
+        if (found.length === 1) amountRaw = String(found[0]);
+    }
     const nominal = amountRaw ? parseRupiah(amountRaw) : null;
     let when = parseTanggal(tglRaw);
     if (when && !when.jam && jamRaw) when.jam = parseTanggal(`1 jan 2000 ${jamRaw}`)?.jam || '';
@@ -231,7 +242,8 @@ export function parseEmail(input: { id: string; from: string; subject: string; h
     const up = pihak.toUpperCase();
     if (cfg.ownerNames.some((n) => n && up.includes(n.toUpperCase()))) jenis = 'Antar Rekening';
 
-    const kategori = jenis === 'Masuk' ? 'Gaji/Pemasukan' : jenis === 'Antar Rekening' ? 'Lainnya' : kategoriOf(pihak, cfg.kategori);
+    const kategori = jenis === 'Masuk' ? 'Gaji/Pemasukan' : jenis === 'Antar Rekening' ? 'Lainnya'
+        : /^Biaya /.test(pihak) ? 'Tagihan & Langganan' : kategoriOf(pihak, cfg.kategori);
     const ok = nominal !== null && nominal > 0 && !!pihak;
     return {
         tanggal: when.tanggal,
