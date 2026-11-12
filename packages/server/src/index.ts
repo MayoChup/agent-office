@@ -6,8 +6,27 @@ import { createServer } from 'http';
 import { OfficeRoom } from './rooms/OfficeRoom';
 import { loadConfig } from './kantor/config';
 import { KantorAuth } from './kantor/auth';
+import { Pencatat, telegramNotifier } from './kantor/pencatat';
 
 const config = loadConfig();
+
+// Mode uji: `node kantor-server.js --uji-pencatat` → tampilkan transaksi yang AKAN dicatat, tanpa menulis apa pun.
+if (process.argv.includes('--uji-pencatat')) {
+    (async () => {
+        const p = new Pencatat({ ...config.pencatat, enabled: true }, config.hermesHome, config.dataDir, async () => undefined);
+        if (!config.pencatat.spreadsheetId) { console.log('pencatat.spreadsheetId belum diisi di kantor.config.json'); process.exit(1); }
+        try {
+            const { rows, skipped } = await p.collect(true);
+            console.log(`\nAkan dicatat: ${rows.length} transaksi (diabaikan: ${skipped} email bukan transaksi/sudah tercatat)\n`);
+            for (const r of rows) console.log(`${r.tanggal} ${r.jam.padEnd(5)} ${r.bank.padEnd(7)} ${r.jenis.padEnd(14)} ${String(r.nominal ?? '?').padStart(10)}  ${r.pihak.slice(0, 28).padEnd(28)} ${r.kategori.padEnd(20)} ${r.status}`);
+            process.exit(0);
+        } catch (e: any) { console.error('GAGAL:', e?.message || e); process.exit(1); }
+    })();
+} else {
+    startServer();
+}
+
+function startServer() {
 const auth = new KantorAuth(config.dataDir, config.password);
 OfficeRoom.config = config;
 OfficeRoom.auth = auth;
@@ -86,6 +105,7 @@ gameServer.define('office', OfficeRoom);
 gameServer.listen(config.port, config.host).then(async () => {
     // Kantor langsung dibuka, walau belum ada yang menonton, supaya agen tetap "hidup".
     await matchMaker.createRoom('office', {});
+    new Pencatat(config.pencatat, config.hermesHome, config.dataDir, telegramNotifier(config.hermesHome)).start();
     console.log(`[Kantor] Buka http://${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.port}`);
     if (config.host !== '127.0.0.1' && config.host !== 'localhost') {
         console.warn('[Kantor] PERINGATAN: server tidak hanya mendengarkan localhost. Pastikan port ini TIDAK terbuka ke internet.');
@@ -99,3 +119,4 @@ const shutdown = async () => {
 };
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
+}

@@ -1,3 +1,4 @@
+import { PencatatConfig, DEFAULT_KATEGORI } from './pencatat';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -49,6 +50,9 @@ export interface KantorConfig {
     password: string;
     /** Asal halaman yang boleh mengakses API (misalnya https://kantor.vercel.app). "*" = semua. */
     allowedOrigins: string[];
+
+    /** Pencatat transaksi dari email bank ke Google Sheets (tanpa AI). */
+    pencatat: PencatatConfig;
 
     // ── Otak gratis (OpenRouter :free) ──
     openRouterApiKey: string;
@@ -140,6 +144,16 @@ export function loadConfig(): KantorConfig {
         password: env.KANTOR_PASSWORD || '',
         allowedOrigins: String(env.KANTOR_ALLOWED_ORIGINS || file.allowedOrigins || '*').split(',').map((s: string) => s.trim()).filter(Boolean),
         maxAgents: num(env.KANTOR_MAX_AGENTS || file.maxAgents, 8),
+        pencatat: {
+            enabled: file.pencatat?.enabled !== false,
+            spreadsheetId: String(file.pencatat?.spreadsheetId || ''),
+            sheetName: String(file.pencatat?.sheetName || 'Transaksi'),
+            sinceDate: String(file.pencatat?.sinceDate || '2026-11-01'),
+            intervalMinutes: num(file.pencatat?.intervalMinutes, 30),
+            dailySummaryHour: num(file.pencatat?.dailySummaryHour, 21),
+            ownerNames: Array.isArray(file.pencatat?.ownerNames) ? file.pencatat.ownerNames : [],
+            kategori: { ...DEFAULT_KATEGORI, ...(file.pencatat?.kategori || {}) }
+        },
 
         openRouterApiKey: env.OPENROUTER_API_KEY || '',
         openRouterBaseUrl: env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',

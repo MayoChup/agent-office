@@ -6,6 +6,7 @@ import { MemoryStore } from '../memory/MemoryStore';
 import { KantorConfig } from '../kantor/config';
 import { KantorAuth } from '../kantor/auth';
 import { FreeLlm, extractJson } from '../kantor/freeLlm';
+import { pencatatEvents } from '../kantor/pencatat';
 import { HermesBridge, HermesProfile, KanbanTask } from '../kantor/hermes';
 import { DOOR, PLACE_LABELS, Spot, pickSpot, buildLayout, groupDivisions, walkableGrid, findPath, OfficeLayout, DivisionInfo } from '../kantor/layout';
 
@@ -180,6 +181,15 @@ export class OfficeRoom extends Room<OfficeState> {
         this.timers.push(setInterval(() => this.pollKanban().catch((e) => console.error('[Kanban]', e)), this.cfg.kanbanPollSeconds * 1000));
         this.timers.push(setInterval(() => this.syncProfiles(false).catch((e) => console.error('[Profil]', e)), this.cfg.profilePollSeconds * 1000));
         this.timers.push(setInterval(() => this.broadcast('usage', this.usagePayload()), 30_000));
+        // Pencatat transaksi (tanpa AI) menambah baris → tampilkan di kantor sebagai pekerjaan Uang.
+        const onAdded = (rows: Array<{ pihak: string; nominal: number | null }>) => {
+            const uang = this.members.get('keuangan');
+            const total = rows.reduce((a, r) => a + (r.nominal || 0), 0);
+            this.emitHighlight('task', `💰 ${rows.length} transaksi baru dicatat`, `Total Rp${total.toLocaleString('id-ID')} — ${rows.slice(0, 3).map((r) => r.pihak).join(', ')}`, uang?.id);
+            const st = uang && this.state.agents.get(uang.id);
+            if (st) st.thought = `Mencatat ${rows.length} transaksi ke Sheets 📒`;
+        };
+        pencatatEvents.on('added', onAdded);
 
         this.setSimulationInterval(() => this.update(), 100);
         console.log(`[Kantor] ${this.cfg.officeName} siap. Anggota: ${Array.from(this.members.values()).map((m) => m.name).join(', ') || '(belum ada)'}`);

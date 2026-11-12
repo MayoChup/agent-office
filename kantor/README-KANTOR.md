@@ -164,3 +164,16 @@ Matikan akses publik kapan saja: `sudo tailscale funnel --bg 3000 off`
   `"divisions": { "keuangan": { "name": "Keuangan Pribadi", "icon": "💰", "color": "#22c55e" } }`
 
 Aset pixel (lantai, dinding, furnitur, karakter) dari proyek *pixel-agents* oleh Pablo De Lucca (lisensi MIT).
+
+## 11. Pencatat transaksi otomatis (tanpa AI)
+
+Membaca email notifikasi BCA, Livin' (Mandiri), Krom, dan Jago dari Gmail lalu menambah baris ke
+tab "Transaksi" di Google Sheets. Memakai izin Google milik Hermes (`~/.hermes/google_token.json`).
+
+Atur di `kantor.config.json` bagian `pencatat` (`spreadsheetId` wajib). Uji dulu tanpa menulis apa pun:
+
+```bash
+cd ~/kantor-virtual && node kantor-server.js --uji-pencatat
+```
+
+Kategori bisa ditambah, misalnya `"kategori": { "Makan & Minum": ["NAMA WARUNG LANGGANAN"] }`.
