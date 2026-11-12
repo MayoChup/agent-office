@@ -7,11 +7,21 @@ import { OfficeRoom } from './rooms/OfficeRoom';
 import { loadConfig } from './kantor/config';
 import { KantorAuth } from './kantor/auth';
 import { Pencatat, telegramNotifier } from './kantor/pencatat';
+import { TradingDesk, tradingCli } from './kantor/trading';
+import os from 'os';
 
 const config = loadConfig();
 
 // Mode uji: `node kantor-server.js --uji-pencatat` → tampilkan transaksi yang AKAN dicatat, tanpa menulis apa pun.
-if (process.argv.includes('--uji-pencatat')) {
+const tradingDeskDir = process.env.TRADER_DESK || path.join(os.homedir(), 'trader-desk');
+const tradingArg = process.argv.indexOf('--trading');
+if (tradingArg >= 0) {
+    // Dipanggil oleh Hermes (AI) atau pemilik: node kantor-server.js --trading <perintah> ...
+    const desk = new TradingDesk(config.dataDir, telegramNotifier(config.hermesHome), tradingDeskDir);
+    tradingCli(desk, process.argv.slice(tradingArg + 1))
+        .then((out) => { console.log(out); process.exit(0); })
+        .catch((e) => { console.error('GAGAL:', e?.message || e); process.exit(1); });
+} else if (process.argv.includes('--uji-pencatat')) {
     (async () => {
         const p = new Pencatat({ ...config.pencatat, enabled: true }, config.hermesHome, config.dataDir, async () => undefined);
         if (!config.pencatat.spreadsheetId) { console.log('pencatat.spreadsheetId belum diisi di kantor.config.json'); process.exit(1); }
@@ -106,6 +116,7 @@ gameServer.listen(config.port, config.host).then(async () => {
     // Kantor langsung dibuka, walau belum ada yang menonton, supaya agen tetap "hidup".
     await matchMaker.createRoom('office', {});
     new Pencatat(config.pencatat, config.hermesHome, config.dataDir, telegramNotifier(config.hermesHome)).start();
+    new TradingDesk(config.dataDir, telegramNotifier(config.hermesHome), tradingDeskDir).start();
     console.log(`[Kantor] Buka http://${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.port}`);
     if (config.host !== '127.0.0.1' && config.host !== 'localhost') {
         console.warn('[Kantor] PERINGATAN: server tidak hanya mendengarkan localhost. Pastikan port ini TIDAK terbuka ke internet.');
