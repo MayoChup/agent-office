@@ -10,7 +10,7 @@ export const KAT_COLORS: Record<string, string> = {
 const HARI = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
 const BULAN = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 
-export const rp = (n: number) => `Rp${Math.round(n).toLocaleString('id-ID')}`;
+export const rp = (n: number) => `${n < 0 ? '−' : ''}Rp${Math.abs(Math.round(n)).toLocaleString('id-ID')}`;
 export const rpShort = (n: number) => {
     const a = Math.abs(n);
     if (a >= 1e9) return `${(n / 1e9).toFixed(1).replace('.', ',')} M`;

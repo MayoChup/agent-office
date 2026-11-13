@@ -259,15 +259,15 @@ button { font-family: inherit; }
 .fin-bar-fill { height: 100%; border-radius: 6px; min-width: 2px; }
 .fin-bar-val { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
 .fin-bar-val small { color: var(--muted); font-weight: 400; }
-.fin-cols { position: relative; display: flex; align-items: flex-end; gap: 4px; height: 150px; padding-bottom: 18px; }
+.fin-cols { position: relative; display: flex; align-items: flex-end; gap: 4px; height: 150px; margin-bottom: 18px; }
 .fin-col { flex: 1; height: 100%; display: flex; flex-direction: column; align-items: center; min-width: 0; }
 .fin-col-bar-wrap { flex: 1; width: 100%; display: flex; align-items: flex-end; }
 .fin-col-bar { width: 100%; background: linear-gradient(180deg, #818cf8, #6366f1); border-radius: 5px 5px 2px 2px; min-height: 2px; }
 .fin-col-bar.bad { background: linear-gradient(180deg, #fb7185, #e11d48); }
 .fin-col-bar.current { opacity: 0.55; }
-.fin-col-label { position: absolute; bottom: 0; font-size: 9.5px; color: var(--muted); transform: translateX(0); }
+.fin-col-label { position: absolute; bottom: -16px; font-size: 9.5px; color: var(--muted); white-space: nowrap; }
 .fin-col { position: relative; }
-.fin-avg { position: absolute; left: 0; right: 0; border-top: 1.5px dashed #fb7185; margin-bottom: 18px; pointer-events: none; z-index: 1; }
+.fin-avg { position: absolute; left: 0; right: 0; border-top: 1.5px dashed #fb7185; pointer-events: none; z-index: 1; }
 .fin-avg span { position: absolute; right: 0; top: -16px; font-size: 9.5px; color: #fda4af; background: var(--panel-2); padding: 0 3px; }
 .fin-days { display: flex; align-items: flex-end; gap: 2px; height: 110px; padding-bottom: 16px; }
 .fin-day { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; position: relative; min-width: 0; }

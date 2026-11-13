@@ -119,7 +119,7 @@ export function FinancePage({ onClose }: { onClose: () => void }) {
                 </div>
                 <div className="fin-filters">
                     <select className="select" value={ym} onChange={(e) => setYm(e.target.value)} aria-label="Bulan">
-                        {months.map((m) => <option key={m} value={m}>{m === todayWib().slice(0, 7) ? `Bulan ini (${monthLabel(m)})` : monthLabel(m)}</option>)}
+                        {months.map((m) => <option key={m} value={m}>{monthLabel(m)}{m === todayWib().slice(0, 7) ? ' ✓' : ''}</option>)}
                     </select>
                     <select className="select" value={bank} onChange={(e) => setBank(e.target.value)} aria-label="Bank">
                         {['Semua', ...BANKS].map((b) => <option key={b} value={b}>{b === 'Semua' ? 'Semua bank' : b}</option>)}
