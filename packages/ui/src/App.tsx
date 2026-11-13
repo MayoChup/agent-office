@@ -10,6 +10,7 @@ import { ActivityPanel } from './components/ActivityPanel';
 import { AgentCard } from './components/AgentCard';
 import { Toasts } from './components/Toasts';
 import { LoginScreen } from './components/LoginScreen';
+import { FinancePage } from './components/FinancePage';
 
 export function App() {
     const status = useKantor((s) => s.status);
@@ -55,6 +56,7 @@ export function App() {
             )}
             {panel === 'org' && <OrgPanel selected={division} onSelect={setDivision} onClose={close} />}
             {panel === 'tasks' && <TasksPanel onClose={close} />}
+            {panel === 'finance' && <FinancePage onClose={close} />}
             {panel === 'chat' && <ChatPanel onClose={close} prefill={prefill} />}
             {panel === 'activity' && <ActivityPanel onClose={close} />}
             {agentId && (

@@ -38,6 +38,17 @@ function safeSet(key: string, value: string) {
 }
 
 export function getRoom() { return room; }
+
+/** Panggil API kantor yang butuh login (GET). */
+export async function apiGet<T = any>(pathAndQuery: string): Promise<T> {
+    const server = currentServer();
+    const token = safeGet(LS_TOKEN);
+    const res = await fetch(`${server}${pathAndQuery}`, { headers: { Authorization: `Bearer ${token}` } });
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 401) { safeSet(LS_TOKEN, ''); setStatus('login'); }
+    if (!res.ok || data?.ok === false) throw new Error(data?.error || `HTTP ${res.status}`);
+    return data as T;
+}
 export function getStatus() { return status; }
 export function getLastError() { return lastError; }
 export function isSameOrigin() { return sameOriginServer; }

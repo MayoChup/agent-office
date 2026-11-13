@@ -94,6 +94,22 @@ app.get('/api/kantor/status', requireToken, (_req, res) => {
     res.json({ ok: true, ...room.statusPayload() });
 });
 
+// Laporan keuangan & trading untuk tampilan kantor (wajib login).
+const pencatat = new Pencatat(config.pencatat, config.hermesHome, config.dataDir, telegramNotifier(config.hermesHome));
+const tradingDesk = new TradingDesk(config.dataDir, telegramNotifier(config.hermesHome), tradingDeskDir);
+app.get('/api/kantor/keuangan', requireToken, async (req, res) => {
+    try {
+        if (req.query.sync === '1') await pencatat.runOnce();
+        res.json({ ok: true, ...(await pencatat.report(req.query.sync === '1')) });
+    } catch (e: any) {
+        res.status(502).json({ ok: false, error: String(e?.message || e) });
+    }
+});
+app.get('/api/kantor/trading', requireToken, (_req, res) => {
+    const st = tradingDesk.load();
+    res.json({ ok: true, capital: st.capital, riskPct: st.riskPct, positions: st.positions, plans: st.plans, history: st.history.slice(-30), watchlist: st.watchlist });
+});
+
 // Tampilan kantor (hasil build UI) disajikan dari server yang sama.
 const uiCandidates = [config.uiDistDir, path.join(__dirname, 'ui'), path.resolve(__dirname, '../../ui/dist')];
 const uiDir = uiCandidates.find((dir) => fs.existsSync(path.join(dir, 'index.html')));
@@ -115,8 +131,8 @@ gameServer.define('office', OfficeRoom);
 gameServer.listen(config.port, config.host).then(async () => {
     // Kantor langsung dibuka, walau belum ada yang menonton, supaya agen tetap "hidup".
     await matchMaker.createRoom('office', {});
-    new Pencatat(config.pencatat, config.hermesHome, config.dataDir, telegramNotifier(config.hermesHome)).start();
-    new TradingDesk(config.dataDir, telegramNotifier(config.hermesHome), tradingDeskDir).start();
+    pencatat.start();
+    tradingDesk.start();
     console.log(`[Kantor] Buka http://${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.port}`);
     if (config.host !== '127.0.0.1' && config.host !== 'localhost') {
         console.warn('[Kantor] PERINGATAN: server tidak hanya mendengarkan localhost. Pastikan port ini TIDAK terbuka ke internet.');

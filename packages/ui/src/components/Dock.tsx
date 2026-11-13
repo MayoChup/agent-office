@@ -2,7 +2,7 @@ import React from 'react';
 import { useKantor } from '../kantor/store';
 import { eventBus } from '../events';
 
-export type PanelKey = 'org' | 'tasks' | 'chat' | 'activity' | null;
+export type PanelKey = 'org' | 'tasks' | 'finance' | 'chat' | 'activity' | null;
 
 export function Dock({ active, onSelect }: { active: PanelKey; onSelect: (k: PanelKey) => void }) {
     const unread = useKantor((s) => s.unreadChat);
@@ -11,6 +11,7 @@ export function Dock({ active, onSelect }: { active: PanelKey; onSelect: (k: Pan
     const items: Array<{ key: Exclude<PanelKey, null>; ico: string; label: string; badge?: number }> = [
         { key: 'org', ico: '🧭', label: 'Bagan' },
         { key: 'tasks', ico: '📋', label: 'Tugas', badge: activeTasks },
+        { key: 'finance', ico: '💰', label: 'Keuangan' },
         { key: 'chat', ico: '💬', label: 'Obrolan', badge: unread },
         { key: 'activity', ico: '⚡', label: 'Aktivitas' }
     ];

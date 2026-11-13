@@ -461,6 +461,37 @@ export class Pencatat {
         }
     }
 
+    private reportCache: { at: number; data: any } | null = null;
+
+    /** Data transaksi untuk laporan keuangan di tampilan kantor (dibaca dari Google Sheets, cache 60 detik). */
+    async report(force = false): Promise<any> {
+        if (!this.cfg.spreadsheetId) throw new Error('Pencatat belum diatur (pencatat.spreadsheetId kosong).');
+        if (!force && this.reportCache && Date.now() - this.reportCache.at < 60_000) return this.reportCache.data;
+        const rows = await this.existingRows();
+        const tx = rows
+            .filter((r) => r[0] !== '' && r[0] !== undefined)
+            .map((r) => ({
+                d: serialToIso(r[0]),
+                t: typeof r[1] === 'number' ? `${String(Math.floor(r[1] * 24)).padStart(2, '0')}:${String(Math.round((r[1] * 1440) % 60)).padStart(2, '0')}` : String(r[1] || ''),
+                bank: String(r[2] || ''),
+                jenis: String(r[3] || ''),
+                n: Math.round(Number(r[4]) || 0),
+                pihak: String(r[5] || ''),
+                kat: String(r[6] || 'Lainnya'),
+                ket: String(r[7] || ''),
+                status: String(r[9] || 'OK')
+            }))
+            .filter((x) => /^\d{4}-\d{2}-\d{2}$/.test(x.d));
+        const data = {
+            transaksi: tx,
+            sheetUrl: `https://docs.google.com/spreadsheets/d/${this.cfg.spreadsheetId}/edit`,
+            pencatat: { lastRun: this.status.lastRun, lastError: this.status.lastError, interval: this.cfg.intervalMinutes },
+            updatedAt: Date.now()
+        };
+        this.reportCache = { at: Date.now(), data };
+        return data;
+    }
+
     private async maybeSummary() {
         if (this.cfg.dailySummaryHour < 0) return;
         const now = new Date(Date.now() + 7 * 3600_000);   // WIB
