@@ -161,7 +161,8 @@ export class OfficeRoom extends Room<OfficeState> {
             model: this.cfg.model,
             dailyLimit: this.cfg.dailyRequestLimit,
             perMinuteLimit: this.cfg.perMinuteLimit,
-            dataDir: this.cfg.dataDir
+            dataDir: this.cfg.dataDir,
+            backups: this.cfg.llmBackups
         });
         this.hermes = new HermesBridge(this.cfg.hermesHome, this.cfg.kanbanDbPath, this.cfg.hermesBin);
 
@@ -614,7 +615,7 @@ Apa yang kamu lakukan sekarang?`;
             }
             const { system, user } = this.buildPrompts(m);
             // Pesan pemilik: coba lebih banyak model gratis sebelum menyerah.
-            const answer = await this.llm.complete(system, user, 350, hadOwnerMessage ? 4 : 2);
+            const answer = await this.llm.complete(system, user, 350, hadOwnerMessage ? 4 : 2, hadOwnerMessage);
             m.lastThinkAt = Date.now();
             this.scheduleNext(m);
 

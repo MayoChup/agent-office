@@ -177,3 +177,10 @@ cd ~/kantor-virtual && node kantor-server.js --uji-pencatat
 ```
 
 Kategori bisa ditambah, misalnya `"kategori": { "Makan & Minum": ["NAMA WARUNG LANGGANAN"] }`.
+
+## 12. Cadangan AI gratis (Gemini / Groq)
+
+Kalau semua model gratis OpenRouter sibuk, kantor otomatis pindah ke Gemini atau Groq (gratis, kuota terpisah).
+Isi salah satu di `.env`: `GEMINI_API_KEY=...` (aistudio.google.com/apikey, proyek tanpa billing) atau
+`GROQ_API_KEY=...` (console.groq.com/keys), lalu restart kantor. Model dipilih otomatis; bisa dipaksa dengan
+`GEMINI_MODEL=` / `GROQ_MODEL=`.

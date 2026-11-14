@@ -1,3 +1,4 @@
+import { BackupProvider, backupProviders } from './freeLlm';
 import { PencatatConfig, DEFAULT_KATEGORI } from './pencatat';
 import fs from 'fs';
 import os from 'os';
@@ -57,6 +58,8 @@ export interface KantorConfig {
     // ── Otak gratis (OpenRouter :free) ──
     openRouterApiKey: string;
     openRouterBaseUrl: string;
+    /** Penyedia AI gratis cadangan dari .env (GEMINI_API_KEY / GROQ_API_KEY). */
+    llmBackups: BackupProvider[];
     /** "auto" = pilih otomatis model :free yang tersedia, atau daftar id dipisah koma. */
     model: string;
     thinkIntervalMinutes: number;
@@ -157,6 +160,7 @@ export function loadConfig(): KantorConfig {
 
         openRouterApiKey: env.OPENROUTER_API_KEY || '',
         openRouterBaseUrl: env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
+        llmBackups: backupProviders(env),
         model: env.KANTOR_MODEL || file.model || 'auto',
         thinkIntervalMinutes: num(env.KANTOR_THINK_MINUTES || file.thinkIntervalMinutes, 10),
         dailyRequestLimit: num(env.KANTOR_DAILY_REQUESTS || file.dailyRequestLimit, 900),

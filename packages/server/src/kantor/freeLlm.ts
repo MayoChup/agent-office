@@ -19,6 +19,32 @@ export interface FreeLlmOptions {
     dailyLimit: number;
     perMinuteLimit: number;
     dataDir: string;
+    /** Penyedia AI gratis cadangan (Gemini / Groq), dipakai kalau semua model OpenRouter sibuk. */
+    backups?: BackupProvider[];
+}
+
+export interface BackupProvider {
+    name: string;              // "Gemini" | "Groq"
+    baseUrl: string;           // endpoint kompatibel OpenAI
+    apiKey: string;
+    model?: string;            // kosong = pilih otomatis
+    prefer: RegExp[];          // urutan pilihan model otomatis
+    avoid: RegExp;             // model yang tidak cocok (gambar, suara, dll.)
+}
+
+export function backupProviders(env: Record<string, string | undefined>): BackupProvider[] {
+    const list: BackupProvider[] = [];
+    if (env.GEMINI_API_KEY) list.push({
+        name: 'Gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', apiKey: env.GEMINI_API_KEY, model: env.GEMINI_MODEL,
+        prefer: [/flash-lite(?!.*preview)/, /flash(?!.*preview)/, /flash/],
+        avoid: /image|tts|audio|live|embed|vision|thinking|learnlm|aqa|imagen|veo|robotics|computer/i
+    });
+    if (env.GROQ_API_KEY) list.push({
+        name: 'Groq', baseUrl: 'https://api.groq.com/openai/v1', apiKey: env.GROQ_API_KEY, model: env.GROQ_MODEL,
+        prefer: [/^llama-3\.3-70b/, /llama-4/, /gpt-oss-120b/, /qwen/, /llama/],
+        avoid: /whisper|tts|guard|playai|vision|compound|distil|orpheus/i
+    });
+    return list;
 }
 
 export interface UsageSnapshot {
@@ -43,6 +69,11 @@ export class FreeLlm {
     private usageFile: string;
     private lastError: string | null = null;
     private lastModelRefresh = 0;
+    /** Model yang terakhir berhasil menjawab: dicoba lebih dulu (biasanya sedang longgar). */
+    private lastGood: string | null = null;
+    private backupModels = new Map<string, { model: string | null; at: number }>();
+    private backupCooldown = new Map<string, number>();
+    private lastProvider: string | null = null;
 
     constructor(private opts: FreeLlmOptions) {
         this.usageFile = path.join(opts.dataDir, 'kantor-usage.json');
@@ -58,7 +89,7 @@ export class FreeLlm {
     }
 
     get enabled(): boolean {
-        return Boolean(this.opts.apiKey);
+        return Boolean(this.opts.apiKey) || Boolean(this.opts.backups?.length);
     }
 
     snapshot(): UsageSnapshot {
@@ -67,7 +98,7 @@ export class FreeLlm {
             date: this.usage.date,
             used: this.usage.used,
             dailyLimit: this.opts.dailyLimit,
-            activeModel: this.currentModel(),
+            activeModel: this.lastProvider && this.lastProvider !== 'OpenRouter' ? `${this.lastProvider} (cadangan)` : this.currentModel(),
             enabled: this.enabled,
             lastError: this.lastError
         };
@@ -79,9 +110,14 @@ export class FreeLlm {
         return Math.max(0, this.opts.dailyLimit - this.usage.used);
     }
 
-    /** Apakah boleh memanggil AI sekarang (kuota harian & per menit). */
+    /** Apakah boleh memanggil AI sekarang: OpenRouter masih ada kuota, atau ada penyedia cadangan. */
     canCall(): boolean {
-        if (!this.enabled) return false;
+        return this.orCanCall() || Boolean(this.opts.backups?.length);
+    }
+
+    /** Kuota OpenRouter (harian & per menit). */
+    private orCanCall(): boolean {
+        if (!this.opts.apiKey) return false;
         if (this.remainingToday() <= 0) return false;
         const now = Date.now();
         this.recent = this.recent.filter((t) => now - t < 60_000);
@@ -104,9 +140,11 @@ export class FreeLlm {
         }
     }
 
-    private currentModel(): string | null {
+    private currentModel(exclude: string[] = []): string | null {
         const now = Date.now();
-        return this.candidates.find((m) => (this.cooldownUntil.get(m) || 0) <= now) || null;
+        const free = (m: string) => (this.cooldownUntil.get(m) || 0) <= now && !exclude.includes(m);
+        if (this.lastGood && this.candidates.includes(this.lastGood) && free(this.lastGood)) return this.lastGood;
+        return this.candidates.find(free) || null;
     }
 
     private async refreshModels(force = false) {
@@ -148,77 +186,176 @@ export class FreeLlm {
         }
     }
 
-    /**
-     * Kirim prompt dan kembalikan teks jawaban, atau null kalau tidak bisa
-     * (kuota habis, semua model sibuk, dsb.).
-     */
-    async complete(system: string, user: string, maxTokens = 350, attempts = 2): Promise<string | null> {
-        if (!this.canCall()) return null;
-        await this.refreshModels();
-
-        // Maksimal 2 percobaan per "berpikir": percobaan gagal ikut memakan kuota harian.
-        for (let attempt = 0; attempt < attempts; attempt++) {
-            const model = this.currentModel();
-            if (!model) {
-                // Semua sedang cooldown: coba ambil ulang daftar sekali.
-                await this.refreshModels(true);
-                if (!this.currentModel()) {
-                    this.lastError = 'Semua model gratis sedang sibuk.';
-                    return null;
-                }
-                continue;
+    /** Satu panggilan ke satu model OpenRouter. Mengembalikan teks atau null (dan mencatat cooldown). */
+    private async callOpenRouter(model: string, system: string, user: string, maxTokens: number, signal?: AbortSignal): Promise<string | null> {
+        this.record();
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 45_000);
+        const onAbort = () => controller.abort();
+        signal?.addEventListener('abort', onAbort);
+        try {
+            const res = await fetch(`${this.opts.baseUrl}/chat/completions`, {
+                method: 'POST',
+                signal: controller.signal,
+                headers: { Authorization: `Bearer ${this.opts.apiKey}`, 'Content-Type': 'application/json', 'X-Title': 'Kantor Virtual' },
+                body: JSON.stringify({
+                    model,
+                    messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+                    temperature: 0.8,
+                    max_tokens: maxTokens
+                })
+            });
+            if (!res.ok) {
+                const body = (await res.text()).slice(0, 200);
+                this.lastError = `${model}: HTTP ${res.status} ${body}`;
+                // 429 = sibuk/kuota, 404/400 = model hilang, 5xx = gangguan
+                const cooldown = res.status === 429 ? 3 * 60_000 : res.status >= 500 ? 5 * 60_000 : 60 * 60_000;
+                this.cooldownUntil.set(model, Date.now() + cooldown);
+                if (this.lastGood === model) this.lastGood = null;
+                console.warn('[FreeLlm]', this.lastError);
+                return null;
             }
-            if (!this.canCall()) return null;
-            this.record();
+            const data: any = await res.json();
+            const text: string = data?.choices?.[0]?.message?.content || '';
+            if (!text.trim()) {
+                this.cooldownUntil.set(model, Date.now() + 5 * 60_000);
+                return null;
+            }
+            this.lastGood = model;
+            this.lastProvider = 'OpenRouter';
+            this.lastError = null;
+            return text;
+        } catch (err: any) {
+            if (signal?.aborted) return null;   // dibatalkan karena model lain sudah menjawab
+            this.lastError = `${model}: ${err?.name === 'AbortError' ? 'timeout' : err?.message || err}`;
+            this.cooldownUntil.set(model, Date.now() + 5 * 60_000);
+            if (this.lastGood === model) this.lastGood = null;
+            console.warn('[FreeLlm]', this.lastError);
+            return null;
+        } finally {
+            clearTimeout(timer);
+            signal?.removeEventListener('abort', onAbort);
+        }
+    }
 
+    /** Pilih model untuk penyedia cadangan (sekali per 6 jam). */
+    private async backupModel(b: BackupProvider): Promise<string | null> {
+        if (b.model) return b.model;
+        const cached = this.backupModels.get(b.name);
+        if (cached && Date.now() - cached.at < 6 * 3600_000) return cached.model;
+        let model: string | null = null;
+        try {
+            const res = await fetch(`${b.baseUrl}/models`, { headers: { Authorization: `Bearer ${b.apiKey}` } });
+            const data: any = await res.json();
+            const ids: string[] = (data?.data || []).map((m: any) => String(m.id || '').replace(/^models\//, '')).filter((id: string) => id && !b.avoid.test(id));
+            for (const re of b.prefer) {
+                const hit = ids.filter((id) => re.test(id)).sort().reverse()[0];
+                if (hit) { model = hit; break; }
+            }
+            if (!model) model = ids[0] || null;
+            console.log(`[FreeLlm] Cadangan ${b.name}: ${model || '(tidak ada model cocok)'}`);
+        } catch (e: any) {
+            console.warn(`[FreeLlm] Cadangan ${b.name} gagal dicek: ${e?.message || e}`);
+        }
+        this.backupModels.set(b.name, { model, at: Date.now() });
+        return model;
+    }
+
+    /** Coba penyedia cadangan satu per satu. Tidak memakai kuota OpenRouter. */
+    private async callBackups(system: string, user: string, maxTokens: number): Promise<string | null> {
+        for (const b of this.opts.backups || []) {
+            if ((this.backupCooldown.get(b.name) || 0) > Date.now()) continue;
+            const model = await this.backupModel(b);
+            if (!model) continue;
             try {
                 const controller = new AbortController();
-                const timer = setTimeout(() => controller.abort(), 45_000);
-                const res = await fetch(`${this.opts.baseUrl}/chat/completions`, {
+                const timer = setTimeout(() => controller.abort(), 40_000);
+                const res = await fetch(`${b.baseUrl}/chat/completions`, {
                     method: 'POST',
                     signal: controller.signal,
-                    headers: {
-                        Authorization: `Bearer ${this.opts.apiKey}`,
-                        'Content-Type': 'application/json',
-                        'X-Title': 'Kantor Virtual'
-                    },
+                    headers: { Authorization: `Bearer ${b.apiKey}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         model,
-                        messages: [
-                            { role: 'system', content: system },
-                            { role: 'user', content: user }
-                        ],
+                        messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
                         temperature: 0.8,
                         max_tokens: maxTokens
                     })
                 });
                 clearTimeout(timer);
-
                 if (!res.ok) {
-                    const body = (await res.text()).slice(0, 200);
-                    this.lastError = `${model}: HTTP ${res.status} ${body}`;
-                    // 429 = sibuk/kuota, 404/400 = model hilang, 5xx = gangguan
-                    const cooldown = res.status === 429 ? 3 * 60_000 : res.status >= 500 ? 5 * 60_000 : 60 * 60_000;
-                    this.cooldownUntil.set(model, Date.now() + cooldown);
+                    const body = (await res.text()).slice(0, 160);
+                    this.lastError = `${b.name} ${model}: HTTP ${res.status} ${body}`;
+                    this.backupCooldown.set(b.name, Date.now() + (res.status === 429 ? 2 * 60_000 : res.status === 401 || res.status === 403 ? 6 * 3600_000 : 5 * 60_000));
+                    if (res.status === 404 || res.status === 400) this.backupModels.delete(b.name);
                     console.warn('[FreeLlm]', this.lastError);
                     continue;
                 }
-
                 const data: any = await res.json();
                 const text: string = data?.choices?.[0]?.message?.content || '';
-                if (!text.trim()) {
-                    this.cooldownUntil.set(model, Date.now() + 5 * 60_000);
-                    continue;
-                }
+                if (!text.trim()) continue;
+                this.lastProvider = b.name;
                 this.lastError = null;
                 return text;
-            } catch (err: any) {
-                this.lastError = `${model}: ${err?.name === 'AbortError' ? 'timeout' : err?.message || err}`;
-                this.cooldownUntil.set(model, Date.now() + 5 * 60_000);
+            } catch (e: any) {
+                this.lastError = `${b.name}: ${e?.name === 'AbortError' ? 'timeout' : e?.message || e}`;
+                this.backupCooldown.set(b.name, Date.now() + 2 * 60_000);
                 console.warn('[FreeLlm]', this.lastError);
             }
         }
         return null;
+    }
+
+    /**
+     * Kirim prompt dan kembalikan teks jawaban, atau null kalau tidak bisa
+     * (kuota habis, semua model sibuk, dsb.).
+     *
+     * race = true (pesan pemilik): dua model OpenRouter dipanggil bersamaan, jawaban
+     * tercepat dipakai. Kalau semua model OpenRouter sibuk, pindah ke penyedia cadangan.
+     */
+    async complete(system: string, user: string, maxTokens = 350, attempts = 2, race = false): Promise<string | null> {
+        const openRouterOk = Boolean(this.opts.apiKey) && this.remainingToday() > 0;
+        if (!openRouterOk && !this.opts.backups?.length) return null;
+        if (openRouterOk) await this.refreshModels();
+
+        const tried: string[] = [];
+        let left = openRouterOk ? attempts : 0;
+
+        if (race && left >= 2 && this.orCanCall()) {
+            const a = this.currentModel(tried);
+            const b = a ? this.currentModel([...tried, a]) : null;
+            if (a && b) {
+                tried.push(a, b);
+                left -= 2;
+                const stop = new AbortController();
+                const winner = await new Promise<string | null>((resolve) => {
+                    let pending = 2;
+                    for (const m of [a, b]) {
+                        this.callOpenRouter(m, system, user, maxTokens, stop.signal).then((text) => {
+                            if (text) { stop.abort(); resolve(text); }
+                            else if (--pending === 0) resolve(null);
+                        });
+                    }
+                });
+                if (winner) return winner;
+            }
+        }
+
+        while (left > 0) {
+            let model = this.currentModel(tried);
+            if (!model) {
+                await this.refreshModels(true);
+                model = this.currentModel(tried);
+                if (!model) { this.lastError = 'Semua model gratis OpenRouter sedang sibuk.'; break; }
+            }
+            if (!this.orCanCall()) break;
+            tried.push(model);
+            left--;
+            const text = await this.callOpenRouter(model, system, user, maxTokens);
+            if (text) return text;
+        }
+
+        // Semua model OpenRouter gagal / sibuk → penyedia cadangan (gratis, kuota terpisah).
+        return this.callBackups(system, user, maxTokens);
     }
 }
 
