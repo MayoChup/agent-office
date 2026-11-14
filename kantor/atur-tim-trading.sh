@@ -106,7 +106,10 @@ add_job() {  # add_job <profil> <nama-jadwal> <skill...> -- <prompt>
     if "$HERMES_BIN" -p "$prof" cron list 2>/dev/null | grep -q "$jname"; then
         echo "  • $prof: jadwal '$jname' sudah ada"; return
     fi
-    "$HERMES_BIN" -p "$prof" cron create "0 19 * * 1-5" "$*" --timezone Asia/Jakarta --name "$jname" \
+    # Zona waktu WIB dipasang di config profil (Hermes versi lama belum punya --timezone di cron).
+    local cfgf="$P/$prof/config.yaml"
+    if ! grep -qE '^timezone:' "$cfgf" 2>/dev/null; then printf '\ntimezone: Asia/Jakarta\n' >> "$cfgf"; fi
+    "$HERMES_BIN" -p "$prof" cron create "0 19 * * 1-5" "$*" --name "$jname" \
         --workdir "$DESK" "${skills[@]}" >/dev/null && echo "  • $prof: jadwal '$jname' dibuat (19.00 WIB, Senin–Jumat)" \
         || echo "  ⚠️  $prof: jadwal '$jname' gagal dibuat — kirim layar ini ke Claude"
 }
