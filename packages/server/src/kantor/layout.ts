@@ -285,7 +285,13 @@ export function buildLayout(members: LayoutMember[], divisions: DivisionInfo[], 
             });
             items.push({ key: 'PLANT', x: x + POD_W - 1, y });
             items.push({ key: 'BIN', x: x + POD_W - 1, y: y + h - 1 });
-            items.push({ key: ci % 2 ? 'SMALL_PAINTING_2' : 'SMALL_PAINTING', x: x + 2, y: y - 1, wall: true });
+            if (/trading|saham|invest/i.test(`${div.id} ${div.name}`)) {
+                // Ruang Trading: papan analisa + jam bursa di dinding.
+                items.push({ key: 'WHITEBOARD', x: x + 2, y: y - 1, wall: true });
+                items.push({ key: 'CLOCK', x: x + 8, y: y - 1, wall: true });
+            } else {
+                items.push({ key: ci % 2 ? 'SMALL_PAINTING_2' : 'SMALL_PAINTING', x: x + 2, y: y - 1, wall: true });
+            }
         });
         y += h + 1;
     });
