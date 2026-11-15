@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 /** Coretan disimpan sebagai SVG (vektor, tajam di semua layar). Data goresan ikut disimpan di <desc> supaya bisa diedit lagi. */
 interface Gores { c: string; w: number; hl: boolean; p: number[] } // p = [x,y,tekanan, x,y,tekanan, ...]
@@ -71,7 +72,7 @@ export function Gambar({ awal, onSimpan, onTutup }: { awal?: string; onSimpan: (
     const ulang = () => setRedo((r) => { if (!r.length) return r; setGores((gs) => [...gs, r[r.length - 1]]); return r.slice(0, -1); });
     const semua = aktif.current && aktif.current.c !== 'hapus' ? [...gores, aktif.current] : gores;
 
-    return (
+    return createPortal(
         <div className="gb">
             <div className="gb-bar">
                 <button className="gb-close" onClick={onTutup} aria-label="Tutup">✕</button>
@@ -98,6 +99,7 @@ export function Gambar({ awal, onSimpan, onTutup }: { awal?: string; onSimpan: (
                 </svg>
             </div>
             <div className="gb-hint">Pakai jari, stylus (tekanan didukung), atau mouse · 🧽 untuk menghapus goresan · disimpan sebagai gambar di catatan ini</div>
-        </div>
+        </div>,
+        document.body
     );
 }

@@ -1171,7 +1171,7 @@ body.no-office #phaser-container { visibility: hidden; }
 .cat-h b { flex: 1; font-size: 14.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cat-h button { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-solid); color: var(--text); cursor: pointer; font-size: 15px; flex: none; }
 .cat-back { display: none; }
-.cat-search { margin: 0 12px 8px; min-width: 0; }
+.cat-search { margin: 0 12px 8px; min-width: 0; flex: none; height: auto; }
 .cat-search input { padding: 8px 0; font-size: 13px; }
 .cat-book { padding: 0 8px; }
 .cat-book-btn { width: 100%; display: flex; align-items: center; gap: 10px; border: none; background: none; color: var(--text); padding: 9px 8px; border-radius: 10px; cursor: pointer; font-size: 13.5px; font-weight: 600; text-align: left; }
