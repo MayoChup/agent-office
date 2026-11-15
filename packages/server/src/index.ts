@@ -9,7 +9,7 @@ import { KantorAuth } from './kantor/auth';
 import { Pencatat, telegramNotifier, ringkasanKeuangan } from './kantor/pencatat';
 import { TradingDesk, tradingCli, fetchPrice, marketOpen } from './kantor/trading';
 import { Kalender } from './kantor/kalender';
-import { Percakapan, Anggota } from './kantor/percakapan';
+import { Percakapan, Anggota, KuotaBerat, hermesSekali, jalankan as jalankanHermes } from './kantor/percakapan';
 import { Investigasi } from './kantor/investigasi';
 import { HermesBridge } from './kantor/hermes';
 import { slidesCli } from './kantor/slides';
@@ -20,6 +20,20 @@ import os from 'os';
 
 const config = loadConfig();
 
+// Daftar AI (nama & peran) dari profil Hermes + nama tampilan di kantor.config.json.
+const hermesProfiles = new HermesBridge(config.hermesHome, config.kanbanDbPath, config.hermesBin);
+let rosterCache: { at: number; list: Anggota[] } = { at: 0, list: [] };
+const roster = (): Anggota[] => {
+    if (Date.now() - rosterCache.at < 60_000) return rosterCache.list;
+    const list = hermesProfiles.listProfiles().map((p) => {
+        const o = config.agents[p.id] || {};
+        return { id: p.id, nama: o.name || p.displayName || p.id, peran: o.title || p.title || (p.id === 'default' ? 'Kepala' : ''), deskripsi: o.role || p.description || '' };
+    });
+    rosterCache = { at: Date.now(), list };
+    return list;
+};
+const kuotaBerat = new KuotaBerat(config.dataDir, config.berat.model, config.berat.perHari);
+
 // Mode uji: `node kantor-server.js --uji-pencatat` → tampilkan transaksi yang AKAN dicatat, tanpa menulis apa pun.
 const tradingDeskDir = process.env.TRADER_DESK || path.join(os.homedir(), 'trader-desk');
 const tradingArg = process.argv.indexOf('--trading');
@@ -29,6 +43,43 @@ if (tradingArg >= 0) {
     tradingCli(desk, process.argv.slice(tradingArg + 1))
         .then((out) => { console.log(out); process.exit(0); })
         .catch((e) => { console.error('GAGAL:', e?.message || e); process.exit(1); });
+} else if (process.argv.includes('--tanya')) {
+    // Dipakai Joni (Telegram) untuk meminta anggota menjawab, hasilnya sudah berlabel nama:
+    //   node kantor-server.js --tanya <profil|nama> [--berat] [--file <path>]... "<pesan lengkap>"
+    (async () => {
+        const a = process.argv.slice(process.argv.indexOf('--tanya') + 1);
+        const siapa = String(a.shift() || '');
+        let berat = false; const files: string[] = []; const teks: string[] = [];
+        while (a.length) {
+            const x = a.shift()!;
+            if (x === '--berat') berat = true;
+            else if (x === '--file' && a.length) files.push(a.shift()!);
+            else teks.push(x);
+        }
+        const r = roster();
+        const ai = r.find((x) => x.id === siapa || x.nama.toLowerCase() === siapa.toLowerCase());
+        if (!ai || !teks.join(' ').trim()) {
+            console.error(`Pakai: --tanya <profil|nama> [--berat] [--file path] "pesan". Anggota: ${r.map((x) => `${x.id}(${x.nama})`).join(', ')}`);
+            process.exit(1);
+        }
+        let catatan = '';
+        if (berat && !kuotaBerat.ambil()) { berat = false; catatan = `\n\n_(kuota model berbayar hari ini habis: ${kuotaBerat.perHari}×, dikerjakan dengan model gratis)_`; }
+        const ada = files.filter((f) => fs.existsSync(f));
+        const prompt = [
+            `[Pesan dari ${config.ownerName} lewat Telegram, diteruskan oleh Joni (kepala kantor). Telegram dipakai seperti grup kantor.]`,
+            teks.join(' '),
+            ada.length ? `\nFile terlampir (bisa kamu baca di komputer ini):\n${ada.map((f) => `- ${path.resolve(f)}`).join('\n')}` : '',
+            `\nBalas sebagai ${ai.nama} (${ai.peran}) dalam Bahasa Indonesia, singkat & jelas. Kalau diminta mengerjakan sesuatu, kerjakan dengan alat/skill-mu lalu laporkan hasilnya.`
+        ].join('\n');
+        try {
+            const out = await hermesSekali(jalankanHermes, config.hermesBin, ai.id, prompt, berat ? config.berat.model : undefined);
+            console.log(`**${ai.nama} · ${ai.peran}**${berat ? ' ⚡' : ''}\n${out || '(tidak ada jawaban)'}${catatan}`);
+            process.exit(0);
+        } catch (e: any) {
+            console.log(`**${ai.nama} · ${ai.peran}**\n⚠️ Gagal menjawab: ${String(e?.message || e).slice(0, 300)}`);
+            process.exit(1);
+        }
+    })();
 } else if (process.argv.includes('--wa-login')) {
     // Tautkan WhatsApp (hanya-baca) dengan kode: node kantor-server.js --wa-login 628xxxx
     waLoginCli(config.dataDir, process.argv[process.argv.indexOf('--wa-login') + 1])
@@ -195,18 +246,7 @@ app.get('/api/kantor/trading', requireToken, async (_req, res) => {
     res.json({ ok: true, capital: st.capital, riskPct: st.riskPct, positions, plans: st.plans, history: st.history.slice(-30), watchlist: st.watchlist, laporan });
 });
 // ── Chat ala WhatsApp dengan AI Hermes (pribadi & grup) ─────────────
-const hermesProfiles = new HermesBridge(config.hermesHome, config.kanbanDbPath, config.hermesBin);
-let rosterCache: { at: number; list: Anggota[] } = { at: 0, list: [] };
-const roster = (): Anggota[] => {
-    if (Date.now() - rosterCache.at < 60_000) return rosterCache.list;
-    const list = hermesProfiles.listProfiles().map((p) => {
-        const o = config.agents[p.id] || {};
-        return { id: p.id, nama: o.name || p.displayName || p.id, peran: o.title || p.title || (p.id === 'default' ? 'Kepala' : ''), deskripsi: o.role || p.description || '' };
-    });
-    rosterCache = { at: Date.now(), list };
-    return list;
-};
-const percakapan = new Percakapan(config.dataDir, config.hermesBin, config.ownerName, roster, () => OfficeRoom.sharedLlm());
+const percakapan = new Percakapan(config.dataDir, config.hermesBin, config.ownerName, roster, () => OfficeRoom.sharedLlm(), kuotaBerat);
 app.get('/api/kantor/chat', requireToken, (_req, res) => { res.json({ ok: true, thread: percakapan.daftar() }); });
 app.get('/api/kantor/chat/:id', requireToken, (req, res) => { res.json({ ok: true, ...percakapan.thread(String(req.params.id)) }); });
 app.post('/api/kantor/chat/:id', requireToken, (req, res) => {

@@ -5,7 +5,7 @@ import { Avatar } from '../components/Avatar';
 import { RichText } from '../components/common/RichText';
 
 interface ThreadInfo { id: string; nama: string; peran: string; terakhir: { nama: string; teks: string; at: number } | null; menulis: string[] }
-interface Pesan { id: string; dari: string; nama: string; teks: string; at: number; status?: 'gagal' }
+interface Pesan { id: string; dari: string; nama: string; teks: string; at: number; status?: 'gagal'; berat?: boolean }
 
 const LS_SEEN = 'kantor:chat-seen';
 const KANTOR = '__kantor';
@@ -188,7 +188,7 @@ function Bubble({ m, grup }: { m: Pesan; grup: boolean }) {
         <div className={`wa-bubble ${me ? 'me' : 'them'} ${m.status === 'gagal' ? 'fail' : ''}`}>
             {grup && !me && <div className="wa-name" style={{ color: warna(m.dari) }}>{m.nama}</div>}
             <div className="wa-text">{me ? m.teks : <RichText text={m.teks} />}</div>
-            <div className="wa-time">{jam(m.at)}{me && <span className="wa-ticks">✓✓</span>}</div>
+            <div className="wa-time">{m.berat && <span className="wa-berat" title="Dikerjakan dengan model berbayar (Claude) atas keputusan Joni">⚡ Claude</span>}{jam(m.at)}{me && <span className="wa-ticks">✓✓</span>}</div>
         </div>
     );
 }

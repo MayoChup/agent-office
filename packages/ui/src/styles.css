@@ -565,3 +565,5 @@ body.no-office #phaser-container { visibility: hidden; }
   .inv-score { grid-template-columns: repeat(3, 1fr); }
   .inv-ticker { font-size: 38px; }
 }
+
+.wa-berat { color: #fbbf24; font-weight: 700; margin-right: 6px; }

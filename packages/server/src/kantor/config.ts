@@ -58,6 +58,8 @@ export interface KantorConfig {
     pencatat: PencatatConfig;
     /** WhatsApp hanya-baca → Google Calendar. */
     whatsapp: { enabled: boolean; grup: boolean; abaikan: string[] };
+    /** Model berbayar untuk tugas berat yang diputuskan Joni, dengan batas harian. */
+    berat: { model: string; perHari: number };
 
     // ── Otak gratis (OpenRouter :free) ──
     openRouterApiKey: string;
@@ -151,6 +153,10 @@ export function loadConfig(): KantorConfig {
         password: env.KANTOR_PASSWORD || '',
         allowedOrigins: String(env.KANTOR_ALLOWED_ORIGINS || file.allowedOrigins || '*').split(',').map((s: string) => s.trim()).filter(Boolean),
         maxAgents: num(env.KANTOR_MAX_AGENTS || file.maxAgents, 8),
+        berat: {
+            model: String(env.KANTOR_BERAT_MODEL || file.berat?.model || 'anthropic/claude-sonnet-5.5'),
+            perHari: num(env.KANTOR_BERAT_PER_HARI || file.berat?.perHari, 15)
+        },
         whatsapp: {
             enabled: file.whatsapp?.enabled !== false && env.KANTOR_WA !== '0',
             grup: file.whatsapp?.grup === true,
