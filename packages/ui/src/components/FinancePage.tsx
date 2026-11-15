@@ -3,7 +3,6 @@ import { apiGet } from '../kantor/connection';
 import { Tx, BANKS, KAT_COLORS, compute, monthsAvailable, monthLabel, dateLabel, rp, rpShort, delta, todayWib } from '../kantor/finance';
 
 interface Report { transaksi: Tx[]; sheetUrl: string; pencatat: { lastRun: number; lastError: string | null; interval: number }; updatedAt: number }
-interface Trading { capital: number; riskPct: number; positions: any[]; plans: any[]; history: any[]; watchlist: string[] }
 
 const LS_TAB = 'kantor:fin-tab';
 
@@ -64,15 +63,14 @@ function DailyChart({ days }: { days: Array<{ day: number; value: number; future
     );
 }
 
-export function FinancePage({ onClose }: { onClose: () => void }) {
+export function FinancePage({ onClose }: { onClose?: () => void }) {
     const [data, setData] = useState<Report | null>(null);
-    const [trading, setTrading] = useState<Trading | null>(null);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [ym, setYm] = useState(todayWib().slice(0, 7));
     const [bank, setBank] = useState('Semua');
-    const [tab, setTab] = useState<'ringkasan' | 'transaksi' | 'trading'>(() => {
-        try { return (localStorage.getItem(LS_TAB) as any) || 'ringkasan'; } catch { return 'ringkasan'; }
+    const [tab, setTab] = useState<'ringkasan' | 'transaksi'>(() => {
+        try { return localStorage.getItem(LS_TAB) === 'transaksi' ? 'transaksi' : 'ringkasan'; } catch { return 'ringkasan'; }
     });
     const [q, setQ] = useState('');
     const [jenis, setJenis] = useState('Semua');
@@ -80,11 +78,7 @@ export function FinancePage({ onClose }: { onClose: () => void }) {
     const load = async (sync = false) => {
         setLoading(true); setError('');
         try {
-            const [r, t] = await Promise.all([
-                apiGet<Report>(`/api/kantor/keuangan${sync ? '?sync=1' : ''}`),
-                apiGet<Trading>('/api/kantor/trading').catch(() => null)
-            ]);
-            setData(r); setTrading(t);
+            setData(await apiGet<Report>(`/api/kantor/keuangan${sync ? '?sync=1' : ''}`));
         } catch (e: any) { setError(String(e?.message || e)); }
         setLoading(false);
     };
@@ -114,7 +108,7 @@ export function FinancePage({ onClose }: { onClose: () => void }) {
                     </div>
                     <div className="row" style={{ gap: 6 }}>
                         <button className="icon-btn" title="Ambil transaksi terbaru" onClick={() => load(true)} disabled={loading}>{loading ? '…' : '↻'}</button>
-                        <button className="icon-btn" onClick={onClose} title="Tutup">✕</button>
+                        {onClose && <button className="icon-btn" onClick={onClose} title="Tutup">✕</button>}
                     </div>
                 </div>
                 <div className="fin-filters">
@@ -126,9 +120,9 @@ export function FinancePage({ onClose }: { onClose: () => void }) {
                     </select>
                 </div>
                 <div className="tabs" style={{ margin: 0 }}>
-                    {(['ringkasan', 'transaksi', 'trading'] as const).map((k) => (
+                    {(['ringkasan', 'transaksi'] as const).map((k) => (
                         <button key={k} className={`tab ${tab === k ? 'active' : ''}`} onClick={() => setTab(k)}>
-                            {k === 'ringkasan' ? 'Ringkasan' : k === 'transaksi' ? 'Transaksi' : 'Trading'}
+                            {k === 'ringkasan' ? 'Ringkasan' : 'Transaksi'}
                         </button>
                     ))}
                 </div>
@@ -205,50 +199,6 @@ export function FinancePage({ onClose }: { onClose: () => void }) {
                     </>
                 )}
 
-                {tab === 'trading' && (
-                    <>
-                        {!trading && <div className="fin-empty">Data trading belum tersedia.</div>}
-                        {trading && (
-                            <>
-                                <div className="fin-mini">
-                                    <div><span>Modal</span><b>${trading.capital}</b></div>
-                                    <div><span>Risiko / transaksi</span><b>{trading.riskPct}%</b></div>
-                                    <div><span>Hasil tertutup</span><b>${trading.history.reduce((a, h) => a + (h.pnl || 0), 0).toFixed(2)}</b></div>
-                                </div>
-                                <section className="fin-card">
-                                    <h3>Posisi terbuka <small>alert dikirim ke Telegram</small></h3>
-                                    {trading.positions.length === 0 && <div className="fin-empty">Belum ada. Setelah beli, bilang ke Joni: "eksekusi #1 di 251".</div>}
-                                    {trading.positions.map((p) => (
-                                        <div key={p.symbol} className="fin-tx">
-                                            <div className="fin-tx-main"><b>{p.symbol} · {p.shares || '?'} lembar @ ${p.entry}</b><span>🟢 target ${p.target} · 🔴 stop ${p.stop}{p.notified?.target ? ' · target tercapai' : p.notified?.stop ? ' · stop kena' : ''}</span></div>
-                                        </div>
-                                    ))}
-                                </section>
-                                <section className="fin-card">
-                                    <h3>Strategi terakhir</h3>
-                                    {trading.plans.length === 0 && <div className="fin-empty">Minta ke Joni: "strategi trading hari ini".</div>}
-                                    {trading.plans.map((p) => (
-                                        <div key={p.id} className="fin-tx">
-                                            <div className="fin-tx-main"><b>#{p.id} {p.symbol} · masuk ±${p.entry}</b><span>target ${p.target} · stop ${p.stop} · {p.shares} lembar (≈${p.dollars})</span></div>
-                                        </div>
-                                    ))}
-                                </section>
-                                {trading.history.length > 0 && (
-                                    <section className="fin-card">
-                                        <h3>Riwayat</h3>
-                                        {[...trading.history].reverse().map((h, i) => (
-                                            <div key={i} className="fin-tx">
-                                                <div className="fin-tx-main"><b>{h.symbol} · ${h.entry} → ${h.exit}</b><span>{String(h.closedAt || '').slice(0, 10)}</span></div>
-                                                <div className={`fin-tx-amt ${h.pnl >= 0 ? 'in' : 'out'}`}>{h.pnl >= 0 ? '+' : '−'}${Math.abs(h.pnl).toFixed(2)}</div>
-                                            </div>
-                                        ))}
-                                    </section>
-                                )}
-                                <p className="fin-note">Kantor tidak tersambung ke broker. Harga gratis tertunda ±15 menit. Bukan nasihat keuangan.</p>
-                            </>
-                        )}
-                    </>
-                )}
             </div>
         </div>
     );

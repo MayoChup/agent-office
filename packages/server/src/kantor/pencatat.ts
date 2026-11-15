@@ -261,7 +261,7 @@ export function parseEmail(input: { id: string; from: string; subject: string; h
 
 // ───────────────────────── Google API ─────────────────────────
 
-class Google {
+export class Google {
     private access = '';
     private accessExp = 0;
     constructor(private tokenPath: string) {}

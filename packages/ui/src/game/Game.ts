@@ -442,5 +442,11 @@ export function setupPhaser(parentId: string) {
         scale: { mode: Phaser.Scale.RESIZE },
         input: { keyboard: false }
     };
-    return new Phaser.Game(config);
+    const game = new Phaser.Game(config);
+    // Hemat baterai HP: kantor 2D hanya berjalan saat halaman Kantor dibuka.
+    eventBus.addEventListener('page-change', (e: Event) => {
+        const show = (e as CustomEvent).detail?.page === 'kantor';
+        if (show) { game.loop.wake(); game.scale.refresh(); } else game.loop.sleep();
+    });
+    return game;
 }

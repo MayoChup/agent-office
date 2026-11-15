@@ -7,7 +7,8 @@ import { OfficeRoom } from './rooms/OfficeRoom';
 import { loadConfig } from './kantor/config';
 import { KantorAuth } from './kantor/auth';
 import { Pencatat, telegramNotifier, ringkasanKeuangan } from './kantor/pencatat';
-import { TradingDesk, tradingCli } from './kantor/trading';
+import { TradingDesk, tradingCli, fetchPrice } from './kantor/trading';
+import { Kalender } from './kantor/kalender';
 import os from 'os';
 
 const config = loadConfig();
@@ -117,9 +118,37 @@ app.get('/api/kantor/keuangan', requireToken, async (req, res) => {
         res.status(502).json({ ok: false, error: String(e?.message || e) });
     }
 });
-app.get('/api/kantor/trading', requireToken, (_req, res) => {
+const kalender = new Kalender(config.hermesHome, config.dataDir, telegramNotifier(config.hermesHome));
+const priceCache = new Map<string, { at: number; p: number }>();
+app.get('/api/kantor/trading', requireToken, async (_req, res) => {
     const st = tradingDesk.load();
-    res.json({ ok: true, capital: st.capital, riskPct: st.riskPct, positions: st.positions, plans: st.plans, history: st.history.slice(-30), watchlist: st.watchlist });
+    // Harga terkini posisi terbuka (cache 2 menit, gagal = dilewati)
+    const positions = await Promise.all(st.positions.map(async (p) => {
+        let price: number | null = null;
+        const c = priceCache.get(p.symbol);
+        if (c && Date.now() - c.at < 120_000) price = c.p;
+        else { try { price = await fetchPrice(p.symbol); priceCache.set(p.symbol, { at: Date.now(), p: price }); } catch { /* */ } }
+        return { ...p, price, pnl: price && p.shares ? Math.round((price - p.entry) * p.shares * 100) / 100 : null };
+    }));
+    // Laporan tim hari ini (Nina, Raka, Sari)
+    const laporanDir = path.join(tradingDeskDir, 'laporan');
+    let laporan: Array<{ nama: string; tanggal: string; isi: string }> = [];
+    try {
+        const files = fs.readdirSync(laporanDir).filter((f) => f.endsWith('.md')).sort().reverse();
+        const latest = files[0]?.slice(0, 10);
+        laporan = files.filter((f) => f.startsWith(latest)).map((f) => ({
+            nama: f.slice(11, -3), tanggal: latest, isi: fs.readFileSync(path.join(laporanDir, f), 'utf8').slice(0, 4000)
+        }));
+    } catch { /* belum ada */ }
+    res.json({ ok: true, capital: st.capital, riskPct: st.riskPct, positions, plans: st.plans, history: st.history.slice(-30), watchlist: st.watchlist, laporan });
+});
+app.get('/api/kantor/jadwal', requireToken, async (req, res) => {
+    try {
+        const days = Math.min(60, Math.max(1, Number(req.query.hari) || 14));
+        res.json({ ok: true, acara: await kalender.agenda(days, req.query.sync === '1') });
+    } catch (e: any) {
+        res.status(502).json({ ok: false, error: String(e?.message || e) });
+    }
 });
 
 // Tampilan kantor (hasil build UI) disajikan dari server yang sama.
@@ -145,6 +174,7 @@ gameServer.listen(config.port, config.host).then(async () => {
     await matchMaker.createRoom('office', {});
     pencatat.start();
     tradingDesk.start();
+    kalender.start();
     console.log(`[Kantor] Buka http://${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.port}`);
     if (config.host !== '127.0.0.1' && config.host !== 'localhost') {
         console.warn('[Kantor] PERINGATAN: server tidak hanya mendengarkan localhost. Pastikan port ini TIDAK terbuka ke internet.');
