@@ -218,6 +218,15 @@ Chat Telegram dengan Pak Rico diperlakukan seperti GRUP KANTOR: semua anggota "m
 blok "$H/SOUL.md" telegram-grup "$TELE"
 echo "✅ Telegram bekerja seperti grup kantor (jawaban berlabel nama)"
 
+# ── Uang: mencatat transaksi dari chat/Telegram ke Google Sheets ──
+CATAT='## Mencatat transaksi
+Kalau Pak Rico menyebut transaksi (mis. "beli nasi goreng 20rb pakai BCA", "gajian 8,5jt masuk Mandiri", "kemarin bensin 50rb cash"), langsung catat dengan perintah terminal:
+node ~/kantor-virtual/kantor-server.js --catat --jenis <Keluar|Masuk|Antar Rekening> --nominal <angka rupiah> --akun <Cash|BCA|Mandiri|Jago|Krom|...> --kategori "<kategori>" --pihak "<tempat/merchant>" --ket "<barang/catatan>" [--tanggal YYYY-MM-DD]
+Kategori: Makan & Minum, Transport, Belanja, Tagihan & Langganan, Pulsa & Internet, Kesehatan, Hiburan, Investasi, Transfer Keluarga, Lainnya (pemasukan: Pendapatan).
+Balas singkat dengan hasil perintah (✅ Tercatat …). Kalau nominal tidak jelas, tanya dulu. Jangan mencatat dua kali.'
+blok "$P/keuangan/SOUL.md" catat-transaksi "$CATAT"
+echo "✅ Uang bisa mencatat transaksi dari chat & Telegram"
+
 # ── Kerja tim: semua AI memakai & mengisi ingatan bersama ─────────────
 KERJA='## Kerja tim (ingatan bersama)
 Ingatanmu pribadi; AI lain tidak bisa membacanya. Yang dibagi bersama ada di Otak Kantor (~/otak-kantor).

@@ -11,12 +11,14 @@ import { AgentCard } from './components/AgentCard';
 import { Toasts } from './components/Toasts';
 import { LoginScreen } from './components/LoginScreen';
 import { KeuanganApp } from './pages/keuangan/KeuanganApp';
+import { CatatanPage } from './pages/catatan/CatatanPage';
+import { BerkasPage } from './pages/BerkasPage';
 import { HomePage } from './pages/HomePage';
 import { TradingPage } from './pages/TradingPage';
 import { SchedulePage } from './pages/SchedulePage';
 
 const LS_PAGE = 'kantor:page';
-const PAGES: PageKey[] = ['home', 'kantor', 'keuangan', 'trading', 'tugas', 'jadwal', 'obrolan'];
+const PAGES: PageKey[] = ['home', 'kantor', 'keuangan', 'trading', 'tugas', 'jadwal', 'obrolan', 'catatan', 'berkas'];
 
 function initialPage(): PageKey {
     const h = location.hash.replace('#', '') as PageKey;
@@ -96,6 +98,8 @@ export function App() {
                     {page === 'keuangan' && <KeuanganApp />}
                     {page === 'trading' && <TradingPage />}
                     {page === 'jadwal' && <SchedulePage />}
+                    {page === 'catatan' && <CatatanPage />}
+                    {page === 'berkas' && <BerkasPage />}
                     {page === 'tugas' && <TasksPanel onClose={back} />}
                     {page === 'obrolan' && <ChatPage prefill={prefill} />}
                 </main>

@@ -13,6 +13,8 @@ import { Percakapan, Anggota, KuotaBerat, hermesSekali, jalankan as jalankanHerm
 import { Investigasi } from './kantor/investigasi';
 import { Screener, ambilCandle } from './kantor/screener';
 import { WatchFolder } from './kantor/watchfolder';
+import { Catatan } from './kantor/catatan';
+import { Berkas } from './kantor/berkas';
 import { AnggaranStore, bacaTransaksi } from './kantor/anggaran';
 import { telegramKirim } from './kantor/telegram';
 import { HermesBridge } from './kantor/hermes';
@@ -178,6 +180,8 @@ if (auth.generated) {
 
 const app = express();
 app.set('trust proxy', true);
+// Catatan & berkas butuh batas lebih besar; route lain tetap 32 KB.
+app.use(['/api/kantor/catatan', '/api/kantor/berkas'], express.json({ limit: '12mb' }));
 app.use(express.json({ limit: '32kb' }));
 
 // CORS: supaya tampilan di Vercel boleh memanggil server ini.
@@ -236,6 +240,46 @@ app.get('/api/kantor/keuangan', requireToken, async (req, res) => {
         res.status(502).json({ ok: false, error: String(e?.message || e) });
     }
 });
+// ── Catatan (Otak Kantor / Obsidian) ─────────────────────────────────
+const catatan = new Catatan(path.resolve(process.env.OBSIDIAN_VAULT_PATH || path.join(os.homedir(), 'otak-kantor')));
+const cat = (fn: (req: express.Request) => any): express.RequestHandler => async (req, res) => {
+    if (!catatan.ada()) { res.status(404).json({ ok: false, error: 'Otak Kantor belum tersambung di VPS (jalankan atur-otak.sh).' }); return; }
+    try { res.json({ ok: true, ...(await fn(req)) }); }
+    catch (e: any) { res.status(e?.konflik ? 409 : 400).json({ ok: false, error: String(e?.message || e), konflik: Boolean(e?.konflik) }); }
+};
+app.get('/api/kantor/catatan/pohon', requireToken, cat(() => ({ pohon: catatan.pohon(), sinkron: catatan.status })));
+app.get('/api/kantor/catatan/baca', requireToken, cat((req) => catatan.baca(String(req.query.p || ''))));
+app.get('/api/kantor/catatan/cari', requireToken, cat((req) => ({ hasil: catatan.cari(String(req.query.q || '')) })));
+app.get('/api/kantor/catatan/berkas', requireToken, (req, res) => {
+    try {
+        const { abs } = catatan.berkas(String(req.query.p || ''));
+        res.setHeader('Cache-Control', 'private, max-age=60');
+        res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'"); // SVG tidak boleh menjalankan skrip
+        res.sendFile(abs);
+    } catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
+});
+app.post('/api/kantor/catatan/tulis', requireToken, cat((req) => catatan.tulis(String(req.body?.p || ''), String(req.body?.isi ?? ''), Number(req.body?.mtime) || undefined)));
+app.post('/api/kantor/catatan/unggah', requireToken, cat((req) => catatan.unggah(String(req.body?.folder || ''), String(req.body?.nama || ''), String(req.body?.base64 || ''))));
+app.post('/api/kantor/catatan/folder', requireToken, cat((req) => catatan.buatFolder(String(req.body?.p || ''))));
+app.post('/api/kantor/catatan/pindah', requireToken, cat((req) => catatan.pindah(String(req.body?.dari || ''), String(req.body?.ke || ''))));
+app.post('/api/kantor/catatan/buang', requireToken, cat((req) => catatan.buang(String(req.body?.p || ''))));
+
+// ── Berkas: cloud pribadi di VPS (bawaan 5 GB) ─────────────────────────
+const berkasDir = path.resolve(process.env.KANTOR_BERKAS_DIR || path.join(os.homedir(), 'berkas-kantor'));
+fs.mkdirSync(berkasDir, { recursive: true });
+const berkas = new Berkas(berkasDir, Math.max(0.5, Number(process.env.KANTOR_BERKAS_GB || (config as any).berkasKuotaGB || 5)) * 1e9);
+const brk = (fn: (req: express.Request) => any): express.RequestHandler => (req, res) => {
+    try { res.json({ ok: true, ...fn(req) }); } catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
+};
+app.get('/api/kantor/berkas/daftar', requireToken, brk((req) => berkas.daftar(String(req.query.p || ''))));
+app.get('/api/kantor/berkas/cari', requireToken, brk((req) => ({ items: berkas.cari(String(req.query.q || '')) })));
+app.post('/api/kantor/berkas/folder', requireToken, brk((req) => berkas.buatFolder(String(req.body?.p || ''), String(req.body?.nama || ''))));
+app.post('/api/kantor/berkas/pindah', requireToken, brk((req) => berkas.pindah(String(req.body?.dari || ''), String(req.body?.ke ?? ''), req.body?.nama ? String(req.body.nama) : undefined)));
+app.post('/api/kantor/berkas/hapus', requireToken, brk((req) => berkas.hapus(String(req.body?.p || ''))));
+app.post('/api/kantor/berkas/tautan', requireToken, brk((req) => berkas.tautan(String(req.body?.p || ''), Boolean(req.body?.unduh))));
+app.post('/api/kantor/berkas/unggah', requireToken, (req, res) => { berkas.unggah(req, res); });
+app.get('/api/kantor/berkas/f/:t/:nama', (req, res) => berkas.kirim(String(req.params.t), res)); // tautan sekali pakai, tanpa login
+
 const anggaran = new AnggaranStore(config.dataDir);
 app.get('/api/kantor/keuangan/anggaran', requireToken, (_req, res) => { res.json({ ok: true, ...anggaran.get(), kategori: Object.keys(config.pencatat.kategori).concat(['Lainnya']) }); });
 app.post('/api/kantor/keuangan/anggaran', requireToken, (req, res) => { res.json({ ok: true, ...anggaran.set(req.body), kategori: Object.keys(config.pencatat.kategori).concat(['Lainnya']) }); });

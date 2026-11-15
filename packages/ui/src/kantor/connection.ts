@@ -59,6 +59,17 @@ export async function apiPost<T = any>(pathAndQuery: string, body: unknown): Pro
     if (!res.ok || data?.ok === false) throw new Error(data?.error || `HTTP ${res.status}`);
     return data as T;
 }
+/** Alamat server kantor & token, untuk unggah berkas besar (XHR dengan progres). */
+export function serverBase() { return currentServer(); }
+export function tokenLogin() { return safeGet(LS_TOKEN); }
+
+/** Ambil berkas (gambar dll.) yang butuh login → blob. */
+export async function apiBlob(pathAndQuery: string): Promise<Blob> {
+    const res = await fetch(`${currentServer()}${pathAndQuery}`, { headers: { Authorization: `Bearer ${safeGet(LS_TOKEN)}` } });
+    if (res.status === 401) { safeSet(LS_TOKEN, ''); setStatus('login'); }
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.blob();
+}
 export function getStatus() { return status; }
 export function getLastError() { return lastError; }
 export function isSameOrigin() { return sameOriginServer; }

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useKantor } from '../kantor/store';
 
-export type PageKey = 'home' | 'kantor' | 'keuangan' | 'trading' | 'tugas' | 'jadwal' | 'obrolan';
+export type PageKey = 'home' | 'kantor' | 'keuangan' | 'trading' | 'tugas' | 'jadwal' | 'obrolan' | 'catatan' | 'berkas';
 export type SidePanel = 'org' | 'activity' | null;
 
 const ALL: Array<{ key: PageKey | 'org' | 'activity'; ico: string; label: string }> = [
@@ -12,6 +12,8 @@ const ALL: Array<{ key: PageKey | 'org' | 'activity'; ico: string; label: string
     { key: 'tugas', ico: '📋', label: 'Tugas' },
     { key: 'jadwal', ico: '📅', label: 'Jadwal' },
     { key: 'obrolan', ico: '💬', label: 'Chat' },
+    { key: 'catatan', ico: '📓', label: 'Catatan' },
+    { key: 'berkas', ico: '☁️', label: 'Berkas' },
     { key: 'org', ico: '🧭', label: 'Bagan' },
     { key: 'activity', ico: '⚡', label: 'Aktivitas' }
 ];
