@@ -10,6 +10,7 @@ import { Pencatat, telegramNotifier, ringkasanKeuangan } from './kantor/pencatat
 import { TradingDesk, tradingCli, fetchPrice } from './kantor/trading';
 import { Kalender } from './kantor/kalender';
 import { slidesCli } from './kantor/slides';
+import { WaJanji, WaReader, waLoginCli, waLogoutCli } from './kantor/wa';
 import os from 'os';
 
 const config = loadConfig();
@@ -23,6 +24,14 @@ if (tradingArg >= 0) {
     tradingCli(desk, process.argv.slice(tradingArg + 1))
         .then((out) => { console.log(out); process.exit(0); })
         .catch((e) => { console.error('GAGAL:', e?.message || e); process.exit(1); });
+} else if (process.argv.includes('--wa-login')) {
+    // Tautkan WhatsApp (hanya-baca) dengan kode: node kantor-server.js --wa-login 628xxxx
+    waLoginCli(config.dataDir, process.argv[process.argv.indexOf('--wa-login') + 1])
+        .then((out) => { console.log(out); process.exit(0); })
+        .catch((e) => { console.error('GAGAL:', e?.message || e); process.exit(1); });
+} else if (process.argv.includes('--wa-logout')) {
+    console.log(waLogoutCli(config.dataDir));
+    process.exit(0);
 } else if (process.argv.includes('--slides')) {
     // Dipakai Putri (Editor · Presentasi): node kantor-server.js --slides buat kerangka.md
     slidesCli(config.hermesHome, process.argv.slice(process.argv.indexOf('--slides') + 1))
@@ -181,6 +190,11 @@ gameServer.listen(config.port, config.host).then(async () => {
     pencatat.start();
     tradingDesk.start();
     kalender.start();
+    if (config.whatsapp.enabled) {
+        const notify = telegramNotifier(config.hermesHome);
+        const janji = new WaJanji(config.dataDir, () => OfficeRoom.sharedLlm(), kalender, notify, { abaikan: config.whatsapp.abaikan.map((n) => n.replace(/^0/, '62')) });
+        new WaReader(config.dataDir, janji, notify, { grup: config.whatsapp.grup }).start();
+    }
     console.log(`[Kantor] Buka http://${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.port}`);
     if (config.host !== '127.0.0.1' && config.host !== 'localhost') {
         console.warn('[Kantor] PERINGATAN: server tidak hanya mendengarkan localhost. Pastikan port ini TIDAK terbuka ke internet.');

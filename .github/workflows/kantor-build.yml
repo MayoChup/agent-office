@@ -44,7 +44,7 @@ jobs:
           bash kantor/ci-run.sh "esbuild" npx --yes esbuild@0.24.2 packages/server/src/index.ts \
             --bundle --platform=node --target=node20 \
             --tsconfig=packages/server/tsconfig.json \
-            --external:sqlite3 \
+            --external:sqlite3 --external:@whiskeysockets/baileys --external:pino \
             --outfile=release/kantor-server.js
 
       - name: Siapkan paket rilis
@@ -61,6 +61,8 @@ jobs:
           npm init -y > /dev/null
           bash ../kantor/ci-run.sh "sqlite3" npm install sqlite3@5.1.7 --omit=dev --no-audit --no-fund
           bash ../kantor/ci-run.sh "sqlite3 load" node -e "require('sqlite3'); console.log('sqlite3 siap')"
+          bash ../kantor/ci-run.sh "whatsapp" npm install @whiskeysockets/baileys@^6.7.16 pino@^9 --omit=dev --no-audit --no-fund
+          bash ../kantor/ci-run.sh "whatsapp load" node -e "const B=require('@whiskeysockets/baileys'); if(typeof B.default!=='function') throw new Error('baileys'); require('pino'); console.log('whatsapp siap')"
           cd ..
           tar czf kantor-virtual-linux-x64.tar.gz -C release .
           ls -lh kantor-virtual-linux-x64.tar.gz

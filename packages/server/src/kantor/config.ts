@@ -56,6 +56,8 @@ export interface KantorConfig {
 
     /** Pencatat transaksi dari email bank ke Google Sheets (tanpa AI). */
     pencatat: PencatatConfig;
+    /** WhatsApp hanya-baca → Google Calendar. */
+    whatsapp: { enabled: boolean; grup: boolean; abaikan: string[] };
 
     // ── Otak gratis (OpenRouter :free) ──
     openRouterApiKey: string;
@@ -149,6 +151,11 @@ export function loadConfig(): KantorConfig {
         password: env.KANTOR_PASSWORD || '',
         allowedOrigins: String(env.KANTOR_ALLOWED_ORIGINS || file.allowedOrigins || '*').split(',').map((s: string) => s.trim()).filter(Boolean),
         maxAgents: num(env.KANTOR_MAX_AGENTS || file.maxAgents, 8),
+        whatsapp: {
+            enabled: file.whatsapp?.enabled !== false && env.KANTOR_WA !== '0',
+            grup: file.whatsapp?.grup === true,
+            abaikan: Array.isArray(file.whatsapp?.abaikan) ? file.whatsapp.abaikan.map((n: any) => String(n).replace(/\D/g, '')) : []
+        },
         pencatat: {
             enabled: file.pencatat?.enabled !== false,
             spreadsheetId: String(file.pencatat?.spreadsheetId || ''),

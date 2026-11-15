@@ -106,6 +106,8 @@ const SMALL_TALK = [
 
 export class OfficeRoom extends Room<OfficeState> {
     private static activeRoom: OfficeRoom | null = null;
+    /** AI gratis kantor, dipakai juga oleh pembaca WhatsApp (berbagi kuota harian). */
+    static sharedLlm() { return OfficeRoom.activeRoom?.llm || null; }
     static config: KantorConfig;
     static auth: KantorAuth;
 

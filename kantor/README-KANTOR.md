@@ -184,3 +184,31 @@ Kalau semua model gratis OpenRouter sibuk, kantor otomatis pindah ke Gemini atau
 Isi salah satu di `.env`: `GEMINI_API_KEY=...` (aistudio.google.com/apikey, proyek tanpa billing) atau
 `GROQ_API_KEY=...` (console.groq.com/keys), lalu restart kantor. Model dipilih otomatis; bisa dipaksa dengan
 `GEMINI_MODEL=` / `GROQ_MODEL=`.
+
+## 13. Google Slides (Putri · Presentasi)
+
+Pakai izin Google yang sudah ada (tidak perlu login ulang). Sekali saja, aktifkan Slides API di
+https://console.cloud.google.com/apis/library/slides.googleapis.com (akun Google yang sama dengan Hermes).
+
+```bash
+cd ~/kantor-virtual && node kantor-server.js --slides cek
+```
+
+Putri menulis kerangka Markdown lalu menjalankan `--slides buat <file.md>`; tautan presentasi dikirim ke Telegram.
+
+## 14. WhatsApp hanya-baca → Google Calendar
+
+Kantor tersambung sebagai *perangkat tertaut* dan **hanya membaca** chat pribadi. Tidak mengirim pesan,
+tidak memberi centang biru, tidak tampil "online", grup diabaikan.
+
+```bash
+cd ~/kantor-virtual && node kantor-server.js --wa-login 628xxxxxxxxxx
+```
+
+Muncul kode 8 huruf → di HP: WhatsApp → Perangkat tertaut → Tautkan perangkat → *Tautkan dengan nomor telepon saja* → masukkan kode.
+Lalu `systemctl --user restart kantor-virtual`.
+
+- Hanya percakapan yang menyebut waktu/janji **dan** ada kata setuju ("oke", "siap", dst.) yang dikirim ke AI gratis untuk dicek.
+- Janji yang disepakati masuk Google Calendar dengan tanda `[dari WhatsApp]`, plus notifikasi Telegram.
+- Kecualikan nomor tertentu: `"whatsapp": { "abaikan": ["62812..."] }` di `kantor.config.json`. Matikan: `"whatsapp": { "enabled": false }`.
+- Lepas: `node kantor-server.js --wa-logout` lalu hapus "Kantor Rico" di Perangkat tertaut.
