@@ -93,6 +93,7 @@ export function PetaBerita({ onOpen }: { onOpen: (s: string) => void }) {
             // Titik, dari belakang ke depan
             pr.sort((p, q) => q.z - p.z);
             const kecil = W < 600;
+            const label: Array<{ txt: string; x: number; y: number; jenis: string; z: number; w: number }> = [];
             for (const p of pr) {
                 const n = p.n, r = n.r * p.f * Math.max(0.7, scale);
                 const redup = dekat && !(dekat.has(n.id) || fokus!.id === n.id || n.jenis === 'pusat');
@@ -104,13 +105,24 @@ export function PetaBerita({ onOpen }: { onOpen: (s: string) => void }) {
                 ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(p.sx, p.sy, Math.max(1.2, r * 0.45), 0, Math.PI * 2); ctx.fill();
                 const tampil = n.jenis === 'pusat' || n.jenis === 'saham' && (!kecil || ((n.ref as Saham).n >= 2)) || (n.jenis === 'berita' && (!dekat ? (n.ref as Berita).saham.length >= (kecil ? 4 : 3) : !redup));
                 if (tampil && !redup) {
-                    ctx.font = `${n.jenis === 'saham' ? 600 : 500} ${n.jenis === 'pusat' ? 12 : 10.5}px 'JetBrains Mono', monospace`;
-                    ctx.fillStyle = n.jenis === 'saham' ? '#fbcfe8' : n.jenis === 'pusat' ? '#fed7aa' : '#fef9c3';
-                    const txt = n.jenis === 'berita' ? (n.label.length > 34 ? `${n.label.slice(0, 33)}…` : n.label) : n.label;
-                    ctx.fillText(txt, p.sx + r + 4, p.sy + 3.5);
+                    const max = kecil ? 22 : 34;
+                    const txt = n.jenis === 'berita' ? (n.label.length > max ? `${n.label.slice(0, max - 1)}…` : n.label) : n.label;
+                    label.push({ txt, x: p.sx + r + 4, y: p.sy + 3.5, jenis: n.jenis, z: p.z, w: txt.length * 6.4 });
                 }
             }
+            // Label tidak boleh bertumpuk: prioritas pusat → saham → berita terdepan; yang bertabrakan disembunyikan.
             ctx.globalAlpha = 1;
+            const urut = { pusat: 0, saham: 1, berita: 2 } as Record<string, number>;
+            label.sort((a, b) => urut[a.jenis] - urut[b.jenis] || a.z - b.z);
+            const kotak: Array<[number, number, number, number]> = [];
+            for (const l of label) {
+                const k: [number, number, number, number] = [l.x - 2, l.y - 10, l.x + l.w + 2, l.y + 3];
+                if (l.jenis !== 'pusat' && kotak.some((q) => k[0] < q[2] && k[2] > q[0] && k[1] < q[3] && k[3] > q[1])) continue;
+                kotak.push(k);
+                ctx.font = `${l.jenis === 'saham' ? 600 : 500} ${l.jenis === 'pusat' ? 12 : 10.5}px 'JetBrains Mono', monospace`;
+                ctx.fillStyle = l.jenis === 'saham' ? '#fbcfe8' : l.jenis === 'pusat' ? '#fed7aa' : '#fef9c3';
+                ctx.fillText(l.txt, l.x, l.y);
+            }
             proj.current = pr.map((p) => ({ n: p.n, sx: p.sx, sy: p.sy, sr: Math.max(8, p.n.r * p.f * scale + 6) }));
             raf = requestAnimationFrame(draw);
         };

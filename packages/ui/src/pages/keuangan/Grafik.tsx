@@ -7,7 +7,7 @@ export function Batang({ data, rata, warna = 'var(--k-bar)', aktif }: { data: Ar
     const W = 320, H = 150, pad = 30, bw = (W - pad) / data.length;
     const ticks = [0, max / 2, max].map((v) => Math.round(v));
     return (
-        <svg className="k-bar" viewBox={`0 0 ${W} ${H + 22}`} role="img" aria-label="Grafik pengeluaran per periode">
+        <svg className="k-bar" viewBox={`0 -10 ${W} ${H + 32}`} role="img" aria-label="Grafik pengeluaran per periode">
             {ticks.map((t, i) => { const y = H - (t / max) * H; return <g key={i}><line x1={pad} x2={W} y1={y} y2={y} className="k-grid" /><text x={pad - 4} y={y + 3} textAnchor="end" className="k-axis">{rpk(t)}</text></g>; })}
             {data.map((d, i) => {
                 const h = (d.v / max) * H;
