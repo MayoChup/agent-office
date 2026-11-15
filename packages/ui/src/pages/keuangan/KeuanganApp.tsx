@@ -46,7 +46,7 @@ export function KeuanganApp() {
                         <button onClick={() => setGeser(Math.min(0, geser + 1))} disabled={geser >= 0} aria-label="Periode berikutnya">›</button>
                     </div>
                     <div className="k-head-act">
-                        <button className="k-pill" onClick={() => setImpor(true)} title="Impor PDF mutasi rekening">📥 Mutasi PDF</button>
+                        <button className="k-pill" onClick={() => setImpor(true)} title="Impor PDF mutasi rekening">📥 Mutasi</button>
                         {rep.data && <a className="k-pill" href={rep.data.sheetUrl} target="_blank" rel="noreferrer">📄 Sheets</a>}
                         <button className="k-pill" onClick={muat} disabled={rep.loading}>{rep.loading ? '…' : '↻'}</button>
                     </div>
