@@ -19,7 +19,7 @@ export function KeuanganApp() {
     const ang = useApi<Anggaran>('/api/kantor/keuangan/anggaran', 0);
     const [tab, setTabS] = useState<Tab>(() => { try { return (localStorage.getItem('kantor:keu-tab') as Tab) || 'beranda'; } catch { return 'beranda'; } });
     const setTab = (t: Tab) => { setTabS(t); try { localStorage.setItem('kantor:keu-tab', t); } catch { /* */ } document.querySelector('.pg')?.scrollTo({ top: 0 }); };
-    useSubNav(TABS.map((t) => ({ k: t.k, ico: t.ico, label: t.k === 'chat' ? 'Catat' : t.label })), tab, (k) => { setTab(k as Tab); if (k !== 'transaksi') setFilter({}); });
+    useSubNav(TABS.map((t) => ({ k: t.k, ico: t.ico, label: t.k === 'chat' ? 'Catat' : t.k === 'pengeluaran' ? 'Keluar' : t.label })), tab, (k) => { setTab(k as Tab); if (k !== 'transaksi') setFilter({}); });
     const [geser, setGeser] = useState(0);
     const [tambah, setTambah] = useState(false);
     const [detail, setDetail] = useState<Tx | null>(null);
