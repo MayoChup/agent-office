@@ -11,6 +11,7 @@ import { TradingDesk, tradingCli, fetchPrice, marketOpen } from './kantor/tradin
 import { Kalender } from './kantor/kalender';
 import { Percakapan, Anggota, KuotaBerat, hermesSekali, jalankan as jalankanHermes } from './kantor/percakapan';
 import { Investigasi } from './kantor/investigasi';
+import { Screener } from './kantor/screener';
 import { telegramKirim } from './kantor/telegram';
 import { HermesBridge } from './kantor/hermes';
 import { slidesCli } from './kantor/slides';
@@ -258,6 +259,23 @@ app.post('/api/kantor/chat/:id', requireToken, (req, res) => {
     catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
 });
 
+// ── Penyaring saham (fundamental SEC + teknikal) ─────────────────────
+const screener = new Screener(config.dataDir, () => tradingDesk.load().watchlist);
+app.get('/api/kantor/screener', requireToken, (_req, res) => { res.json({ ok: true, ...screener.data() }); });
+app.get('/api/kantor/screener/:s', requireToken, (req, res) => { res.json({ ok: true, spark: screener.spark(String(req.params.s).toUpperCase()) }); });
+app.post('/api/kantor/screener/perbarui', requireToken, (req, res) => {
+    if (screener.sibuk) { res.json({ ok: true, sibuk: screener.sibuk }); return; }
+    const p = req.body?.jenis === 'fundamental' ? screener.perbaruiFundamental() : screener.perbaruiTeknikal(true);
+    p.catch((e) => console.warn('[Screener]', e?.message || e));
+    res.json({ ok: true, mulai: true });
+});
+app.post('/api/kantor/trading/watchlist', requireToken, (req, res) => {
+    const simbol = String(req.body?.simbol || '').toUpperCase().replace(/[^A-Z0-9.-]/g, '').slice(0, 12);
+    if (!simbol) { res.status(400).json({ ok: false, error: 'Simbol tidak valid' }); return; }
+    tradingDesk.watchlist(req.body?.aksi === 'hapus' ? 'hapus' : 'tambah', [simbol]);
+    res.json({ ok: true, watchlist: tradingDesk.load().watchlist });
+});
+
 // ── Investigasi pergerakan saham ─────────────────────────────────────
 const investigasi = new Investigasi(config.dataDir, () => OfficeRoom.sharedLlm(), telegramNotifier(config.hermesHome), () => {
     const st = tradingDesk.load();
@@ -310,6 +328,7 @@ gameServer.listen(config.port, config.host).then(async () => {
     tradingDesk.start();
     kalender.start();
     investigasi.start(() => !marketOpen());
+    screener.start(() => !marketOpen());
     if (config.whatsapp.enabled) startWaChild();
     console.log(`[Kantor] Buka http://${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.port}`);
     if (config.host !== '127.0.0.1' && config.host !== 'localhost') {

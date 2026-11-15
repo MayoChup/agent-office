@@ -1,0 +1,263 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import { useApi } from '../kantor/api';
+import { apiGet, apiPost } from '../kantor/connection';
+
+interface F { roe: number | null; roa: number | null; pbv: number | null; per: number | null; der: number | null; npm: number | null; revGrowth: number | null; mcap: number | null; tahun: string }
+interface Sinyal {
+    goldenCross: number | null; deathCross: number | null; doubleTop: string | null; doubleBottom: string | null;
+    breakout52: boolean; dekat52Low: boolean; rsiOversold: boolean; rsiOverbought: boolean; macdBullish: number | null; macdBearish: number | null;
+    diAtasMa200: boolean; volumeSpike: boolean; tren: 'naik' | 'turun' | 'datar';
+}
+interface Baris { s: string; nama: string; sektor: string; harga: number; chg1d: number; chg1m: number; chg3m: number; chg1y: number; rsi: number | null; ma50: number | null; ma200: number | null; volX: number; sinyal: Sinyal; f: F | null }
+interface Data { baris: Baris[]; teknikalAt: number; teknikalSesi: string; fundamentalAt: number; sibuk: string; progres: string; gagal: number }
+interface Spark { tgl: string[]; c: number[]; ma50: (number | null)[]; ma200: (number | null)[] }
+
+type NumKey = 'roe' | 'roa' | 'pbv' | 'per' | 'der' | 'npm' | 'revGrowth' | 'mcap';
+const ANGKA: Array<{ k: NumKey; label: string; arah: 'min' | 'max'; satuan: string; info: string }> = [
+    { k: 'roe', label: 'ROE', arah: 'min', satuan: '%', info: 'Laba ÷ modal pemegang saham. Makin tinggi makin efisien memakai modal (bagus: >15%).' },
+    { k: 'roa', label: 'ROA', arah: 'min', satuan: '%', info: 'Laba ÷ total aset (bagus: >5%).' },
+    { k: 'pbv', label: 'PBV', arah: 'max', satuan: '×', info: 'Harga ÷ nilai buku. Di bawah 1 = dihargai di bawah nilai bukunya (murah, atau ada masalah).' },
+    { k: 'per', label: 'PER', arah: 'max', satuan: '×', info: 'Harga ÷ laba. Berapa tahun laba untuk "balik modal". Makin kecil makin murah.' },
+    { k: 'der', label: 'DER', arah: 'max', satuan: '×', info: 'Utang ÷ modal. Di atas 2 = utang besar (kecuali bank).' },
+    { k: 'npm', label: 'Margin laba', arah: 'min', satuan: '%', info: 'Laba bersih ÷ pendapatan.' },
+    { k: 'revGrowth', label: 'Tumbuh pendapatan', arah: 'min', satuan: '%', info: 'Pendapatan tahun lalu dibanding tahun sebelumnya.' },
+    { k: 'mcap', label: 'Kapitalisasi', arah: 'min', satuan: 'jt$', info: 'Nilai pasar perusahaan (juta USD). 10.000 = $10 miliar.' }
+];
+type SigKey = 'goldenCross' | 'deathCross' | 'doubleTop' | 'doubleBottom' | 'breakout52' | 'dekat52Low' | 'rsiOversold' | 'rsiOverbought' | 'macdBullish' | 'macdBearish' | 'diAtasMa200' | 'volumeSpike' | 'trenNaik' | 'trenTurun';
+const SINYAL: Array<{ k: SigKey; label: string; baik: boolean | null; info: string }> = [
+    { k: 'goldenCross', label: 'Golden cross', baik: true, info: 'MA50 memotong ke atas MA200 dalam 10 hari terakhir — tanda awal tren naik jangka menengah.' },
+    { k: 'deathCross', label: 'Death cross', baik: false, info: 'MA50 memotong ke bawah MA200 dalam 10 hari terakhir.' },
+    { k: 'doubleBottom', label: 'Double bottom', baik: true, info: 'Dua lembah setara (pola "W") — potensi berbalik naik. Terkonfirmasi kalau harga tembus garis leher.' },
+    { k: 'doubleTop', label: 'Double top', baik: false, info: 'Dua puncak setara (pola "M") — potensi berbalik turun.' },
+    { k: 'breakout52', label: 'Tembus tertinggi 52 mgg', baik: true, info: 'Harga penutupan tertinggi dalam 1 tahun.' },
+    { k: 'dekat52Low', label: 'Dekat terendah 52 mgg', baik: null, info: 'Dalam 3% dari harga terendah setahun.' },
+    { k: 'rsiOversold', label: 'RSI < 30', baik: null, info: 'Jenuh jual — sudah turun banyak dalam waktu singkat.' },
+    { k: 'rsiOverbought', label: 'RSI > 70', baik: null, info: 'Jenuh beli — sudah naik banyak dalam waktu singkat.' },
+    { k: 'macdBullish', label: 'MACD naik', baik: true, info: 'Garis MACD memotong ke atas garis sinyal (5 hari terakhir).' },
+    { k: 'macdBearish', label: 'MACD turun', baik: false, info: 'Garis MACD memotong ke bawah garis sinyal (5 hari terakhir).' },
+    { k: 'diAtasMa200', label: 'Di atas MA200', baik: true, info: 'Harga di atas rata-rata 200 hari — tren besar naik.' },
+    { k: 'volumeSpike', label: 'Volume 2×', baik: null, info: 'Volume hari ini 2× rata-rata 20 hari.' },
+    { k: 'trenNaik', label: 'Tren naik rapi', baik: true, info: 'Harga > MA50 > MA200 dan MA50 menanjak.' },
+    { k: 'trenTurun', label: 'Tren turun', baik: false, info: 'Harga < MA50 < MA200 dan MA50 menurun.' }
+];
+const PRESET: Array<{ nama: string; num: Partial<Record<NumKey, string>>; sig: SigKey[] }> = [
+    { nama: 'Murah & berkualitas', num: { roe: '15', pbv: '3', der: '1.5' }, sig: [] },
+    { nama: 'Tumbuh cepat', num: { revGrowth: '15', npm: '10' }, sig: ['diAtasMa200'] },
+    { nama: 'Momentum', num: {}, sig: ['goldenCross'] },
+    { nama: 'Berbalik naik?', num: {}, sig: ['doubleBottom'] },
+    { nama: 'Waspada turun', num: {}, sig: ['doubleTop'] },
+    { nama: 'Jenuh jual tapi sehat', num: { roe: '10' }, sig: ['rsiOversold'] }
+];
+const LS = 'kantor:screener';
+
+function cocokSinyal(b: Baris, k: SigKey) {
+    const s = b.sinyal;
+    if (k === 'trenNaik') return s.tren === 'naik';
+    if (k === 'trenTurun') return s.tren === 'turun';
+    const v = (s as any)[k];
+    return v !== null && v !== false && v !== undefined;
+}
+const fmt = (v: number | null | undefined, sat = '') => (v == null ? '–' : `${v.toLocaleString('id-ID', { maximumFractionDigits: 1 })}${sat}`);
+const pct = (v: number) => <span className={v >= 0 ? 'up' : 'down'}>{v >= 0 ? '+' : '−'}{Math.abs(v).toFixed(1).replace('.', ',')}%</span>;
+const sejak = (at: number) => (at ? new Date(at).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }) : 'belum');
+
+export function ScreenerView() {
+    const { data, error, reload } = useApi<Data>('/api/kantor/screener', 0);
+    const simpanan = (() => { try { return JSON.parse(localStorage.getItem(LS) || '{}'); } catch { return {}; } })();
+    const [num, setNum] = useState<Partial<Record<NumKey, string>>>(simpanan.num || {});
+    const [sig, setSig] = useState<SigKey[]>(simpanan.sig || []);
+    const [sektor, setSektor] = useState<string>(simpanan.sektor || '');
+    const [urut, setUrut] = useState<string>(simpanan.urut || 'chg1d');
+    const [q, setQ] = useState('');
+    const [buka, setBuka] = useState<string | null>(null);
+    const [info, setInfo] = useState<string | null>(null);
+    const [msg, setMsg] = useState('');
+
+    useEffect(() => { try { localStorage.setItem(LS, JSON.stringify({ num, sig, sektor, urut })); } catch { /* */ } }, [num, sig, sektor, urut]);
+    // Saat server sedang memperbarui data, muat ulang berkala.
+    useEffect(() => { if (!data?.sibuk) return; const t = setInterval(() => reload(), 8000); return () => clearInterval(t); }, [data?.sibuk]);
+
+    const sektorList = useMemo(() => Array.from(new Set((data?.baris || []).map((b) => b.sektor).filter(Boolean))).sort(), [data]);
+    const hasil = useMemo(() => {
+        if (!data) return [];
+        const qq = q.trim().toUpperCase();
+        const out = data.baris.filter((b) => {
+            if (qq && !b.s.includes(qq) && !b.nama.toUpperCase().includes(qq)) return false;
+            if (sektor && b.sektor !== sektor) return false;
+            for (const a of ANGKA) {
+                const raw = num[a.k];
+                if (raw === undefined || raw === '') continue;
+                const lim = Number(String(raw).replace(',', '.'));
+                if (!Number.isFinite(lim)) continue;
+                const v = b.f?.[a.k];
+                if (v == null) return false;
+                if (a.arah === 'min' ? v < lim : v > lim || v < 0) return false;
+            }
+            return sig.every((k) => cocokSinyal(b, k));
+        });
+        const val = (b: Baris): number | null => {
+            const v = urut in (b.f || { roe: 0, roa: 0, pbv: 0, per: 0, der: 0, npm: 0, revGrowth: 0, mcap: 0 }) && !(urut in b) ? (b.f as any)?.[urut] : (b as any)[urut];
+            return typeof v === 'number' && Number.isFinite(v) ? v : null;
+        };
+        const asc = ['pbv', 'per', 'der'].includes(urut);
+        return out.sort((a, b) => {
+            const x = val(a), y = val(b);
+            if (x == null) return y == null ? 0 : 1;
+            if (y == null) return -1;
+            if (asc && (x < 0 || y < 0)) return x < 0 ? (y < 0 ? 0 : 1) : -1; // PBV/PER negatif (rugi) di belakang
+            return asc ? x - y : y - x;
+        });
+    }, [data, num, sig, sektor, urut, q]);
+
+    const perbarui = async (jenis: string) => {
+        setMsg('');
+        try { await apiPost('/api/kantor/screener/perbarui', { jenis }); setMsg('Sedang mengambil data… (beberapa menit, bisa ditinggal)'); setTimeout(() => reload(), 2000); }
+        catch (e: any) { setMsg(String(e.message || e)); }
+    };
+    const aktif = Object.values(num).filter((v) => v !== undefined && v !== '').length + sig.length + (sektor ? 1 : 0);
+    const cur = data?.baris.find((b) => b.s === buka);
+
+    if (cur) return <Detail b={cur} onBack={() => setBuka(null)} />;
+
+    return (
+        <>
+            <section className="fin-card">
+                <div className="inv-kicker">■ Penyaring saham · S&P 500 + watchlist</div>
+                <div className="scr-presets">
+                    {PRESET.map((p) => <button key={p.nama} className="chip" style={{ ['--c' as any]: '#a78bfa' }} onClick={() => { setNum(p.num); setSig(p.sig); }}>{p.nama}</button>)}
+                    {aktif > 0 && <button className="chip" style={{ ['--c' as any]: '#94a3b8' }} onClick={() => { setNum({}); setSig([]); setSektor(''); }}>✕ Hapus filter ({aktif})</button>}
+                </div>
+
+                <div className="scr-sub">Fundamental <small>dari laporan resmi SEC</small></div>
+                <div className="scr-nums">
+                    {ANGKA.map((a) => (
+                        <label key={a.k} className="scr-num">
+                            <span>{a.label} <button type="button" className="scr-i" onClick={() => setInfo(info === a.k ? null : a.k)}>?</button></span>
+                            <div><em>{a.arah === 'min' ? '≥' : '≤'}</em><input className="input" inputMode="decimal" placeholder="–" value={num[a.k] ?? ''} onChange={(e) => setNum({ ...num, [a.k]: e.target.value })} /><em>{a.satuan}</em></div>
+                            {info === a.k && <small className="scr-info">{a.info}</small>}
+                        </label>
+                    ))}
+                </div>
+
+                <div className="scr-sub">Teknikal <small>ketuk untuk memilih; semua yang dipilih harus terpenuhi</small></div>
+                <div className="scr-sigs">
+                    {SINYAL.map((s) => {
+                        const on = sig.includes(s.k);
+                        return <button key={s.k} className={`scr-sig ${on ? 'on' : ''} ${s.baik === true ? 'baik' : s.baik === false ? 'buruk' : ''}`} title={s.info} onClick={() => setSig(on ? sig.filter((x) => x !== s.k) : [...sig, s.k])}>{s.label}</button>;
+                    })}
+                </div>
+                <details className="scr-legend"><summary>Arti tiap sinyal</summary>{SINYAL.map((s) => <div key={s.k}><b>{s.label}</b> — {s.info}</div>)}</details>
+
+                <div className="scr-row">
+                    <input className="input" placeholder="Cari kode/nama" value={q} onChange={(e) => setQ(e.target.value)} />
+                    <select className="select" value={sektor} onChange={(e) => setSektor(e.target.value)}>
+                        <option value="">Semua sektor</option>
+                        {sektorList.map((s) => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                    <select className="select" value={urut} onChange={(e) => setUrut(e.target.value)}>
+                        <option value="chg1d">Urut: naik hari ini</option><option value="chg1m">Naik 1 bulan</option><option value="chg1y">Naik 1 tahun</option>
+                        <option value="roe">ROE tertinggi</option><option value="pbv">PBV termurah</option><option value="per">PER termurah</option>
+                        <option value="revGrowth">Tumbuh tercepat</option><option value="mcap">Terbesar</option><option value="volX">Volume tertinggi</option>
+                    </select>
+                </div>
+            </section>
+
+            {error && <div className="error">Gagal memuat: {error}</div>}
+            {data && (
+                <div className="scr-meta">
+                    <span><b>{hasil.length}</b> dari {data.baris.length} saham</span>
+                    <span>Harga: {data.teknikalSesi || '–'} · Fundamental: {sejak(data.fundamentalAt)}</span>
+                    {data.sibuk ? <span className="scr-busy">⏳ Memperbarui {data.progres}</span> : <button className="btn small" onClick={() => perbarui('teknikal')}>↻ Perbarui</button>}
+                </div>
+            )}
+            {msg && <div className="fin-note">{msg}</div>}
+            {data && data.baris.length === 0 && <div className="fin-empty">Data belum ada. Tekan ↻ Perbarui (±5 menit untuk ±500 saham), atau tunggu otomatis setelah bursa tutup.</div>}
+
+            {hasil.length > 0 && (
+                <div className="scr-table-wrap">
+                    <table className="scr-table">
+                        <thead><tr><th>Saham</th><th>Harga</th><th>1H</th><th>1B</th><th>ROE</th><th>PBV</th><th>PER</th><th>Sinyal</th></tr></thead>
+                        <tbody>
+                            {hasil.slice(0, 200).map((b) => (
+                                <tr key={b.s} onClick={() => setBuka(b.s)}>
+                                    <td><b>{b.s}</b><small>{b.nama}</small></td>
+                                    <td>${fmt(b.harga)}</td>
+                                    <td>{pct(b.chg1d)}</td>
+                                    <td>{pct(b.chg1m)}</td>
+                                    <td>{fmt(b.f?.roe, '%')}</td>
+                                    <td>{fmt(b.f?.pbv, '×')}</td>
+                                    <td>{fmt(b.f?.per, '×')}</td>
+                                    <td className="scr-tags">{SINYAL.filter((s) => cocokSinyal(b, s.k)).slice(0, 3).map((s) => <i key={s.k} className={s.baik === true ? 'baik' : s.baik === false ? 'buruk' : ''}>{s.label}</i>)}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                    {hasil.length > 200 && <div className="fin-note">Menampilkan 200 teratas — persempit filter untuk melihat sisanya.</div>}
+                </div>
+            )}
+            {data && data.baris.length > 0 && hasil.length === 0 && <div className="fin-empty">Tidak ada saham yang cocok. Longgarkan filter.</div>}
+            <p className="fin-note">Data gratis: harga Yahoo Finance (tertunda), fundamental laporan tahunan SEC. Untuk riset, bukan saran beli/jual.</p>
+        </>
+    );
+}
+
+function Detail({ b, onBack }: { b: Baris; onBack: () => void }) {
+    const [sp, setSp] = useState<Spark | null>(null);
+    const [msg, setMsg] = useState('');
+    useEffect(() => { apiGet<{ spark: Spark | null }>(`/api/kantor/screener/${b.s}`).then((d) => setSp(d.spark)).catch(() => undefined); }, [b.s]);
+    const aksi = async (fn: () => Promise<any>, ok: string) => { setMsg('…'); try { await fn(); setMsg(ok); } catch (e: any) { setMsg(String(e.message || e)); } };
+    const f = b.f;
+    return (
+        <>
+            <button className="back" onClick={onBack}>‹ Hasil penyaring</button>
+            <section className="inv-hero">
+                <div className="inv-kicker">{b.sektor || 'Saham AS'} · {b.nama}</div>
+                <div className="inv-ticker">{b.s}</div>
+                <div className="inv-price">${fmt(b.harga)} {pct(b.chg1d)}</div>
+                <div className="inv-sub">1 bulan {b.chg1m >= 0 ? '+' : ''}{b.chg1m}% · 3 bulan {b.chg3m >= 0 ? '+' : ''}{b.chg3m}% · 1 tahun {b.chg1y >= 0 ? '+' : ''}{b.chg1y}% · RSI {fmt(b.rsi)} · volume {b.volX}×</div>
+                {sp && <Chart sp={sp} />}
+                <div className="scr-legend-line"><i style={{ background: '#e2e8f0' }} />Harga <i style={{ background: '#f59e0b' }} />MA50 <i style={{ background: '#38bdf8' }} />MA200</div>
+            </section>
+            <section className="fin-card">
+                <div className="inv-kicker">■ Sinyal teknikal</div>
+                <div className="scr-sigs">
+                    {SINYAL.filter((s) => cocokSinyal(b, s.k)).map((s) => <span key={s.k} className={`scr-sig on ${s.baik === true ? 'baik' : s.baik === false ? 'buruk' : ''}`} title={s.info}>{s.label}{s.k === 'goldenCross' && b.sinyal.goldenCross != null ? ` · ${b.sinyal.goldenCross} hr lalu` : ''}{(s.k === 'doubleTop' || s.k === 'doubleBottom') ? ` · ${(b.sinyal as any)[s.k]}` : ''}</span>)}
+                    {!SINYAL.some((s) => cocokSinyal(b, s.k)) && <span className="inv-muted">Tidak ada sinyal menonjol.</span>}
+                </div>
+                <div className="inv-muted" style={{ marginTop: 8 }}>MA50 ${fmt(b.ma50)} · MA200 ${fmt(b.ma200)} · tren {b.sinyal.tren}</div>
+            </section>
+            <section className="fin-card">
+                <div className="inv-kicker">■ Fundamental {f ? `· laporan ${f.tahun}` : ''}</div>
+                {f ? (
+                    <div className="inv-nums">
+                        {ANGKA.map((a) => <div key={a.k}><b>{a.k === 'mcap' && f.mcap ? `$${(f.mcap / 1000).toLocaleString('id-ID', { maximumFractionDigits: 1 })} M` : fmt(f[a.k], a.satuan)}</b><span>{a.label}</span><small>{a.info}</small></div>)}
+                    </div>
+                ) : <div className="fin-empty">Data fundamental belum ada untuk saham ini.</div>}
+            </section>
+            <section className="fin-card">
+                <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+                    <button className="btn primary" onClick={() => aksi(() => apiPost('/api/kantor/trading/watchlist', { simbol: b.s, aksi: 'tambah' }), `✓ ${b.s} masuk watchlist — Dito ikut memantaunya.`)}>+ Watchlist</button>
+                    <button className="btn" onClick={() => aksi(() => apiPost('/api/kantor/investigasi/selidiki', { simbol: b.s }), `✓ Kasus ${b.s} siap — buka tab Investigasi.`)}>🔎 Selidiki pergerakannya</button>
+                    <button className="btn" onClick={() => aksi(() => apiPost('/api/kantor/chat/grup', { teks: `@Dito @Raka tolong analisis ${b.s}: harga $${b.harga}, ROE ${fmt(f?.roe, '%')}, PBV ${fmt(f?.pbv, '×')}, PER ${fmt(f?.per, '×')}, sinyal: ${SINYAL.filter((s) => cocokSinyal(b, s.k)).map((s) => s.label).join(', ') || 'tidak ada'}. Layak dipantau?` }), '✓ Ditanyakan ke Dito & Raka di Grup Kantor (menu Chat).')}>💬 Tanya Dito & Raka</button>
+                </div>
+                {msg && <div className="fin-note" style={{ textAlign: 'left' }}>{msg}</div>}
+            </section>
+        </>
+    );
+}
+
+function Chart({ sp }: { sp: Spark }) {
+    const W = 600, H = 160;
+    const all = [...sp.c, ...sp.ma50.filter((x): x is number => x != null), ...sp.ma200.filter((x): x is number => x != null)];
+    const lo = Math.min(...all), hi = Math.max(...all);
+    const X = (i: number) => (i / Math.max(1, sp.c.length - 1)) * W;
+    const Y = (v: number) => H - ((v - lo) / Math.max(0.0001, hi - lo)) * (H - 10) - 5;
+    const line = (arr: (number | null)[]) => arr.map((v, i) => (v == null ? '' : `${X(i).toFixed(1)},${Y(v).toFixed(1)}`)).filter(Boolean).join(' ');
+    return (
+        <svg className="scr-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label="Grafik harga 6 bulan">
+            <polyline points={line(sp.ma200)} fill="none" stroke="#38bdf8" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+            <polyline points={line(sp.ma50)} fill="none" stroke="#f59e0b" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+            <polyline points={line(sp.c)} fill="none" stroke="#e2e8f0" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+        </svg>
+    );
+}

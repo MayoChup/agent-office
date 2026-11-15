@@ -3,6 +3,7 @@ import { useApi, TradingData } from '../kantor/api';
 import { useKantor, statusOf } from '../kantor/store';
 import { Avatar } from '../components/Avatar';
 import { InvestigasiView } from './InvestigasiView';
+import { ScreenerView } from './ScreenerView';
 
 const LS_TAB = 'kantor:trading-tab';
 
@@ -29,8 +30,9 @@ export function TradingPage() {
     const agents = useKantor((s) => s.agents);
     const team = agents.filter((a) => a.id === 'trading' || a.id.startsWith('trading-'));
     const [lap, setLap] = useState(0);
-    const [tab, setTabState] = useState<'posisi' | 'investigasi'>(() => { try { return localStorage.getItem(LS_TAB) === 'investigasi' ? 'investigasi' : 'posisi'; } catch { return 'posisi'; } });
-    const setTab = (t: 'posisi' | 'investigasi') => { setTabState(t); try { localStorage.setItem(LS_TAB, t); } catch { /* */ } };
+    type Tab = 'posisi' | 'penyaring' | 'investigasi';
+    const [tab, setTabState] = useState<Tab>(() => { try { const v = localStorage.getItem(LS_TAB); return v === 'investigasi' || v === 'penyaring' ? v : 'posisi'; } catch { return 'posisi'; } });
+    const setTab = (t: Tab) => { setTabState(t); try { localStorage.setItem(LS_TAB, t); } catch { /* */ } };
     const realized = (data?.history || []).reduce((a, h) => a + (h.pnl || 0), 0);
     const open = (data?.positions || []).reduce((a, p) => a + (p.pnl || 0), 0);
 
@@ -41,10 +43,12 @@ export function TradingPage() {
                 <button className="icon-btn" onClick={() => reload()} disabled={loading} title="Muat ulang">{loading ? '…' : '↻'}</button>
             </div>
             <div className="tabs" style={{ margin: 0 }}>
-                <button className={`tab ${tab === 'posisi' ? 'active' : ''}`} onClick={() => setTab('posisi')}>Posisi & strategi</button>
+                <button className={`tab ${tab === 'posisi' ? 'active' : ''}`} onClick={() => setTab('posisi')}>Posisi</button>
+                <button className={`tab ${tab === 'penyaring' ? 'active' : ''}`} onClick={() => setTab('penyaring')}>🧪 Penyaring</button>
                 <button className={`tab ${tab === 'investigasi' ? 'active' : ''}`} onClick={() => setTab('investigasi')}>🔎 Investigasi</button>
             </div>
             {tab === 'investigasi' && <InvestigasiView />}
+            {tab === 'penyaring' && <ScreenerView />}
             {tab === 'posisi' && error && <div className="error">Gagal memuat: {error}</div>}
             {tab === 'posisi' && data && (
                 <>
