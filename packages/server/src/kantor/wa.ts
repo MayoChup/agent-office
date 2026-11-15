@@ -115,14 +115,20 @@ function silentLogger(): any {
     try { return require('pino')({ level: 'silent' }); } catch { return undefined; }
 }
 export const waAuthDir = (dataDir: string) => path.join(dataDir, 'wa-auth');
-export const waLinked = (dataDir: string) => fs.existsSync(path.join(waAuthDir(dataDir), 'creds.json'));
+/** Sudah tertaut sungguhan (bukan sisa percobaan login yang gagal). */
+export const waLinked = (dataDir: string) => {
+    try {
+        const c = JSON.parse(fs.readFileSync(path.join(waAuthDir(dataDir), 'creds.json'), 'utf8'));
+        return Boolean(c.registered || c.me?.id);
+    } catch { return false; }
+};
 
 function teksDari(m: any): string {
     const msg = m.message?.ephemeralMessage?.message || m.message?.viewOnceMessage?.message || m.message || {};
     return msg.conversation || msg.extendedTextMessage?.text || msg.imageMessage?.caption || msg.videoMessage?.caption || '';
 }
 
-async function socket(dataDir: string, onOpen?: (sock: any) => void, onClose?: (code: number) => void, onQr?: (sock: any) => void) {
+async function socket(dataDir: string, onOpen?: (sock: any) => void, onClose?: (code: number) => void, onQr?: (sock: any) => void, qrTimeout?: number) {
     const B = baileys();
     if (!B) throw new Error('Modul WhatsApp belum terpasang di paket kantor (tunggu update berikutnya).');
     const { default: makeWASocket, useMultiFileAuthState, Browsers } = B;
@@ -133,7 +139,8 @@ async function socket(dataDir: string, onOpen?: (sock: any) => void, onClose?: (
         version,
         auth: state,
         logger: silentLogger(),
-        browser: Browsers.ubuntu('Kantor Rico'),
+        browser: Browsers.ubuntu('Chrome'),   // nama peramban standar; nama lain membuat kode tautan ditolak
+        qrTimeout,
         markOnlineOnConnect: false,        // jangan tampil "online"
         syncFullHistory: false,
         shouldSyncHistoryMessage: () => false,
@@ -205,28 +212,45 @@ export class WaReader {
 export async function waLoginCli(dataDir: string, nomor: string): Promise<string> {
     const num = String(nomor || '').replace(/\D/g, '').replace(/^0/, '62');
     if (!/^62\d{8,13}$/.test(num)) throw new Error('Pakai: --wa-login 628xxxxxxxxxx (nomor WhatsApp Pak Rico, format 62…)');
+    if (waLinked(dataDir)) return '✅ WhatsApp sudah tertaut. Untuk menautkan ulang: --wa-logout dulu.';
+    // Sisa percobaan yang gagal dihapus supaya mulai bersih.
+    fs.rmSync(waAuthDir(dataDir), { recursive: true, force: true });
     fs.mkdirSync(waAuthDir(dataDir), { recursive: true });
     return new Promise((resolve, reject) => {
-        let asked = false;
-        let restarts = 0;
-        const timer = setTimeout(() => reject(new Error('Waktu habis (5 menit). Jalankan lagi.')), 300_000);
-        const run = () => socket(dataDir,
-            () => { clearTimeout(timer); setTimeout(() => resolve('✅ WhatsApp tertaut (hanya-baca). Sekarang jalankan: systemctl --user restart kantor-virtual'), 3000); },
-            (code) => {
-                if (code === 515 && restarts++ < 3) { run(); return; } // WhatsApp minta sambung ulang setelah tertaut
-                if (code === 401) { clearTimeout(timer); reject(new Error('Ditolak WhatsApp. Hapus folder data/wa-auth lalu coba lagi.')); }
-            },
-            async (sock) => {
-                if (asked || sock.authState?.creds?.registered) return;
-                asked = true;
-                try {
-                    const code = await sock.requestPairingCode(num);
-                    console.log(`\nKode tautan: ${String(code).replace(/(.{4})/, '$1-')}\n`);
-                    console.log('Di HP: WhatsApp → ⋮ / Setelan → Perangkat tertaut → Tautkan perangkat → "Tautkan dengan nomor telepon saja" → masukkan kode di atas.');
-                    console.log('Menunggu… (jangan tutup layar ini)');
-                } catch (e: any) { clearTimeout(timer); reject(new Error(`Gagal meminta kode: ${e?.message || e}`)); }
-            }
-        ).catch((e) => { clearTimeout(timer); reject(e); });
+        let done = false;
+        let tries = 0;
+        const finish = (err: Error | null, msg = '') => {
+            if (done) return;
+            done = true; clearTimeout(timer);
+            err ? reject(err) : resolve(msg);
+        };
+        const timer = setTimeout(() => finish(new Error('Waktu habis (15 menit). Jalankan lagi.')), 15 * 60_000);
+        const run = () => {
+            let asked = false;
+            socket(dataDir,
+                () => setTimeout(() => finish(null, '✅ WhatsApp tertaut (hanya-baca). Sekarang jalankan: systemctl --user restart kantor-virtual'), 4000),
+                (code) => {
+                    if (done) return;
+                    if (code === 401) { finish(new Error('Ditolak WhatsApp. Jalankan --wa-login lagi.')); return; }
+                    if (waLinked(dataDir) || code === 515) { setTimeout(run, 1000); return; } // tertaut → sambung ulang sekali
+                    if (++tries > 4) { finish(new Error('Sambungan ke WhatsApp terus terputus. Coba lagi beberapa menit lagi.')); return; }
+                    console.log('\n(Sambungan terputus — meminta kode BARU, pakai kode terbaru di bawah)');
+                    setTimeout(run, 2000);
+                },
+                async (sock) => {
+                    if (asked || sock.authState?.creds?.registered) return;
+                    asked = true;
+                    try {
+                        await new Promise((r) => setTimeout(r, 2000));
+                        const code = String(await sock.requestPairingCode(num));
+                        console.log(`\n   Kode tautan:  ${code.slice(0, 4)}-${code.slice(4)}\n`);
+                        console.log('Di HP: WhatsApp → Perangkat tertaut → Tautkan perangkat → "Tautkan dengan nomor telepon saja" → ketik kode di atas.');
+                        console.log('Kode berlaku beberapa menit. Menunggu… (jangan tutup layar ini)');
+                    } catch (e: any) { finish(new Error(`Gagal meminta kode: ${e?.message || e}`)); }
+                },
+                120_000 // tiap putaran kode bertahan 2 menit (bawaan hanya 20 detik)
+            ).catch((e) => finish(e));
+        };
         run();
     });
 }
