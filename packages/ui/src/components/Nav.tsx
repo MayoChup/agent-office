@@ -11,18 +11,17 @@ const ALL: Array<{ key: PageKey | 'org' | 'activity'; ico: string; label: string
     { key: 'trading', ico: '📈', label: 'Trading' },
     { key: 'tugas', ico: '📋', label: 'Tugas' },
     { key: 'jadwal', ico: '📅', label: 'Jadwal' },
-    { key: 'obrolan', ico: '💬', label: 'Obrolan' },
+    { key: 'obrolan', ico: '💬', label: 'Chat' },
     { key: 'org', ico: '🧭', label: 'Bagan' },
     { key: 'activity', ico: '⚡', label: 'Aktivitas' }
 ];
-const MOBILE_MAIN = ['home', 'kantor', 'keuangan', 'trading'];
+const MOBILE_MAIN = ['home', 'obrolan', 'keuangan', 'trading'];
 
 export function Nav({ page, panel, onGo }: { page: PageKey; panel: SidePanel; onGo: (k: PageKey | 'org' | 'activity') => void }) {
-    const unread = useKantor((s) => s.unreadChat);
     const tasks = useKantor((s) => s.tasks);
     const activeTasks = tasks.filter((t) => t.status === 'in_progress' || t.status === 'blocked').length;
     const [more, setMore] = useState(false);
-    const badge = (k: string) => (k === 'obrolan' ? unread : k === 'tugas' ? activeTasks : 0);
+    const badge = (k: string) => (k === 'tugas' ? activeTasks : 0);
     const isActive = (k: string) => (k === 'org' || k === 'activity' ? page === 'kantor' && panel === k : page === k && !(k === 'kantor' && panel));
     const btn = (it: (typeof ALL)[number], extra = '') => (
         <button key={it.key} className={`dock-btn ${extra} ${isActive(it.key) ? 'active' : ''}`} onClick={() => { setMore(false); onGo(it.key); }}>

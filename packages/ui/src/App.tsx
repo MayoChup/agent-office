@@ -5,7 +5,7 @@ import { TopBar } from './components/TopBar';
 import { Nav, PageKey, SidePanel } from './components/Nav';
 import { OrgPanel } from './components/OrgPanel';
 import { TasksPanel } from './components/TasksPanel';
-import { ChatPanel } from './components/ChatPanel';
+import { ChatPage } from './pages/ChatPage';
 import { ActivityPanel } from './components/ActivityPanel';
 import { AgentCard } from './components/AgentCard';
 import { Toasts } from './components/Toasts';
@@ -97,7 +97,7 @@ export function App() {
                     {page === 'trading' && <TradingPage />}
                     {page === 'jadwal' && <SchedulePage />}
                     {page === 'tugas' && <TasksPanel onClose={back} />}
-                    {page === 'obrolan' && <ChatPanel onClose={back} prefill={prefill} />}
+                    {page === 'obrolan' && <ChatPage prefill={prefill} />}
                 </main>
             )}
 

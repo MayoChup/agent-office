@@ -49,6 +49,16 @@ export async function apiGet<T = any>(pathAndQuery: string): Promise<T> {
     if (!res.ok || data?.ok === false) throw new Error(data?.error || `HTTP ${res.status}`);
     return data as T;
 }
+/** Panggil API kantor yang butuh login (POST JSON). */
+export async function apiPost<T = any>(pathAndQuery: string, body: unknown): Promise<T> {
+    const server = currentServer();
+    const token = safeGet(LS_TOKEN);
+    const res = await fetch(`${server}${pathAndQuery}`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 401) { safeSet(LS_TOKEN, ''); setStatus('login'); }
+    if (!res.ok || data?.ok === false) throw new Error(data?.error || `HTTP ${res.status}`);
+    return data as T;
+}
 export function getStatus() { return status; }
 export function getLastError() { return lastError; }
 export function isSameOrigin() { return sameOriginServer; }

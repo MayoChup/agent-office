@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { useApi, TradingData } from '../kantor/api';
 import { useKantor, statusOf } from '../kantor/store';
 import { Avatar } from '../components/Avatar';
+import { InvestigasiView } from './InvestigasiView';
+
+const LS_TAB = 'kantor:trading-tab';
 
 const LAPORAN_NAMA: Record<string, string> = { berita: '📰 Nina · Berita', fundamental: '📊 Raka · Analis', smartmoney: '🐋 Sari · Smart Money' };
 
@@ -26,6 +29,8 @@ export function TradingPage() {
     const agents = useKantor((s) => s.agents);
     const team = agents.filter((a) => a.id === 'trading' || a.id.startsWith('trading-'));
     const [lap, setLap] = useState(0);
+    const [tab, setTabState] = useState<'posisi' | 'investigasi'>(() => { try { return localStorage.getItem(LS_TAB) === 'investigasi' ? 'investigasi' : 'posisi'; } catch { return 'posisi'; } });
+    const setTab = (t: 'posisi' | 'investigasi') => { setTabState(t); try { localStorage.setItem(LS_TAB, t); } catch { /* */ } };
     const realized = (data?.history || []).reduce((a, h) => a + (h.pnl || 0), 0);
     const open = (data?.positions || []).reduce((a, p) => a + (p.pnl || 0), 0);
 
@@ -35,8 +40,13 @@ export function TradingPage() {
                 <div><h2>📈 Trading</h2><p>Saham AS · alert target & stop dikirim ke Telegram · bukan nasihat keuangan</p></div>
                 <button className="icon-btn" onClick={() => reload()} disabled={loading} title="Muat ulang">{loading ? '…' : '↻'}</button>
             </div>
-            {error && <div className="error">Gagal memuat: {error}</div>}
-            {data && (
+            <div className="tabs" style={{ margin: 0 }}>
+                <button className={`tab ${tab === 'posisi' ? 'active' : ''}`} onClick={() => setTab('posisi')}>Posisi & strategi</button>
+                <button className={`tab ${tab === 'investigasi' ? 'active' : ''}`} onClick={() => setTab('investigasi')}>🔎 Investigasi</button>
+            </div>
+            {tab === 'investigasi' && <InvestigasiView />}
+            {tab === 'posisi' && error && <div className="error">Gagal memuat: {error}</div>}
+            {tab === 'posisi' && data && (
                 <>
                     <div className="fin-mini">
                         <div><span>Modal</span><b>${data.capital}</b></div>

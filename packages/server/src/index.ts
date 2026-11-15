@@ -7,8 +7,11 @@ import { OfficeRoom } from './rooms/OfficeRoom';
 import { loadConfig } from './kantor/config';
 import { KantorAuth } from './kantor/auth';
 import { Pencatat, telegramNotifier, ringkasanKeuangan } from './kantor/pencatat';
-import { TradingDesk, tradingCli, fetchPrice } from './kantor/trading';
+import { TradingDesk, tradingCli, fetchPrice, marketOpen } from './kantor/trading';
 import { Kalender } from './kantor/kalender';
+import { Percakapan, Anggota } from './kantor/percakapan';
+import { Investigasi } from './kantor/investigasi';
+import { HermesBridge } from './kantor/hermes';
 import { slidesCli } from './kantor/slides';
 import { WaJanji, WaReader, waLoginCli, waLogoutCli, waLinked } from './kantor/wa';
 import { FreeLlm } from './kantor/freeLlm';
@@ -191,6 +194,44 @@ app.get('/api/kantor/trading', requireToken, async (_req, res) => {
     } catch { /* belum ada */ }
     res.json({ ok: true, capital: st.capital, riskPct: st.riskPct, positions, plans: st.plans, history: st.history.slice(-30), watchlist: st.watchlist, laporan });
 });
+// ── Chat ala WhatsApp dengan AI Hermes (pribadi & grup) ─────────────
+const hermesProfiles = new HermesBridge(config.hermesHome, config.kanbanDbPath, config.hermesBin);
+let rosterCache: { at: number; list: Anggota[] } = { at: 0, list: [] };
+const roster = (): Anggota[] => {
+    if (Date.now() - rosterCache.at < 60_000) return rosterCache.list;
+    const list = hermesProfiles.listProfiles().map((p) => {
+        const o = config.agents[p.id] || {};
+        return { id: p.id, nama: o.name || p.displayName || p.id, peran: o.title || p.title || (p.id === 'default' ? 'Kepala' : ''), deskripsi: o.role || p.description || '' };
+    });
+    rosterCache = { at: Date.now(), list };
+    return list;
+};
+const percakapan = new Percakapan(config.dataDir, config.hermesBin, config.ownerName, roster, () => OfficeRoom.sharedLlm());
+app.get('/api/kantor/chat', requireToken, (_req, res) => { res.json({ ok: true, thread: percakapan.daftar() }); });
+app.get('/api/kantor/chat/:id', requireToken, (req, res) => { res.json({ ok: true, ...percakapan.thread(String(req.params.id)) }); });
+app.post('/api/kantor/chat/:id', requireToken, (req, res) => {
+    try { res.json({ ok: true, pesan: percakapan.kirim(String(req.params.id), String(req.body?.teks || '')) }); }
+    catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
+});
+
+// ── Investigasi pergerakan saham ─────────────────────────────────────
+const investigasi = new Investigasi(config.dataDir, () => OfficeRoom.sharedLlm(), telegramNotifier(config.hermesHome), () => {
+    const st = tradingDesk.load();
+    return Array.from(new Set([...st.positions.map((p) => p.symbol), ...st.watchlist]));
+});
+const jalankan = (fn: () => Promise<any>): express.RequestHandler => async (_req, res) => {
+    try { res.json({ ok: true, ...(await fn()) }); } catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
+};
+app.get('/api/kantor/investigasi', requireToken, (_req, res) => { res.json({ ok: true, ...investigasi.data() }); });
+app.post('/api/kantor/investigasi/selidiki', requireToken, (req, res, next) => jalankan(async () => ({ kasus: await investigasi.selidiki(String(req.body?.simbol || ''), 'manual') }))(req, res, next));
+app.post('/api/kantor/investigasi/:id/putuskan', requireToken, (req, res, next) => jalankan(async () => ({ kasus: investigasi.putuskan(String(req.params.id), req.body?.status === 'diterima' ? 'diterima' : 'ditolak', String(req.body?.alasan || '')) }))(req, res, next));
+app.post('/api/kantor/investigasi/:id/tanya', requireToken, (req, res, next) => jalankan(() => investigasi.tanya(String(req.params.id), String(req.body?.pertanyaan || ''), Array.isArray(req.body?.riwayat) ? req.body.riwayat : []))(req, res, next));
+app.post('/api/kantor/investigasi/catatan', requireToken, (req, res, next) => jalankan(async () => {
+    if (typeof req.body?.hapus === 'number') { investigasi.hapusCatatan(String(req.body?.simbol || ''), req.body.hapus); return { catatan: investigasi.data().catatan }; }
+    investigasi.setCatatan(String(req.body?.simbol || ''), String(req.body?.teks || ''));
+    return { catatan: investigasi.data().catatan };
+})(req, res, next));
+
 app.get('/api/kantor/jadwal', requireToken, async (req, res) => {
     try {
         const days = Math.min(60, Math.max(1, Number(req.query.hari) || 14));
@@ -224,6 +265,7 @@ gameServer.listen(config.port, config.host).then(async () => {
     pencatat.start();
     tradingDesk.start();
     kalender.start();
+    investigasi.start(() => !marketOpen());
     if (config.whatsapp.enabled) startWaChild();
     console.log(`[Kantor] Buka http://${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.port}`);
     if (config.host !== '127.0.0.1' && config.host !== 'localhost') {
