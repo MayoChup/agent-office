@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { apiGet, apiPost } from '../../kantor/connection';
+import { useApi } from '../../kantor/api';
+import type { FolderData } from './WatchlistView';
 import { CandleChart } from '../../components/CandleChart';
 import { Baris, FAKTOR, FaktorKey, Label, kelas, usd, persen, kap, skorBar } from './types';
 
@@ -11,6 +13,8 @@ export function SahamDetail({ simbol, onBack }: { simbol: string; onBack: () => 
     const [err, setErr] = useState('');
     const [msg, setMsg] = useState('');
     const [tab, setTab] = useState<FaktorKey>('teknikal');
+    const [menuWl, setMenuWl] = useState(false);
+    const fd = useApi<FolderData>('/api/kantor/watchlist-folder', 0);
     useEffect(() => {
         let alive = true;
         setD(null); setErr('');
@@ -116,7 +120,16 @@ export function SahamDetail({ simbol, onBack }: { simbol: string; onBack: () => 
 
             <section className="sb-card">
                 <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-                    <button className="btn primary" onClick={() => aksi(() => apiPost('/api/kantor/trading/watchlist', { simbol: b.s, aksi: 'tambah' }), `✓ ${b.s} masuk watchlist — Dito ikut memantau & orang dalamnya ikut dicek.`)}>+ Watchlist</button>
+                    <div className="wl-menu-wrap">
+                        <button className="btn primary" onClick={() => setMenuWl(!menuWl)}>+ Watchlist ▾</button>
+                        {menuWl && (
+                            <div className="wl-menu">
+                                <button onClick={() => { setMenuWl(false); aksi(() => apiPost('/api/kantor/trading/watchlist', { simbol: b.s, aksi: 'tambah' }), `✓ ${b.s} masuk Watchlist Utama — Dito ikut memantau.`); }}>⭐ Utama {fd.data?.utama.includes(b.s) ? '✓' : ''}</button>
+                                {(fd.data?.folders || []).map((f) => <button key={f.id} onClick={() => { setMenuWl(false); aksi(() => apiPost('/api/kantor/watchlist-folder', { aksi: 'tambah', id: f.id, simbol: b.s }), `✓ ${b.s} masuk folder ${f.nama}.`); }}>{f.ikon} {f.nama} {f.simbol.includes(b.s) ? '✓' : ''}</button>)}
+                                {!(fd.data?.folders || []).length && <small>Buat folder lain di tab Watchlist.</small>}
+                            </div>
+                        )}
+                    </div>
                     <button className="btn" onClick={() => aksi(() => apiPost('/api/kantor/investigasi/selidiki', { simbol: b.s }), `✓ Kasus ${b.s} siap — buka tab Investigasi.`)}>🔎 Selidiki pergerakannya</button>
                     <button className="btn" onClick={() => aksi(() => apiPost('/api/kantor/chat/grup', { teks: `@Dito @Raka @Sari tolong bahas ${b.s} (${usd(b.harga)}): sinyal gabungan ${all?.label}, teknikal ${d.skor.teknikal?.label || '-'}, fundamental ${d.skor.fundamental?.label || '-'}, berita ${d.skor.berita?.label || '-'}, whales ${d.skor.whales?.label || '-'}.${best ? ` Target utama ${usd(best.harga)} (peluang ${best.peluang}%), stop ${usd(pr!.stop.harga)}.` : ''} Layak dieksekusi?` }), '✓ Ditanyakan ke Dito, Raka & Sari di Grup Kantor (menu Chat).')}>💬 Tanya tim trading</button>
                 </div>

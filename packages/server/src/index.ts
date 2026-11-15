@@ -12,6 +12,7 @@ import { Kalender } from './kantor/kalender';
 import { Percakapan, Anggota, KuotaBerat, hermesSekali, jalankan as jalankanHermes } from './kantor/percakapan';
 import { Investigasi } from './kantor/investigasi';
 import { Screener, ambilCandle } from './kantor/screener';
+import { WatchFolder } from './kantor/watchfolder';
 import { telegramKirim } from './kantor/telegram';
 import { HermesBridge } from './kantor/hermes';
 import { slidesCli } from './kantor/slides';
@@ -270,6 +271,13 @@ app.get('/api/kantor/saham/:s', requireToken, async (req, res) => {
     try { const b = await screener.satu(String(req.params.s)); res.json({ ok: true, baris: b, skor: screener.skor(b) }); }
     catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
 });
+const watchFolder = new WatchFolder(config.dataDir);
+app.get('/api/kantor/watchlist-folder', requireToken, (_req, res) => { res.json({ ok: true, folders: watchFolder.list(), utama: tradingDesk.load().watchlist }); });
+app.post('/api/kantor/watchlist-folder', requireToken, (req, res) => {
+    try { res.json({ ok: true, folders: watchFolder.aksi(req.body), utama: tradingDesk.load().watchlist }); }
+    catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
+});
+app.get('/api/kantor/peta-berita', requireToken, (_req, res) => { res.json({ ok: true, ...screener.petaBerita() }); });
 app.get('/api/kantor/saham-detail/:s', requireToken, (req, res) => {
     const d = screener.detail(String(req.params.s).toUpperCase());
     if (!d) { res.status(404).json({ ok: false, error: 'Belum ada di data penyaring' }); return; }

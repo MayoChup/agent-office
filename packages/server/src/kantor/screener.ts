@@ -198,6 +198,42 @@ export class Screener {
         return { baris: b, skor: this.skor(b), berita: this.st.berita?.[s] || null, orang: this.st.orang?.[s] || null };
     }
 
+    /** Peta berita: berita (unik) ↔ saham yang terkait, untuk tampilan "tata surya". */
+    petaBerita() {
+        const norm = (t: string) => t.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+        // Nama perusahaan → kode (kata pertama yang khas), untuk menangkap saham yang disebut di judul.
+        const UMUM = new Set(['the', 'american', 'united', 'general', 'first', 'international', 'global', 'national', 'southern', 'american', 'news', 'corp', 'group', 'bank', 'energy', 'health', 'capital', 'financial', 'public', 'digital', 'west', 'east', 'north']);
+        const namaKe = new Map<string, string>();
+        for (const b of this.st.baris) {
+            const w = (b.nama || '').toLowerCase().replace(/[^a-z0-9 &-]/g, ' ').split(/\s+/)[0];
+            if (w && w.length >= 4 && !UMUM.has(w) && !namaKe.has(w)) namaKe.set(w, b.s);
+        }
+        const kode = new Set(this.st.baris.map((b) => b.s));
+        const berita = new Map<string, { id: string; t: string; tgl: string; url: string; sent: number; saham: Set<string> }>();
+        for (const [s, br] of Object.entries(this.st.berita || {})) {
+            for (const j of br.judul || []) {
+                const k = norm(j.t);
+                if (!k) continue;
+                let n = berita.get(k);
+                if (!n) { n = { id: `b${berita.size}`, t: j.t, tgl: j.tgl, url: j.url, sent: j.s, saham: new Set() }; berita.set(k, n); }
+                n.saham.add(s);
+                for (const w of k.split(' ')) { const x = namaKe.get(w); if (x) n.saham.add(x); }
+                for (const m of j.t.match(/\b[A-Z]{2,5}\b/g) || []) if (kode.has(m) && !['CEO', 'AI', 'US', 'IPO', 'ETF', 'EPS', 'FDA', 'SEC'].includes(m)) n.saham.add(m);
+            }
+        }
+        const list = Array.from(berita.values()).sort((a, b) => b.saham.size - a.saham.size || b.tgl.localeCompare(a.tgl)).slice(0, 90);
+        const hitung = new Map<string, number>();
+        for (const n of list) n.saham.forEach((s) => hitung.set(s, (hitung.get(s) || 0) + 1));
+        const info = new Map(this.st.baris.map((b) => [b.s, b]));
+        const saham = Array.from(hitung.entries()).sort((a, b) => b[1] - a[1]).slice(0, 80).map(([s, n]) => ({ s, n, nama: info.get(s)?.nama || s, chg: info.get(s)?.chg1d ?? 0, sektor: info.get(s)?.sektor || '' }));
+        const ada = new Set(saham.map((x) => x.s));
+        return {
+            total: berita.size, at: this.st.beritaAt || 0,
+            berita: list.map((n) => ({ id: n.id, t: n.t, tgl: n.tgl, url: n.url, sent: n.sent, saham: Array.from(n.saham).filter((s) => ada.has(s)) })).filter((n) => n.saham.length),
+            saham
+        };
+    }
+
     spark(s: string): Spark | null {
         try { return JSON.parse(fs.readFileSync(path.join(this.sparkDir, `${s.replace(/[^A-Z0-9-]/gi, '')}.json`), 'utf8')); } catch { return null; }
     }

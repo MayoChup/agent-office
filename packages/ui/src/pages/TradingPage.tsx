@@ -9,6 +9,9 @@ import { CandleChart } from '../components/CandleChart';
 import { PasarView } from './trading/PasarView';
 import { PilihanView } from './trading/PilihanView';
 import { SahamDetail } from './trading/SahamDetail';
+import { PetaPanas } from './trading/PetaPanas';
+import { PetaBerita } from './trading/PetaBerita';
+import { WatchlistView } from './trading/WatchlistView';
 import { FaktorKey, ScreenerData } from './trading/types';
 
 const LS_TAB = 'kantor:trading-tab';
@@ -37,8 +40,8 @@ export function TradingPage() {
     const team = agents.filter((a) => a.id === 'trading' || a.id.startsWith('trading-'));
     const [lap, setLap] = useState(0);
     const [grafik, setGrafik] = useState<string | null>(null);
-    type Tab = 'pasar' | 'pilihan' | 'penyaring' | 'investigasi' | 'posisi';
-    const TABS: Array<{ k: Tab; label: string }> = [{ k: 'pasar', label: 'Pasar' }, { k: 'pilihan', label: 'Pilihan harian' }, { k: 'penyaring', label: 'Penyaring' }, { k: 'investigasi', label: 'Investigasi' }, { k: 'posisi', label: 'Posisi saya' }];
+    type Tab = 'pasar' | 'pilihan' | 'panas' | 'berita' | 'watchlist' | 'penyaring' | 'investigasi' | 'posisi';
+    const TABS: Array<{ k: Tab; label: string }> = [{ k: 'pasar', label: 'Pasar' }, { k: 'pilihan', label: 'Pilihan harian' }, { k: 'panas', label: 'Peta panas' }, { k: 'berita', label: 'Peta berita' }, { k: 'watchlist', label: 'Watchlist' }, { k: 'penyaring', label: 'Penyaring' }, { k: 'investigasi', label: 'Investigasi' }, { k: 'posisi', label: 'Posisi saya' }];
     const [tab, setTabState] = useState<Tab>(() => { try { const v = localStorage.getItem(LS_TAB) as Tab; return TABS.some((t) => t.k === v) ? v : 'pilihan'; } catch { return 'pilihan'; } });
     const [saham, setSaham] = useState<string | null>(null);
     const [faktor, setFaktor] = useState<FaktorKey>(() => { try { return (localStorage.getItem('kantor:faktor') as FaktorKey) || 'semua'; } catch { return 'semua'; } });
@@ -66,12 +69,15 @@ export function TradingPage() {
                 {sc.data?.sibuk ? <span className="sb-busy">⏳ {sc.data.progres}</span> : <button className="sb-refresh" onClick={() => { perbarui(); reload(); }} title="Ambil data terbaru">↻</button>}
             </nav>
             {saham && <SahamDetail simbol={saham} onBack={() => setSaham(null)} />}
-            {!saham && (tab === 'pasar' || tab === 'pilihan') && !sc.data && <div className="fin-empty">{sc.error ? `Gagal memuat: ${sc.error}` : 'Memuat data pasar…'}</div>}
-            {!saham && (tab === 'pasar' || tab === 'pilihan') && sc.data && sc.data.baris.length === 0 && (
+            {!saham && ['pasar', 'pilihan', 'panas', 'watchlist'].includes(tab) && !sc.data && <div className="fin-empty">{sc.error ? `Gagal memuat: ${sc.error}` : 'Memuat data pasar…'}</div>}
+            {!saham && ['pasar', 'pilihan', 'panas'].includes(tab) && sc.data && sc.data.baris.length === 0 && (
                 <div className="sb-card fin-empty">Data pasar belum ada. Tekan ↻ di kanan atas (±5–10 menit untuk ±500 saham + berita), atau tunggu otomatis setelah bursa AS tutup.</div>
             )}
             {!saham && tab === 'pasar' && sc.data && sc.data.baris.length > 0 && <PasarView data={sc.data} faktor={faktor} setFaktor={setF} onOpen={buka} />}
             {!saham && tab === 'pilihan' && sc.data && sc.data.baris.length > 0 && <PilihanView data={sc.data} faktor={faktor} setFaktor={setF} onOpen={buka} watchlist={[...(data?.watchlist || []), ...(data?.positions || []).map((p) => p.symbol)]} />}
+            {!saham && tab === 'panas' && sc.data && sc.data.baris.length > 0 && <PetaPanas data={sc.data} onOpen={buka} watch={[...(data?.watchlist || []), ...(data?.positions || []).map((p) => p.symbol)]} />}
+            {!saham && tab === 'berita' && <PetaBerita onOpen={buka} />}
+            {!saham && tab === 'watchlist' && sc.data && <WatchlistView data={sc.data} faktor={faktor} onOpen={buka} />}
             {!saham && tab === 'investigasi' && <InvestigasiView />}
             {!saham && tab === 'penyaring' && <ScreenerView onOpen={buka} />}
             {!saham && tab === 'posisi' && error && <div className="error">Gagal memuat: {error}</div>}
