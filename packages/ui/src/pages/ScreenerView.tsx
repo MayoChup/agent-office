@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useApi } from '../kantor/api';
 import { apiGet, apiPost } from '../kantor/connection';
+import { CandleChart } from '../components/CandleChart';
 
 interface F { roe: number | null; roa: number | null; pbv: number | null; per: number | null; der: number | null; npm: number | null; revGrowth: number | null; mcap: number | null; tahun: string }
 interface Sinyal {
@@ -10,7 +11,6 @@ interface Sinyal {
 }
 interface Baris { s: string; nama: string; sektor: string; harga: number; chg1d: number; chg1m: number; chg3m: number; chg1y: number; rsi: number | null; ma50: number | null; ma200: number | null; volX: number; sinyal: Sinyal; f: F | null }
 interface Data { baris: Baris[]; teknikalAt: number; teknikalSesi: string; fundamentalAt: number; sibuk: string; progres: string; gagal: number }
-interface Spark { tgl: string[]; c: number[]; ma50: (number | null)[]; ma200: (number | null)[] }
 
 type NumKey = 'roe' | 'roa' | 'pbv' | 'per' | 'der' | 'npm' | 'revGrowth' | 'mcap';
 const ANGKA: Array<{ k: NumKey; label: string; arah: 'min' | 'max'; satuan: string; info: string }> = [
@@ -72,7 +72,11 @@ export function ScreenerView() {
     const [buka, setBuka] = useState<string | null>(null);
     const [info, setInfo] = useState<string | null>(null);
     const [msg, setMsg] = useState('');
+    const [batas, setBatas] = useState(100);
+    const [luar, setLuar] = useState<Baris | null>(null);
+    const [cari, setCari] = useState('');
 
+    useEffect(() => { setBatas(100); }, [num, sig, sektor, urut, q]);
     useEffect(() => { try { localStorage.setItem(LS, JSON.stringify({ num, sig, sektor, urut })); } catch { /* */ } }, [num, sig, sektor, urut]);
     // Saat server sedang memperbarui data, muat ulang berkala.
     useEffect(() => { if (!data?.sibuk) return; const t = setInterval(() => reload(), 8000); return () => clearInterval(t); }, [data?.sibuk]);
@@ -116,8 +120,15 @@ export function ScreenerView() {
     };
     const aktif = Object.values(num).filter((v) => v !== undefined && v !== '').length + sig.length + (sektor ? 1 : 0);
     const cur = data?.baris.find((b) => b.s === buka);
+    const bukaLuar = async (kode: string) => {
+        setCari('Mencari…');
+        try { const r = await apiGet<{ baris: Baris }>(`/api/kantor/saham/${encodeURIComponent(kode)}`); setLuar(r.baris); setCari(''); }
+        catch (e: any) { setCari(String(e.message || e)); }
+    };
 
+    if (luar) return <Detail b={luar} onBack={() => setLuar(null)} />;
     if (cur) return <Detail b={cur} onBack={() => setBuka(null)} />;
+    const kodeCari = q.trim().toUpperCase().replace(/[^A-Z0-9.-]/g, '');
 
     return (
         <>
@@ -178,7 +189,7 @@ export function ScreenerView() {
                     <table className="scr-table">
                         <thead><tr><th>Saham</th><th>Harga</th><th>1H</th><th>1B</th><th>ROE</th><th>PBV</th><th>PER</th><th>Sinyal</th></tr></thead>
                         <tbody>
-                            {hasil.slice(0, 200).map((b) => (
+                            {hasil.slice(0, batas).map((b) => (
                                 <tr key={b.s} onClick={() => setBuka(b.s)}>
                                     <td><b>{b.s}</b><small>{b.nama}</small></td>
                                     <td>${fmt(b.harga)}</td>
@@ -192,19 +203,24 @@ export function ScreenerView() {
                             ))}
                         </tbody>
                     </table>
-                    {hasil.length > 200 && <div className="fin-note">Menampilkan 200 teratas — persempit filter untuk melihat sisanya.</div>}
+                    {hasil.length > batas && <button className="btn scr-more" onClick={() => setBatas(batas + 100)}>Tampilkan 100 lagi ({hasil.length - batas} tersisa)</button>}
                 </div>
             )}
-            {data && data.baris.length > 0 && hasil.length === 0 && <div className="fin-empty">Tidak ada saham yang cocok. Longgarkan filter.</div>}
+            {data && data.baris.length > 0 && hasil.length === 0 && !kodeCari && <div className="fin-empty">Tidak ada saham yang cocok. Longgarkan filter.</div>}
+            {kodeCari && hasil.length === 0 && (
+                <div className="fin-empty">
+                    {kodeCari} tidak ada di daftar S&P 500 / watchlist.{' '}
+                    <button className="btn small" onClick={() => bukaLuar(kodeCari)}>Buka grafik & sinyal {kodeCari}</button>
+                    {cari && <div style={{ marginTop: 6 }}>{cari}</div>}
+                </div>
+            )}
             <p className="fin-note">Data gratis: harga Yahoo Finance (tertunda), fundamental laporan tahunan SEC. Untuk riset, bukan saran beli/jual.</p>
         </>
     );
 }
 
 function Detail({ b, onBack }: { b: Baris; onBack: () => void }) {
-    const [sp, setSp] = useState<Spark | null>(null);
     const [msg, setMsg] = useState('');
-    useEffect(() => { apiGet<{ spark: Spark | null }>(`/api/kantor/screener/${b.s}`).then((d) => setSp(d.spark)).catch(() => undefined); }, [b.s]);
     const aksi = async (fn: () => Promise<any>, ok: string) => { setMsg('…'); try { await fn(); setMsg(ok); } catch (e: any) { setMsg(String(e.message || e)); } };
     const f = b.f;
     return (
@@ -215,9 +231,8 @@ function Detail({ b, onBack }: { b: Baris; onBack: () => void }) {
                 <div className="inv-ticker">{b.s}</div>
                 <div className="inv-price">${fmt(b.harga)} {pct(b.chg1d)}</div>
                 <div className="inv-sub">1 bulan {b.chg1m >= 0 ? '+' : ''}{b.chg1m}% · 3 bulan {b.chg3m >= 0 ? '+' : ''}{b.chg3m}% · 1 tahun {b.chg1y >= 0 ? '+' : ''}{b.chg1y}% · RSI {fmt(b.rsi)} · volume {b.volX}×</div>
-                {sp && <Chart sp={sp} />}
-                <div className="scr-legend-line"><i style={{ background: '#e2e8f0' }} />Harga <i style={{ background: '#f59e0b' }} />MA50 <i style={{ background: '#38bdf8' }} />MA200</div>
             </section>
+            <section className="fin-card cc-card"><CandleChart simbol={b.s} /></section>
             <section className="fin-card">
                 <div className="inv-kicker">■ Sinyal teknikal</div>
                 <div className="scr-sigs">
@@ -243,21 +258,5 @@ function Detail({ b, onBack }: { b: Baris; onBack: () => void }) {
                 {msg && <div className="fin-note" style={{ textAlign: 'left' }}>{msg}</div>}
             </section>
         </>
-    );
-}
-
-function Chart({ sp }: { sp: Spark }) {
-    const W = 600, H = 160;
-    const all = [...sp.c, ...sp.ma50.filter((x): x is number => x != null), ...sp.ma200.filter((x): x is number => x != null)];
-    const lo = Math.min(...all), hi = Math.max(...all);
-    const X = (i: number) => (i / Math.max(1, sp.c.length - 1)) * W;
-    const Y = (v: number) => H - ((v - lo) / Math.max(0.0001, hi - lo)) * (H - 10) - 5;
-    const line = (arr: (number | null)[]) => arr.map((v, i) => (v == null ? '' : `${X(i).toFixed(1)},${Y(v).toFixed(1)}`)).filter(Boolean).join(' ');
-    return (
-        <svg className="scr-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label="Grafik harga 6 bulan">
-            <polyline points={line(sp.ma200)} fill="none" stroke="#38bdf8" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
-            <polyline points={line(sp.ma50)} fill="none" stroke="#f59e0b" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
-            <polyline points={line(sp.c)} fill="none" stroke="#e2e8f0" strokeWidth="2" vectorEffect="non-scaling-stroke" />
-        </svg>
     );
 }

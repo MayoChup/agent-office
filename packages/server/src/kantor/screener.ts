@@ -165,6 +165,16 @@ export class Screener {
         try { return JSON.parse(fs.readFileSync(path.join(this.sparkDir, `${s.replace(/[^A-Z0-9-]/gi, '')}.json`), 'utf8')); } catch { return null; }
     }
 
+    /** Saham di luar daftar (mis. saham kecil): hitung sinyal teknikal saat diminta. */
+    async satu(simbol: string): Promise<Baris> {
+        const s = simbol.toUpperCase().replace(/[^A-Z0-9.^-]/g, '').slice(0, 12);
+        const ada = this.st.baris.find((b) => b.s === s);
+        if (ada) return ada;
+        const d = await harian(s);
+        const a = analisis(d.c, d.v);
+        return { s, nama: d.nama || s, sektor: '', harga: +d.c[d.c.length - 1].toFixed(2), chg1d: a.chg1d, chg1m: a.chg1m, chg3m: a.chg3m, chg1y: a.chg1y, rsi: a.rsi, ma50: a.ma50 != null ? +a.ma50.toFixed(2) : null, ma200: a.ma200 != null ? +a.ma200.toFixed(2) : null, volX: a.volX, sinyal: a.sinyal, f: null };
+    }
+
     private async semesta(): Promise<Array<{ s: string; nama: string; sektor: string }>> {
         const list: Array<{ s: string; nama: string; sektor: string }> = [];
         try {
@@ -287,6 +297,48 @@ export class Screener {
         setTimeout(tick, 3 * 60_000);
         setInterval(tick, 60 * 60_000).unref();
     }
+}
+
+/* ── Candle untuk grafik (langsung dari Yahoo, cache 3 menit) ── */
+const RENTANG: Record<string, { range: string; interval: string; tampil: number; harian: boolean }> = {
+    '1H': { range: '1d', interval: '5m', tampil: 80, harian: false },
+    '5H': { range: '5d', interval: '15m', tampil: 140, harian: false },
+    '1B': { range: '2y', interval: '1d', tampil: 22, harian: true },
+    '3B': { range: '2y', interval: '1d', tampil: 64, harian: true },
+    '6B': { range: '2y', interval: '1d', tampil: 126, harian: true },
+    '1T': { range: '2y', interval: '1d', tampil: 252, harian: true },
+    '5T': { range: '10y', interval: '1wk', tampil: 261, harian: true }
+};
+const candleCache = new Map<string, { at: number; data: any }>();
+export async function ambilCandle(simbol: string, rentang: string) {
+    const s = simbol.toUpperCase().replace(/[^A-Z0-9.^-]/g, '').slice(0, 12);
+    const r = RENTANG[rentang] || RENTANG['6B'];
+    const key = `${s}|${r.range}|${r.interval}`;
+    const hit = candleCache.get(key);
+    if (hit && Date.now() - hit.at < 180_000) return { ...hit.data, tampil: r.tampil };
+    const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(s)}?range=${r.range}&interval=${r.interval}&includePrePost=false`, { headers: { 'User-Agent': UA } });
+    if (!res.ok) throw new Error(res.status === 404 ? `Saham ${s} tidak ditemukan` : `Harga ${s} gagal diambil (HTTP ${res.status})`);
+    const j: any = (await res.json() as any)?.chart?.result?.[0];
+    if (!j) throw new Error(`Saham ${s} tidak ditemukan`);
+    const q = j.indicators?.quote?.[0] || {};
+    const candles = (j.timestamp || []).map((t: number, i: number) => ({
+        t: r.harian ? new Date((t + (j.meta?.gmtoffset || 0)) * 1000).toISOString().slice(0, 10) : t + 7 * 3600, // intraday ditampilkan dalam WIB
+        o: q.open?.[i], h: q.high?.[i], l: q.low?.[i], c: q.close?.[i], v: q.volume?.[i] || 0
+    })).filter((k: any) => [k.o, k.h, k.l, k.c].every((x) => Number.isFinite(x)));
+    // Hapus tanggal ganda (Yahoo kadang mengirim baris hari ini dua kali).
+    const uniq: any[] = [];
+    for (const k of candles) { if (uniq.length && uniq[uniq.length - 1].t === k.t) uniq[uniq.length - 1] = k; else uniq.push(k); }
+    const closes = uniq.map((k) => k.c);
+    const r2 = (x: number | null) => (x == null ? null : +x.toFixed(4));
+    const data = {
+        s, nama: String(j.meta?.longName || j.meta?.shortName || s), mataUang: j.meta?.currency || 'USD', bursa: j.meta?.fullExchangeName || j.meta?.exchangeName || '',
+        harian: r.harian, interval: r.interval,
+        candles: uniq.map((k) => ({ ...k, o: +k.o.toFixed(4), h: +k.h.toFixed(4), l: +k.l.toFixed(4), c: +k.c.toFixed(4) })),
+        ma20: sma(closes, 20).map(r2), ma50: sma(closes, 50).map(r2), ma200: sma(closes, 200).map(r2)
+    };
+    candleCache.set(key, { at: Date.now(), data });
+    if (candleCache.size > 200) candleCache.delete(candleCache.keys().next().value as string);
+    return { ...data, tampil: r.tampil };
 }
 
 const SEKTOR: Record<string, string> = {

@@ -4,6 +4,7 @@ import { useKantor, statusOf } from '../kantor/store';
 import { Avatar } from '../components/Avatar';
 import { InvestigasiView } from './InvestigasiView';
 import { ScreenerView } from './ScreenerView';
+import { CandleChart } from '../components/CandleChart';
 
 const LS_TAB = 'kantor:trading-tab';
 
@@ -30,6 +31,7 @@ export function TradingPage() {
     const agents = useKantor((s) => s.agents);
     const team = agents.filter((a) => a.id === 'trading' || a.id.startsWith('trading-'));
     const [lap, setLap] = useState(0);
+    const [grafik, setGrafik] = useState<string | null>(null);
     type Tab = 'posisi' | 'penyaring' | 'investigasi';
     const [tab, setTabState] = useState<Tab>(() => { try { const v = localStorage.getItem(LS_TAB); return v === 'investigasi' || v === 'penyaring' ? v : 'posisi'; } catch { return 'posisi'; } });
     const setTab = (t: Tab) => { setTabState(t); try { localStorage.setItem(LS_TAB, t); } catch { /* */ } };
@@ -64,11 +66,12 @@ export function TradingPage() {
                         {data.positions.length === 0 && <div className="fin-empty">Belum ada. Setelah beli di broker, bilang ke Dito: "eksekusi #1 di 251".</div>}
                         {data.positions.map((p) => (
                             <div key={p.symbol} className="tr-pos">
-                                <div className="tr-pos-head">
-                                    <b>{p.symbol}</b><span>{p.shares || '?'} lembar @ ${p.entry}</span>
+                                <div className="tr-pos-head" onClick={() => setGrafik(grafik === p.symbol ? null : p.symbol)} style={{ cursor: 'pointer' }}>
+                                    <b>{p.symbol}</b><span className="tr-chart-btn">{grafik === p.symbol ? '▾ grafik' : '📊 grafik'}</span><span>{p.shares || '?'} lembar @ ${p.entry}</span>
                                     {p.pnl !== null && <span className={`tr-pnl ${p.pnl >= 0 ? 'in' : 'out'}`}>{p.pnl >= 0 ? '+' : '−'}${Math.abs(p.pnl).toFixed(2)}</span>}
                                 </div>
                                 <Range stop={p.stop} entry={p.entry} target={p.target} price={p.price} />
+                                {grafik === p.symbol && <div className="tr-chart"><CandleChart simbol={p.symbol} /></div>}
                                 {(p.notified?.target || p.notified?.stop) && <div className="fin-alert" style={{ marginTop: 6 }}>{p.notified?.target ? '🟢 Target sudah tercapai — sudah jual?' : '🔴 Stop loss tersentuh — sudah jual?'}</div>}
                             </div>
                         ))}
