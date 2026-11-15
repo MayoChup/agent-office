@@ -38,7 +38,24 @@ identity() {   # identity <dir> <nama> <title> <deskripsi> <soul>
     local d="$1" name="$2" title="$3" desc="$4" soul="$5"
     printf 'display_name: %s\ntitle: %s\ndescription: %s\n' "$name" "$title" "$desc" > "$d/profile.yaml"
     [ -f "$d/SOUL.md" ] && [ ! -f "$d/SOUL.md.sebelum-tim" ] && cp "$d/SOUL.md" "$d/SOUL.md.sebelum-tim"
+    local otak=""
+    [ -f "$d/SOUL.md" ] && otak="$(sed -n '/<!-- otak-kantor -->/,/<!-- \/otak-kantor -->/p' "$d/SOUL.md")"
     printf 'Kamu %s si %s.\n%s\n%s\n' "$name" "$title" "$COMMON" "$soul" > "$d/SOUL.md"
+    [ -n "$otak" ] && printf '\n%s\n' "$otak" >> "$d/SOUL.md"   # aturan Otak Kantor tetap dipertahankan
+    return 0
+}
+
+blok() {   # blok <file> <penanda> <isi>: pasang/ganti bagian bertanda di SOUL.md tanpa menyentuh isi lain
+    [ -f "$1" ] || return 0
+    python3 - "$1" "$2" "$3" <<'PY'
+import sys, re
+f, tag, body = sys.argv[1:4]
+s = open(f).read()
+block = f"<!-- {tag} -->\n{body}\n<!-- /{tag} -->"
+pat = re.compile(rf"<!-- {re.escape(tag)} -->.*?<!-- /{re.escape(tag)} -->", re.S)
+s = pat.sub(lambda m: block, s) if pat.search(s) else s.rstrip() + "\n\n" + block + "\n"
+open(f, "w").write(s)
+PY
 }
 
 google() {   # google <dir>: pakai izin Google milik Joni + skill google-workspace
@@ -156,6 +173,29 @@ c.divisions.trading={name:"Trading",icon:"📈",color:"#16a34a",...(c.divisions.
 fs.writeFileSync(f,JSON.stringify(c,null,2));' "$CFG"
     echo "✅ Kantor virtual: batas agen 20, nama \"si Peran\" dipasang"
 fi
+
+# ── Susunan kantor: Joni & para kepala tahu siapa mengerjakan apa ──────
+SUSUNAN='## Susunan kantor (terbaru — abaikan daftar lama di ingatanmu)
+Berikan tugas ke orang yang tepat dengan: hermes kanban create "<tugas jelas>" --assignee <id-profil>
+| Nama | Peran | id-profil | Kerjakan |
+|---|---|---|---|
+| Uang | Bendahara, kepala Keuangan | keuangan | rekap & laporan keuangan |
+| Bima | Budgeting | keuangan-budget | anggaran per kategori, peringatan batas |
+| Prita | Proyeksi | keuangan-proyeksi | perkiraan pengeluaran & sisa uang |
+| Hana | Penasihat | keuangan-penasihat | saran keuangan konkret |
+| Eca | Editor, kepala Editor | eca | dokumen umum, membagi tugas editor |
+| Sasa | Spreadsheet | eca-sheets | Google Sheets |
+| Dodi | Docs | eca-docs | Google Docs (surat, laporan, notulen) |
+| Putri | Presentasi | eca-slides | Google Slides / slide / presentasi |
+| Sekar | Sekretaris | sekretaris | jadwal, Google Calendar, janji temu |
+| Dito | Trader, kepala Trading | trading | strategi trading saham AS |
+| Nina | Berita | trading-berita | berita saham |
+| Raka | Analis | trading-fundamental | analisis fundamental |
+| Sari | Smart Money | trading-smartmoney | investor besar & Kongres AS |
+Kalau Pak Rico menyebut nama orang (mis. "Putri, buatkan slide"), itu tugas untuk orang tersebut: langsung buat tugasnya dengan id-profil di atas, jangan bertanya ulang.'
+blok "$H/SOUL.md" susunan-kantor "$SUSUNAN"
+for id in keuangan eca trading sekretaris; do blok "$P/$id/SOUL.md" susunan-kantor "$SUSUNAN"; done
+echo "✅ Joni & para kepala tahu susunan tim terbaru"
 
 echo
 echo "Memulai ulang Hermes & kantor…"
