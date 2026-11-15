@@ -443,9 +443,12 @@ export function setupPhaser(parentId: string) {
         input: { keyboard: false }
     };
     const game = new Phaser.Game(config);
+    game.events.once('ready', () => { if (document.body.classList.contains('no-office') && game.input) game.input.enabled = false; });
     // Hemat baterai HP: kantor 2D hanya berjalan saat halaman Kantor dibuka.
     eventBus.addEventListener('page-change', (e: Event) => {
         const show = (e as CustomEvent).detail?.page === 'kantor';
+        // Matikan input juga: Phaser mendengar pointer di window, jadi klik di halaman lain bisa "tembus" ke ruangan.
+        if (game.input) game.input.enabled = show;
         if (show) { game.loop.wake(); game.scale.refresh(); } else game.loop.sleep();
     });
     return game;
