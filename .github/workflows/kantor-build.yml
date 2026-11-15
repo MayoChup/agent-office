@@ -54,6 +54,7 @@ jobs:
           cp kantor/env.example release/.env.example
           cp kantor/kantor-virtual.service release/
           cp kantor/README-KANTOR.md release/
+          cp -r kantor/hermes-skills release/hermes-skills
           cp kantor/kantor-update.sh kantor/kantor-update.service kantor/kantor-update.timer release/
           chmod +x release/kantor-update.sh
           cd release

@@ -9,6 +9,7 @@ import { KantorAuth } from './kantor/auth';
 import { Pencatat, telegramNotifier, ringkasanKeuangan } from './kantor/pencatat';
 import { TradingDesk, tradingCli, fetchPrice } from './kantor/trading';
 import { Kalender } from './kantor/kalender';
+import { slidesCli } from './kantor/slides';
 import os from 'os';
 
 const config = loadConfig();
@@ -20,6 +21,11 @@ if (tradingArg >= 0) {
     // Dipanggil oleh Hermes (AI) atau pemilik: node kantor-server.js --trading <perintah> ...
     const desk = new TradingDesk(config.dataDir, telegramNotifier(config.hermesHome), tradingDeskDir);
     tradingCli(desk, process.argv.slice(tradingArg + 1))
+        .then((out) => { console.log(out); process.exit(0); })
+        .catch((e) => { console.error('GAGAL:', e?.message || e); process.exit(1); });
+} else if (process.argv.includes('--slides')) {
+    // Dipakai Putri (Editor · Presentasi): node kantor-server.js --slides buat kerangka.md
+    slidesCli(config.hermesHome, process.argv.slice(process.argv.indexOf('--slides') + 1))
         .then((out) => { console.log(out); process.exit(0); })
         .catch((e) => { console.error('GAGAL:', e?.message || e); process.exit(1); });
 } else if (process.argv.includes('--keuangan')) {
