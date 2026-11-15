@@ -53,6 +53,7 @@ export function CatatanPage() {
         const folder = folderAktif?.path || '';
         const p = [folder, `${nama.replace(/[\\/:*?"<>|#^[\]]/g, '').trim()}.md`].filter(Boolean).join('/');
         await apiPost('/api/kantor/catatan/tulis', { p, isi: `# ${nama}\n\n` });
+        try { localStorage.setItem('kantor:cat-mode', 'edit'); } catch { /* */ }
         await ph.reload();
         bukaHal(p);
     };

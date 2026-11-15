@@ -166,7 +166,7 @@ async function harian(s: string) {
         nama = String(r?.meta?.longName || r?.meta?.shortName || '');
         statusHarga.sumber = 'Yahoo';
     } catch (e: any) {
-        try { rows = await stooqHarian(s); statusHarga.sumber = 'Stooq'; } catch (e2: any) { throw new Error(`${e?.message || e}; cadangan ${e2?.message || e2}`); }
+        try { rows = await stooqHarian(s); statusHarga.sumber = 'Stooq'; } catch (e2: any) { throw new Error(`${e?.message || e}; cadangan Stooq juga gagal (${e2?.cause?.code || e2?.message || e2})`); }
     }
     if (rows.length < 60) throw new Error('data kurang');
     const col = (k: string) => rows.map((x: any) => x[k]) as number[];

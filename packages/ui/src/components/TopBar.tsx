@@ -57,7 +57,7 @@ export function TopBar() {
             )}
             <div className="pill"><span className={`dot ${dotClass}`} /><span className="hide-sm">{statusText}</span></div>
             <button className="icon-btn tema-btn" title={tema === 'dark' ? 'Ganti ke tampilan terang' : 'Ganti ke tampilan gelap'} aria-label="Ganti tema" onClick={gantiTema}>{tema === 'dark' ? '☀' : '☾'}</button>
-            {status !== 'login' && <button className="icon-btn" title="Keluar" onClick={logout}>⎋</button>}
+            {status !== 'login' && <button className="icon-btn" title="Keluar dari kantor" aria-label="Keluar" onClick={() => { if (confirm('Keluar dari Kantor Virtual? Nanti perlu masukkan kata sandi lagi.')) logout(); }}>🚪</button>}
         </div>
     );
 }
