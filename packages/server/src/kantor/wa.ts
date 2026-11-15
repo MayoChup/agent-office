@@ -177,21 +177,36 @@ export class WaReader {
 
     constructor(private dataDir: string, private janji: WaJanji, private notify: (t: string) => Promise<void>, private opts: { grup?: boolean } = {}) {}
 
+    private lastOk = Date.now();
+    private alerted = false;
+
     start() {
         if (!waLinked(this.dataDir)) { console.log('[WA] Belum ditautkan (jalankan --wa-login). Pembaca WhatsApp mati.'); return; }
         this.connect();
+        // Penjaga: kalau lebih dari 1 jam tidak tersambung, kabari Pak Rico sekali saja.
+        setInterval(() => {
+            if (this.status === 'tersambung') { this.lastOk = Date.now(); return; }
+            if (this.status !== 'keluar' && !this.alerted && Date.now() - this.lastOk > 60 * 60_000) {
+                this.alerted = true;
+                this.notify('⚠️ WhatsApp kantor tidak tersambung sejak 1 jam terakhir (kemungkinan WhatsApp sedang berubah). Kantor terus mencoba sendiri; kalau sampai besok belum pulih, kabari Claude.').catch(() => undefined);
+            }
+        }, 5 * 60_000).unref();
     }
 
     private async connect() {
         if (this.stopped) return;
         this.status = 'menyambung';
         try {
-            const sock = await socket(this.dataDir, () => { this.status = 'tersambung'; this.retry = 0; console.log('[WA] Tersambung (hanya-baca).'); }, (code) => {
+            const sock = await socket(this.dataDir, () => {
+                this.status = 'tersambung'; this.retry = 0; this.lastOk = Date.now();
+                console.log('[WA] Tersambung (hanya-baca).');
+                if (this.alerted) { this.alerted = false; this.notify('✅ WhatsApp kantor tersambung lagi.').catch(() => undefined); }
+            }, (code) => {
                 this.status = 'mati';
                 if (code === 401) {
                     this.status = 'keluar';
                     console.warn('[WA] Tautan dilepas dari HP. Jalankan --wa-login lagi kalau ingin menyalakan.');
-                    this.notify('⚠️ WhatsApp kantor terlepas (perangkat tertaut dihapus). Pencatatan janji dari WA berhenti.').catch(() => undefined);
+                    this.notify('⚠️ WhatsApp kantor terlepas dari HP. Pencatatan janji dari WA berhenti.\nUntuk menyambung lagi (±1 menit), di VPS:\ncd ~/kantor-virtual && node kantor-server.js --wa-logout && node kantor-server.js --wa-login <nomor>\nlalu systemctl --user restart kantor-virtual').catch(() => undefined);
                     return;
                 }
                 const wait = Math.min(300_000, 5_000 * 2 ** this.retry++);
