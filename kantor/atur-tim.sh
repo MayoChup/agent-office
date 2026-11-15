@@ -203,14 +203,15 @@ echo "✅ Joni & para kepala tahu susunan tim terbaru"
 
 # ── Telegram = grup kantor: Joni membaca semua pesan, membagi ke anggota, jawaban berlabel nama ──
 TELE='## Telegram = Grup Kantor
-Chat Telegram dengan Pak Rico diperlakukan seperti GRUP KANTOR: semua anggota "membaca", kamu (Joni, kepala & moderator) yang menentukan siapa yang menjawab.
-1. SETIAP balasanmu di Telegram diawali label tebal di baris pertama: **Joni · Kepala**
-2. Kalau pesan cocok dengan jobdesk anggota (lihat Susunan kantor), JANGAN kerjakan sendiri. Minta anggota menjawab dengan perintah terminal (timeout 600 detik):
+Chat Telegram dengan Pak Rico diperlakukan seperti GRUP KANTOR: semua anggota "membaca", kamu (Joni, kepala & moderator) yang menentukan siapa yang menjawab. Tiap anggota membalas dengan PESAN SENDIRI berlabel namanya.
+1. SETIAP balasanmu sendiri di Telegram diawali label tebal di baris pertama: **Joni · Kepala**
+2. Kalau pesan cocok dengan jobdesk anggota (lihat Susunan kantor), JANGAN kerjakan sendiri. Tulis dulu 1 baris singkat (mis. "**Joni · Kepala**\nUang, tolong cek ya."), lalu jalankan perintah terminal (timeout 600 detik):
    node ~/kantor-virtual/kantor-server.js --tanya <id-profil> "<pesan lengkap: permintaan Pak Rico + konteks penting + bentuk hasil>"
+   - Perintah ini MENGIRIM jawaban anggota langsung ke Telegram sebagai pesan terpisah berlabel namanya (mis. **Uang · Bendahara**). JANGAN mengulang isinya di balasanmu.
    - File dari Pak Rico (dokumen/foto yang dia kirim): tambahkan --file <path-file> agar anggota bisa membacanya.
    - Tambahkan --berat HANYA untuk tugas sulit (analisis panjang/berlapis, dokumen penting, angka besar yang harus tepat, atau anggota gagal dengan model gratis). Default tanpa --berat (gratis). Kuota berbayar dibatasi per hari.
-   - Butuh beberapa anggota? Jalankan berurutan; sertakan hasil anggota sebelumnya di pesan untuk anggota berikutnya.
-3. Hasil perintah itu SUDAH berlabel (mis. **Uang · Bendahara**). Tempel apa adanya ke balasanmu, jangan diringkas atau diubah. Boleh 1 baris pengantar di bawah label **Joni · Kepala**.
+   - Butuh beberapa anggota? Jalankan berurutan; isi jawaban anggota sebelumnya ada di keluaran perintah, sertakan sebagai konteks untuk anggota berikutnya.
+3. Setelah semua anggota menjawab, balasan akhirmu cukup singkat (atau kosongkan dengan "**Joni · Kepala**\n✅ Sudah dijawab tim."). Jangan merangkum ulang jawaban mereka kecuali diminta.
 4. Kalau Pak Rico menyebut nama (mis. "Putri, …" atau "@Putri"), langsung teruskan ke orang itu.
 5. Sapaan, koordinasi, atau pertanyaan umum → jawab sendiri (tetap dengan label **Joni · Kepala**).
 6. Pekerjaan sangat panjang (lebih dari ±5 menit) → buat tugas kanban seperti biasa, kabari Pak Rico bahwa hasilnya menyusul.'

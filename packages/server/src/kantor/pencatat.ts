@@ -532,6 +532,50 @@ export function telegramNotifier(hermesHome: string) {
     };
 }
 
+function teleCreds(hermesHome: string) {
+    const env = fs.readFileSync(path.join(hermesHome, '.env'), 'utf8');
+    const get = (k: string) => (env.match(new RegExp(`^${k}=(.*)$`, 'm'))?.[1] || '').trim().replace(/^["']|["']$/g, '');
+    return { token: get('TELEGRAM_BOT_TOKEN'), chat: get('TELEGRAM_HOME_CHANNEL') || get('TELEGRAM_ALLOWED_USERS').split(',')[0].trim() };
+}
+
+/** Kirim pesan Telegram atas nama satu AI: label tebal di baris pertama, dipecah kalau terlalu panjang. */
+export async function telegramSebagai(hermesHome: string, label: string, isi: string): Promise<boolean> {
+    try {
+        const { token, chat } = teleCreds(hermesHome);
+        if (!token || !chat) return false;
+        const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const html = (t: string) => esc(t).replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>').replace(/`([^`\n]+)`/g, '<code>$1</code>');
+        const potong: string[] = [];
+        let sisa = isi.trim() || '(tidak ada jawaban)';
+        while (sisa.length > 3500) {
+            let i = sisa.lastIndexOf('\n', 3500);
+            if (i < 1500) i = 3500;
+            potong.push(sisa.slice(0, i)); sisa = sisa.slice(i).trimStart();
+        }
+        potong.push(sisa);
+        for (let n = 0; n < potong.length; n++) {
+            const head = `<b>${esc(label)}</b>${potong.length > 1 ? ` (${n + 1}/${potong.length})` : ''}\n`;
+            const send = (body: any) => fetch(`https://api.telegram.org/bot${token}/sendMessage`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: chat, disable_web_page_preview: true, ...body }) });
+            const r = await send({ text: head + html(potong[n]), parse_mode: 'HTML' });
+            if (!r.ok) await send({ text: `${label}\n${potong[n]}` }); // cadangan tanpa format
+        }
+        return true;
+    } catch { return false; }
+}
+
+/** Tampilkan "sedang mengetik…" di Telegram selama fn berjalan. */
+export async function sambilMengetik<T>(hermesHome: string, fn: () => Promise<T>): Promise<T> {
+    let t: NodeJS.Timeout | undefined;
+    try {
+        const { token, chat } = teleCreds(hermesHome);
+        if (token && chat) {
+            const ping = () => fetch(`https://api.telegram.org/bot${token}/sendChatAction`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: chat, action: 'typing' }) }).catch(() => undefined);
+            ping(); t = setInterval(ping, 4500);
+        }
+    } catch { /* */ }
+    try { return await fn(); } finally { if (t) clearInterval(t); }
+}
+
 /** Ringkasan bulanan untuk agen Keuangan (teks pendek, hemat token). */
 export function ringkasanKeuangan(tx: Array<{ d: string; jenis: string; n: number; kat: string; pihak: string; bank: string }>, ym: string): string {
     const inMonth = tx.filter((t) => t.d.startsWith(ym));

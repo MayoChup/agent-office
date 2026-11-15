@@ -6,11 +6,12 @@ import { createServer } from 'http';
 import { OfficeRoom } from './rooms/OfficeRoom';
 import { loadConfig } from './kantor/config';
 import { KantorAuth } from './kantor/auth';
-import { Pencatat, telegramNotifier, ringkasanKeuangan } from './kantor/pencatat';
+import { Pencatat, telegramNotifier, ringkasanKeuangan, telegramSebagai, sambilMengetik } from './kantor/pencatat';
 import { TradingDesk, tradingCli, fetchPrice, marketOpen } from './kantor/trading';
 import { Kalender } from './kantor/kalender';
 import { Percakapan, Anggota, KuotaBerat, hermesSekali, jalankan as jalankanHermes } from './kantor/percakapan';
 import { Investigasi } from './kantor/investigasi';
+import { telegramKirim } from './kantor/telegram';
 import { HermesBridge } from './kantor/hermes';
 import { slidesCli } from './kantor/slides';
 import { WaJanji, WaReader, waLoginCli, waLogoutCli, waLinked } from './kantor/wa';
@@ -44,15 +45,16 @@ if (tradingArg >= 0) {
         .then((out) => { console.log(out); process.exit(0); })
         .catch((e) => { console.error('GAGAL:', e?.message || e); process.exit(1); });
 } else if (process.argv.includes('--tanya')) {
-    // Dipakai Joni (Telegram) untuk meminta anggota menjawab, hasilnya sudah berlabel nama:
-    //   node kantor-server.js --tanya <profil|nama> [--berat] [--file <path>]... "<pesan lengkap>"
+    // Dipakai Joni (Telegram): anggota menjawab sebagai PESAN TERPISAH di Telegram, berlabel nama tebal.
+    //   node kantor-server.js --tanya <profil|nama> [--berat] [--file <path>]... [--tanpa-kirim] "<pesan lengkap>"
     (async () => {
         const a = process.argv.slice(process.argv.indexOf('--tanya') + 1);
         const siapa = String(a.shift() || '');
-        let berat = false; const files: string[] = []; const teks: string[] = [];
+        let berat = false; let kirim = true; const files: string[] = []; const teks: string[] = [];
         while (a.length) {
             const x = a.shift()!;
             if (x === '--berat') berat = true;
+            else if (x === '--tanpa-kirim') kirim = false;
             else if (x === '--file' && a.length) files.push(a.shift()!);
             else teks.push(x);
         }
@@ -63,7 +65,7 @@ if (tradingArg >= 0) {
             process.exit(1);
         }
         let catatan = '';
-        if (berat && !kuotaBerat.ambil()) { berat = false; catatan = `\n\n_(kuota model berbayar hari ini habis: ${kuotaBerat.perHari}×, dikerjakan dengan model gratis)_`; }
+        if (berat && !kuotaBerat.ambil()) { berat = false; catatan = `\n\n(kuota model berbayar hari ini habis: ${kuotaBerat.perHari}×, dikerjakan dengan model gratis)`; }
         const ada = files.filter((f) => fs.existsSync(f));
         const prompt = [
             `[Pesan dari ${config.ownerName} lewat Telegram, diteruskan oleh Joni (kepala kantor). Telegram dipakai seperti grup kantor.]`,
@@ -71,14 +73,16 @@ if (tradingArg >= 0) {
             ada.length ? `\nFile terlampir (bisa kamu baca di komputer ini):\n${ada.map((f) => `- ${path.resolve(f)}`).join('\n')}` : '',
             `\nBalas sebagai ${ai.nama} (${ai.peran}) dalam Bahasa Indonesia, singkat & jelas. Kalau diminta mengerjakan sesuatu, kerjakan dengan alat/skill-mu lalu laporkan hasilnya.`
         ].join('\n');
+        const label = `${ai.nama} · ${ai.peran}${berat ? ' ⚡' : ''}`;
+        let out: string; let ok = true;
         try {
-            const out = await hermesSekali(jalankanHermes, config.hermesBin, ai.id, prompt, berat ? config.berat.model : undefined);
-            console.log(`**${ai.nama} · ${ai.peran}**${berat ? ' ⚡' : ''}\n${out || '(tidak ada jawaban)'}${catatan}`);
-            process.exit(0);
-        } catch (e: any) {
-            console.log(`**${ai.nama} · ${ai.peran}**\n⚠️ Gagal menjawab: ${String(e?.message || e).slice(0, 300)}`);
-            process.exit(1);
-        }
+            out = await sambilMengetik(config.hermesHome, () => hermesSekali(jalankanHermes, config.hermesBin, ai.id, prompt, berat ? config.berat.model : undefined));
+            out = (out || '(tidak ada jawaban)') + catatan;
+        } catch (e: any) { out = `⚠️ Gagal menjawab: ${String(e?.message || e).slice(0, 300)}`; ok = false; }
+        const terkirim = kirim && await telegramSebagai(config.hermesHome, label, out);
+        if (terkirim) console.log(`[SUDAH TERKIRIM ke ${config.ownerName} sebagai pesan ${ai.nama}. JANGAN diulang di balasanmu.]\nIsi jawaban ${ai.nama} (untuk konteks / diteruskan ke anggota lain):\n${out}`);
+        else console.log(`**${label}**\n${out}`);
+        process.exit(ok ? 0 : 1);
     })();
 } else if (process.argv.includes('--wa-login')) {
     // Tautkan WhatsApp (hanya-baca) dengan kode: node kantor-server.js --wa-login 628xxxx
