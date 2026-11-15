@@ -463,6 +463,25 @@ export class Pencatat {
 
     private reportCache: { at: number; data: any } | null = null;
 
+    /** Catat transaksi manual (dari web, chat, atau Uang) ke Google Sheets yang sama. */
+    async tambahManual(x: { tanggal?: string; jam?: string; akun: string; jenis: string; nominal: number; pihak?: string; kategori?: string; keterangan?: string }) {
+        if (!this.cfg.spreadsheetId) throw new Error('Pencatat belum diatur (pencatat.spreadsheetId kosong).');
+        const now = new Date(Date.now() + 7 * 3600_000).toISOString();
+        const tanggal = /^\d{4}-\d{2}-\d{2}$/.test(x.tanggal || '') ? x.tanggal! : now.slice(0, 10);
+        const jam = /^\d{2}:\d{2}$/.test(x.jam || '') ? x.jam! : now.slice(11, 16);
+        const jenis = ['Keluar', 'Masuk', 'Antar Rekening'].includes(x.jenis) ? x.jenis : 'Keluar';
+        const nominal = Math.round(Number(x.nominal));
+        if (!(nominal > 0) || nominal > 1e12) throw new Error('Nominal tidak valid');
+        const akun = String(x.akun || 'Cash').slice(0, 30);
+        const id = `manual-${Date.now().toString(36)}`;
+        const row = [tanggal, jam, akun, jenis, nominal, String(x.pihak || '').slice(0, 80), String(x.kategori || 'Lainnya').slice(0, 40), String(x.keterangan || '').slice(0, 200), id, 'Manual'];
+        await this.g.call(`https://sheets.googleapis.com/v4/spreadsheets/${this.cfg.spreadsheetId}/values/${this.sheetRange('A1:J1')}:append?valueInputOption=USER_ENTERED&insertDataOption=OVERWRITE`, {
+            method: 'POST', body: JSON.stringify({ values: [row] })
+        });
+        this.reportCache = null;
+        return { d: tanggal, t: jam, bank: akun, jenis, n: nominal, pihak: row[5], kat: row[6], ket: row[7], status: 'Manual' };
+    }
+
     /** Data transaksi untuk laporan keuangan di tampilan kantor (dibaca dari Google Sheets, cache 60 detik). */
     async report(force = false): Promise<any> {
         if (!this.cfg.spreadsheetId) throw new Error('Pencatat belum diatur (pencatat.spreadsheetId kosong).');

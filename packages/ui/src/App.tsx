@@ -10,7 +10,7 @@ import { ActivityPanel } from './components/ActivityPanel';
 import { AgentCard } from './components/AgentCard';
 import { Toasts } from './components/Toasts';
 import { LoginScreen } from './components/LoginScreen';
-import { FinancePage } from './components/FinancePage';
+import { KeuanganApp } from './pages/keuangan/KeuanganApp';
 import { HomePage } from './pages/HomePage';
 import { TradingPage } from './pages/TradingPage';
 import { SchedulePage } from './pages/SchedulePage';
@@ -93,7 +93,7 @@ export function App() {
             {page !== 'kantor' && (
                 <main className={`page interactive page-${page}`}>
                     {page === 'home' && <HomePage go={(p) => go(p)} />}
-                    {page === 'keuangan' && <FinancePage />}
+                    {page === 'keuangan' && <KeuanganApp />}
                     {page === 'trading' && <TradingPage />}
                     {page === 'jadwal' && <SchedulePage />}
                     {page === 'tugas' && <TasksPanel onClose={back} />}

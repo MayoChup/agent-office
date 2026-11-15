@@ -13,6 +13,7 @@ import { Percakapan, Anggota, KuotaBerat, hermesSekali, jalankan as jalankanHerm
 import { Investigasi } from './kantor/investigasi';
 import { Screener, ambilCandle } from './kantor/screener';
 import { WatchFolder } from './kantor/watchfolder';
+import { AnggaranStore, bacaTransaksi } from './kantor/anggaran';
 import { telegramKirim } from './kantor/telegram';
 import { HermesBridge } from './kantor/hermes';
 import { slidesCli } from './kantor/slides';
@@ -86,6 +87,14 @@ if (tradingArg >= 0) {
         else console.log(`**${label}**\n${out}`);
         process.exit(ok ? 0 : 1);
     })();
+} else if (process.argv.includes('--catat')) {
+    // Dipakai Uang: node kantor-server.js --catat --jenis Keluar --nominal 20000 --akun BCA --kategori "Makan & Minum" --pihak "Nasi goreng" [--ket ..] [--tanggal YYYY-MM-DD]
+    const a = process.argv.slice(process.argv.indexOf('--catat') + 1);
+    const opt = (k: string) => { const i = a.indexOf(`--${k}`); return i >= 0 ? a[i + 1] : undefined; };
+    new Pencatat(config.pencatat, config.hermesHome, config.dataDir, async () => undefined)
+        .tambahManual({ jenis: opt('jenis') || 'Keluar', nominal: Number(opt('nominal')), akun: opt('akun') || 'Cash', kategori: opt('kategori'), pihak: opt('pihak'), keterangan: opt('ket'), tanggal: opt('tanggal'), jam: opt('jam') })
+        .then((t) => { console.log(`✅ Tercatat: ${t.jenis} Rp${t.n.toLocaleString('id-ID')} · ${t.bank} · ${t.kat}${t.pihak ? ` · ${t.pihak}` : ''} (${t.d} ${t.t})`); process.exit(0); })
+        .catch((e) => { console.error('GAGAL:', e?.message || e); process.exit(1); });
 } else if (process.argv.includes('--wa-login')) {
     // Tautkan WhatsApp (hanya-baca) dengan kode: node kantor-server.js --wa-login 628xxxx
     waLoginCli(config.dataDir, process.argv[process.argv.indexOf('--wa-login') + 1])
@@ -226,6 +235,20 @@ app.get('/api/kantor/keuangan', requireToken, async (req, res) => {
     } catch (e: any) {
         res.status(502).json({ ok: false, error: String(e?.message || e) });
     }
+});
+const anggaran = new AnggaranStore(config.dataDir);
+app.get('/api/kantor/keuangan/anggaran', requireToken, (_req, res) => { res.json({ ok: true, ...anggaran.get(), kategori: Object.keys(config.pencatat.kategori).concat(['Lainnya']) }); });
+app.post('/api/kantor/keuangan/anggaran', requireToken, (req, res) => { res.json({ ok: true, ...anggaran.set(req.body), kategori: Object.keys(config.pencatat.kategori).concat(['Lainnya']) }); });
+app.post('/api/kantor/keuangan/tambah', requireToken, async (req, res) => {
+    try { res.json({ ok: true, tx: await pencatat.tambahManual(req.body || {}) }); }
+    catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
+});
+app.post('/api/kantor/keuangan/baca', requireToken, async (req, res) => {
+    try {
+        const a = anggaran.get();
+        const r = await bacaTransaksi(OfficeRoom.sharedLlm(), String(req.body?.teks || ''), a.akun, Object.keys(config.pencatat.kategori).concat(['Lainnya']));
+        res.json({ ok: true, draf: r });
+    } catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
 });
 const kalender = new Kalender(config.hermesHome, config.dataDir, telegramNotifier(config.hermesHome));
 const priceCache = new Map<string, { at: number; p: number }>();
