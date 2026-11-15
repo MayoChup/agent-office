@@ -313,8 +313,9 @@ app.post('/api/kantor/keuangan/mutasi', requireToken, express.raw({ type: () => 
         const sandi = String(req.headers['x-pdf-sandi'] || '');
         const { halaman } = await bacaPdf(buf, sandi);
         const hasil = urai(halaman, akun);
-        const rep = await pencatat.report(true);
-        const c = cocokkan(akun, hasil.transaksi, rep.transaksi, hasil.periode);
+        let ada: any[] = [];
+        try { ada = (await pencatat.report(true)).transaksi; } catch (e: any) { hasil.peringatan.push(`Belum bisa mengecek transaksi yang sudah tercatat (${e?.message || e}) — semua ditandai baru.`); }
+        const c = cocokkan(akun, hasil.transaksi, ada, hasil.periode);
         const rules = config.pencatat.kategori;
         res.json({
             ok: true, ...hasil,
