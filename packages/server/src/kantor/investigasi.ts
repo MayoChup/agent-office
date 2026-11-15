@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { extractJson } from './freeLlm';
+import { yahooChart } from './screener';
 
 /**
  * Investigasi pergerakan saham (ala "Catalyst"): kalau saham di watchlist/posisi bergerak tajam,
@@ -30,7 +31,7 @@ export interface Kasus {
 interface State { kasus: Kasus[]; catatan: Record<string, string[]>; scanTerakhir: string }
 type Llm = { complete(system: string, user: string, maxTokens?: number, attempts?: number): Promise<string | null> } | null;
 
-const UA = 'Mozilla/5.0 (KantorRico; research)';
+const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 const SEC_UA = 'KantorRico research kantor-rico@users.noreply.github.com';
 const SEC_ITEMS: Record<string, string> = {
     '1.01': 'perjanjian material baru', '1.02': 'perjanjian material diakhiri', '2.01': 'akuisisi/penjualan aset selesai',
@@ -42,9 +43,7 @@ const SEC_ITEMS: Record<string, string> = {
 /* ── Pengambil data ─────────────────────────────────────────── */
 interface Hari { tgl: string; c: number; v: number }
 export async function ambilHarian(simbol: string): Promise<Hari[]> {
-    const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(simbol)}?range=3mo&interval=1d`, { headers: { 'User-Agent': UA } });
-    if (!res.ok) throw new Error(`Harga ${simbol} gagal (HTTP ${res.status})`);
-    const r: any = (await res.json() as any)?.chart?.result?.[0];
+    const r: any = await yahooChart(simbol, '3mo', '1d');
     const q = r?.indicators?.quote?.[0] || {};
     return (r?.timestamp || []).map((t: number, i: number) => ({ tgl: new Date(t * 1000).toISOString().slice(0, 10), c: q.close?.[i], v: q.volume?.[i] || 0 }))
         .filter((h: Hari) => Number.isFinite(h.c));

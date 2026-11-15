@@ -16,7 +16,7 @@ export interface Baris {
     skor?: Record<FaktorKey, SkorRingkas | null>;
 }
 export interface Pasar { naik: number; turun: number; tetap: number; mcap: number; sektor: Array<{ nama: string; n: number; chg: number }>; tape: Array<{ s: string; nama: string; harga: number; chg: number }> }
-export interface ScreenerData { baris: Baris[]; pasar: Pasar; teknikalAt: number; teknikalSesi: string; fundamentalAt: number; beritaAt: number; sibuk: string; progres: string; gagal: number }
+export interface ScreenerData { baris: Baris[]; pasar: Pasar; teknikalAt: number; teknikalSesi: string; fundamentalAt: number; beritaAt: number; sibuk: string; progres: string; gagal: number; galat?: string; sumber?: string }
 
 export const LABELS: Label[] = ['Beli kuat', 'Beli', 'Tahan', 'Jual', 'Jual kuat'];
 export const FAKTOR: Array<{ k: FaktorKey; label: string; ico: string; info: string }> = [

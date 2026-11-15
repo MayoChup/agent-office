@@ -1327,3 +1327,11 @@ body.no-office #phaser-container { visibility: hidden; }
 .laci-badge { margin-left: auto; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: #ef4444; color: #fff; font-size: 11px; font-weight: 700; display: grid; place-items: center; }
 [data-theme="light"] .laci-in { background: #fff; }
 [data-theme="light"] .laci-btn.on { background: #e9f7ee; border-color: #86c79e; }
+
+.sb-kosong { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; padding: 28px 18px; }
+.sb-kosong b { font-size: 16px; }
+.sb-kosong p { margin: 0; color: var(--muted); font-size: 13.5px; max-width: 460px; line-height: 1.5; }
+.sb-kosong .btn { margin-top: 6px; }
+.sb-kosong .error { align-self: stretch; text-align: left; }
+.sb-prog { width: min(360px, 100%); height: 8px; border-radius: 99px; background: rgba(127, 127, 127, 0.18); overflow: hidden; }
+.sb-prog i { display: block; height: 100%; background: #16a34a; border-radius: 99px; transition: width 0.4s; }

@@ -110,16 +110,12 @@ export function sessionWib(utcMs = Date.now()): string {
 
 // ───────────────────────── Data harga (Yahoo, gratis, tertunda ±15 menit) ─────────────────────────
 
-const UA = 'Mozilla/5.0 (compatible; kantor-virtual/1.0)';
+import { yahooChart } from './screener';
 
 export interface Candle { t: number; o: number; h: number; l: number; c: number }
 
 export async function fetchDaily(symbol: string): Promise<{ candles: Candle[]; price: number }> {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=6mo&interval=1d`;
-    const res = await fetch(url, { headers: { 'User-Agent': UA, Accept: '*/*' } });
-    if (!res.ok) throw new Error(`Harga ${symbol} gagal diambil (HTTP ${res.status})`);
-    const data: any = await res.json();
-    const r = data?.chart?.result?.[0];
+    const r = await yahooChart(symbol, '6mo', '1d');
     if (!r) throw new Error(`Saham ${symbol} tidak ditemukan`);
     const q = r.indicators?.quote?.[0] || {};
     const candles: Candle[] = (r.timestamp || []).map((t: number, i: number) => ({ t, o: q.open?.[i], h: q.high?.[i], l: q.low?.[i], c: q.close?.[i] }))
@@ -130,11 +126,8 @@ export async function fetchDaily(symbol: string): Promise<{ candles: Candle[]; p
 }
 
 export async function fetchPrice(symbol: string): Promise<number> {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=1d&interval=1m`;
-    const res = await fetch(url, { headers: { 'User-Agent': UA, Accept: '*/*' } });
-    if (!res.ok) throw new Error(`Harga ${symbol} gagal diambil (HTTP ${res.status})`);
-    const data: any = await res.json();
-    const p = Number(data?.chart?.result?.[0]?.meta?.regularMarketPrice);
+    const r = await yahooChart(symbol, '1d', '1m');
+    const p = Number(r?.meta?.regularMarketPrice);
     if (!p) throw new Error(`Harga ${symbol} kosong`);
     return p;
 }

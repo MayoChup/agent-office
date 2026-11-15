@@ -168,7 +168,7 @@ export function sentimen(t: string): number {
     return Math.max(-1, Math.min(1, s / 2));
 }
 export async function ambilBerita(simbol: string): Promise<Berita> {
-    const res = await fetch(`https://feeds.finance.yahoo.com/rss/2.0/headline?s=${encodeURIComponent(simbol)}&region=US&lang=en-US`, { headers: { 'User-Agent': 'Mozilla/5.0 (KantorRico)' } });
+    const res = await fetch(`https://feeds.finance.yahoo.com/rss/2.0/headline?s=${encodeURIComponent(simbol)}&region=US&lang=en-US`, { headers: { 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36' }, signal: AbortSignal.timeout(15_000) });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const xml = await res.text();
     const tag = (s: string, t: string) => (s.match(new RegExp(`<${t}>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?</${t}>`)) || [])[1]?.trim() || '';

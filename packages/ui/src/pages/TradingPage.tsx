@@ -55,7 +55,7 @@ export function TradingPage() {
     const PENDEK: Partial<Record<Tab, string>> = { pilihan: 'Sinyal', panas: 'Heatmap', berita: 'Berita', posisi: 'Posisi' };
     useSubNav((['pilihan', 'watchlist', 'panas', 'berita', 'pasar', 'penyaring', 'investigasi', 'posisi'] as Tab[]).map((k) => ({ k, ico: IKON[k], label: PENDEK[k] || TABS.find((t) => t.k === k)!.label })), tab, (k) => setTab(k as Tab));
     const buka = (s: string) => { setSaham(s); document.querySelector('.pg')?.scrollTo({ top: 0 }); };
-    const perbarui = async () => { try { await apiPost('/api/kantor/screener/perbarui', { jenis: 'teknikal' }); setTimeout(() => sc.reload(), 3000); } catch { /* */ } };
+    const perbarui = async () => { try { await apiPost('/api/kantor/screener/perbarui', { jenis: 'teknikal' }); setTimeout(() => sc.reload(), 1500); setTimeout(() => sc.reload(), 6000); } catch (e: any) { alert(`Gagal memulai: ${e?.message || e}`); } };
     const realized = (data?.history || []).reduce((a, h) => a + (h.pnl || 0), 0);
     const open = (data?.positions || []).reduce((a, p) => a + (p.pnl || 0), 0);
 
@@ -77,8 +77,20 @@ export function TradingPage() {
             {saham && <SahamDetail simbol={saham} onBack={() => setSaham(null)} />}
             {!saham && ['pasar', 'pilihan', 'panas', 'watchlist'].includes(tab) && !sc.data && <div className="fin-empty">{sc.error ? `Gagal memuat: ${sc.error}` : 'Memuat data pasar…'}</div>}
             {!saham && ['pasar', 'pilihan', 'panas'].includes(tab) && sc.data && sc.data.baris.length === 0 && (
-                <div className="sb-card fin-empty">Data pasar belum ada. Tekan ↻ di kanan atas (±5–10 menit untuk ±500 saham + berita), atau tunggu otomatis setelah bursa AS tutup.</div>
+                <div className="sb-card sb-kosong">
+                    {sc.data.sibuk ? (<>
+                        <b>⏳ Sedang mengambil data pasar…</b>
+                        <p>{sc.data.progres || 'menyiapkan'} — biasanya 5–10 menit untuk ±500 saham. Halaman ini terisi sendiri, tidak perlu dimuat ulang.</p>
+                        <div className="sb-prog"><i style={{ width: `${(() => { const m = /(\d+)\/(\d+)/.exec(sc.data.progres || ''); return m ? Math.round((+m[1] / +m[2]) * 100) : 5; })()}%` }} /></div>
+                    </>) : (<>
+                        <b>Data pasar belum ada</b>
+                        <p>Ambil harga ±500 saham S&P 500 + watchlist (5–10 menit). Setelah itu otomatis diperbarui tiap bursa AS tutup.</p>
+                        <button className="btn primary" onClick={() => { perbarui(); reload(); }}>↻ Ambil data sekarang</button>
+                    </>)}
+                    {sc.data.galat && !sc.data.sibuk && <div className="error">⚠️ {sc.data.galat}</div>}
+                </div>
             )}
+            {!saham && sc.data && sc.data.baris.length > 0 && sc.data.galat && !sc.data.sibuk && <div className="error" style={{ margin: '0 0 12px' }}>⚠️ {sc.data.galat}</div>}
             {!saham && tab === 'pasar' && sc.data && sc.data.baris.length > 0 && <PasarView data={sc.data} faktor={faktor} setFaktor={setF} onOpen={buka} />}
             {!saham && tab === 'pilihan' && sc.data && sc.data.baris.length > 0 && <PilihanView data={sc.data} faktor={faktor} setFaktor={setF} onOpen={buka} watchlist={[...(data?.watchlist || []), ...(data?.positions || []).map((p) => p.symbol)]} />}
             {!saham && tab === 'panas' && sc.data && sc.data.baris.length > 0 && <PetaPanas data={sc.data} onOpen={buka} watch={[...(data?.watchlist || []), ...(data?.positions || []).map((p) => p.symbol)]} />}

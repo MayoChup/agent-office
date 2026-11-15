@@ -70,7 +70,7 @@ export function WatchlistView({ data, faktor, onOpen }: { data: ScreenerData; fa
                     return (
                         <div key={s} className="wl-item">
                             {b ? <Kartu b={b} faktor={faktor} onOpen={onOpen} /> : (
-                                <article className="sb-cardx" onClick={() => onOpen(s)}><header><div><b className="mono">{s}</b><small>Di luar S&P 500 — ketuk untuk grafik & sinyal</small></div></header></article>
+                                <article className="sb-cardx" onClick={() => onOpen(s)}><header><div><b className="mono">{s}</b><small>{data.baris.length ? 'Di luar S&P 500 — ketuk untuk grafik & sinyal' : 'Data pasar belum diambil — ketuk untuk grafik'}</small></div></header></article>
                             )}
                             <button className="wl-x" title="Keluarkan dari folder" onClick={() => buang(s)}>✕</button>
                         </div>
