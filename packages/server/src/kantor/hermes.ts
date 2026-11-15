@@ -16,6 +16,8 @@ import { open, Database } from 'sqlite';
 export interface HermesProfile {
     id: string; // nama profil, "default" = profil utama (Kepala)
     displayName: string;
+    /** Sebutan pendek: profile.yaml `title` (mis. "Editor"). */
+    title?: string;
     description: string;
 }
 
@@ -75,6 +77,7 @@ export class HermesBridge {
             profiles.push({
                 id: 'default',
                 displayName: readYamlField(path.join(this.hermesHome, 'profile.yaml'), 'display_name'),
+                title: readYamlField(path.join(this.hermesHome, 'profile.yaml'), 'title'),
                 description: readYamlField(path.join(this.hermesHome, 'profile.yaml'), 'description')
             });
         }
@@ -96,6 +99,7 @@ export class HermesBridge {
             profiles.push({
                 id: name,
                 displayName: readYamlField(yaml, 'display_name'),
+                title: readYamlField(yaml, 'title'),
                 description: readYamlField(yaml, 'description')
             });
         }

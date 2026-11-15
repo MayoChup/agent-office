@@ -6,7 +6,7 @@ import { createServer } from 'http';
 import { OfficeRoom } from './rooms/OfficeRoom';
 import { loadConfig } from './kantor/config';
 import { KantorAuth } from './kantor/auth';
-import { Pencatat, telegramNotifier } from './kantor/pencatat';
+import { Pencatat, telegramNotifier, ringkasanKeuangan } from './kantor/pencatat';
 import { TradingDesk, tradingCli } from './kantor/trading';
 import os from 'os';
 
@@ -21,6 +21,18 @@ if (tradingArg >= 0) {
     tradingCli(desk, process.argv.slice(tradingArg + 1))
         .then((out) => { console.log(out); process.exit(0); })
         .catch((e) => { console.error('GAGAL:', e?.message || e); process.exit(1); });
+} else if (process.argv.includes('--keuangan')) {
+    // Dipakai agen Keuangan: node kantor-server.js --keuangan ringkasan [YYYY-MM]
+    (async () => {
+        const i = process.argv.indexOf('--keuangan');
+        const ym = /^\d{4}-\d{2}$/.test(process.argv[i + 2] || '') ? process.argv[i + 2] : new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 7);
+        try {
+            const p = new Pencatat({ ...config.pencatat, enabled: true }, config.hermesHome, config.dataDir, async () => undefined);
+            const r = await p.report(true);
+            console.log(ringkasanKeuangan(r.transaksi, ym));
+            process.exit(0);
+        } catch (e: any) { console.error('GAGAL:', e?.message || e); process.exit(1); }
+    })();
 } else if (process.argv.includes('--uji-pencatat')) {
     (async () => {
         const p = new Pencatat({ ...config.pencatat, enabled: true }, config.hermesHome, config.dataDir, async () => undefined);

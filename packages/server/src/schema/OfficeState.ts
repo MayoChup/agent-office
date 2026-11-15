@@ -16,6 +16,8 @@ export class AgentState extends Schema {
     @type('number') reputation: number;
     @type('number') riskLevel: number;
     @type('number') momentum: number;
+    /** Sebutan peran pendek, tampil sebagai "Nama si <title>". */
+    @type('string') title: string = '';
 
     constructor(id: string, name: string) {
         super();

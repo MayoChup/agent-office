@@ -309,15 +309,18 @@ export class OfficeRoom extends Room<OfficeState> {
             const override = this.cfg.agents[p.id] || {};
             const name = override.name || p.displayName || this.titleCase(p.id);
             const role = override.role || this.roleFromDescription(p.description);
+            const title = override.title || (p as any).title || (p.id === 'default' ? 'Kepala' : '');
             const existing = this.members.get(p.id);
             if (existing) {
                 existing.name = name;
                 existing.role = role;
                 const st = this.state.agents.get(p.id);
-                if (st) { st.name = name; st.role = role; }
+                if (st) { st.name = name; st.role = role; st.title = title; }
                 continue;
             }
             await this.addMember(p, name, role, override.persona || p.description || '', override.skin, initial);
+            const nst = this.state.agents.get(p.id);
+            if (nst) nst.title = title;
         }
 
         for (const id of Array.from(this.members.keys())) {

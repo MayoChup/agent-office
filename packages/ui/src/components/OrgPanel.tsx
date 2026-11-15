@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { useKantor, statusOf, AgentView, DivisionView, TaskView } from '../kantor/store';
+import { fullName } from '../kantor/store';
 import { eventBus } from '../events';
 import { Avatar } from './Avatar';
 import { Panel } from './Panel';
@@ -25,7 +26,7 @@ function MemberRow({ a, isHead, color }: { a: AgentView; isHead: boolean; color:
             <Avatar skin={a.skin} size={44} />
             <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="member-name">
-                    {a.name}
+                    <span className="who">{a.name}{a.title && <small className="who-role">{a.title}</small>}</span>
                     {isHead && <span className="tag" style={{ color }}>Kepala divisi</span>}
                     <StatusChip action={a.action} />
                 </div>
@@ -150,7 +151,7 @@ export function OrgPanel({ selected, onSelect, onClose }: {
                     <div className="org-node head" onClick={() => onSelect('default')}>
                         {head ? <Avatar skin={head.skin} size={40} /> : <div className="div-icon">👑</div>}
                         <div style={{ flex: 1 }}>
-                            <div style={{ fontWeight: 700 }}>{head?.name || 'Kepala Kantor'}</div>
+                            <div style={{ fontWeight: 700 }} className="who">{head?.name || 'Joni'}{head?.title && <small className="who-role">{head.title}</small>}</div>
                             <div style={{ fontSize: 11, color: 'var(--muted)' }}>Kepala Kantor · membagi tugas</div>
                         </div>
                         {head && <StatusChip action={head.action} />}
@@ -172,7 +173,7 @@ export function OrgPanel({ selected, onSelect, onClose }: {
                                                 {members.length} orang · {blocked ? `⚠️ ${blocked} tertahan` : working ? `💻 ${working} bekerja` : 'santai'}
                                             </div>
                                             <div className="avatars">
-                                                {members.slice(0, 5).map((m) => <Avatar key={m.id} skin={m.skin} size={26} title={m.name} />)}
+                                                {members.slice(0, 5).map((m) => <Avatar key={m.id} skin={m.skin} size={26} title={fullName(m)} />)}
                                             </div>
                                         </div>
                                     );

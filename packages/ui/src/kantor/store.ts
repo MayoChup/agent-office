@@ -7,6 +7,8 @@ import { getRoom, ConnStatus } from './connection';
 export interface AgentView {
     id: string;
     name: string;
+    /** Sebutan peran pendek ("Editor"). */
+    title: string;
     role: string;
     skin: number;
     action: string;
@@ -145,6 +147,7 @@ setInterval(() => {
     room.state.agents.forEach((a: any, id: string) => list.push({
         id,
         name: a.name,
+        title: a.title || '',
         role: a.role || '',
         skin: Number(a.skin) || 0,
         action: a.action || 'idle',
@@ -153,7 +156,7 @@ setInterval(() => {
         x: a.x,
         y: a.y
     }));
-    const key = JSON.stringify(list.map((a) => [a.id, a.name, a.role, a.action, a.thought, a.currentTask]));
+    const key = JSON.stringify(list.map((a) => [a.id, a.name, a.title, a.role, a.action, a.thought, a.currentTask]));
     if (key !== lastAgentsKey) {
         lastAgentsKey = key;
         set({ agents: list });
@@ -176,4 +179,9 @@ export const STATUS_LABEL: Record<string, { label: string; color: string }> = {
 
 export function statusOf(action: string) {
     return STATUS_LABEL[action] || STATUS_LABEL.idle;
+}
+
+/** Untuk teks satu baris (pilihan, tooltip): "Eca · Editor". */
+export function fullName(a: { name: string; title?: string }) {
+    return a.title ? `${a.name} · ${a.title}` : a.name;
 }

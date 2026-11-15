@@ -46,6 +46,7 @@ interface AgentView {
     sprite: Phaser.GameObjects.Sprite;
     shadow: Phaser.GameObjects.Ellipse;
     nameTag: Phaser.GameObjects.Text;
+    roleTag: Phaser.GameObjects.Text;
     emote: Phaser.GameObjects.Text;
     bubble: Phaser.GameObjects.Text;
     skin: number;
@@ -344,13 +345,18 @@ export class OfficeScene extends Phaser.Scene {
             fontFamily: 'Inter, system-ui, sans-serif', fontSize: '6px', fontStyle: 'bold',
             color: '#ffffff', backgroundColor: '#0f172acc', padding: { x: 3, y: 1 }
         }).setOrigin(0.5, 0).setResolution(4);
+        // Peran di baris bawah nama (mis. "Kepala", "Editor").
+        const roleTag = this.add.text(0, 12, agent.title || '', {
+            fontFamily: 'Inter, system-ui, sans-serif', fontSize: '5px', fontStyle: 'bold',
+            color: '#c7d2fe', backgroundColor: '#312e81cc', padding: { x: 2, y: 0.5 }
+        }).setOrigin(0.5, 0).setResolution(4).setVisible(Boolean(agent.title));
         const emote = this.add.text(7, -30, '', { fontSize: '9px' }).setOrigin(0.5, 1).setResolution(4).setVisible(false);
         const bubble = this.add.text(0, -34, '', {
             fontFamily: 'Inter, system-ui, sans-serif', fontSize: '6px', color: '#0f172a',
             backgroundColor: '#ffffffee', padding: { x: 4, y: 3 },
             wordWrap: { width: 110, useAdvancedWrap: true }, align: 'center'
         }).setOrigin(0.5, 1).setResolution(4).setVisible(false);
-        container.add([shadow, sprite, nameTag, emote, bubble]);
+        container.add([shadow, sprite, nameTag, roleTag, emote, bubble]);
         container.setSize(16, 32);
         container.setInteractive(new Phaser.Geom.Rectangle(-8, -32, 16, 36), Phaser.Geom.Rectangle.Contains);
         container.on('pointerup', () => {
@@ -359,7 +365,7 @@ export class OfficeScene extends Phaser.Scene {
         });
         container.setAlpha(0);
         this.tweens.add({ targets: container, alpha: 1, duration: 500 });
-        return { container, sprite, shadow, nameTag, emote, bubble, skin, lastThought: '' };
+        return { container, sprite, shadow, nameTag, roleTag, emote, bubble, skin, lastThought: '' };
     }
 
     private applyAgent(v: AgentView, agent: AgentState, id: string, first: boolean) {
@@ -393,6 +399,8 @@ export class OfficeScene extends Phaser.Scene {
         v.shadow.setVisible(!seated);
 
         if (agent.name !== v.nameTag.text) v.nameTag.setText(agent.name);
+        const t = agent.title || '';
+        if (t !== v.roleTag.text) { v.roleTag.setText(t); v.roleTag.setVisible(Boolean(t)); }
 
         const emote = EMOTES[agent.action] || '';
         v.emote.setText(emote).setVisible(Boolean(emote));

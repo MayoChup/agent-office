@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useKantor } from '../kantor/store';
+import { fullName } from '../kantor/store';
 import { getRoom } from '../kantor/connection';
 import { Panel } from './Panel';
 
@@ -44,7 +45,7 @@ export function TasksPanel({ onClose }: { onClose: () => void }) {
                     <div className="row" style={{ marginTop: 8 }}>
                         <select className="select" value={target} onChange={(e) => setTarget(e.target.value)}>
                             {sortedAgents.length === 0 && <option value="default">Kepala Kantor</option>}
-                            {sortedAgents.map((a) => <option key={a.id} value={a.id}>{a.name}{a.role ? ` — ${a.role}` : ''}</option>)}
+                            {sortedAgents.map((a) => <option key={a.id} value={a.id}>{fullName(a)}</option>)}
                         </select>
                         <button className="btn primary" type="submit" disabled={!title.trim()}>Kirim</button>
                     </div>

@@ -1,5 +1,6 @@
 import React from 'react';
 import { useKantor, statusOf } from '../kantor/store';
+import { fullName } from '../kantor/store';
 import { eventBus } from '../events';
 import { Avatar } from './Avatar';
 
@@ -15,7 +16,7 @@ export function AgentCard({ id, onClose, onOpenDivision }: { id: string; onClose
                 <Avatar skin={agent.skin} size={56} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        <b style={{ fontSize: 16 }}>{agent.name}</b>
+                        <span className="who"><b style={{ fontSize: 16 }}>{agent.name}</b>{agent.title && <small className="who-role">{agent.title}</small>}</span>
                         <span className="chip" style={{ ['--c' as any]: st.color }}>● {st.label}</span>
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>

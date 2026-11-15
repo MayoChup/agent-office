@@ -291,3 +291,6 @@ button { font-family: inherit; }
   .fin-mini { grid-template-columns: 1fr 1fr; }
   .fin-two { grid-template-columns: 1fr; }
 }
+
+.who { display: inline-flex; flex-direction: column; line-height: 1.15; vertical-align: middle; }
+.who-role { font-size: 10.5px; font-weight: 600; color: #a5b4fc; letter-spacing: 0.2px; }

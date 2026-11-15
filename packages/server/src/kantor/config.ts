@@ -17,6 +17,8 @@ export interface AgentOverride {
     name?: string;
     /** Jabatan singkat, misalnya "Kepala Kantor". */
     role?: string;
+    /** Sebutan pendek di belakang nama: "Eca si Editor" → "Editor". */
+    title?: string;
     /** Kepribadian / gaya bicara singkat (opsional). */
     persona?: string;
     /** Nomor karakter 0-5 (opsional). */

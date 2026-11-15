@@ -531,3 +531,32 @@ export function telegramNotifier(hermesHome: string) {
         } catch { /* notifikasi tidak penting */ }
     };
 }
+
+/** Ringkasan bulanan untuk agen Keuangan (teks pendek, hemat token). */
+export function ringkasanKeuangan(tx: Array<{ d: string; jenis: string; n: number; kat: string; pihak: string; bank: string }>, ym: string): string {
+    const inMonth = tx.filter((t) => t.d.startsWith(ym));
+    const keluar = inMonth.filter((t) => t.jenis === 'Keluar');
+    const sum = (xs: typeof tx) => xs.reduce((a, t) => a + t.n, 0);
+    const rp = (n: number) => `Rp${Math.round(n).toLocaleString('id-ID')}`;
+    const byKat = new Map<string, number>();
+    keluar.forEach((t) => byKat.set(t.kat || 'Lainnya', (byKat.get(t.kat || 'Lainnya') || 0) + t.n));
+    const days = new Set(inMonth.map((t) => t.d)).size;
+    const [y, m] = ym.split('-').map(Number);
+    const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    const today = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
+    const elapsed = today.startsWith(ym) ? Number(today.slice(8, 10)) : daysInMonth;
+    // 3 bulan sebelumnya untuk pembanding
+    const prev = [1, 2, 3].map((k) => {
+        const d = new Date(Date.UTC(y, m - 1 - k, 1)).toISOString().slice(0, 7);
+        return `${d}: keluar ${rp(sum(tx.filter((t) => t.d.startsWith(d) && t.jenis === 'Keluar')))}, masuk ${rp(sum(tx.filter((t) => t.d.startsWith(d) && t.jenis === 'Masuk')))}`;
+    });
+    const top = [...keluar].sort((a, b) => b.n - a.n).slice(0, 5).map((t) => `${t.d} ${t.pihak} ${rp(t.n)} (${t.kat})`);
+    return [
+        `Ringkasan keuangan ${ym} (hari ke-${elapsed} dari ${daysInMonth}, ${days} hari ada transaksi)`,
+        `Masuk ${rp(sum(inMonth.filter((t) => t.jenis === 'Masuk')))} · Keluar ${rp(sum(keluar))} (${keluar.length} transaksi) · rata-rata keluar/hari ${rp(sum(keluar) / Math.max(1, elapsed))}`,
+        `Per kategori: ${Array.from(byKat.entries()).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${rp(v)}`).join('; ') || '-'}`,
+        `5 terbesar: ${top.join('; ') || '-'}`,
+        `Bulan-bulan sebelumnya: ${prev.join(' | ')}`,
+        `Perlu dicek: ${tx.filter((t: any) => t.status === 'Perlu dicek').length}`
+    ].join('\n');
+}
