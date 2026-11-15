@@ -1,0 +1,19 @@
+name: Kantor Virtual - rakit ulang mingguan
+
+# Tiap Senin 03.00 WIB: rakit ulang kantor (branch kantor-rico) supaya modul WhatsApp
+# ikut versi terbaru — WhatsApp sering berubah. VPS mengambil hasilnya otomatis.
+on:
+  schedule:
+    - cron: '0 20 * * 0'
+  workflow_dispatch:
+
+permissions:
+  actions: write
+
+jobs:
+  pemicu:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: gh workflow run kantor-build.yml --ref kantor-rico -R "$GITHUB_REPOSITORY"
+        env:
+          GH_TOKEN: ${{ github.token }}
