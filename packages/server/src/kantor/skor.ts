@@ -16,7 +16,7 @@ export interface Proyeksi { horizon: number; target: Target[]; stop: { harga: nu
 export interface Ekstra {
     spark: number[]; mom: { w1: number; m1: number; m3: number }; atr: number; cmf: number; obv: number; trenLabel: string; proyeksi: Proyeksi | null;
 }
-export interface Berita { skor: number | null; n: number; judul: Array<{ t: string; s: number; tgl: string; url: string }>; at: number }
+export interface Berita { skor: number | null; n: number; judul: Array<{ t: string; s: number; tgl: string; url: string }>; at: number; sumber?: string }
 export interface Orang { net: number; beli: number; jual: number; n: number; at: number }
 
 export function label(s: number): Label {
@@ -167,22 +167,36 @@ export function sentimen(t: string): number {
     for (const x of w) { if (POS.includes(x)) s++; else if (NEG.includes(x)) s--; }
     return Math.max(-1, Math.min(1, s / 2));
 }
+const UA_BROWSER = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+let yahooRssIstirahat = 0;
+/** RSS berita: Yahoo dulu; kalau server diblokir Yahoo, pakai Google News (gratis, tanpa kunci). */
+export async function rssBerita(simbol: string): Promise<{ xml: string; sumber: string }> {
+    if (yahooRssIstirahat < Date.now()) {
+        try {
+            const res = await fetch(`https://feeds.finance.yahoo.com/rss/2.0/headline?s=${encodeURIComponent(simbol)}&region=US&lang=en-US`, { headers: { 'User-Agent': UA_BROWSER }, signal: AbortSignal.timeout(15_000) });
+            if (res.ok) { const xml = await res.text(); if (/<item>/.test(xml)) return { xml, sumber: 'Yahoo' }; }
+            else if (res.status === 429 || res.status === 403) yahooRssIstirahat = Date.now() + 20 * 60_000;
+        } catch { /* coba cadangan */ }
+    }
+    const q = encodeURIComponent(`${simbol.replace('-', '.')} stock`);
+    const res = await fetch(`https://news.google.com/rss/search?q=${q}+when:7d&hl=en-US&gl=US&ceid=US:en`, { headers: { 'User-Agent': UA_BROWSER }, signal: AbortSignal.timeout(15_000) });
+    if (!res.ok) throw new Error(`Berita: Yahoo & Google News gagal (HTTP ${res.status})`);
+    return { xml: await res.text(), sumber: 'Google News' };
+}
 export async function ambilBerita(simbol: string): Promise<Berita> {
-    const res = await fetch(`https://feeds.finance.yahoo.com/rss/2.0/headline?s=${encodeURIComponent(simbol)}&region=US&lang=en-US`, { headers: { 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36' }, signal: AbortSignal.timeout(15_000) });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const xml = await res.text();
+    const { xml, sumber } = await rssBerita(simbol);
     const tag = (s: string, t: string) => (s.match(new RegExp(`<${t}>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?</${t}>`)) || [])[1]?.trim() || '';
     const un = (s: string) => s.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&#39;|&apos;/g, "'").replace(/&quot;/g, '"');
     const batas = Date.now() - 7 * 86400_000;
     const judul = (xml.match(/<item>[\s\S]*?<\/item>/g) || []).map((it) => {
-        const t = un(tag(it, 'title')).slice(0, 200);
+        const t = un(tag(it, 'title')).replace(/\s+-\s+[^-]{2,60}$/, sumber === 'Google News' ? '' : '$&').slice(0, 200);
         const at = Date.parse(tag(it, 'pubDate')) || Date.now();
         return { t, s: sentimen(`${t} ${un(tag(it, 'description')).slice(0, 200)}`), tgl: new Date(at).toISOString().slice(0, 10), url: tag(it, 'link'), at };
     }).filter((j) => j.t && j.at >= batas).slice(0, 12);
     // Berita baru lebih berbobot.
     let sum = 0, w = 0;
     for (const j of judul) { const bobot = 1 + (j.at - batas) / (7 * 86400_000); sum += j.s * bobot; w += bobot; }
-    return { skor: judul.length ? +(sum / w).toFixed(2) : null, n: judul.length, judul: judul.slice(0, 6).map(({ at, ...r }) => r), at: Date.now() };
+    return { skor: judul.length ? +(sum / w).toFixed(2) : null, n: judul.length, judul: judul.slice(0, 6).map(({ at, ...r }) => r), at: Date.now(), sumber };
 }
 
 /* ── Orang dalam (Form 4) ──────────────────────────────────── */

@@ -10,7 +10,7 @@ import { Ekstra, Berita, Orang, ekstra, skorTeknikal, skorFundamental, skorBerit
  *    breakout 52 minggu, lonjakan volume.
  */
 
-import { UA, yahooChart, hargaHarian, statusHarga } from './harga';
+import { UA, yahooChart, hargaHarian, statusHarga, cnbcChart } from './harga';
 export { yahooChart, statusHarga };
 const SEC_UA = 'KantorRico research kantor-rico@users.noreply.github.com';
 const SP500_CSV = 'https://raw.githubusercontent.com/datasets/s-and-p-500-companies/main/data/constituents.csv';
@@ -436,10 +436,12 @@ export async function ambilCandle(simbol: string, rentang: string) {
     if (hit && Date.now() - hit.at < 180_000) return { ...hit.data, tampil: r.tampil };
     let j: any;
     try { j = await yahooChart(s, r.range, r.interval); } catch (e: any) {
-        if (!r.harian || r.interval !== '1d') throw e;
-        // Yahoo diblokir → pakai harga harian dari sumber cadangan.
+        // Yahoo diblokir → CNBC (menit / mingguan) atau harga harian dari sumber cadangan.
+        if (r.interval !== '1d') { j = await cnbcChart(s, r.range === '1d' ? '1D' : r.range === '5d' ? '5D' : '5Y'); }
+        else {
         const h = await hargaHarian(s);
         j = { meta: { currency: 'USD', longName: h.nama || s }, timestamp: h.rows.map((x) => Date.parse(x.t + 'T00:00:00Z') / 1000), indicators: { quote: [{ open: h.rows.map((x) => x.o), high: h.rows.map((x) => x.h), low: h.rows.map((x) => x.l), close: h.rows.map((x) => x.c), volume: h.rows.map((x) => x.v) }] } };
+        }
     }
     const q = j.indicators?.quote?.[0] || {};
     const candles = (j.timestamp || []).map((t: number, i: number) => ({

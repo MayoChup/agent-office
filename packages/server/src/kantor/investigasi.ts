@@ -3,6 +3,7 @@ import path from 'path';
 import { extractJson } from './freeLlm';
 import { yahooChart } from './screener';
 import { hargaHarian } from './harga';
+import { rssBerita } from './skor';
 
 /**
  * Investigasi pergerakan saham (ala "Catalyst"): kalau saham di watchlist/posisi bergerak tajam,
@@ -53,9 +54,7 @@ export async function ambilHarian(simbol: string): Promise<Hari[]> {
 
 async function ambilBerita(simbol: string): Promise<Array<{ judul: string; isi: string; tanggal: string; url: string }>> {
     try {
-        const res = await fetch(`https://feeds.finance.yahoo.com/rss/2.0/headline?s=${encodeURIComponent(simbol)}&region=US&lang=en-US`, { headers: { 'User-Agent': UA } });
-        if (!res.ok) return [];
-        const xml = await res.text();
+        const { xml } = await rssBerita(simbol);
         const tag = (s: string, t: string) => (s.match(new RegExp(`<${t}>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?</${t}>`)) || [])[1]?.trim() || '';
         const un = (s: string) => s.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&#39;|&apos;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
         return (xml.match(/<item>[\s\S]*?<\/item>/g) || []).slice(0, 12).map((it) => ({

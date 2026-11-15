@@ -3,7 +3,7 @@ import { execFile } from 'child_process';
 /**
  * Harga saham AS dari beberapa sumber gratis (tanpa kunci API), bergantian otomatis:
  *   1. Yahoo (fetch Node)      2. Yahoo lewat curl (sidik TLS berbeda, sering lolos saat Node kena 429)
- *   3. Nasdaq.com              4. CNBC                     5. Stooq
+ *   3. CNBC                    4. Nasdaq.com               5. Stooq
  * Sumber yang barusan gagal "diistirahatkan" 20 menit supaya 500 saham tidak menunggu sumber yang memblokir.
  */
 
@@ -108,18 +108,30 @@ async function nasdaq(s: string): Promise<{ rows: Bar[]; nama: string }> {
 }
 
 /* ── CNBC ── */
-async function cnbc(s: string): Promise<{ rows: Bar[]; nama: string }> {
+async function cnbcBars(s: string, kode: '1D' | '5D' | '1Y' | '5Y'): Promise<any[]> {
     const sym = s === '^VIX' ? '.VIX' : s.replace('-', '.');
-    const j = await ambilFetch(`https://ts-api.cnbc.com/harmony/app/charts/1Y.json?symbol=${encodeURIComponent(sym)}`, { Referer: 'https://www.cnbc.com/' });
+    const j = await ambilFetch(`https://ts-api.cnbc.com/harmony/app/charts/${kode}.json?symbol=${encodeURIComponent(sym)}`, { Referer: 'https://www.cnbc.com/' });
     if (j.status !== 200) throw httpGalat('CNBC', j.status);
     const bars = JSON.parse(j.body)?.barData?.priceBars;
     if (!Array.isArray(bars) || !bars.length) throw new Galat('CNBC: tidak ada data');
-    const rows = bars.map((b: any) => {
+    return bars.filter((b: any) => [b.open, b.high, b.low, b.close].every((y) => Number.isFinite(angka(y)) && angka(y) > 0));
+}
+async function cnbc(s: string): Promise<{ rows: Bar[]; nama: string }> {
+    const rows = (await cnbcBars(s, '1Y')).map((b: any) => {
         const tt = String(b.tradeTime || '');
         const t = /^\d{8}/.test(tt) ? `${tt.slice(0, 4)}-${tt.slice(4, 6)}-${tt.slice(6, 8)}` : new Date(Number(b.tradeTimeinMills)).toISOString().slice(0, 10);
         return { t, o: angka(b.open), h: angka(b.high), l: angka(b.low), c: angka(b.close), v: angka(b.volume) || 0 };
-    }).filter((x: Bar) => [x.o, x.h, x.l, x.c].every((y) => Number.isFinite(y) && y > 0));
+    });
     return { rows, nama: '' };
+}
+/** Grafik CNBC dalam bentuk mirip Yahoo (untuk candle saat Yahoo diblokir). */
+export async function cnbcChart(s: string, kode: '1D' | '5D' | '5Y'): Promise<any> {
+    const bars = await cnbcBars(s, kode);
+    return {
+        meta: { currency: 'USD', longName: s, gmtoffset: 0 },
+        timestamp: bars.map((b: any) => Math.round(Number(b.tradeTimeinMills) / 1000)),
+        indicators: { quote: [{ open: bars.map((b: any) => angka(b.open)), high: bars.map((b: any) => angka(b.high)), low: bars.map((b: any) => angka(b.low)), close: bars.map((b: any) => angka(b.close)), volume: bars.map((b: any) => angka(b.volume) || 0) }] }
+    };
 }
 
 /* ── Stooq ── */
@@ -137,8 +149,8 @@ async function stooq(s: string): Promise<{ rows: Bar[]; nama: string }> {
 const SUMBER: Array<[string, (s: string) => Promise<{ rows: Bar[]; nama: string }>]> = [
     ['Yahoo', async (s) => dariYahoo(await yahooMentah('fetch', s, '1y', '1d'))],
     ['Yahoo (curl)', async (s) => dariYahoo(await yahooMentah('curl', s, '1y', '1d'))],
-    ['Nasdaq', nasdaq],
     ['CNBC', cnbc],
+    ['Nasdaq', nasdaq],
     ['Stooq', stooq]
 ];
 
@@ -172,4 +184,7 @@ export async function cekHargaCli(simbol = 'AAPL') {
         try { const r = await fn(simbol); const z = r.rows[r.rows.length - 1]; console.log(`✅ ${nama.padEnd(13)} ${r.rows.length} hari, terakhir ${z?.t} tutup ${z?.c}  (${Date.now() - t0} ms)`); }
         catch (e: any) { console.log(`❌ ${nama.padEnd(13)} ${e?.cause?.code || e?.message || e}  (${Date.now() - t0} ms)`); }
     }
+    try { const r = await cnbcChart(simbol, '1D'); console.log(`✅ CNBC menit   ${r.timestamp.length} batang hari ini`); } catch (e: any) { console.log(`❌ CNBC menit   ${e?.message || e}`); }
+    const { ambilBerita } = await import('./skor');
+    try { const b = await ambilBerita(simbol); console.log(`✅ Berita       ${b.n} judul 7 hari terakhir (${b.sumber})${b.judul[0] ? ` — "${b.judul[0].t.slice(0, 60)}"` : ''}`); } catch (e: any) { console.log(`❌ Berita       ${e?.message || e}`); }
 }
