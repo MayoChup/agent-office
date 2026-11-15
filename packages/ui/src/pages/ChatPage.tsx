@@ -173,7 +173,7 @@ function Thread({ info, threads, skin, onBack, onSeen }: { info: ThreadInfo; thr
                 </div>
             )}
             <form className="wa-input" onSubmit={send}>
-                <textarea ref={inputRef} rows={1} placeholder={grup ? 'Tulis ke grup… (@Nama untuk orang tertentu)' : `Tulis ke ${info.nama}…`} value={text}
+                <textarea ref={inputRef} rows={1} placeholder={grup ? 'Tulis ke grup…' : `Tulis ke ${info.nama}…`} value={text}
                     onChange={(e) => { setText(e.target.value); e.target.style.height = 'auto'; e.target.style.height = `${Math.min(120, e.target.scrollHeight)}px`; }}
                     onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && window.innerWidth >= 768) { e.preventDefault(); send(); } }} />
                 <button className="wa-send" type="submit" disabled={!text.trim() || sending} aria-label="Kirim">➤</button>

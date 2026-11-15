@@ -406,8 +406,8 @@ body.no-office #phaser-container { visibility: hidden; }
 
 /* ── Chat ala WhatsApp ───────────────────────────────────── */
 .page-obrolan { background: transparent; }
-.wa { flex: 1; min-height: 0; display: grid; grid-template-columns: 340px 1fr; background: var(--panel-solid); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; width: 100%; max-width: 1200px; margin: 0 auto; }
-.wa-list { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--line); }
+.wa { flex: 1; min-height: 0; display: grid; grid-template-columns: 340px minmax(0, 1fr); background: var(--panel-solid); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; width: 100%; max-width: 1200px; margin: 0 auto; }
+.wa-list { display: flex; flex-direction: column; min-height: 0; min-width: 0; border-right: 1px solid var(--line); }
 .wa-list-head { padding: 14px 14px 10px; display: flex; flex-direction: column; gap: 10px; border-bottom: 1px solid var(--line); }
 .wa-list-head h2 { margin: 0; font-size: 19px; }
 .wa-items { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
@@ -469,7 +469,7 @@ body.no-office #phaser-container { visibility: hidden; }
 .wa-send { flex: none; width: 44px; height: 44px; border-radius: 50%; border: none; background: #22c55e; color: #052e16; font-size: 18px; cursor: pointer; }
 .wa-send:disabled { opacity: 0.4; cursor: default; }
 @media (max-width: 767px) {
-  .wa { grid-template-columns: 1fr; border-radius: 16px; }
+  .wa { grid-template-columns: minmax(0, 1fr); border-radius: 16px; }
   .wa.has-open .wa-list { display: none; }
   .wa:not(.has-open) .wa-thread { display: none; }
   .wa-back { display: grid; width: 32px; border: none; background: none; }
@@ -477,12 +477,13 @@ body.no-office #phaser-container { visibility: hidden; }
 }
 
 /* ── Investigasi (ala Catalyst) ───────────────────────────── */
+.pg > .back { align-self: flex-start; }
 .inv-kicker { font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace; font-size: 10.5px; letter-spacing: 1.4px; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
 .inv-big { margin: 0 0 6px !important; font-size: 22px !important; letter-spacing: -0.4px; display: block !important; }
 .inv-big span { color: var(--muted); }
 .inv-muted { color: var(--muted); font-size: 12.5px; line-height: 1.5; margin: 4px 0 8px; }
 .inv-search { display: flex; gap: 8px; margin-top: 6px; }
-.inv-search .input { flex: 1; text-transform: uppercase; }
+.inv-search .input { flex: 1; min-width: 0; }
 .inv-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .inv-chips .chip { cursor: pointer; font-size: 11.5px; padding: 4px 10px; }
 .inv-score { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
@@ -514,8 +515,13 @@ body.no-office #phaser-container { visibility: hidden; }
 .inv-summary { font-size: 15px; line-height: 1.5; margin: 12px 0 0; color: #e2e8f0; }
 .inv-map-head { display: grid; grid-template-columns: 1fr 18px 1fr 18px 1fr; font-family: ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: 1px; color: var(--muted); text-transform: uppercase; margin-bottom: 6px; }
 .inv-map-head span:nth-child(2) { grid-column: 3; } .inv-map-head span:nth-child(3) { grid-column: 5; }
-.inv-map { display: grid; grid-template-columns: 1fr 18px 1fr 18px 1fr; align-items: stretch; margin-bottom: 10px; opacity: 0.6; }
-.inv-map.main { opacity: 1; }
+.inv-map { display: grid; grid-template-columns: 1fr 18px 1fr 18px 1fr; align-items: stretch; margin-bottom: 10px; }
+.inv-map:not(.main) .inv-node { background: rgba(255, 255, 255, 0.05); color: var(--text); border-color: var(--line); }
+.inv-map:not(.main) .inv-node small, .inv-map:not(.main) .inv-node-foot { color: var(--muted); }
+.inv-map:not(.main) .inv-node .inv-src a { background: rgba(124, 131, 255, 0.2); color: #a5b4fc; }
+.inv-map:not(.main) .inv-node .kyk.sedang { background: rgba(251, 191, 36, 0.15); color: #fde68a; }
+.inv-map:not(.main) .inv-node .kyk.rendah { background: rgba(148, 163, 184, 0.15); color: #cbd5e1; }
+.inv-map:not(.main) .inv-node .kyk.tinggi { background: rgba(74, 222, 128, 0.15); color: #86efac; }
 .inv-node { background: #f3f1ea; color: #111827; border-radius: 10px; padding: 9px 10px; display: flex; flex-direction: column; gap: 4px; border: 1.5px solid transparent; min-width: 0; }
 .inv-map.main .inv-node { border-color: #111827; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35); }
 .inv-node small { font-size: 10px; color: #6b7280; }
