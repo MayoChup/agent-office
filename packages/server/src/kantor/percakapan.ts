@@ -21,7 +21,10 @@ const BATAS_WAKTU = 6 * 60_000;
 /** Batas harian pemakaian model berbayar ("berat") supaya tagihan tidak kebablasan. */
 export class KuotaBerat {
     private file: string;
-    constructor(dataDir: string, public model: string, public perHari: number) { this.file = path.join(dataDir, 'kantor-berat.json'); }
+    constructor(dataDir: string, public model: string, public perHari: number) {
+        try { fs.mkdirSync(dataDir, { recursive: true }); } catch { /* */ }
+        this.file = path.join(dataDir, 'kantor-berat.json');
+    }
     private hari() { return new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10); }
     terpakai(): number {
         try { const j = JSON.parse(fs.readFileSync(this.file, 'utf8')); return j.hari === this.hari() ? Number(j.n) || 0 : 0; } catch { return 0; }
