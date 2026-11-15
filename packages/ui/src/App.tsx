@@ -49,6 +49,7 @@ export function App() {
     useEffect(() => {
         try { localStorage.setItem(LS_PAGE, page); } catch { /* */ }
         if (location.hash !== `#${page}`) history.replaceState(null, '', `#${page}`);
+        document.body.classList.toggle('no-office', page !== 'kantor');
         eventBus.dispatchEvent(new CustomEvent('page-change', { detail: { page } }));
         if (page !== 'kantor') setAgentId(null);
     }, [page]);
