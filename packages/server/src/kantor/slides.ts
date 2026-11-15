@@ -71,11 +71,12 @@ export class Slides {
 
     async cek(): Promise<string> {
         try {
-            // Presentasi yang tidak ada → 404 berarti API aktif; 403 SERVICE_DISABLED berarti belum.
+            // Presentasi yang tidak ada → 400/404 berarti API aktif; 403 SERVICE_DISABLED berarti belum.
             await this.g.call(`${API}/tidak-ada-${Date.now()}`);
             return '✅ Google Slides siap.';
         } catch (e: any) {
-            if (/Google API 404/.test(String(e?.message))) return '✅ Google Slides siap.';
+            // 400/404 untuk id palsu = API aktif & izin diterima.
+            if (/Google API (400|404)/.test(String(e?.message))) return '✅ Google Slides siap.';
             throw friendly(e);
         }
     }
