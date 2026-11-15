@@ -111,11 +111,17 @@ export function sessionWib(utcMs = Date.now()): string {
 // ───────────────────────── Data harga (Yahoo, gratis, tertunda ±15 menit) ─────────────────────────
 
 import { yahooChart } from './screener';
+import { hargaHarian } from './harga';
 
 export interface Candle { t: number; o: number; h: number; l: number; c: number }
 
 export async function fetchDaily(symbol: string): Promise<{ candles: Candle[]; price: number }> {
-    const r = await yahooChart(symbol, '6mo', '1d');
+    let r: any;
+    try { r = await yahooChart(symbol, '6mo', '1d'); } catch {
+        const h = await hargaHarian(symbol);
+        const rows = h.rows.slice(-130);
+        return { candles: rows.map((x) => ({ t: Date.parse(x.t + 'T00:00:00Z') / 1000, o: x.o, h: x.h, l: x.l, c: x.c })), price: rows[rows.length - 1].c };
+    }
     if (!r) throw new Error(`Saham ${symbol} tidak ditemukan`);
     const q = r.indicators?.quote?.[0] || {};
     const candles: Candle[] = (r.timestamp || []).map((t: number, i: number) => ({ t, o: q.open?.[i], h: q.high?.[i], l: q.low?.[i], c: q.close?.[i] }))
@@ -126,8 +132,8 @@ export async function fetchDaily(symbol: string): Promise<{ candles: Candle[]; p
 }
 
 export async function fetchPrice(symbol: string): Promise<number> {
-    const r = await yahooChart(symbol, '1d', '1m');
-    const p = Number(r?.meta?.regularMarketPrice);
+    let p = 0;
+    try { const r = await yahooChart(symbol, '1d', '1m'); p = Number(r?.meta?.regularMarketPrice); } catch { const h = await hargaHarian(symbol); p = h.rows[h.rows.length - 1].c; }
     if (!p) throw new Error(`Harga ${symbol} kosong`);
     return p;
 }

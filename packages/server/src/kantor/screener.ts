@@ -10,45 +10,8 @@ import { Ekstra, Berita, Orang, ekstra, skorTeknikal, skorFundamental, skorBerit
  *    breakout 52 minggu, lonjakan volume.
  */
 
-// Yahoo sering menolak (HTTP 429) permintaan dengan User-Agent yang tidak mirip browser, terutama dari IP server.
-const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
-const tidur = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-/** Grafik Yahoo dengan 2 host cadangan + coba ulang saat dibatasi (429). */
-export async function yahooChart(s: string, range: string, interval: string): Promise<any> {
-    let galat = '';
-    for (let t = 0; t < 4; t++) {
-        const host = t % 2 === 0 ? 'query1' : 'query2';
-        try {
-            const res = await fetch(`https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(s)}?range=${range}&interval=${interval}&includePrePost=false`, { headers: { 'User-Agent': UA, Accept: 'application/json' }, signal: AbortSignal.timeout(15_000) });
-            if (res.status === 404) throw Object.assign(new Error(`Saham ${s} tidak ditemukan`), { tetap: true });
-            if (!res.ok) { galat = res.status === 429 ? 'Yahoo membatasi permintaan (HTTP 429)' : `Yahoo HTTP ${res.status}`; await tidur(800 * (t + 1)); continue; }
-            const r = (await res.json() as any)?.chart?.result?.[0];
-            if (!r) throw Object.assign(new Error(`Saham ${s} tidak ditemukan`), { tetap: true });
-            return r;
-        } catch (e: any) {
-            if (e?.tetap) throw e;
-            galat = e?.name === 'TimeoutError' ? 'Yahoo tidak menjawab (timeout)' : `Yahoo tidak bisa dihubungi (${e?.cause?.code || e?.message || e})`;
-            await tidur(500 * (t + 1));
-        }
-    }
-    throw new Error(galat || 'Yahoo gagal');
-}
-
-/** Cadangan harga harian: Stooq (CSV gratis, tanpa kunci). */
-async function stooqHarian(s: string) {
-    if (s.startsWith('^')) throw new Error('indeks tidak tersedia di Stooq');
-    const res = await fetch(`https://stooq.com/q/d/l/?s=${encodeURIComponent(s.toLowerCase())}.us&i=d`, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(15_000) });
-    if (!res.ok) throw new Error(`Stooq HTTP ${res.status}`);
-    const lines = (await res.text()).trim().split(/\r?\n/);
-    if (!/^Date,/i.test(lines[0] || '')) throw new Error('Stooq: tidak ada data');
-    const rows = lines.slice(1).map((l) => l.split(',')).filter((c) => c.length >= 5).slice(-260)
-        .map((c) => ({ t: c[0], o: +c[1], h: +c[2], l: +c[3], c: +c[4], v: +(c[5] || 0) })).filter((x) => [x.o, x.h, x.l, x.c].every(Number.isFinite));
-    return rows;
-}
-
-/** Galat terakhir saat mengambil harga — ditampilkan di layar supaya tidak "diam-diam kosong". */
-export const statusHarga = { galat: '', sumber: 'Yahoo' as 'Yahoo' | 'Stooq' };
+import { UA, yahooChart, hargaHarian, statusHarga } from './harga';
+export { yahooChart, statusHarga };
 const SEC_UA = 'KantorRico research kantor-rico@users.noreply.github.com';
 const SP500_CSV = 'https://raw.githubusercontent.com/datasets/s-and-p-500-companies/main/data/constituents.csv';
 
@@ -156,18 +119,7 @@ export function analisis(c: number[], v: number[]) {
 
 /* ── Pengambil data ─────────────────────────────────────────── */
 async function harian(s: string) {
-    let rows: Array<{ t: string; o: number; h: number; l: number; c: number; v: number }> = [];
-    let nama = '';
-    try {
-        const r = await yahooChart(s, '1y', '1d');
-        const q = r?.indicators?.quote?.[0] || {};
-        rows = (r?.timestamp || []).map((t: number, i: number) => ({ t: new Date(t * 1000).toISOString().slice(0, 10), o: q.open?.[i], h: q.high?.[i], l: q.low?.[i], c: q.close?.[i], v: q.volume?.[i] || 0 }))
-            .filter((x: any) => [x.o, x.h, x.l, x.c].every((y) => Number.isFinite(y)));
-        nama = String(r?.meta?.longName || r?.meta?.shortName || '');
-        statusHarga.sumber = 'Yahoo';
-    } catch (e: any) {
-        try { rows = await stooqHarian(s); statusHarga.sumber = 'Stooq'; } catch (e2: any) { throw new Error(`${e?.message || e}; cadangan Stooq juga gagal (${e2?.cause?.code || e2?.message || e2})`); }
-    }
+    const { rows, nama } = await hargaHarian(s);
     if (rows.length < 60) throw new Error('data kurang');
     const col = (k: string) => rows.map((x: any) => x[k]) as number[];
     return { tgl: col('t') as unknown as string[], o: col('o'), h: col('h'), l: col('l'), c: col('c'), v: col('v'), nama };
@@ -482,7 +434,13 @@ export async function ambilCandle(simbol: string, rentang: string) {
     const key = `${s}|${r.range}|${r.interval}`;
     const hit = candleCache.get(key);
     if (hit && Date.now() - hit.at < 180_000) return { ...hit.data, tampil: r.tampil };
-    const j: any = await yahooChart(s, r.range, r.interval);
+    let j: any;
+    try { j = await yahooChart(s, r.range, r.interval); } catch (e: any) {
+        if (!r.harian || r.interval !== '1d') throw e;
+        // Yahoo diblokir → pakai harga harian dari sumber cadangan.
+        const h = await hargaHarian(s);
+        j = { meta: { currency: 'USD', longName: h.nama || s }, timestamp: h.rows.map((x) => Date.parse(x.t + 'T00:00:00Z') / 1000), indicators: { quote: [{ open: h.rows.map((x) => x.o), high: h.rows.map((x) => x.h), low: h.rows.map((x) => x.l), close: h.rows.map((x) => x.c), volume: h.rows.map((x) => x.v) }] } };
+    }
     const q = j.indicators?.quote?.[0] || {};
     const candles = (j.timestamp || []).map((t: number, i: number) => ({
         t: r.harian ? new Date((t + (j.meta?.gmtoffset || 0)) * 1000).toISOString().slice(0, 10) : t + 7 * 3600, // intraday ditampilkan dalam WIB

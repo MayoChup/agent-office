@@ -28,12 +28,16 @@ export function Nav({ page, panel, onGo }: { page: PageKey; panel: SidePanel; on
     const activeTasks = tasks.filter((t) => t.status === 'in_progress' || t.status === 'blocked').length;
     const sub = useSubNavState();
     const [laci, setLaci] = useState(false);
+    const [kecil, setKecilS] = useState(() => { try { return localStorage.getItem('kantor:menu-kecil') === '1'; } catch { return false; } });
+    const setKecil = (v: boolean) => { setKecilS(v); try { localStorage.setItem('kantor:menu-kecil', v ? '1' : '0'); } catch { /* */ } };
+    useEffect(() => { document.body.classList.toggle('menu-kecil', kecil); }, [kecil]);
     const [more, setMore] = useState(false);
     const badge = (k: string) => (k === 'tugas' ? activeTasks : 0);
     const isActive = (k: string) => (k === 'org' || k === 'activity' ? page === 'kantor' && panel === k : page === k && !(k === 'kantor' && panel));
 
     useEffect(() => {
-        const buka = () => setLaci(true);
+        // ☰: di HP membuka laci menu, di laptop memperkecil/melebarkan menu samping.
+        const buka = () => { if (window.innerWidth >= 768) setKecilS((k) => { const v = !k; try { localStorage.setItem('kantor:menu-kecil', v ? '1' : '0'); } catch { /* */ } return v; }); else setLaci(true); };
         eventBus.addEventListener('buka-menu', buka);
         return () => eventBus.removeEventListener('buka-menu', buka);
     }, []);
@@ -53,15 +57,26 @@ export function Nav({ page, panel, onGo }: { page: PageKey; panel: SidePanel; on
 
     return (
         <>
-            {/* Laptop: menu samping seperti biasa */}
-            <nav className="dock dock-desk interactive">
-                {ALL.map((it) => (
-                    <button key={it.key} className={`dock-btn ${isActive(it.key) ? 'active' : ''}`} onClick={() => onGo(it.key)}>
-                        <span className="ico">{it.ico}</span>
-                        {it.label}
-                        {badge(it.key) > 0 && <span className="badge">{N(badge(it.key))}</span>}
-                    </button>
+            {/* Laptop: menu samping lebar (bisa diperkecil jadi ikon saja lewat ☰) */}
+            <nav className={`sidebar interactive ${kecil ? 'kecil' : ''}`}>
+                {LACI.map((it) => (
+                    <React.Fragment key={it.key}>
+                        <button className={`sb-item ${isActive(it.key) ? 'on' : ''}`} onClick={() => onGo(it.key)} title={it.label}>
+                            <span className="sb-ico">{it.ico}</span>
+                            <span className="sb-t"><b>{it.label}</b>{it.ket && <small>{it.ket}</small>}</span>
+                            {badge(it.key) > 0 && <span className="sb-badge">{N(badge(it.key))}</span>}
+                        </button>
+                        {it.key === 'kantor' && page === 'kantor' && ALL.filter((x) => x.key === 'org' || x.key === 'activity').map((x) => (
+                            <button key={x.key} className={`sb-item sb-anak ${isActive(x.key) ? 'on' : ''}`} onClick={() => onGo(x.key)} title={x.label}>
+                                <span className="sb-ico">{x.ico}</span><span className="sb-t"><b>{x.label}</b></span>
+                            </button>
+                        ))}
+                    </React.Fragment>
                 ))}
+                <span className="sb-spacer" />
+                <button className="sb-item sb-kecilkan" onClick={() => setKecil(!kecil)} title={kecil ? 'Lebarkan menu' : 'Perkecil menu'}>
+                    <span className="sb-ico">{kecil ? '»' : '«'}</span><span className="sb-t"><b>Perkecil menu</b></span>
+                </button>
             </nav>
 
             {/* HP: menu bawah = bagian-bagian dari halaman yang sedang dibuka */}

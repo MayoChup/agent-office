@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { cekHargaCli } from './kantor/harga';
 import express from 'express';
 import { Server, matchMaker } from 'colyseus';
 import { createServer } from 'http';
@@ -43,7 +44,10 @@ const kuotaBerat = new KuotaBerat(config.dataDir, config.berat.model, config.ber
 // Mode uji: `node kantor-server.js --uji-pencatat` → tampilkan transaksi yang AKAN dicatat, tanpa menulis apa pun.
 const tradingDeskDir = process.env.TRADER_DESK || path.join(os.homedir(), 'trader-desk');
 const tradingArg = process.argv.indexOf('--trading');
-if (tradingArg >= 0) {
+if (process.argv.includes('--cek-harga')) {
+    const i = process.argv.indexOf('--cek-harga');
+    cekHargaCli((process.argv[i + 1] || 'AAPL').toUpperCase()).then(() => process.exit(0));
+} else if (tradingArg >= 0) {
     // Dipanggil oleh Hermes (AI) atau pemilik: node kantor-server.js --trading <perintah> ...
     const desk = new TradingDesk(config.dataDir, telegramNotifier(config.hermesHome), tradingDeskDir);
     tradingCli(desk, process.argv.slice(tradingArg + 1))

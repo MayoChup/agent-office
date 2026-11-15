@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { extractJson } from './freeLlm';
 import { yahooChart } from './screener';
+import { hargaHarian } from './harga';
 
 /**
  * Investigasi pergerakan saham (ala "Catalyst"): kalau saham di watchlist/posisi bergerak tajam,
@@ -43,7 +44,8 @@ const SEC_ITEMS: Record<string, string> = {
 /* ── Pengambil data ─────────────────────────────────────────── */
 interface Hari { tgl: string; c: number; v: number }
 export async function ambilHarian(simbol: string): Promise<Hari[]> {
-    const r: any = await yahooChart(simbol, '3mo', '1d');
+    let r: any;
+    try { r = await yahooChart(simbol, '3mo', '1d'); } catch { const h = await hargaHarian(simbol); return h.rows.slice(-66).map((x) => ({ tgl: x.t, c: x.c, v: x.v })); }
     const q = r?.indicators?.quote?.[0] || {};
     return (r?.timestamp || []).map((t: number, i: number) => ({ tgl: new Date(t * 1000).toISOString().slice(0, 10), c: q.close?.[i], v: q.volume?.[i] || 0 }))
         .filter((h: Hari) => Number.isFinite(h.c));
