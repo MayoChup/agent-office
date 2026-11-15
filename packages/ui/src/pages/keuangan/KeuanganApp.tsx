@@ -2,12 +2,13 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSubNav } from '../../kantor/subnav';
 import { useApi } from '../../kantor/api';
 import { apiGet, apiPost } from '../../kantor/connection';
+import { ImporMutasi } from './ImporMutasi';
 import { RichText } from '../../components/common/RichText';
 import { Batang, Donat } from './Grafik';
 import { Tx, rp, rpk, ikon, warnaDari, periode, dalam, keluar, masuk, sum, kelompok, hariIni, tglPanjang, tglPendek } from './util';
 
 interface Report { transaksi: Tx[]; sheetUrl: string; pencatat: { lastRun: number; lastError: string } }
-interface Anggaran { mulai: number; batas: Record<string, number>; akun: string[]; kategori: string[] }
+interface Anggaran { mulai: number; batas: Record<string, number>; akun: string[]; kategori: string[]; saldo?: Record<string, { nilai: number; tanggal: string; sumber: string }> }
 type Tab = 'beranda' | 'pengeluaran' | 'anggaran' | 'transaksi' | 'chat';
 const TABS: Array<{ k: Tab; ico: string; label: string }> = [
     { k: 'beranda', ico: '🏠', label: 'Beranda' }, { k: 'pengeluaran', ico: '🛒', label: 'Pengeluaran' }, { k: 'anggaran', ico: '🥧', label: 'Anggaran' },
@@ -22,6 +23,8 @@ export function KeuanganApp() {
     useSubNav(TABS.map((t) => ({ k: t.k, ico: t.ico, label: t.k === 'chat' ? 'Catat' : t.k === 'pengeluaran' ? 'Keluar' : t.label })), tab, (k) => { setTab(k as Tab); if (k !== 'transaksi') setFilter({}); });
     const [geser, setGeser] = useState(0);
     const [tambah, setTambah] = useState(false);
+    const [ubah, setUbah] = useState<Tx | null>(null);
+    const [impor, setImpor] = useState(false);
     const [detail, setDetail] = useState<Tx | null>(null);
     const [filter, setFilter] = useState<{ jenis?: string; kat?: string; akun?: string; pihak?: string }>({});
     const tx = rep.data?.transaksi || [];
@@ -43,6 +46,7 @@ export function KeuanganApp() {
                         <button onClick={() => setGeser(Math.min(0, geser + 1))} disabled={geser >= 0} aria-label="Periode berikutnya">›</button>
                     </div>
                     <div className="k-head-act">
+                        <button className="k-pill" onClick={() => setImpor(true)} title="Impor PDF mutasi rekening">📥 Mutasi PDF</button>
                         {rep.data && <a className="k-pill" href={rep.data.sheetUrl} target="_blank" rel="noreferrer">📄 Sheets</a>}
                         <button className="k-pill" onClick={muat} disabled={rep.loading}>{rep.loading ? '…' : '↻'}</button>
                     </div>
@@ -62,7 +66,7 @@ export function KeuanganApp() {
             {rep.error && <div className="error">Data keuangan belum bisa dibaca: {rep.error}</div>}
             {!rep.data && !rep.error && <div className="fin-empty">Memuat…</div>}
 
-            {rep.data && tab === 'beranda' && <Beranda tx={tx} p={p} mulai={mulai} ang={ang.data} onTx={setDetail} go={setTab} onTambah={() => setTambah(true)} lihat={bukaTransaksi} />}
+            {rep.data && tab === 'beranda' && <Beranda tx={tx} p={p} mulai={mulai} ang={ang.data} onTx={setDetail} go={setTab} onTambah={() => setTambah(true)} lihat={bukaTransaksi} onImpor={() => setImpor(true)} />}
             {rep.data && tab === 'pengeluaran' && <Pengeluaran tx={tx} mulai={mulai} geser={geser} lihat={bukaTransaksi} />}
             {rep.data && tab === 'anggaran' && <AnggaranView tx={diP} p={p} ang={ang.data} simpan={async (x) => { await apiPost('/api/kantor/keuangan/anggaran', x); ang.reload(); }} lihat={bukaTransaksi} />}
             {rep.data && tab === 'transaksi' && <Transaksi tx={tx} filter={filter} setFilter={setFilter} onTx={setDetail} />}
@@ -70,13 +74,17 @@ export function KeuanganApp() {
 
             <button className="k-fab" onClick={() => setTambah(true)} aria-label="Tambah transaksi">＋</button>
             {tambah && <Tambah ang={ang.data} onClose={() => setTambah(false)} onSaved={() => { setTambah(false); muat(); }} />}
-            {detail && <Detail t={detail} all={tx} mulai={mulai} onClose={() => setDetail(null)} lihat={(f) => { setDetail(null); bukaTransaksi(f); }} />}
+            {detail && <Detail t={detail} all={tx} mulai={mulai} onClose={() => setDetail(null)} lihat={(f) => { setDetail(null); bukaTransaksi(f); }}
+                onUbah={() => { setUbah(detail); setDetail(null); }} onHapus={async () => { await apiPost('/api/kantor/keuangan/hapus', { ids: [detail.id] }); setDetail(null); muat(); }} />}
+            {ubah && <Tambah ang={ang.data} id={ubah.id} awal={{ jenis: ubah.jenis, nominal: ubah.n, akun: ubah.bank, kategori: ubah.kat, pihak: ubah.pihak, keterangan: ubah.ket, tanggal: ubah.d }} onClose={() => setUbah(null)} onSaved={() => { setUbah(null); muat(); }} />}
+            {impor && <ImporMutasi akun={ang.data?.akun || []} onClose={() => setImpor(false)} onSelesai={() => { muat(); ang.reload(); }} />}
         </div>
     );
 }
 
 /* ── Beranda ─────────────────────────────────────────────── */
-function Beranda({ tx, p, mulai, ang, onTx, go, onTambah, lihat }: { tx: Tx[]; p: ReturnType<typeof periode>; mulai: number; ang: Anggaran | null; onTx: (t: Tx) => void; go: (t: Tab) => void; onTambah: () => void; lihat: (f: any) => void }) {
+function Beranda({ tx, p, mulai, ang, onTx, go, onTambah, lihat, onImpor }: { tx: Tx[]; p: ReturnType<typeof periode>; mulai: number; ang: Anggaran | null; onTx: (t: Tx) => void; go: (t: Tab) => void; onTambah: () => void; lihat: (f: any) => void; onImpor: () => void }) {
+    const saldo = Object.entries(ang?.saldo || {}).map(([a, s]) => ({ a, s, kini: s.nilai + tx.filter((t) => t.bank.toLowerCase() === a.toLowerCase() && t.d > s.tanggal).reduce((x, t) => x + (t.jenis === 'Masuk' ? t.n : -t.n), 0) }));
     const today = hariIni();
     const hariIniKel = sum(tx.filter((t) => t.d === today && keluar(t)));
     const totalBatas = Object.values(ang?.batas || {}).reduce((a, b) => a + b, 0);
@@ -96,9 +104,17 @@ function Beranda({ tx, p, mulai, ang, onTx, go, onTambah, lihat }: { tx: Tx[]; p
                     <button onClick={() => go('chat')}><span className="q b">💬</span>Catat lewat chat</button>
                     <button onClick={onTambah}><span className="q g">✍️</span>Tambah manual</button>
                     <button onClick={() => go('pengeluaran')}><span className="q o">📊</span>Laporan</button>
-                    <button onClick={() => go('anggaran')}><span className="q p">🎯</span>Anggaran</button>
+                    <button onClick={onImpor}><span className="q p">📥</span>Impor mutasi</button>
                 </div>
             </section>
+            {saldo.length > 0 && (
+                <section className="k-card k-span2">
+                    <div className="k-card-h"><h3>Saldo rekening</h3><small>patokan dari mutasi PDF + transaksi sesudahnya</small></div>
+                    <div className="k-saldo-akun">{saldo.map((x) => (
+                        <button key={x.a} onClick={() => lihat({ akun: x.a })}><span>🏦 {x.a}</span><b className="mono">{rp(x.kini)}</b><small>per mutasi {tglPendek(x.s.tanggal)}: {rp(x.s.nilai)}</small></button>
+                    ))}</div>
+                </section>
+            )}
             <section className="k-card k-today">
                 <div><small>Pengeluaran hari ini</small><b className="mono">{rp(hariIniKel)}</b></div>
                 {totalBatas > 0 ? <p>{hariIniKel <= jatah ? '🤩 Aman!' : '😬 Melebihi jatah.'} Jatah harian sampai {tglPendek(p.end)}: <b className="mono">{rp(jatah)}</b></p> : <p>Atur anggaran supaya tahu jatah harian. <button className="k-link" onClick={() => go('anggaran')}>Atur →</button></p>}
@@ -249,7 +265,9 @@ function Transaksi({ tx, filter, setFilter, onTx }: { tx: Tx[]; filter: any; set
 }
 
 /* ── Detail transaksi (dengan grafik) ────────────────────── */
-function Detail({ t, all, mulai, onClose, lihat }: { t: Tx; all: Tx[]; mulai: number; onClose: () => void; lihat: (f: any) => void }) {
+function Detail({ t, all, mulai, onClose, lihat, onUbah, onHapus }: { t: Tx; all: Tx[]; mulai: number; onClose: () => void; lihat: (f: any) => void; onUbah: () => void; onHapus: () => Promise<void> }) {
+    const [hapusErr, setHapusErr] = useState('');
+    const [busy, setBusy] = useState(false);
     const pers = Array.from({ length: 6 }, (_, i) => periode(mulai, i - 5, t.d));
     const sama = (x: Tx) => (t.pihak ? x.pihak === t.pihak : x.kat === t.kat) && x.jenis === t.jenis;
     const seri = pers.map((p) => ({ label: p.pendek, v: sum(all.filter((x) => dalam(x, p) && sama(x))) }));
@@ -271,7 +289,7 @@ function Detail({ t, all, mulai, onClose, lihat }: { t: Tx; all: Tx[]; mulai: nu
                     <div><small>Akun</small><b>{t.bank}</b></div>
                     <div><small>Merchant / pihak</small><b>{t.pihak || '–'}</b></div>
                     <div><small>Catatan</small><b>{t.ket || '–'}</b></div>
-                    <div><small>Sumber</small><b>{t.status === 'Manual' ? 'Dicatat manual' : 'Email bank (otomatis)'}</b></div>
+                    <div><small>Sumber</small><b>{t.status === 'Manual' ? 'Dicatat manual' : t.status === 'Mutasi' ? 'Mutasi rekening (PDF)' : 'Email bank (otomatis)'}</b></div>
                     <div><small>Jenis</small><b>{t.jenis}</b></div>
                 </div>
                 <h4>{t.pihak ? `Di ${t.pihak}` : `Kategori ${t.kat}`} per periode <small>({kali}× total)</small></h4>
@@ -283,13 +301,24 @@ function Detail({ t, all, mulai, onClose, lihat }: { t: Tx; all: Tx[]; mulai: nu
                     {t.pihak && <button className="btn" onClick={() => lihat({ pihak: t.pihak })}>Semua di {t.pihak}</button>}
                     <button className="btn" onClick={() => lihat({ kat: t.kat })}>Semua {t.kat}</button>
                 </div>
+                {t.id && (
+                    <div className="k-det-act">
+                        <button className="btn" onClick={onUbah}>✏️ Ubah</button>
+                        <button className="btn danger" disabled={busy} onClick={async () => {
+                            if (!confirm(`Hapus transaksi ${rp(t.n)} (${t.pihak || t.kat}, ${tglPendek(t.d)})? Salinannya tetap disimpan di VPS.`)) return;
+                            setBusy(true); setHapusErr('');
+                            try { await onHapus(); } catch (e: any) { setHapusErr(String(e?.message || e)); setBusy(false); }
+                        }}>{busy ? 'Menghapus…' : '🗑 Hapus'}</button>
+                    </div>
+                )}
+                {hapusErr && <div className="error">{hapusErr}</div>}
             </div>
         </div>
     );
 }
 
 /* ── Tambah manual ───────────────────────────────────────── */
-function Tambah({ ang, onClose, onSaved, awal }: { ang: Anggaran | null; onClose: () => void; onSaved: () => void; awal?: any }) {
+function Tambah({ ang, onClose, onSaved, awal, id }: { ang: Anggaran | null; onClose: () => void; onSaved: () => void; awal?: any; id?: string }) {
     const [jenis, setJenis] = useState<string>(awal?.jenis || 'Keluar');
     const [n, setN] = useState<string>(awal?.nominal ? String(awal.nominal) : '');
     const [akun, setAkun] = useState<string>(awal?.akun || ang?.akun[0] || 'Cash');
@@ -302,23 +331,24 @@ function Tambah({ ang, onClose, onSaved, awal }: { ang: Anggaran | null; onClose
     const nominal = Number(n.replace(/\D/g, ''));
     const simpan = async () => {
         setBusy(true); setErr('');
-        try { await apiPost('/api/kantor/keuangan/tambah', { jenis, nominal, akun, kategori: jenis === 'Masuk' ? 'Pendapatan' : kat, pihak, keterangan: ket, tanggal: tgl }); onSaved(); }
+        const isi = { jenis, nominal, akun, kategori: jenis === 'Masuk' ? (id ? kat : 'Pendapatan') : kat, pihak, keterangan: ket, tanggal: tgl };
+        try { await apiPost(id ? '/api/kantor/keuangan/ubah' : '/api/kantor/keuangan/tambah', id ? { id, ...isi } : isi); onSaved(); }
         catch (e: any) { setErr(String(e.message || e)); }
         setBusy(false);
     };
     return (
         <div className="k-sheet" onClick={onClose}>
             <div className="k-sheet-in" onClick={(e) => e.stopPropagation()}>
-                <div className="k-sheet-h"><b>Tambah transaksi</b><button onClick={onClose}>✕</button></div>
+                <div className="k-sheet-h"><b>{id ? 'Ubah transaksi' : 'Tambah transaksi'}</b><button onClick={onClose}>✕</button></div>
                 <div className="k-seg full">{[['Keluar', 'Pengeluaran'], ['Masuk', 'Pemasukan'], ['Antar Rekening', 'Transfer']].map(([k, l]) => <button key={k} className={jenis === k ? 'on' : ''} onClick={() => setJenis(k)}>{l}</button>)}</div>
                 <label className="k-amount"><span>Rp</span><input inputMode="numeric" autoFocus placeholder="0" value={nominal ? nominal.toLocaleString('id-ID') : ''} onChange={(e) => setN(e.target.value)} /></label>
                 <input className="input" type="date" value={tgl} max={hariIni()} onChange={(e) => setTgl(e.target.value)} />
-                <div className="k-akun">{(ang?.akun || ['Cash']).map((a) => <button key={a} className={akun === a ? 'on' : ''} onClick={() => setAkun(a)}>{a === 'Cash' ? '💵' : '🏦'} {a}</button>)}</div>
-                {jenis === 'Keluar' && <select className="select" value={kat} onChange={(e) => setKat(e.target.value)}>{(ang?.kategori || ['Lainnya']).map((k) => <option key={k} value={k}>{ikon(k)} {k}</option>)}</select>}
+                <div className="k-akun">{Array.from(new Set([...(ang?.akun || ['Cash']), akun])).map((a) => <button key={a} className={akun === a ? 'on' : ''} onClick={() => setAkun(a)}>{a === 'Cash' ? '💵' : '🏦'} {a}</button>)}</div>
+                {(jenis === 'Keluar' || id) && <select className="select" value={kat} onChange={(e) => setKat(e.target.value)}>{Array.from(new Set([...(ang?.kategori || ['Lainnya']), 'Pendapatan', kat])).map((k) => <option key={k} value={k}>{ikon(k)} {k}</option>)}</select>}
                 <input className="input" placeholder={jenis === 'Masuk' ? 'Dari siapa? (mis. gaji kantor)' : 'Di mana? (mis. warung, Fore Coffee)'} value={pihak} onChange={(e) => setPihak(e.target.value)} />
                 <input className="input" placeholder="Beli apa / catatan (mis. nasi kuning)" value={ket} onChange={(e) => setKet(e.target.value)} />
                 {err && <div className="error">{err}</div>}
-                <button className="btn primary k-save" disabled={!nominal || busy} onClick={simpan}>{busy ? 'Menyimpan…' : 'Simpan ke Google Sheets'}</button>
+                <button className="btn primary k-save" disabled={!nominal || busy} onClick={simpan}>{busy ? 'Menyimpan…' : id ? 'Simpan perubahan' : 'Simpan ke Google Sheets'}</button>
             </div>
         </div>
     );

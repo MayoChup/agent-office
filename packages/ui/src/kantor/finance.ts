@@ -1,5 +1,5 @@
 /** Hitungan laporan keuangan (meniru Dashboard di Google Sheets "Keuangan Rico"). */
-export interface Tx { d: string; t: string; bank: string; jenis: string; n: number; pihak: string; kat: string; ket: string; status: string }
+export interface Tx { id?: string; row?: number; d: string; t: string; bank: string; jenis: string; n: number; pihak: string; kat: string; ket: string; status: string }
 
 export const BANKS = ['Mandiri', 'BCA', 'Krom', 'Jago'];
 export const KAT_COLORS: Record<string, string> = {

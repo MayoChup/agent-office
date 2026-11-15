@@ -7,7 +7,7 @@ import { createServer } from 'http';
 import { OfficeRoom } from './rooms/OfficeRoom';
 import { loadConfig } from './kantor/config';
 import { KantorAuth } from './kantor/auth';
-import { Pencatat, telegramNotifier, ringkasanKeuangan, telegramSebagai, sambilMengetik } from './kantor/pencatat';
+import { Pencatat, telegramNotifier, ringkasanKeuangan, telegramSebagai, sambilMengetik, kategoriOf } from './kantor/pencatat';
 import { TradingDesk, tradingCli, fetchPrice, marketOpen } from './kantor/trading';
 import { Kalender } from './kantor/kalender';
 import { Percakapan, Anggota, KuotaBerat, hermesSekali, jalankan as jalankanHermes } from './kantor/percakapan';
@@ -17,6 +17,7 @@ import { WatchFolder } from './kantor/watchfolder';
 import { Catatan } from './kantor/catatan';
 import { Berkas } from './kantor/berkas';
 import { AnggaranStore, bacaTransaksi } from './kantor/anggaran';
+import { bacaPdf, urai, cocokkan } from './kantor/mutasi';
 import { telegramKirim } from './kantor/telegram';
 import { HermesBridge } from './kantor/hermes';
 import { slidesCli } from './kantor/slides';
@@ -186,6 +187,7 @@ const app = express();
 app.set('trust proxy', true);
 // Catatan & berkas butuh batas lebih besar; route lain tetap 32 KB.
 app.use(['/api/kantor/catatan', '/api/kantor/berkas'], express.json({ limit: '12mb' }));
+app.use('/api/kantor/keuangan/mutasi/terapkan', express.json({ limit: '2mb' }));
 app.use(express.json({ limit: '32kb' }));
 
 // CORS: supaya tampilan di Vercel boleh memanggil server ini.
@@ -195,7 +197,7 @@ app.use('/api/kantor', (req, res, next) => {
     if (origin && (allowAll || config.allowedOrigins.includes(origin))) {
         res.setHeader('Access-Control-Allow-Origin', origin);
         res.setHeader('Vary', 'Origin');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Pdf-Sandi');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     }
     if (req.method === 'OPTIONS') { res.status(204).end(); return; }
@@ -290,6 +292,54 @@ app.post('/api/kantor/keuangan/anggaran', requireToken, (req, res) => { res.json
 app.post('/api/kantor/keuangan/tambah', requireToken, async (req, res) => {
     try { res.json({ ok: true, tx: await pencatat.tambahManual(req.body || {}) }); }
     catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
+});
+const keuErr = (res: express.Response, e: any) => res.status(400).json({ ok: false, error: String(e?.message || e), butuhSandi: Boolean(e?.butuhSandi) });
+app.post('/api/kantor/keuangan/ubah', requireToken, async (req, res) => {
+    try { res.json({ ok: true, ...(await pencatat.ubah(String(req.body?.id || ''), req.body || {})) }); } catch (e) { keuErr(res, e); }
+});
+app.post('/api/kantor/keuangan/hapus', requireToken, async (req, res) => {
+    try {
+        const ids = (Array.isArray(req.body?.ids) ? req.body.ids : [req.body?.id]).map(String).filter(Boolean).slice(0, 500);
+        res.json({ ok: true, ...(await pencatat.hapus(ids, path.join(config.dataDir, 'keuangan-terhapus.json'))) });
+    } catch (e) { keuErr(res, e); }
+});
+// Impor PDF mutasi rekening: dibaca di VPS (tidak dikirim ke AI), dicocokkan dengan yang sudah tercatat, lalu ditinjau Pak Rico.
+app.post('/api/kantor/keuangan/mutasi', requireToken, express.raw({ type: () => true, limit: '20mb' }), async (req, res) => {
+    try {
+        const buf = req.body as Buffer;
+        if (!Buffer.isBuffer(buf) || buf.length < 100 || buf.subarray(0, 5).toString() !== '%PDF-') throw new Error('Berkas bukan PDF.');
+        const akun = String(req.query.akun || '').trim().slice(0, 30);
+        if (!akun) throw new Error('Pilih rekening/akunnya dulu.');
+        const sandi = String(req.headers['x-pdf-sandi'] || '');
+        const { halaman } = await bacaPdf(buf, sandi);
+        const hasil = urai(halaman, akun);
+        const rep = await pencatat.report(true);
+        const c = cocokkan(akun, hasil.transaksi, rep.transaksi, hasil.periode);
+        const rules = config.pencatat.kategori;
+        res.json({
+            ok: true, ...hasil,
+            transaksi: c.hasil.map((t) => ({ ...t, kategori: t.jenis === 'Masuk' ? 'Pendapatan' : kategoriOf(`${t.pihak} ${t.ket}`, rules) })),
+            lebih: c.lebih,
+            saldoTercatat: anggaran.get().saldo?.[akun] || null
+        });
+    } catch (e) { keuErr(res, e); }
+});
+app.post('/api/kantor/keuangan/mutasi/terapkan', requireToken, async (req, res) => {
+    try {
+        const akun = String(req.body?.akun || '').trim().slice(0, 30);
+        if (!akun) throw new Error('Akun kosong');
+        const tambah = (Array.isArray(req.body?.tambah) ? req.body.tambah : []).slice(0, 2000).map((x: any) => ({
+            id: String(x.id || ''), tanggal: x.tanggal, jam: '00:00', akun, jenis: x.jenis === 'Masuk' ? 'Masuk' : x.jenis === 'Antar Rekening' ? 'Antar Rekening' : 'Keluar',
+            nominal: x.nominal, pihak: x.pihak, kategori: x.kategori, keterangan: x.keterangan
+        })).filter((x: any) => /^mutasi-[0-9a-f]{14}$/.test(x.id));
+        const out: any = { ditambah: 0, dihapus: 0 };
+        if (tambah.length) Object.assign(out, await pencatat.tambahBanyak(tambah, 'Mutasi'));
+        const hapus = (Array.isArray(req.body?.hapus) ? req.body.hapus : []).map(String).filter(Boolean).slice(0, 500);
+        if (hapus.length) Object.assign(out, await pencatat.hapus(hapus, path.join(config.dataDir, 'keuangan-terhapus.json')));
+        const sd = req.body?.saldo;
+        if (sd && Number.isFinite(Number(sd.nilai)) && /^\d{4}-\d{2}-\d{2}$/.test(String(sd.tanggal || ''))) { anggaran.setSaldo(akun, Number(sd.nilai), String(sd.tanggal)); out.saldo = true; }
+        res.json({ ok: true, ...out });
+    } catch (e) { keuErr(res, e); }
 });
 app.post('/api/kantor/keuangan/baca', requireToken, async (req, res) => {
     try {

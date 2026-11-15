@@ -3,7 +3,8 @@ import path from 'path';
 import { extractJson } from './freeLlm';
 
 /** Anggaran per kategori + awal periode gajian (mis. tanggal 25), disimpan di VPS. */
-export interface Anggaran { mulai: number; batas: Record<string, number>; akun: string[] }
+export interface Saldo { nilai: number; tanggal: string; sumber: string }
+export interface Anggaran { mulai: number; batas: Record<string, number>; akun: string[]; saldo?: Record<string, Saldo> }
 const BAWAAN: Anggaran = { mulai: 1, batas: {}, akun: ['Cash', 'BCA', 'Mandiri', 'Jago', 'Krom'] };
 
 export class AnggaranStore {
@@ -16,9 +17,16 @@ export class AnggaranStore {
         const batas: Record<string, number> = {};
         for (const [k, v] of Object.entries(x?.batas ?? cur.batas)) { const n = Math.round(Number(v)); if (k && n > 0) batas[String(k).slice(0, 40)] = n; }
         const akun = Array.isArray(x?.akun) ? x.akun.map((a: any) => String(a).trim().slice(0, 30)).filter(Boolean).slice(0, 20) : cur.akun;
-        const out = { mulai, batas, akun };
+        const out: Anggaran = { mulai, batas, akun, saldo: cur.saldo || {} };
         fs.writeFileSync(this.file, JSON.stringify(out, null, 1));
         return out;
+    }
+    /** Saldo patokan per akun (dari mutasi PDF). Saldo sekarang = patokan + transaksi sesudah tanggalnya. */
+    setSaldo(akun: string, nilai: number, tanggal: string, sumber = 'Mutasi PDF') {
+        const cur = this.get();
+        const saldo = { ...(cur.saldo || {}), [akun]: { nilai: Math.round(nilai), tanggal, sumber } };
+        const akunList = cur.akun.includes(akun) ? cur.akun : [...cur.akun, akun].slice(0, 20);
+        fs.writeFileSync(this.file, JSON.stringify({ ...cur, akun: akunList, saldo }, null, 1));
     }
 }
 

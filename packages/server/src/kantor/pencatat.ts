@@ -482,14 +482,91 @@ export class Pencatat {
         return { d: tanggal, t: jam, bank: akun, jenis, n: nominal, pihak: row[5], kat: row[6], ket: row[7], status: 'Manual' };
     }
 
+    /* ── Ubah / hapus / tambah banyak ──────────────────────────────── */
+    private sheetGid: number | null = null;
+    private async gid(): Promise<number> {
+        if (this.sheetGid != null) return this.sheetGid;
+        const meta = await this.g.call(`https://sheets.googleapis.com/v4/spreadsheets/${this.cfg.spreadsheetId}?fields=sheets.properties`);
+        const sh = (meta.sheets || []).find((x: any) => x.properties?.title === this.cfg.sheetName);
+        if (!sh) throw new Error(`Sheet "${this.cfg.sheetName}" tidak ditemukan`);
+        this.sheetGid = Number(sh.properties.sheetId);
+        return this.sheetGid;
+    }
+    /** Cari nomor baris terbaru dari id (kolom I). Baris lama tanpa id memakai "baris-N". */
+    private async cariBaris(id: string): Promise<{ row: number; r: any[] }> {
+        const rows = await this.existingRows();
+        const m = /^baris-(\d+)$/.exec(id);
+        if (m) { const row = Number(m[1]); const r = rows[row - 2]; if (r && !r[8]) return { row, r }; }
+        const i = rows.findIndex((r) => String(r[8] || '') === id);
+        if (i < 0) throw new Error('Transaksi tidak ditemukan (mungkin sudah dihapus/diubah di Sheets). Muat ulang dulu.');
+        return { row: i + 2, r: rows[i] };
+    }
+    private bersih(x: any, lama?: any[]) {
+        const tanggal = /^\d{4}-\d{2}-\d{2}$/.test(x.tanggal || '') ? x.tanggal : (lama ? serialToIso(lama[0]) : new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10));
+        const jam = /^\d{2}:\d{2}$/.test(x.jam || '') ? x.jam : (lama && typeof lama[1] === 'number' ? `${String(Math.floor(lama[1] * 24)).padStart(2, '0')}:${String(Math.round((lama[1] * 1440) % 60)).padStart(2, '0')}` : String(lama?.[1] || '00:00'));
+        const jenis = ['Keluar', 'Masuk', 'Antar Rekening'].includes(x.jenis) ? x.jenis : String(lama?.[3] || 'Keluar');
+        const nominal = Math.round(Number(x.nominal ?? lama?.[4]));
+        if (!(nominal > 0) || nominal > 1e12) throw new Error('Nominal tidak valid');
+        return [tanggal, jam, String(x.akun ?? lama?.[2] ?? 'Cash').slice(0, 30), jenis, nominal, String(x.pihak ?? lama?.[5] ?? '').slice(0, 80), String(x.kategori ?? lama?.[6] ?? 'Lainnya').slice(0, 40), String(x.keterangan ?? lama?.[7] ?? '').slice(0, 200)];
+    }
+    async ubah(id: string, x: any) {
+        const { row, r } = await this.cariBaris(id);
+        const v = this.bersih(x, r);
+        const status = String(r[9] || '') === 'Perlu dicek' ? 'OK' : String(r[9] || 'OK');
+        await this.g.call(`https://sheets.googleapis.com/v4/spreadsheets/${this.cfg.spreadsheetId}/values/${this.sheetRange(`A${row}:J${row}`)}?valueInputOption=USER_ENTERED`, {
+            method: 'PUT', body: JSON.stringify({ values: [[...v, r[8] || '', status]] })
+        });
+        this.reportCache = null;
+        return { diubah: 1 };
+    }
+    /** Hapus beberapa transaksi sekaligus (dari bawah ke atas supaya nomor baris tidak bergeser). Salinannya disimpan dulu. */
+    async hapus(ids: string[], arsipFile: string) {
+        const rows = await this.existingRows();
+        const target: Array<{ row: number; r: any[] }> = [];
+        for (const id of ids) {
+            const m = /^baris-(\d+)$/.exec(id);
+            const i = m ? Number(m[1]) - 2 : rows.findIndex((r) => String(r[8] || '') === id);
+            if (i >= 0 && rows[i] && (!m || !rows[i][8])) target.push({ row: i + 2, r: rows[i] });
+        }
+        if (!target.length) throw new Error('Transaksi tidak ditemukan. Muat ulang dulu.');
+        let arsip: any[] = []; try { arsip = JSON.parse(fs.readFileSync(arsipFile, 'utf8')); } catch { /* baru */ }
+        arsip.push(...target.map((t) => ({ at: Date.now(), baris: t.r })));
+        fs.writeFileSync(arsipFile, JSON.stringify(arsip.slice(-2000)));
+        const gid = await this.gid();
+        target.sort((a, b) => b.row - a.row);
+        await this.g.call(`https://sheets.googleapis.com/v4/spreadsheets/${this.cfg.spreadsheetId}:batchUpdate`, {
+            method: 'POST', body: JSON.stringify({ requests: target.map((t) => ({ deleteDimension: { range: { sheetId: gid, dimension: 'ROWS', startIndex: t.row - 1, endIndex: t.row } } })) })
+        });
+        this.reportCache = null;
+        return { dihapus: target.length };
+    }
+    /** Tambah banyak sekaligus (impor mutasi). id unik mencegah dobel kalau diimpor dua kali. */
+    async tambahBanyak(list: any[], status = 'Mutasi') {
+        if (!this.cfg.spreadsheetId) throw new Error('Pencatat belum diatur (pencatat.spreadsheetId kosong).');
+        const ada = new Set((await this.existingRows()).map((r) => String(r[8] || '')));
+        const values: any[][] = [];
+        for (const x of list) {
+            const id = String(x.id || '').slice(0, 60);
+            if (!id || ada.has(id)) continue;
+            ada.add(id);
+            values.push([...this.bersih(x), id, status]);
+        }
+        if (values.length) await this.g.call(`https://sheets.googleapis.com/v4/spreadsheets/${this.cfg.spreadsheetId}/values/${this.sheetRange('A1:J1')}:append?valueInputOption=USER_ENTERED&insertDataOption=OVERWRITE`, { method: 'POST', body: JSON.stringify({ values }) });
+        this.reportCache = null;
+        return { ditambah: values.length };
+    }
+
     /** Data transaksi untuk laporan keuangan di tampilan kantor (dibaca dari Google Sheets, cache 60 detik). */
     async report(force = false): Promise<any> {
         if (!this.cfg.spreadsheetId) throw new Error('Pencatat belum diatur (pencatat.spreadsheetId kosong).');
         if (!force && this.reportCache && Date.now() - this.reportCache.at < 60_000) return this.reportCache.data;
         const rows = await this.existingRows();
         const tx = rows
-            .filter((r) => r[0] !== '' && r[0] !== undefined)
-            .map((r) => ({
+            .map((r, i) => ({ r, row: i + 2 }))
+            .filter(({ r }) => r[0] !== '' && r[0] !== undefined)
+            .map(({ r, row }) => ({
+                id: String(r[8] || `baris-${row}`),
+                row,
                 d: serialToIso(r[0]),
                 t: typeof r[1] === 'number' ? `${String(Math.floor(r[1] * 24)).padStart(2, '0')}:${String(Math.round((r[1] * 1440) % 60)).padStart(2, '0')}` : String(r[1] || ''),
                 bank: String(r[2] || ''),

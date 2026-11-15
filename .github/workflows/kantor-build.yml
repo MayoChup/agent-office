@@ -63,6 +63,8 @@ jobs:
           bash ../kantor/ci-run.sh "sqlite3 load" node -e "require('sqlite3'); console.log('sqlite3 siap')"
           bash ../kantor/ci-run.sh "whatsapp" npm install @whiskeysockets/baileys@^6.7.16 pino@^9 --omit=dev --no-audit --no-fund
           bash ../kantor/ci-run.sh "whatsapp load" node -e "const B=require('@whiskeysockets/baileys'); if(typeof B.default!=='function') throw new Error('baileys'); require('pino'); console.log('whatsapp siap')"
+          bash ../kantor/ci-run.sh "pdf" npm install pdfjs-dist@6.2.108 --omit=dev --no-audit --no-fund
+          bash ../kantor/ci-run.sh "pdf load" node --input-type=module -e "const p = await import('pdfjs-dist/legacy/build/pdf.mjs'); if (typeof p.getDocument !== 'function') throw new Error('pdfjs'); console.log('pembaca PDF siap')"
           cd ..
           tar czf kantor-virtual-linux-x64.tar.gz -C release .
           ls -lh kantor-virtual-linux-x64.tar.gz
