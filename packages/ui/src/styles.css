@@ -648,7 +648,12 @@ body.no-office #phaser-container { visibility: hidden; }
 
 /* Pita indeks */
 .sb-tape { overflow: hidden; border-radius: 12px; background: #0b1f17; border: 1px solid rgba(34, 197, 94, 0.18); }
-.sb-tape-in { display: flex; gap: 22px; padding: 8px 14px; overflow-x: auto; scrollbar-width: none; white-space: nowrap; }
+.sb-tape-run { display: flex; width: max-content; animation: tapeJalan linear infinite; }
+.sb-tape:hover .sb-tape-run, .sb-tape:active .sb-tape-run { animation-play-state: paused; }
+.sb-tape-in { display: flex; gap: 28px; padding: 8px 14px 8px 0; white-space: nowrap; flex: none; }
+.sb-tape-in > button:first-child { margin-left: 14px; }
+@keyframes tapeJalan { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) { .sb-tape-run { animation-duration: 0s !important; } }
 .sb-tape-in::-webkit-scrollbar { display: none; }
 .sb-tape button { background: none; border: none; color: #e7f5ec; font-size: 12px; cursor: pointer; padding: 0; display: inline-flex; gap: 6px; align-items: baseline; }
 .sb-tape b { font-family: var(--mono); font-weight: 700; }

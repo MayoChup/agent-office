@@ -65,13 +65,19 @@ export function TradingPage() {
 
     return (
         <div className="pg pg-trading">
-            {sc.data && sc.data.pasar.tape.length > 0 && (
-                <div className="sb-tape"><div className="sb-tape-in">
-                    {[...sc.data.pasar.tape, ...sc.data.baris.filter((b) => (data?.watchlist || []).includes(b.s)).map((b) => ({ s: b.s, nama: b.s, harga: b.harga, chg: b.chg1d }))].map((t) => (
-                        <button key={t.s} onClick={() => !t.s.startsWith('^') && buka(t.s)}><b>{t.nama}</b> <span className="mono">{t.harga.toLocaleString('en-US', { maximumFractionDigits: 2 })}</span> <em className={`mono ${t.chg >= 0 ? 'up' : 'down'}`}>{t.chg >= 0 ? '▲' : '▼'} {Math.abs(t.chg).toFixed(2)}%</em></button>
-                    ))}
-                </div></div>
-            )}
+            {sc.data && sc.data.pasar.tape.length > 0 && (() => {
+                const isi = [...sc.data.pasar.tape, ...sc.data.baris.filter((b) => (data?.watchlist || []).includes(b.s)).map((b) => ({ s: b.s, nama: b.s, harga: b.harga, chg: b.chg1d }))];
+                const item = (t: typeof isi[number], k: string) => (
+                    <button key={k} onClick={() => !t.s.startsWith('^') && buka(t.s)}><b>{t.nama}</b> <span className="mono">{t.harga.toLocaleString('en-US', { maximumFractionDigits: 2 })}</span> <em className={`mono ${t.chg >= 0 ? 'up' : 'down'}`}>{t.chg >= 0 ? '▲' : '▼'} {Math.abs(t.chg).toFixed(2)}%</em></button>
+                );
+                // Running text ala papan bursa: isi digandakan supaya putarannya menyambung tanpa jeda.
+                return (
+                    <div className="sb-tape"><div className="sb-tape-run" style={{ animationDuration: `${Math.max(20, isi.length * 4)}s` }}>
+                        <div className="sb-tape-in">{isi.map((t, i) => item(t, `a${i}`))}</div>
+                        <div className="sb-tape-in" aria-hidden="true">{isi.map((t, i) => item(t, `b${i}`))}</div>
+                    </div></div>
+                );
+            })()}
             <nav className="sb-nav">
                 {TABS.map((t) => <button key={t.k} className={tab === t.k && !saham ? 'on' : ''} onClick={() => setTab(t.k)}>{t.label}</button>)}
                 <span className="sb-nav-judul">{TABS.find((t) => t.k === tab)?.label}</span>
