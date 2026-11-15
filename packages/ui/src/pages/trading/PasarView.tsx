@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Baris, FaktorKey, FAKTOR, ScreenerData, kelas, usd, persen, kap, vol } from './types';
+import { Baris, FaktorKey, FAKTOR, ScreenerData, kelas, usd, persen, kap, vol, kapOf } from './types';
 import { Sparkline } from './Sparkline';
 
 type Grup = 'Semua' | 'Beli' | 'Tahan' | 'Jual';
@@ -23,7 +23,7 @@ export function PasarView({ data, faktor, setFaktor, onOpen }: { data: ScreenerD
         const lbl = (b: Baris) => b.skor?.[faktor]?.label || '';
         const out = data.baris.filter((b) => (!qq || b.s.includes(qq) || b.nama.toUpperCase().includes(qq)) && (!sektor || b.sektor === sektor)
             && (grup === 'Semua' || (grup === 'Beli' ? /Beli/.test(lbl(b)) : grup === 'Jual' ? /Jual/.test(lbl(b)) : lbl(b) === 'Tahan')));
-        const val = (b: Baris): number | string => urut.k === 'mcap' ? (b.f?.mcap ?? -1) : urut.k === 'vol' ? (b.vol ?? -1) : urut.k === 'sinyal' ? (b.skor?.[faktor]?.skor ?? -9) : urut.k === 's' ? b.s : urut.k === 'sektor' ? b.sektor : (b as any)[urut.k] ?? -1;
+        const val = (b: Baris): number | string => urut.k === 'mcap' ? (kapOf(b) ?? -1) : urut.k === 'vol' ? (b.vol ?? -1) : urut.k === 'sinyal' ? (b.skor?.[faktor]?.skor ?? -9) : urut.k === 's' ? b.s : urut.k === 'sektor' ? b.sektor : (b as any)[urut.k] ?? -1;
         return out.sort((a, b) => { const x = val(a), y = val(b); const r = typeof x === 'string' ? String(x).localeCompare(String(y)) : (x as number) - (y as number); return urut.asc ? r : -r; });
     }, [data, q, sektor, grup, urut, faktor]);
     const hitung = (g: Grup) => data.baris.filter((b) => { const l = b.skor?.[faktor]?.label || ''; return g === 'Semua' || (g === 'Beli' ? /Beli/.test(l) : g === 'Jual' ? /Jual/.test(l) : l === 'Tahan'); }).length;
@@ -77,7 +77,7 @@ export function PasarView({ data, faktor, setFaktor, onOpen }: { data: ScreenerD
                                         <td className={`num mono ${b.chg1d >= 0 ? 'up' : 'down'}`}>{b.chg1d >= 0 ? '▲' : '▼'} {Math.abs(b.chg1d).toFixed(2)}%</td>
                                         <td className="col-spark">{b.x && <Sparkline data={b.x.spark} w={96} h={28} />}</td>
                                         <td className="num mono">{vol(b.vol)}</td>
-                                        <td className="num mono">{kap(b.f?.mcap)}</td>
+                                        <td className="num mono">{kap(kapOf(b))}</td>
                                         <td className="col-sinyal">{sk ? <span className={`lb ${kelas(sk.label)}`}>{sk.label.toUpperCase()}</span> : <span className="lb lb-none">–</span>}</td>
                                     </tr>
                                 );

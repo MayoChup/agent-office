@@ -26,9 +26,11 @@ export interface Baris {
     s: string; nama: string; sektor: string; harga: number; chg1d: number; chg1m: number; chg3m: number; chg1y: number;
     rsi: number | null; ma50: number | null; ma200: number | null; volX: number; sinyal: Sinyal; f: Fundamental | null;
     x?: Ekstra; vol?: number;
+    industri?: string; mcap?: number | null; // mcap: juta USD (dari Nasdaq; cadangan dari SEC)
 }
+interface StatusLangkah { at: number; n: number; galat: string }
 interface Spark { s: string; tgl: string[]; c: number[]; ma50: (number | null)[]; ma200: (number | null)[] }
-interface Simpanan { baris: Baris[]; teknikalSesi: string; teknikalAt: number; fundamentalAt: number; gagal: string[]; berita?: Record<string, Berita>; beritaAt?: number; orang?: Record<string, Orang>; tape?: Array<{ s: string; nama: string; harga: number; chg: number }>; galatAt?: number }
+interface Simpanan { baris: Baris[]; teknikalSesi: string; teknikalAt: number; fundamentalAt: number; gagal: string[]; berita?: Record<string, Berita>; beritaAt?: number; orang?: Record<string, Orang>; tape?: Array<{ s: string; nama: string; harga: number; chg: number }>; galatAt?: number; status?: Record<string, StatusLangkah> }
 
 /* ── Indikator ─────────────────────────────────────────────── */
 export function sma(x: number[], n: number): (number | null)[] {
@@ -125,12 +127,27 @@ async function harian(s: string) {
     return { tgl: col('t') as unknown as string[], o: col('o'), h: col('h'), l: col('l'), c: col('c'), v: col('v'), nama };
 }
 
+let secGalat = '';
 async function secJson(url: string): Promise<any | null> {
     try {
-        const res = await fetch(url, { headers: { 'User-Agent': SEC_UA, Accept: 'application/json' } });
-        if (!res.ok) return null;
+        const res = await fetch(url, { headers: { 'User-Agent': SEC_UA, Accept: 'application/json' }, signal: AbortSignal.timeout(30_000) });
+        if (!res.ok) { if (res.status !== 404) secGalat = `SEC HTTP ${res.status}${res.status === 403 || res.status === 429 ? ' (server diblokir/dibatasi SEC)' : ''}`; return null; }
         return await res.json();
-    } catch { return null; }
+    } catch (e: any) { secGalat = `SEC tidak bisa dihubungi (${e?.cause?.code || e?.name || e?.message || e})`; return null; }
+}
+
+/** Kapitalisasi pasar semua saham AS dalam SATU permintaan (Nasdaq screener). */
+export async function kapNasdaq(): Promise<Map<string, { mcap: number; industri: string }>> {
+    const res = await fetch('https://api.nasdaq.com/api/screener/stocks?tableonly=true&limit=25&offset=0&download=true', { headers: { 'User-Agent': UA, Accept: 'application/json, text/plain, */*', Origin: 'https://www.nasdaq.com', Referer: 'https://www.nasdaq.com/' }, signal: AbortSignal.timeout(60_000) });
+    if (!res.ok) throw new Error(`Nasdaq screener HTTP ${res.status}`);
+    const rows = ((await res.json()) as any)?.data?.rows;
+    if (!Array.isArray(rows) || !rows.length) throw new Error('Nasdaq screener: kosong');
+    const m = new Map<string, { mcap: number; industri: string }>();
+    for (const r of rows) {
+        const mc = Number(String(r.marketCap ?? '').replace(/[$,]/g, ''));
+        if (r.symbol && Number.isFinite(mc) && mc > 0) m.set(String(r.symbol).trim().toUpperCase().replace(/[/.^]/g, '-'), { mcap: mc, industri: String(r.industry || '') });
+    }
+    return m;
 }
 /** Satu konsep untuk semua perusahaan dalam satu periode → Map<CIK, nilai>. */
 async function frame(tax: string, konsep: string, unit: string, periode: string): Promise<Map<number, number>> {
@@ -156,6 +173,7 @@ export class Screener {
         try { this.st = JSON.parse(fs.readFileSync(this.file, 'utf8')); } catch { this.st = { baris: [], teknikalSesi: '', teknikalAt: 0, fundamentalAt: 0, gagal: [] }; }
     }
     private simpan() { fs.writeFileSync(this.file, JSON.stringify(this.st)); }
+    private langkah(k: string, n: number, galat: string) { this.st.status = { ...(this.st.status || {}), [k]: { at: Date.now(), n, galat } }; }
 
     /** Skor 4 faktor + gabungan untuk satu saham. */
     skor(b: Baris, sari = bacaLaporanSari(this.deskDir)): Record<string, Faktor | null> {
@@ -179,13 +197,13 @@ export class Screener {
         const sek = new Map<string, { w: number; s: number; n: number }>();
         let mcap = 0;
         for (const b of baris) {
-            const w = b.f?.mcap || 1; mcap += b.f?.mcap || 0;
+            const mc = b.mcap ?? b.f?.mcap ?? 0; const w = mc || 1; mcap += mc;
             const k = b.sektor || 'Lainnya'; const e = sek.get(k) || { w: 0, s: 0, n: 0 };
             e.w += w; e.s += b.chg1d * w; e.n++; sek.set(k, e);
         }
         const sektor = Array.from(sek.entries()).map(([k, e]) => ({ nama: k, n: e.n, chg: +(e.s / e.w).toFixed(2) })).sort((a, b) => b.chg - a.chg);
         const pasar = { naik, turun, tetap: baris.length - naik - turun, mcap, sektor, tape: this.st.tape || [] };
-        return { baris, pasar, beritaAt: this.st.beritaAt || 0, teknikalAt: this.st.teknikalAt, teknikalSesi: this.st.teknikalSesi, fundamentalAt: this.st.fundamentalAt, sibuk: this.sibuk, progres: this.progres, gagal: this.st.gagal.length, galat: statusHarga.galat, sumber: statusHarga.sumber };
+        return { baris, pasar, beritaAt: this.st.beritaAt || 0, teknikalAt: this.st.teknikalAt, teknikalSesi: this.st.teknikalSesi, fundamentalAt: this.st.fundamentalAt, sibuk: this.sibuk, progres: this.progres, gagal: this.st.gagal.length, galat: [statusHarga.galat, ...['fundamental', 'berita', 'kap'].map((k) => (this.st.baris.length ? this.st.status?.[k]?.galat : '') || '')].filter(Boolean).join('\n'), sumber: statusHarga.sumber, status: this.st.status || {} };
     }
     /** Detail lengkap satu saham: alasan tiap faktor, berita, orang dalam. */
     detail(s: string) {
@@ -245,21 +263,21 @@ export class Screener {
         return b;
     }
 
-    private async semesta(): Promise<Array<{ s: string; nama: string; sektor: string }>> {
-        const list: Array<{ s: string; nama: string; sektor: string }> = [];
+    private async semesta(): Promise<Array<{ s: string; nama: string; sektor: string; industri?: string }>> {
+        const list: Array<{ s: string; nama: string; sektor: string; industri?: string }> = [];
         try {
             const res = await fetch(SP500_CSV, { headers: { 'User-Agent': UA } });
             if (res.ok) {
                 const lines = (await res.text()).trim().split(/\r?\n/);
                 const head = parseCsv(lines[0]);
-                const iS = head.indexOf('Symbol'), iN = head.indexOf('Security'), iSec = head.findIndex((h) => /sector/i.test(h));
+                const iS = head.indexOf('Symbol'), iN = head.indexOf('Security'), iSec = head.findIndex((h) => /sector/i.test(h)), iInd = head.findIndex((h) => /sub-industry/i.test(h));
                 for (const l of lines.slice(1)) {
                     const c = parseCsv(l);
-                    if (c[iS]) list.push({ s: c[iS].replace('.', '-').toUpperCase(), nama: c[iN] || '', sektor: SEKTOR[c[iSec]] || c[iSec] || '' });
+                    if (c[iS]) list.push({ s: c[iS].replace('.', '-').toUpperCase(), nama: c[iN] || '', sektor: SEKTOR[c[iSec]] || c[iSec] || '', industri: iInd >= 0 ? c[iInd] || '' : '' });
                 }
             }
         } catch { /* pakai cadangan */ }
-        if (!list.length) for (const b of this.st.baris) list.push({ s: b.s, nama: b.nama, sektor: b.sektor });
+        if (!list.length) for (const b of this.st.baris) list.push({ s: b.s, nama: b.nama, sektor: b.sektor, industri: b.industri });
         for (const s of this.watchlist()) if (!list.some((x) => x.s === s)) list.push({ s, nama: '', sektor: '' });
         return list;
     }
@@ -285,7 +303,7 @@ export class Screener {
                     try {
                         const d = await harian(u.s);
                         const a = analisis(d.c, d.v);
-                        baru.push({ s: u.s, nama: u.nama || d.nama || u.s, sektor: u.sektor, harga: +d.c[d.c.length - 1].toFixed(2), chg1d: a.chg1d, chg1m: a.chg1m, chg3m: a.chg3m, chg1y: a.chg1y, rsi: a.rsi, ma50: a.ma50 != null ? +a.ma50.toFixed(2) : null, ma200: a.ma200 != null ? +a.ma200.toFixed(2) : null, volX: a.volX, sinyal: a.sinyal, f: lama.get(u.s)?.f || null, x: ekstra(d.o, d.h, d.l, d.c, d.v, a.ma50, a.ma200), vol: d.v[d.v.length - 1] });
+                        baru.push({ s: u.s, nama: u.nama || d.nama || u.s, sektor: u.sektor, harga: +d.c[d.c.length - 1].toFixed(2), chg1d: a.chg1d, chg1m: a.chg1m, chg3m: a.chg3m, chg1y: a.chg1y, rsi: a.rsi, ma50: a.ma50 != null ? +a.ma50.toFixed(2) : null, ma200: a.ma200 != null ? +a.ma200.toFixed(2) : null, volX: a.volX, sinyal: a.sinyal, f: lama.get(u.s)?.f || null, industri: u.industri || lama.get(u.s)?.industri || '', mcap: lama.get(u.s)?.mcap ?? null, x: ekstra(d.o, d.h, d.l, d.c, d.v, a.ma50, a.ma200), vol: d.v[d.v.length - 1] });
                         const k = Math.max(0, d.c.length - 130);
                         const r2 = (x: number | null) => (x == null ? null : +x.toFixed(2));
                         fs.writeFileSync(path.join(this.sparkDir, `${u.s}.json`), JSON.stringify({ s: u.s, tgl: d.tgl.slice(k), c: d.c.slice(k).map((x) => +x.toFixed(2)), ma50: a.m50.slice(k).map(r2), ma200: a.m200.slice(k).map(r2) }));
@@ -306,9 +324,20 @@ export class Screener {
                 try { const d = await harian(s); const n = d.c.length; tape.push({ s, nama, harga: +d.c[n - 1].toFixed(2), chg: +((d.c[n - 1] / d.c[n - 2] - 1) * 100).toFixed(2) }); } catch { /* lewati */ }
             }
             if (tape.length) { this.st.tape = tape; this.simpan(); }
-            // Fundamental lebih dari 7 hari → perbarui juga. Berita & orang dalam tiap sesi.
-            if (Date.now() - this.st.fundamentalAt > 7 * 86400_000) { this.sibuk = ''; await this.perbaruiFundamental(); }
-            this.sibuk = ''; await this.perbaruiBerita();
+            // Kapitalisasi (1 permintaan ke Nasdaq) — untuk ukuran kotak peta panas.
+            this.progres = 'kapitalisasi pasar';
+            try {
+                const kap = await kapNasdaq();
+                let n = 0;
+                for (const b of this.st.baris) { const k = kap.get(b.s); if (k) { b.mcap = Math.round(k.mcap / 1e6); if (!b.industri) b.industri = k.industri; n++; } }
+                this.langkah('kap', n, n ? '' : 'Nasdaq tidak punya data kapitalisasi untuk saham-saham ini');
+                this.simpan();
+            } catch (e: any) { this.langkah('kap', 0, String(e?.message || e)); }
+            // Fundamental: kalau lebih dari 7 hari ATAU percobaan terakhir kosong. Berita & orang dalam tiap sesi.
+            // Masing-masing berdiri sendiri: kalau satu gagal, yang lain tetap jalan.
+            const fs0 = this.st.status?.fundamental;
+            if (Date.now() - this.st.fundamentalAt > 7 * 86400_000 || !fs0?.n) { this.sibuk = ''; await this.perbaruiFundamental().catch((e) => console.warn('[Screener] fundamental', e?.message || e)); }
+            this.sibuk = ''; await this.perbaruiBerita().catch((e) => console.warn('[Screener] berita', e?.message || e));
         } finally { this.sibuk = ''; this.progres = ''; }
     }
 
@@ -319,17 +348,19 @@ export class Screener {
         try {
             const daftar = this.st.baris.map((b) => b.s);
             const out: Record<string, Berita> = { ...(this.st.berita || {}) };
-            let i = 0;
+            let i = 0, ok = 0, berjudul = 0, galat = '', gagalBeruntun = 0;
             const kerja = async () => {
                 while (i < daftar.length) {
+                    if (gagalBeruntun >= 25) return; // sumber berita sedang menolak semua → berhenti, jangan buang waktu
                     const s = daftar[i++];
                     this.progres = `berita ${i}/${daftar.length}`;
-                    try { out[s] = await ambilBerita(s); } catch { /* lewati */ }
-                    await new Promise((r) => setTimeout(r, 200));
+                    try { out[s] = await ambilBerita(s); ok++; if (out[s].n) berjudul++; gagalBeruntun = 0; } catch (e: any) { gagalBeruntun++; if (!galat) galat = String(e?.message || e); }
+                    await new Promise((r) => setTimeout(r, 350));
                 }
             };
-            await Promise.all([kerja(), kerja(), kerja()]);
+            await Promise.all([kerja(), kerja()]);
             this.st.berita = out; this.st.beritaAt = Date.now();
+            this.langkah('berita', berjudul, !ok ? `Berita gagal diambil: ${galat}` : ok < daftar.length * 0.5 ? `Berita hanya ${ok}/${daftar.length} saham (${galat})` : '');
             this.simpan();
             // Orang dalam (Form 4) — hanya watchlist/posisi supaya hemat permintaan ke SEC.
             const map = await secJson('https://www.sec.gov/files/company_tickers.json');
@@ -355,8 +386,9 @@ export class Screener {
         if (this.sibuk) return;
         this.sibuk = 'fundamental';
         try {
+            secGalat = '';
             const map = await secJson('https://www.sec.gov/files/company_tickers.json');
-            if (!map) throw new Error('Daftar SEC gagal diambil');
+            if (!map) { const g = `Fundamental gagal: daftar perusahaan SEC tidak bisa diambil (${secGalat || 'tanpa keterangan'})`; this.langkah('fundamental', 0, g); this.simpan(); throw new Error(g); }
             const cikOf = new Map<string, number>();
             for (const k of Object.keys(map)) cikOf.set(String(map[k].ticker).toUpperCase(), Number(map[k].cik_str));
 
@@ -405,6 +437,10 @@ export class Screener {
                     tahun: ni1.has(cik) ? String(y - 1) : String(y - 2)
                 };
             }
+            const n = this.st.baris.filter((b) => b.f && (b.f.roe != null || b.f.per != null || b.f.pbv != null)).length;
+            for (const b of this.st.baris) if (b.mcap == null && b.f?.mcap) b.mcap = b.f.mcap;
+            if (!n) { const g = `Fundamental kosong: laporan keuangan SEC tidak terbaca (${secGalat || 'data tidak tersedia'})`; this.langkah('fundamental', 0, g); this.simpan(); throw new Error(g); }
+            this.langkah('fundamental', n, '');
             this.st.fundamentalAt = Date.now();
             this.simpan();
         } finally { this.sibuk = ''; this.progres = ''; }

@@ -1368,3 +1368,8 @@ body.no-office #phaser-container { visibility: hidden; }
   [data-theme="light"] .sidebar { background: rgba(255, 255, 255, 0.92); box-shadow: 0 4px 18px rgba(28, 25, 23, 0.06); }
   [data-theme="light"] .sb-item.on { background: #e9f7ee; border-color: #86c79e; }
 }
+
+.hm-pilih { background: var(--panel-solid); color: var(--text); border: 1px solid var(--line-strong); border-radius: 10px; padding: 7px 10px; font-size: 13px; max-width: 100%; }
+.sb-seg-l { font-size: 11.5px; color: var(--muted); padding: 0 6px 0 4px; align-self: center; }
+.hm-sek-h { cursor: zoom-in; pointer-events: auto; }
+.sb-kosong .error, .pg > .error { white-space: pre-line; }

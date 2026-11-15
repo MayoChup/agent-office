@@ -186,5 +186,10 @@ export async function cekHargaCli(simbol = 'AAPL') {
     }
     try { const r = await cnbcChart(simbol, '1D'); console.log(`✅ CNBC menit   ${r.timestamp.length} batang hari ini`); } catch (e: any) { console.log(`❌ CNBC menit   ${e?.message || e}`); }
     const { ambilBerita } = await import('./skor');
+    const { kapNasdaq } = await import('./screener');
+    try { const k = await kapNasdaq(); const a = k.get(simbol); console.log(`✅ Kapitalisasi ${k.size} saham dari Nasdaq${a ? ` — ${simbol} ${(a.mcap / 1e9).toFixed(0)} miliar USD` : ''}`); } catch (e: any) { console.log(`❌ Kapitalisasi ${e?.message || e}`); }
+    for (const [nama, url] of [['SEC daftar', 'https://www.sec.gov/files/company_tickers.json'], ['SEC laporan', `https://data.sec.gov/api/xbrl/frames/us-gaap/NetIncomeLoss/USD/CY${new Date().getUTCFullYear() - 1}.json`]]) {
+        try { const r = await fetch(url, { headers: { 'User-Agent': 'KantorRico research kantor-rico@users.noreply.github.com', Accept: 'application/json' }, signal: AbortSignal.timeout(30_000) }); const t = await r.text(); console.log(`${r.ok ? '✅' : '❌'} ${nama.padEnd(12)} HTTP ${r.status}, ${(t.length / 1024).toFixed(0)} KB`); } catch (e: any) { console.log(`❌ ${nama.padEnd(12)} ${e?.cause?.code || e?.message || e}`); }
+    }
     try { const b = await ambilBerita(simbol); console.log(`✅ Berita       ${b.n} judul 7 hari terakhir (${b.sumber})${b.judul[0] ? ` — "${b.judul[0].t.slice(0, 60)}"` : ''}`); } catch (e: any) { console.log(`❌ Berita       ${e?.message || e}`); }
 }

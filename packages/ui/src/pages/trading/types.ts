@@ -13,8 +13,10 @@ export interface Sinyal {
 export interface Baris {
     s: string; nama: string; sektor: string; harga: number; chg1d: number; chg1m: number; chg3m: number; chg1y: number;
     rsi: number | null; ma50: number | null; ma200: number | null; volX: number; vol?: number; sinyal: Sinyal; f: F | null; x?: Ekstra;
+    industri?: string; mcap?: number | null;
     skor?: Record<FaktorKey, SkorRingkas | null>;
 }
+export const kapOf = (b: { mcap?: number | null; f: { mcap: number | null } | null }) => b.mcap ?? b.f?.mcap ?? null;
 export interface Pasar { naik: number; turun: number; tetap: number; mcap: number; sektor: Array<{ nama: string; n: number; chg: number }>; tape: Array<{ s: string; nama: string; harga: number; chg: number }> }
 export interface ScreenerData { baris: Baris[]; pasar: Pasar; teknikalAt: number; teknikalSesi: string; fundamentalAt: number; beritaAt: number; sibuk: string; progres: string; gagal: number; galat?: string; sumber?: string }
 

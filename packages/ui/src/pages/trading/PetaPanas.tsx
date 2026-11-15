@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Baris, ScreenerData, usd } from './types';
+import { Baris, ScreenerData, usd, kapOf } from './types';
 
 type Periode = '1H' | '1M' | '1B' | '3B' | '1T';
 const PERIODE: Array<{ k: Periode; label: string }> = [{ k: '1H', label: 'Harian' }, { k: '1M', label: 'Mingguan' }, { k: '1B', label: 'Bulanan' }, { k: '3B', label: '3 bulan' }, { k: '1T', label: '1 tahun' }];
@@ -49,8 +49,10 @@ function squarify<T extends { v: number }>(items: T[], r: Kotak): Array<T & Kota
 
 export function PetaPanas({ data, onOpen, watch }: { data: ScreenerData; onOpen: (s: string) => void; watch: string[] }) {
     const [periode, setPeriode] = useState<Periode>('1H');
-    const [ukuran, setUkuran] = useState<'kap' | 'rata'>('kap');
+    const [ukuran, setUkuran] = useState<'kap' | 'nilai' | 'rata'>('kap');
     const [lingkup, setLingkup] = useState<'semua' | 'watch'>('semua');
+    const [sektor, setSektor] = useState('');
+    const [industri, setIndustri] = useState('');
     const [hover, setHover] = useState<{ b: Baris; x: number; y: number } | null>(null);
     const box = useRef<HTMLDivElement>(null);
     const [dim, setDim] = useState({ w: 800, h: 560 });
@@ -59,13 +61,17 @@ export function PetaPanas({ data, onOpen, watch }: { data: ScreenerData; onOpen:
         const ro = new ResizeObserver(() => setDim({ w: el.clientWidth, h: el.clientWidth < 600 ? 640 : Math.max(520, Math.round(el.clientWidth * 0.56)) }));
         ro.observe(el); return () => ro.disconnect();
     }, []);
-    const baris = data.baris.filter((b) => lingkup === 'semua' || watch.includes(b.s));
+    const daftarSektor = useMemo(() => Array.from(new Set(data.baris.map((b) => b.sektor || 'Lainnya'))).sort(), [data.baris]);
+    const daftarIndustri = useMemo(() => Array.from(new Set(data.baris.filter((b) => (b.sektor || 'Lainnya') === sektor).map((b) => b.industri || 'Lainnya'))).sort(), [data.baris, sektor]);
+    const baris = data.baris.filter((b) => (lingkup === 'semua' || watch.includes(b.s)) && (!sektor || (b.sektor || 'Lainnya') === sektor) && (!industri || (b.industri || 'Lainnya') === industri));
+    const adaKap = data.baris.some((b) => kapOf(b));
     const max = SKALA[periode];
 
     const layout = useMemo(() => {
         const sek = new Map<string, Baris[]>();
-        for (const b of baris) { const k = b.sektor || 'Lainnya'; sek.set(k, [...(sek.get(k) || []), b]); }
-        const size = (b: Baris) => (ukuran === 'kap' ? Math.max(1, b.f?.mcap || 1000) : 1);
+        // Satu sektor dipilih → kotak dikelompokkan per industri.
+        for (const b of baris) { const k = sektor ? b.industri || 'Lainnya' : b.sektor || 'Lainnya'; sek.set(k, [...(sek.get(k) || []), b]); }
+        const size = (b: Baris) => (ukuran === 'kap' ? Math.max(1, kapOf(b) || 1000) : ukuran === 'nilai' ? Math.max(1, (b.vol || 0) * b.harga / 1e6) : 1);
         const grup = Array.from(sek.entries()).map(([nama, list]) => ({ nama, list, v: list.reduce((a, b) => a + size(b), 0) }));
         const sektorBox = squarify(grup, { x: 0, y: 0, w: dim.w, h: dim.h });
         return sektorBox.map((g) => {
@@ -74,7 +80,7 @@ export function PetaPanas({ data, onOpen, watch }: { data: ScreenerData; onOpen:
             const avg = g.list.reduce((a, b) => a + nilai(b, periode) * size(b), 0) / Math.max(1, g.list.reduce((a, b) => a + size(b), 0));
             return { ...g, head, tiles, avg };
         });
-    }, [baris, dim, ukuran, periode]);
+    }, [baris, dim, ukuran, periode, sektor]);
 
     const urut = [...baris].sort((a, b) => nilai(b, periode) - nilai(a, periode));
     const naik = urut.slice(0, 10), turun = urut.slice(-10).reverse();
@@ -82,18 +88,30 @@ export function PetaPanas({ data, onOpen, watch }: { data: ScreenerData; onOpen:
     return (
         <>
             <section className="sb-hero row-hero">
-                <div><h1>Peta panas</h1><p>Besar kotak = kapitalisasi pasar, warna = naik (hijau) atau turun (merah). Ketuk kotak untuk membuka sahamnya.</p></div>
+                <div><h1>Peta panas</h1><p>Besar kotak = {ukuran === 'kap' ? 'kapitalisasi pasar' : ukuran === 'nilai' ? 'nilai transaksi hari ini' : 'sama rata'}, warna = naik (hijau) atau turun (merah). Pilih sektor/industri supaya kotaknya lebih besar. Ketuk kotak untuk membuka sahamnya.</p></div>
             </section>
             <div className="sb-tools">
                 <div className="sb-seg scroll">{PERIODE.map((p) => <button key={p.k} className={periode === p.k ? 'on' : ''} onClick={() => setPeriode(p.k)}>{p.label}</button>)}</div>
-                <div className="sb-seg"><button className={ukuran === 'kap' ? 'on' : ''} onClick={() => setUkuran('kap')}>Kapitalisasi</button><button className={ukuran === 'rata' ? 'on' : ''} onClick={() => setUkuran('rata')}>Sama rata</button></div>
+                <div className="sb-seg"><span className="sb-seg-l">Ukuran</span><button className={ukuran === 'kap' ? 'on' : ''} onClick={() => setUkuran('kap')}>Kapitalisasi</button><button className={ukuran === 'nilai' ? 'on' : ''} onClick={() => setUkuran('nilai')}>Nilai transaksi</button><button className={ukuran === 'rata' ? 'on' : ''} onClick={() => setUkuran('rata')}>Sama rata</button></div>
+                <select className="hm-pilih" value={sektor} onChange={(e) => { setSektor(e.target.value); setIndustri(''); }}>
+                    <option value="">Semua sektor</option>
+                    {daftarSektor.map((x) => <option key={x} value={x}>{x} ({data.baris.filter((b) => (b.sektor || 'Lainnya') === x).length})</option>)}
+                </select>
+                {sektor && daftarIndustri.length > 1 && (
+                    <select className="hm-pilih" value={industri} onChange={(e) => setIndustri(e.target.value)}>
+                        <option value="">Semua industri</option>
+                        {daftarIndustri.map((x) => <option key={x} value={x}>{x}</option>)}
+                    </select>
+                )}
                 <div className="sb-seg"><button className={lingkup === 'semua' ? 'on' : ''} onClick={() => setLingkup('semua')}>Semua</button><button className={lingkup === 'watch' ? 'on' : ''} onClick={() => setLingkup('watch')}>Watchlist</button></div>
             </div>
+            {ukuran === 'kap' && !adaKap && <div className="hint">Data kapitalisasi belum ada (diambil bersama ↻ data pasar), jadi sementara semua kotak sama besar.</div>}
+            {!baris.length && <div className="sb-card fin-empty">Tidak ada saham untuk filter ini.</div>}
             <div className="hm-legend mono">{[-1, -0.66, -0.33, 0, 0.33, 0.66, 1].map((t) => <span key={t} style={{ background: warna(t * max, max) }}>{t > 0 ? '+' : t < 0 ? '−' : ''}{Math.abs(Math.round(t * max))}%</span>)}</div>
             <div className="hm" ref={box} style={{ height: dim.h }} onMouseLeave={() => setHover(null)}>
                 {layout.map((g) => (
                     <div key={g.nama} className="hm-sek" style={{ left: g.x, top: g.y, width: g.w, height: g.h }}>
-                        {g.head > 0 && <div className="hm-sek-h"><b>{g.nama}</b><span className="mono">{g.avg >= 0 ? '+' : ''}{g.avg.toFixed(2)}%</span></div>}
+                        {g.head > 0 && <div className="hm-sek-h" onClick={() => { if (!sektor) setSektor(g.nama); else if (!industri) setIndustri(g.nama); }} title="Ketuk untuk memperbesar kelompok ini"><b>{g.nama}</b><span className="mono">{g.avg >= 0 ? '+' : ''}{g.avg.toFixed(2)}%</span></div>}
                     </div>
                 ))}
                 {layout.flatMap((g) => g.tiles.map((t) => {
