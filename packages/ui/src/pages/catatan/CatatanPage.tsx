@@ -103,6 +103,12 @@ export function CatatanPage() {
                     <b>{folderAktif ? (bagian ? `${bukuAktif?.nama} › ${folderAktif.nama}` : folderAktif.nama) : 'Pilih buku'}</b>
                     {folderAktif && <button onClick={halBaru} title="Halaman baru">＋</button>}
                 </div>
+                {bukuAktif && (bukuAktif.anak || []).some((a) => a.folder) && (
+                    <div className="cat-secchips">
+                        <button className={!bagian ? 'on' : ''} onClick={() => setBagian('')}>Semua di {bukuAktif.nama}</button>
+                        {(bukuAktif.anak || []).filter((a) => a.folder).map((s2) => <button key={s2.path} className={bagian === s2.path ? 'on' : ''} onClick={() => setBagian(s2.path)}>{s2.nama}</button>)}
+                    </div>
+                )}
                 {folderAktif && halaman.length === 0 && <div className="fin-empty">Belum ada halaman.<br /><button className="btn primary" style={{ marginTop: 8 }} onClick={halBaru}>＋ Halaman baru</button></div>}
                 {halaman.map((h) => (
                     <button key={h.path} className={`cat-page ${hal === h.path ? 'on' : ''}`} onClick={() => bukaHal(h.path)}>

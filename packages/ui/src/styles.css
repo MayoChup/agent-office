@@ -1290,3 +1290,7 @@ body.no-office #phaser-container { visibility: hidden; }
   .br-antre > div { grid-template-columns: minmax(0, 1fr) 70px auto; } .br-antre .k-meter { display: none; }
   .br-kuota { width: 100%; }
 }
+
+.cat-secchips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 0 12px 10px; border-bottom: 1px solid var(--line); }
+.cat-secchips button { flex: none; border: 1px solid var(--line-strong); background: none; color: var(--text); border-radius: 999px; padding: 5px 11px; font-size: 12px; cursor: pointer; }
+.cat-secchips button.on { background: #7c3aed; border-color: #7c3aed; color: #fff; }
