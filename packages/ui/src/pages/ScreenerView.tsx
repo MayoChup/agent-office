@@ -21,7 +21,7 @@ const ANGKA: Array<{ k: NumKey; label: string; arah: 'min' | 'max'; satuan: stri
     { k: 'der', label: 'DER', arah: 'max', satuan: '×', info: 'Utang ÷ modal. Di atas 2 = utang besar (kecuali bank).' },
     { k: 'npm', label: 'Margin laba', arah: 'min', satuan: '%', info: 'Laba bersih ÷ pendapatan.' },
     { k: 'revGrowth', label: 'Tumbuh pendapatan', arah: 'min', satuan: '%', info: 'Pendapatan tahun lalu dibanding tahun sebelumnya.' },
-    { k: 'mcap', label: 'Kapitalisasi', arah: 'min', satuan: 'jt$', info: 'Nilai pasar perusahaan (juta USD). 10.000 = $10 miliar.' }
+    { k: 'mcap', label: 'Kapitalisasi', arah: 'min', satuan: 'M$', info: 'Nilai pasar perusahaan dalam miliar USD (M = miliar). 10 = $10 miliar.' }
 ];
 type SigKey = 'goldenCross' | 'deathCross' | 'doubleTop' | 'doubleBottom' | 'breakout52' | 'dekat52Low' | 'rsiOversold' | 'rsiOverbought' | 'macdBullish' | 'macdBearish' | 'diAtasMa200' | 'volumeSpike' | 'trenNaik' | 'trenTurun';
 const SINYAL: Array<{ k: SigKey; label: string; baik: boolean | null; info: string }> = [
@@ -87,7 +87,7 @@ export function ScreenerView() {
             for (const a of ANGKA) {
                 const raw = num[a.k];
                 if (raw === undefined || raw === '') continue;
-                const lim = Number(String(raw).replace(',', '.'));
+                const lim = Number(String(raw).replace(',', '.')) * (a.k === 'mcap' ? 1000 : 1);
                 if (!Number.isFinite(lim)) continue;
                 const v = b.f?.[a.k];
                 if (v == null) return false;
@@ -230,7 +230,7 @@ function Detail({ b, onBack }: { b: Baris; onBack: () => void }) {
                 <div className="inv-kicker">■ Fundamental {f ? `· laporan ${f.tahun}` : ''}</div>
                 {f ? (
                     <div className="inv-nums">
-                        {ANGKA.map((a) => <div key={a.k}><b>{a.k === 'mcap' && f.mcap ? `$${(f.mcap / 1000).toLocaleString('id-ID', { maximumFractionDigits: 1 })} M` : fmt(f[a.k], a.satuan)}</b><span>{a.label}</span><small>{a.info}</small></div>)}
+                        {ANGKA.map((a) => <div key={a.k}><b>{a.k === 'mcap' && f.mcap ? (f.mcap >= 1e6 ? `$${(f.mcap / 1e6).toLocaleString('id-ID', { maximumFractionDigits: 2 })} T` : `$${(f.mcap / 1e3).toLocaleString('id-ID', { maximumFractionDigits: 1 })} M`) : fmt(f[a.k], a.satuan)}</b><span>{a.label}</span><small>{a.info}</small></div>)}
                     </div>
                 ) : <div className="fin-empty">Data fundamental belum ada untuk saham ini.</div>}
             </section>
