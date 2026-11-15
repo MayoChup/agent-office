@@ -136,8 +136,14 @@ export class Percakapan {
                 grup ? 'Jawab hanya bagian yang sesuai keahlianmu; jangan mengulang jawaban anggota lain. Kalau perlu orang lain, sebut namanya.' : '',
                 'Kalau diminta mengerjakan sesuatu, kerjakan dengan alat/skill-mu seperti biasa, lalu laporkan hasilnya di sini.'
             ].filter(Boolean).join('\n');
-            const args = [...(aiId === 'default' ? [] : ['-p', aiId]), '-z', prompt];
-            const out = bersihkan(await this.run(this.hermesBin, args));
+            const prof = aiId === 'default' ? [] : ['-p', aiId];
+            let out: string;
+            try { out = bersihkan(await this.run(this.hermesBin, [...prof, '-z', prompt])); }
+            catch (e: any) {
+                // Hermes versi lama belum punya -z (oneshot) → pakai "chat -Q -q".
+                if (!/unrecognized|invalid choice|no such option|unknown option/i.test(String(e?.message))) throw e;
+                out = bersihkan(await this.run(this.hermesBin, [...prof, 'chat', '-Q', '-q', prompt]));
+            }
             this.tambah(thread, { dari: aiId, nama: ai.nama, teks: out || '(tidak ada jawaban)', at: Date.now() });
         } catch (e: any) {
             this.tambah(thread, { dari: aiId, nama: ai.nama, teks: `⚠️ ${ai.nama} gagal membalas: ${String(e?.message || e).slice(0, 200)}`, at: Date.now(), status: 'gagal' });
