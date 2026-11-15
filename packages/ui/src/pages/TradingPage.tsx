@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useSubNav } from '../kantor/subnav';
+import { Horison, HorisonBar, nilaiH } from './trading/Horison';
 import { useApi, TradingData } from '../kantor/api';
 import { apiPost } from '../kantor/connection';
 import { useKantor, statusOf } from '../kantor/store';
@@ -47,7 +48,10 @@ export function TradingPage() {
     const [saham, setSaham] = useState<string | null>(null);
     const [faktor, setFaktor] = useState<FaktorKey>(() => { try { return (localStorage.getItem('kantor:faktor') as FaktorKey) || 'semua'; } catch { return 'semua'; } });
     const setF = (f: FaktorKey) => { setFaktor(f); try { localStorage.setItem('kantor:faktor', f); } catch { /* */ } };
-    const sc = useApi<ScreenerData>('/api/kantor/screener', 600_000);
+    const [horison, setHorisonS] = useState<Horison>(() => { try { const v = JSON.parse(localStorage.getItem('kantor:horison') || ''); if (v?.mode === 'tanggal' && !(v.tanggal > new Date().toISOString().slice(0, 10))) return { mode: 'harian' }; return v?.mode ? v : { mode: 'harian' }; } catch { return { mode: 'harian' }; } });
+    const setHorison = (h: Horison) => { setHorisonS(h); try { localStorage.setItem('kantor:horison', JSON.stringify(h)); } catch { /* */ } };
+    const H = nilaiH(horison);
+    const sc = useApi<ScreenerData>(`/api/kantor/screener?h=${H}`, 600_000);
     React.useEffect(() => { if (!sc.data?.sibuk) return; const t = setInterval(() => sc.reload(), 8000); return () => clearInterval(t); }, [sc.data?.sibuk]);
     const setTab = (t: Tab) => { setSaham(null); setTabState(t); try { localStorage.setItem(LS_TAB, t); } catch { /* */ } document.querySelector('.pg')?.scrollTo({ top: 0 }); };
     // Menu bawah HP: yang paling sering dipakai di depan, sisanya masuk "Lainnya".
@@ -74,7 +78,7 @@ export function TradingPage() {
                 <span className="sb-nav-sp" />
                 {sc.data?.sibuk ? <span className="sb-busy">⏳ {sc.data.progres}</span> : <button className="sb-refresh" onClick={() => { perbarui(); reload(); }} title="Ambil data terbaru">↻</button>}
             </nav>
-            {saham && <SahamDetail simbol={saham} onBack={() => setSaham(null)} />}
+            {saham && <><HorisonBar h={horison} setH={setHorison} /><SahamDetail key={`${saham}-${H}`} simbol={saham} H={H} onBack={() => setSaham(null)} /></>}
             {!saham && ['pasar', 'pilihan', 'panas', 'watchlist'].includes(tab) && !sc.data && <div className="fin-empty">{sc.error ? `Gagal memuat: ${sc.error}` : 'Memuat data pasar…'}</div>}
             {!saham && ['pasar', 'pilihan', 'panas'].includes(tab) && sc.data && sc.data.baris.length === 0 && (
                 <div className="sb-card sb-kosong">
@@ -91,6 +95,7 @@ export function TradingPage() {
                 </div>
             )}
             {!saham && sc.data && sc.data.baris.length > 0 && sc.data.galat && !sc.data.sibuk && <div className="error" style={{ margin: '0 0 12px' }}>⚠️ {sc.data.galat}</div>}
+            {!saham && (tab === 'pilihan' || tab === 'pasar' || tab === 'watchlist') && sc.data && sc.data.baris.length > 0 && <HorisonBar h={horison} setH={setHorison} bobot={(sc.data as any).bobot} />}
             {!saham && tab === 'pasar' && sc.data && sc.data.baris.length > 0 && <PasarView data={sc.data} faktor={faktor} setFaktor={setF} onOpen={buka} />}
             {!saham && tab === 'pilihan' && sc.data && sc.data.baris.length > 0 && <PilihanView data={sc.data} faktor={faktor} setFaktor={setF} onOpen={buka} watchlist={[...(data?.watchlist || []), ...(data?.positions || []).map((p) => p.symbol)]} />}
             {!saham && tab === 'panas' && sc.data && sc.data.baris.length > 0 && <PetaPanas data={sc.data} onOpen={buka} watch={[...(data?.watchlist || []), ...(data?.positions || []).map((p) => p.symbol)]} />}

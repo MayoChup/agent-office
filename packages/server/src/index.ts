@@ -333,7 +333,7 @@ app.post('/api/kantor/chat/:id', requireToken, (req, res) => {
 
 // ── Penyaring saham (fundamental SEC + teknikal) ─────────────────────
 const screener = new Screener(config.dataDir, () => { const st = tradingDesk.load(); return Array.from(new Set([...st.positions.map((p) => p.symbol), ...st.watchlist])); }, tradingDeskDir);
-app.get('/api/kantor/screener', requireToken, (_req, res) => { res.json({ ok: true, ...screener.data() }); });
+app.get('/api/kantor/screener', requireToken, (req, res) => { res.json({ ok: true, ...screener.data(Number(req.query.h) || 20) }); });
 app.get('/api/kantor/candle/:s', requireToken, async (req, res) => {
     try { res.json({ ok: true, ...(await ambilCandle(String(req.params.s), String(req.query.r || '6B'))) }); }
     catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
@@ -350,7 +350,7 @@ app.post('/api/kantor/watchlist-folder', requireToken, (req, res) => {
 });
 app.get('/api/kantor/peta-berita', requireToken, (_req, res) => { res.json({ ok: true, ...screener.petaBerita() }); });
 app.get('/api/kantor/saham-detail/:s', requireToken, (req, res) => {
-    const d = screener.detail(String(req.params.s).toUpperCase());
+    const d = screener.detail(String(req.params.s).toUpperCase(), Math.max(1, Math.min(120, Number(req.query.h) || 20)));
     if (!d) { res.status(404).json({ ok: false, error: 'Belum ada di data penyaring' }); return; }
     res.json({ ok: true, ...d });
 });

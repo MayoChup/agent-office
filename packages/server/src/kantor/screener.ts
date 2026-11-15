@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { Ekstra, Berita, Orang, ekstra, skorTeknikal, skorFundamental, skorBerita, skorWhales, gabung, ambilBerita, ambilOrangDalam, bacaLaporanSari, Faktor } from './skor';
+import { Ekstra, Berita, Orang, ekstra, skorTeknikal, skorFundamental, skorBerita, skorWhales, gabung, bobot, proyeksi, Proyeksi, ambilBerita, ambilOrangDalam, bacaLaporanSari, Faktor } from './skor';
 
 /**
  * Penyaring saham AS (S&P 500 + watchlist) — data GRATIS, dihitung di VPS tanpa AI:
@@ -175,22 +175,40 @@ export class Screener {
     private simpan() { fs.writeFileSync(this.file, JSON.stringify(this.st)); }
     private langkah(k: string, n: number, galat: string) { this.st.status = { ...(this.st.status || {}), [k]: { at: Date.now(), n, galat } }; }
 
-    /** Skor 4 faktor + gabungan untuk satu saham. */
-    skor(b: Baris, sari = bacaLaporanSari(this.deskDir)): Record<string, Faktor | null> {
+    /* ── Horison: proyeksi & skor dihitung ulang untuk H hari bursa ── */
+    private seri = new Map<string, { h: number[]; l: number[]; c: number[] } | null>();
+    private proyCache = new Map<number, Map<string, Proyeksi | null>>();
+    private seriDari(s: string) {
+        if (!this.seri.has(s)) { try { this.seri.set(s, JSON.parse(fs.readFileSync(path.join(this.sparkDir, `${s}.hlc.json`), 'utf8'))); } catch { this.seri.set(s, null); } }
+        return this.seri.get(s) || null;
+    }
+    proyeksiH(b: Baris, H: number): Proyeksi | null {
+        if (H === 20 || !b.x) return b.x?.proyeksi || null;
+        let m = this.proyCache.get(H);
+        if (!m) { m = new Map(); this.proyCache.set(H, m); if (this.proyCache.size > 12) this.proyCache.delete(this.proyCache.keys().next().value as number); }
+        if (!m.has(b.s)) { const d = this.seriDari(b.s); m.set(b.s, d ? proyeksi(d.h, d.l, d.c, b.x.atr, H) : null); }
+        return m.get(b.s) || null;
+    }
+    private segarkanHorison() { this.seri.clear(); this.proyCache.clear(); }
+
+    /** Skor 4 faktor + gabungan untuk satu saham, untuk posisi ≤H hari bursa. */
+    skor(b: Baris, sari = bacaLaporanSari(this.deskDir), H = 20): Record<string, Faktor | null> {
+        const pr = this.proyeksiH(b, H);
         const f: Record<string, Faktor | null> = {
-            teknikal: skorTeknikal(b), fundamental: skorFundamental(b), berita: skorBerita(this.st.berita?.[b.s]),
+            teknikal: skorTeknikal(b, H, pr), fundamental: skorFundamental(b), berita: skorBerita(this.st.berita?.[b.s]),
             whales: skorWhales(b, b.x, this.st.orang?.[b.s], sari.get(b.s) || 0)
         };
-        return { semua: gabung(f), ...f };
+        return { semua: gabung(f, H), ...f };
     }
 
-    data() {
+    data(H = 20) {
+        H = Math.max(1, Math.min(120, Math.round(H) || 20));
         const sari = bacaLaporanSari(this.deskDir);
         const baris = this.st.baris.map((b) => {
-            const sk = this.skor(b, sari);
+            const sk = this.skor(b, sari, H);
             const ringkas: Record<string, { skor: number; label: string } | null> = {};
             for (const k of Object.keys(sk)) ringkas[k] = sk[k] ? { skor: sk[k]!.skor, label: sk[k]!.label } : null;
-            return { ...b, skor: ringkas };
+            return { ...b, x: b.x ? { ...b.x, proyeksi: this.proyeksiH(b, H) } : b.x, skor: ringkas };
         });
         // Ikhtisar pasar
         const naik = baris.filter((b) => b.chg1d > 0.05).length, turun = baris.filter((b) => b.chg1d < -0.05).length;
@@ -203,13 +221,14 @@ export class Screener {
         }
         const sektor = Array.from(sek.entries()).map(([k, e]) => ({ nama: k, n: e.n, chg: +(e.s / e.w).toFixed(2) })).sort((a, b) => b.chg - a.chg);
         const pasar = { naik, turun, tetap: baris.length - naik - turun, mcap, sektor, tape: this.st.tape || [] };
-        return { baris, pasar, beritaAt: this.st.beritaAt || 0, teknikalAt: this.st.teknikalAt, teknikalSesi: this.st.teknikalSesi, fundamentalAt: this.st.fundamentalAt, sibuk: this.sibuk, progres: this.progres, gagal: this.st.gagal.length, galat: [statusHarga.galat, ...['fundamental', 'berita', 'kap'].map((k) => (this.st.baris.length ? this.st.status?.[k]?.galat : '') || '')].filter(Boolean).join('\n'), sumber: statusHarga.sumber, status: this.st.status || {} };
+        return { horizon: H, bobot: bobot(H), baris, pasar, beritaAt: this.st.beritaAt || 0, teknikalAt: this.st.teknikalAt, teknikalSesi: this.st.teknikalSesi, fundamentalAt: this.st.fundamentalAt, sibuk: this.sibuk, progres: this.progres, gagal: this.st.gagal.length, galat: [statusHarga.galat, ...['fundamental', 'berita', 'kap'].map((k) => (this.st.baris.length ? this.st.status?.[k]?.galat : '') || '')].filter(Boolean).join('\n'), sumber: statusHarga.sumber, status: this.st.status || {} };
     }
     /** Detail lengkap satu saham: alasan tiap faktor, berita, orang dalam. */
-    detail(s: string) {
-        const b = this.st.baris.find((x) => x.s === s);
-        if (!b) return null;
-        return { baris: b, skor: this.skor(b), berita: this.st.berita?.[s] || null, orang: this.st.orang?.[s] || null };
+    detail(s: string, H = 20) {
+        const b0 = this.st.baris.find((x) => x.s === s);
+        if (!b0) return null;
+        const b = { ...b0, x: b0.x ? { ...b0.x, proyeksi: this.proyeksiH(b0, H) } : b0.x };
+        return { horizon: H, baris: b, skor: this.skor(b0, undefined, H), berita: this.st.berita?.[s] || null, orang: this.st.orang?.[s] || null };
     }
 
     /** Peta berita: berita (unik) ↔ saham yang terkait, untuk tampilan "tata surya". */
@@ -306,6 +325,7 @@ export class Screener {
                         baru.push({ s: u.s, nama: u.nama || d.nama || u.s, sektor: u.sektor, harga: +d.c[d.c.length - 1].toFixed(2), chg1d: a.chg1d, chg1m: a.chg1m, chg3m: a.chg3m, chg1y: a.chg1y, rsi: a.rsi, ma50: a.ma50 != null ? +a.ma50.toFixed(2) : null, ma200: a.ma200 != null ? +a.ma200.toFixed(2) : null, volX: a.volX, sinyal: a.sinyal, f: lama.get(u.s)?.f || null, industri: u.industri || lama.get(u.s)?.industri || '', mcap: lama.get(u.s)?.mcap ?? null, x: ekstra(d.o, d.h, d.l, d.c, d.v, a.ma50, a.ma200), vol: d.v[d.v.length - 1] });
                         const k = Math.max(0, d.c.length - 130);
                         const r2 = (x: number | null) => (x == null ? null : +x.toFixed(2));
+                        fs.writeFileSync(path.join(this.sparkDir, `${u.s}.hlc.json`), JSON.stringify({ h: d.h.slice(-270).map((x) => +x.toFixed(3)), l: d.l.slice(-270).map((x) => +x.toFixed(3)), c: d.c.slice(-270).map((x) => +x.toFixed(3)) }));
                         fs.writeFileSync(path.join(this.sparkDir, `${u.s}.json`), JSON.stringify({ s: u.s, tgl: d.tgl.slice(k), c: d.c.slice(k).map((x) => +x.toFixed(2)), ma50: a.m50.slice(k).map(r2), ma200: a.m200.slice(k).map(r2) }));
                     } catch (e: any) { gagal.push(u.s); if (!contohGalat) contohGalat = String(e?.message || e); }
                     await new Promise((r) => setTimeout(r, 150));
@@ -315,6 +335,7 @@ export class Screener {
             if (baru.length) {
                 this.st.baris = baru.sort((a, b) => a.s.localeCompare(b.s));
                 this.st.teknikalSesi = sesi; this.st.teknikalAt = Date.now(); this.st.gagal = gagal;
+                this.segarkanHorison();
                 this.simpan();
             }
             statusHarga.galat = !baru.length ? `Semua ${semesta.length} saham gagal diambil: ${contohGalat}` : gagal.length > semesta.length * 0.3 ? `${gagal.length} dari ${semesta.length} saham gagal diambil (${contohGalat}). Coba ↻ lagi nanti.` : '';

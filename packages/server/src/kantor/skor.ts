@@ -89,21 +89,41 @@ export function proyeksi(h: number[], l: number[], c: number[], atr: number, H =
 }
 
 /* ── Skor per faktor ───────────────────────────────────────── */
-export function skorTeknikal(b: any): Faktor {
+/**
+ * Teknikal menurut horison posisi (H = hari bursa):
+ *   ≤2 hari  → yang menentukan: jenuh beli/jual, lonjakan volume, MACD barusan memotong, peluang historis H hari.
+ *   ≤10 hari → swing: pola (double bottom/top), MACD, momentum seminggu; tren besar setengah bobot.
+ *   >40 hari → tren besar (MA50/MA200, golden/death cross) paling berbobot; osilator hampir diabaikan.
+ */
+export function skorTeknikal(b: any, H = 20, pr: Proyeksi | null = null): Faktor {
     const s = b.sinyal, a: string[] = []; let x = 0;
-    const add = (v: number, why: string) => { x += v; a.push(`${v > 0 ? '+' : '−'} ${why}`); };
-    if (s.tren === 'naik') add(0.3, 'tren naik rapi (harga > MA50 > MA200)'); else if (s.tren === 'turun') add(-0.3, 'tren turun (harga < MA50 < MA200)');
-    if (s.diAtasMa200) add(0.12, 'di atas MA200'); else if (b.ma200) add(-0.12, 'di bawah MA200');
-    if (s.goldenCross != null) add(0.25, `golden cross ${s.goldenCross} hari lalu`);
-    if (s.deathCross != null) add(-0.25, `death cross ${s.deathCross} hari lalu`);
-    if (s.macdBullish != null) add(0.12, 'MACD memotong naik'); if (s.macdBearish != null) add(-0.12, 'MACD memotong turun');
-    if (s.doubleBottom) add(s.doubleBottom === 'terkonfirmasi' ? 0.3 : 0.15, `double bottom ${s.doubleBottom}`);
-    if (s.doubleTop) add(s.doubleTop === 'terkonfirmasi' ? -0.3 : -0.15, `double top ${s.doubleTop}`);
+    const kilat = H <= 2, swing = H <= 10, panjang = H > 40;
+    const wTren = kilat ? 0.2 : swing ? 0.55 : panjang ? 1.3 : 1;
+    const wOsc = kilat ? 1.7 : swing ? 1.3 : panjang ? 0.4 : 1;
+    const wSilang = kilat ? 1.4 : swing ? 1.3 : panjang ? 0.5 : 1;
+    const segar = (hari: number | null) => hari != null && hari <= Math.max(2, Math.ceil(H * 1.5));
+    const add0 = (v: number, why: string) => { if (Math.abs(v) < 0.005) return; x += v; a.push(`${v > 0 ? '+' : '−'} ${why}`); };
+    const add = add0;
+    const tren = (v: number, why: string) => add0(v * wTren, why);
+    const osc = (v: number, why: string) => add0(v * wOsc, why);
+    if (s.tren === 'naik') tren(0.3, 'tren naik rapi (harga > MA50 > MA200)'); else if (s.tren === 'turun') tren(-0.3, 'tren turun (harga < MA50 < MA200)');
+    if (s.diAtasMa200) tren(0.12, 'di atas MA200'); else if (b.ma200) tren(-0.12, 'di bawah MA200');
+    if (s.goldenCross != null && (panjang || segar(s.goldenCross))) tren(0.25, `golden cross ${s.goldenCross} hari lalu`);
+    if (s.deathCross != null && (panjang || segar(s.deathCross))) tren(-0.25, `death cross ${s.deathCross} hari lalu`);
+    if (s.macdBullish != null && segar(s.macdBullish)) add(0.12 * wSilang, 'MACD memotong naik'); if (s.macdBearish != null && segar(s.macdBearish)) add(-0.12 * wSilang, 'MACD memotong turun');
+    if (s.doubleBottom) add((s.doubleBottom === 'terkonfirmasi' ? 0.3 : 0.15) * (kilat ? 0.6 : 1), `double bottom ${s.doubleBottom}`);
+    if (s.doubleTop) add((s.doubleTop === 'terkonfirmasi' ? -0.3 : -0.15) * (kilat ? 0.6 : 1), `double top ${s.doubleTop}`);
+    if (swing && b.x?.mom) {
+        if (b.x.mom.w1 < -7) osc(0.12, `turun ${Math.abs(b.x.mom.w1)}% seminggu (rawan memantul)`);
+        else if (b.x.mom.w1 > 10) osc(-0.1, `naik ${b.x.mom.w1}% seminggu (rawan ambil untung)`);
+        if (b.volX >= 2) add(b.chg1d >= 0 ? 0.15 : -0.15, `volume ${b.volX}× rata-rata, harga ${b.chg1d >= 0 ? 'naik' : 'turun'}`);
+    }
+    if (pr) add(((pr.peluangNaik - 50) / 50) * (kilat ? 0.35 : swing ? 0.3 : 0.2), `secara historis ${pr.peluangNaik}% periode ${H} hari berakhir naik`);
     if (s.breakout52) add(0.18, 'tembus tertinggi 52 minggu');
     if (s.dekat52Low) add(-0.08, 'dekat terendah 52 minggu');
-    if (b.rsi != null && b.rsi < 30) add(0.1, `RSI ${b.rsi} jenuh jual (peluang memantul)`);
-    if (b.rsi != null && b.rsi > 75) add(-0.12, `RSI ${b.rsi} jenuh beli`);
-    if (b.chg1m > 8) add(0.08, `naik ${b.chg1m}% sebulan`); else if (b.chg1m < -8) add(-0.08, `turun ${Math.abs(b.chg1m)}% sebulan`);
+    if (b.rsi != null && b.rsi < 30) osc(0.1, `RSI ${b.rsi} jenuh jual (peluang memantul)`);
+    if (b.rsi != null && b.rsi > 75) osc(-0.12, `RSI ${b.rsi} jenuh beli`);
+    if (!kilat) { if (b.chg1m > 8) tren(0.08, `naik ${b.chg1m}% sebulan`); else if (b.chg1m < -8) tren(-0.08, `turun ${Math.abs(b.chg1m)}% sebulan`); }
     const sk = clamp(x);
     return { skor: +sk.toFixed(2), label: label(sk), alasan: a };
 }
@@ -149,13 +169,20 @@ export function skorWhales(b: any, x: Ekstra | undefined, orang: Orang | undefin
     return { skor: +sk.toFixed(2), label: label(sk), alasan: a };
 }
 
-export function gabung(f: Record<string, Faktor | null>): Faktor {
-    const W: Record<string, number> = { teknikal: 0.35, fundamental: 0.25, berita: 0.15, whales: 0.25 };
+/** Bobot faktor per horison: makin pendek, fundamental makin tidak relevan; berita & teknikal makin penting. */
+export function bobot(H: number): Record<string, number> {
+    if (H <= 2) return { teknikal: 0.55, fundamental: 0, berita: 0.3, whales: 0.15 };
+    if (H <= 5) return { teknikal: 0.5, fundamental: 0.05, berita: 0.25, whales: 0.2 };
+    if (H <= 20) return { teknikal: 0.4, fundamental: 0.2, berita: 0.15, whales: 0.25 };
+    return { teknikal: 0.3, fundamental: 0.4, berita: 0.1, whales: 0.2 };
+}
+export function gabung(f: Record<string, Faktor | null>, H = 20): Faktor {
+    const W = bobot(H);
     let s = 0, w = 0;
     for (const k of Object.keys(W)) if (f[k]) { s += f[k]!.skor * W[k]; w += W[k]; }
     const sk = w ? clamp(s / w) : 0;
-    const ada = Object.keys(W).filter((k) => f[k]).length;
-    return { skor: +sk.toFixed(2), label: label(sk), alasan: [`gabungan ${ada} faktor`] };
+    const ada = Object.keys(W).filter((k) => f[k] && W[k] > 0).length;
+    return { skor: +sk.toFixed(2), label: label(sk), alasan: [`gabungan ${ada} faktor untuk posisi ≤${H} hari bursa (bobot: ${Object.entries(W).filter(([, v]) => v > 0).map(([k, v]) => `${k} ${Math.round(v * 100)}%`).join(', ')})`] };
 }
 
 /* ── Sentimen berita (kamus kata, tanpa AI) ───────────────────── */
