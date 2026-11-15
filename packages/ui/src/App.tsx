@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { eventBus } from './events';
 import { useKantor } from './kantor/store';
+import { useSubNav } from './kantor/subnav';
 import { TopBar } from './components/TopBar';
 import { Nav, PageKey, SidePanel } from './components/Nav';
 import { OrgPanel } from './components/OrgPanel';
@@ -114,8 +115,14 @@ export function App() {
                     onOpenDivision={(id) => { setDivision(id); setPanel('org'); closeAgent(); }}
                 />
             )}
+            {page === 'kantor' && <KantorSub panel={panel} go={go} />}
             <Toasts />
             <Nav page={page} panel={panel} onGo={go} />
         </>
     );
+}
+
+function KantorSub({ panel, go }: { panel: SidePanel; go: (k: PageKey | 'org' | 'activity') => void }) {
+    useSubNav([{ k: 'kantor', ico: '🏢', label: 'Kantor' }, { k: 'org', ico: '🧭', label: 'Bagan' }, { k: 'activity', ico: '⚡', label: 'Aktivitas' }], panel || 'kantor', (k) => { if (k !== (panel || 'kantor')) go(k === 'kantor' ? 'kantor' : (k as 'org' | 'activity')); });
+    return null;
 }

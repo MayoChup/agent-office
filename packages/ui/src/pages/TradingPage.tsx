@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useSubNav } from '../kantor/subnav';
 import { useApi, TradingData } from '../kantor/api';
 import { apiPost } from '../kantor/connection';
 import { useKantor, statusOf } from '../kantor/store';
@@ -48,7 +49,11 @@ export function TradingPage() {
     const setF = (f: FaktorKey) => { setFaktor(f); try { localStorage.setItem('kantor:faktor', f); } catch { /* */ } };
     const sc = useApi<ScreenerData>('/api/kantor/screener', 600_000);
     React.useEffect(() => { if (!sc.data?.sibuk) return; const t = setInterval(() => sc.reload(), 8000); return () => clearInterval(t); }, [sc.data?.sibuk]);
-    const setTab = (t: Tab) => { setSaham(null); setTabState(t); try { localStorage.setItem(LS_TAB, t); } catch { /* */ } };
+    const setTab = (t: Tab) => { setSaham(null); setTabState(t); try { localStorage.setItem(LS_TAB, t); } catch { /* */ } document.querySelector('.pg')?.scrollTo({ top: 0 }); };
+    // Menu bawah HP: yang paling sering dipakai di depan, sisanya masuk "Lainnya".
+    const IKON: Record<Tab, string> = { pilihan: '🎯', watchlist: '⭐', panas: '🟩', berita: '🪐', pasar: '🌐', penyaring: '🔍', investigasi: '🕵️', posisi: '💼' };
+    const PENDEK: Partial<Record<Tab, string>> = { pilihan: 'Sinyal', panas: 'Peta panas', berita: 'Berita', posisi: 'Posisi' };
+    useSubNav((['pilihan', 'watchlist', 'panas', 'berita', 'pasar', 'penyaring', 'investigasi', 'posisi'] as Tab[]).map((k) => ({ k, ico: IKON[k], label: PENDEK[k] || TABS.find((t) => t.k === k)!.label })), tab, (k) => setTab(k as Tab));
     const buka = (s: string) => { setSaham(s); document.querySelector('.pg')?.scrollTo({ top: 0 }); };
     const perbarui = async () => { try { await apiPost('/api/kantor/screener/perbarui', { jenis: 'teknikal' }); setTimeout(() => sc.reload(), 3000); } catch { /* */ } };
     const realized = (data?.history || []).reduce((a, h) => a + (h.pnl || 0), 0);
@@ -65,6 +70,7 @@ export function TradingPage() {
             )}
             <nav className="sb-nav">
                 {TABS.map((t) => <button key={t.k} className={tab === t.k && !saham ? 'on' : ''} onClick={() => setTab(t.k)}>{t.label}</button>)}
+                <span className="sb-nav-judul">{TABS.find((t) => t.k === tab)?.label}</span>
                 <span className="sb-nav-sp" />
                 {sc.data?.sibuk ? <span className="sb-busy">⏳ {sc.data.progres}</span> : <button className="sb-refresh" onClick={() => { perbarui(); reload(); }} title="Ambil data terbaru">↻</button>}
             </nav>

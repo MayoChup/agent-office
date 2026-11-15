@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useSubNav } from '../../kantor/subnav';
 import { useApi } from '../../kantor/api';
 import { apiGet, apiPost } from '../../kantor/connection';
 import { RichText } from '../../components/common/RichText';
@@ -17,7 +18,8 @@ export function KeuanganApp() {
     const rep = useApi<Report>('/api/kantor/keuangan', 120_000);
     const ang = useApi<Anggaran>('/api/kantor/keuangan/anggaran', 0);
     const [tab, setTabS] = useState<Tab>(() => { try { return (localStorage.getItem('kantor:keu-tab') as Tab) || 'beranda'; } catch { return 'beranda'; } });
-    const setTab = (t: Tab) => { setTabS(t); try { localStorage.setItem('kantor:keu-tab', t); } catch { /* */ } };
+    const setTab = (t: Tab) => { setTabS(t); try { localStorage.setItem('kantor:keu-tab', t); } catch { /* */ } document.querySelector('.pg')?.scrollTo({ top: 0 }); };
+    useSubNav(TABS.map((t) => ({ k: t.k, ico: t.ico, label: t.k === 'chat' ? 'Catat' : t.label })), tab, (k) => { setTab(k as Tab); if (k !== 'transaksi') setFilter({}); });
     const [geser, setGeser] = useState(0);
     const [tambah, setTambah] = useState(false);
     const [detail, setDetail] = useState<Tx | null>(null);

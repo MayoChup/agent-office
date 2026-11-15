@@ -1,54 +1,101 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useKantor } from '../kantor/store';
+import { useSubNavState } from '../kantor/subnav';
+import { eventBus } from '../events';
 
 export type PageKey = 'home' | 'kantor' | 'keuangan' | 'trading' | 'tugas' | 'jadwal' | 'obrolan' | 'catatan' | 'berkas';
 export type SidePanel = 'org' | 'activity' | null;
 
-const ALL: Array<{ key: PageKey | 'org' | 'activity'; ico: string; label: string }> = [
-    { key: 'home', ico: '🏠', label: 'Beranda' },
-    { key: 'kantor', ico: '🏢', label: 'Kantor' },
-    { key: 'keuangan', ico: '💰', label: 'Keuangan' },
-    { key: 'trading', ico: '📈', label: 'Trading' },
-    { key: 'tugas', ico: '📋', label: 'Tugas' },
-    { key: 'jadwal', ico: '📅', label: 'Jadwal' },
-    { key: 'obrolan', ico: '💬', label: 'Chat' },
-    { key: 'catatan', ico: '📓', label: 'Catatan' },
-    { key: 'berkas', ico: '☁️', label: 'Berkas' },
+const ALL: Array<{ key: PageKey | 'org' | 'activity'; ico: string; label: string; ket?: string }> = [
+    { key: 'home', ico: '🏠', label: 'Beranda', ket: 'Ringkasan hari ini' },
+    { key: 'obrolan', ico: '💬', label: 'Chat', ket: 'Ngobrol dengan tim AI' },
+    { key: 'keuangan', ico: '💰', label: 'Keuangan', ket: 'Pengeluaran, anggaran, transaksi' },
+    { key: 'trading', ico: '📈', label: 'Trading', ket: 'Watchlist, sinyal, peta pasar' },
+    { key: 'catatan', ico: '📓', label: 'Catatan', ket: 'Buku catatan & gambar' },
+    { key: 'berkas', ico: '☁️', label: 'Berkas', ket: 'Cloud pribadi 5 GB' },
+    { key: 'tugas', ico: '📋', label: 'Tugas', ket: 'Pekerjaan tim' },
+    { key: 'jadwal', ico: '📅', label: 'Jadwal', ket: 'Kalender & pengingat' },
+    { key: 'kantor', ico: '🏢', label: 'Kantor', ket: 'Kantor 2D, bagan, aktivitas' },
     { key: 'org', ico: '🧭', label: 'Bagan' },
     { key: 'activity', ico: '⚡', label: 'Aktivitas' }
 ];
-const MOBILE_MAIN = ['home', 'obrolan', 'keuangan', 'trading'];
+/** Di HP, Bagan & Aktivitas jadi menu bawah halaman Kantor, jadi tidak perlu ada di menu samping. */
+const LACI = ALL.filter((i) => i.key !== 'org' && i.key !== 'activity');
+const MAKS_BAWAH = 5;
 
 export function Nav({ page, panel, onGo }: { page: PageKey; panel: SidePanel; onGo: (k: PageKey | 'org' | 'activity') => void }) {
     const tasks = useKantor((s) => s.tasks);
     const activeTasks = tasks.filter((t) => t.status === 'in_progress' || t.status === 'blocked').length;
+    const sub = useSubNavState();
+    const [laci, setLaci] = useState(false);
     const [more, setMore] = useState(false);
     const badge = (k: string) => (k === 'tugas' ? activeTasks : 0);
     const isActive = (k: string) => (k === 'org' || k === 'activity' ? page === 'kantor' && panel === k : page === k && !(k === 'kantor' && panel));
-    const btn = (it: (typeof ALL)[number], extra = '') => (
-        <button key={it.key} className={`dock-btn ${extra} ${isActive(it.key) ? 'active' : ''}`} onClick={() => { setMore(false); onGo(it.key); }}>
+
+    useEffect(() => {
+        const buka = () => setLaci(true);
+        eventBus.addEventListener('buka-menu', buka);
+        return () => eventBus.removeEventListener('buka-menu', buka);
+    }, []);
+    useEffect(() => { setMore(false); setLaci(false); }, [page]);
+    useEffect(() => { document.body.classList.toggle('tanpa-subnav', !sub || sub.items.length < 2); }, [sub]);
+
+    const N = (n: number) => (n > 9 ? '9+' : n);
+    const utama = sub ? (sub.items.length <= MAKS_BAWAH ? sub.items : sub.items.slice(0, MAKS_BAWAH - 1)) : [];
+    const sisa = sub && sub.items.length > MAKS_BAWAH ? sub.items.slice(MAKS_BAWAH - 1) : [];
+    const subBtn = (it: { k: string; ico: string; label: string; badge?: number }) => (
+        <button key={it.k} className={`dock-btn ${sub?.aktif === it.k ? 'active' : ''}`} onClick={() => { setMore(false); sub?.pilih(it.k); }}>
             <span className="ico">{it.ico}</span>
-            {it.label}
-            {badge(it.key) > 0 && <span className="badge">{badge(it.key) > 9 ? '9+' : badge(it.key)}</span>}
+            <span className="dock-lbl">{it.label}</span>
+            {!!it.badge && <span className="badge">{N(it.badge)}</span>}
         </button>
     );
-    const moreItems = ALL.filter((i) => !MOBILE_MAIN.includes(i.key));
-    const moreBadge = moreItems.reduce((a, i) => a + badge(i.key), 0);
+
     return (
         <>
-            <nav className="dock interactive">
-                {ALL.map((it) => btn(it, MOBILE_MAIN.includes(it.key) ? '' : 'desk-only'))}
-                <button className={`dock-btn mobile-only ${more || moreItems.some((i) => isActive(i.key)) ? 'active' : ''}`} onClick={() => setMore(!more)}>
-                    <span className="ico">☰</span>
-                    Lainnya
-                    {moreBadge > 0 && <span className="badge">{moreBadge > 9 ? '9+' : moreBadge}</span>}
-                </button>
+            {/* Laptop: menu samping seperti biasa */}
+            <nav className="dock dock-desk interactive">
+                {ALL.map((it) => (
+                    <button key={it.key} className={`dock-btn ${isActive(it.key) ? 'active' : ''}`} onClick={() => onGo(it.key)}>
+                        <span className="ico">{it.ico}</span>
+                        {it.label}
+                        {badge(it.key) > 0 && <span className="badge">{N(badge(it.key))}</span>}
+                    </button>
+                ))}
             </nav>
-            {more && (
+
+            {/* HP: menu bawah = bagian-bagian dari halaman yang sedang dibuka */}
+            {sub && sub.items.length > 1 && (
+                <nav className="dock dock-sub interactive">
+                    {utama.map(subBtn)}
+                    {sisa.length > 0 && (
+                        <button className={`dock-btn ${more || sisa.some((i) => i.k === sub.aktif) ? 'active' : ''}`} onClick={() => setMore(!more)}>
+                            <span className="ico">⋯</span>
+                            <span className="dock-lbl">{sisa.some((i) => i.k === sub.aktif) ? sisa.find((i) => i.k === sub.aktif)!.label : 'Lainnya'}</span>
+                            {sisa.some((i) => i.badge) && <span className="badge">{N(sisa.reduce((a, i) => a + (i.badge || 0), 0))}</span>}
+                        </button>
+                    )}
+                </nav>
+            )}
+            {more && sub && (
                 <div className="more-sheet interactive" onClick={() => setMore(false)}>
-                    <div className="more-grid" onClick={(e) => e.stopPropagation()}>
-                        {moreItems.map((it) => btn(it))}
-                    </div>
+                    <div className="more-grid" onClick={(e) => e.stopPropagation()}>{sisa.map(subBtn)}</div>
+                </div>
+            )}
+
+            {/* HP: menu samping (laci) berisi semua menu utama */}
+            {laci && (
+                <div className="laci interactive" onClick={() => setLaci(false)}>
+                    <aside className="laci-in" onClick={(e) => e.stopPropagation()}>
+                        <div className="laci-h"><b>Menu</b><button className="icon-btn" onClick={() => setLaci(false)} aria-label="Tutup menu">✕</button></div>
+                        {LACI.map((it) => (
+                            <button key={it.key} className={`laci-btn ${page === it.key ? 'on' : ''}`} onClick={() => { setLaci(false); onGo(it.key); }}>
+                                <span className="laci-ico">{it.ico}</span>
+                                <span className="laci-t"><b>{it.label}</b>{it.ket && <small>{it.ket}</small>}</span>
+                                {badge(it.key) > 0 && <span className="laci-badge">{N(badge(it.key))}</span>}
+                            </button>
+                        ))}
+                    </aside>
                 </div>
             )}
         </>

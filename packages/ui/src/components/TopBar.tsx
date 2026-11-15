@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useKantor } from '../kantor/store';
 import { logout } from '../kantor/connection';
 import { useTema } from '../kantor/tema';
+import { eventBus } from '../events';
 
 function useClock() {
     const [now, setNow] = useState(() => new Date());
@@ -28,6 +29,7 @@ export function TopBar() {
 
     return (
         <div className="topbar interactive">
+            <button className="icon-btn menu-btn" aria-label="Buka menu" onClick={() => eventBus.dispatchEvent(new CustomEvent('buka-menu'))}>☰</button>
             <div className="brand">
                 <div className="brand-logo">🏢</div>
                 <div style={{ minWidth: 0 }}>
