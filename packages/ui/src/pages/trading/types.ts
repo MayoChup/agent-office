@@ -22,7 +22,7 @@ export interface ScreenerData { baris: Baris[]; pasar: Pasar; teknikalAt: number
 
 export const LABELS: Label[] = ['Beli kuat', 'Beli', 'Tahan', 'Jual', 'Jual kuat'];
 export const FAKTOR: Array<{ k: FaktorKey; label: string; ico: string; info: string }> = [
-    { k: 'semua', label: 'Semua', ico: '◎', info: 'Gabungan semua faktor (teknikal 35%, fundamental 25%, whales 25%, berita 15%).' },
+    { k: 'semua', label: 'Semua', ico: '◎', info: 'Gabungan semua faktor — bobotnya mengikuti rencana pegang posisi di atas.' },
     { k: 'teknikal', label: 'Teknikal', ico: '📈', info: 'Tren, MA50/MA200, golden/death cross, MACD, RSI, double top/bottom, breakout.' },
     { k: 'fundamental', label: 'Fundamental', ico: '🏦', info: 'ROE, PER, PBV, utang, margin, pertumbuhan pendapatan (laporan SEC).' },
     { k: 'berita', label: 'Berita', ico: '📰', info: 'Sentimen judul berita 7 hari terakhir.' },

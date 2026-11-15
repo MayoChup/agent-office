@@ -42,7 +42,7 @@ export function PilihanView({ data, faktor, setFaktor, onOpen, watchlist }: { da
         <>
             <section className="sb-hero row-hero">
                 <div>
-                    <h1>Pilihan harian</h1>
+                    <h1>Pilihan sinyal</h1>
                     <p>Sinyal beli, tahan, dan jual tiap saham — dari teknikal, fundamental, berita, dan whales — lengkap dengan target harga dan peluang tercapainya. Data penutupan {data.teknikalSesi || '–'}.</p>
                 </div>
                 <div className="sb-counts">{ringkas.map((r) => <button key={r.l} className={`sb-count ${kelas(r.l)} ${label === r.l ? 'on' : ''}`} onClick={() => setLabel(label === r.l ? 'Semua' : r.l)}><b>{r.n}</b><span>{r.l}</span></button>)}</div>
