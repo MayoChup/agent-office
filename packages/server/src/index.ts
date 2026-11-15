@@ -10,7 +10,9 @@ import { Pencatat, telegramNotifier, ringkasanKeuangan } from './kantor/pencatat
 import { TradingDesk, tradingCli, fetchPrice } from './kantor/trading';
 import { Kalender } from './kantor/kalender';
 import { slidesCli } from './kantor/slides';
-import { WaJanji, WaReader, waLoginCli, waLogoutCli } from './kantor/wa';
+import { WaJanji, WaReader, waLoginCli, waLogoutCli, waLinked } from './kantor/wa';
+import { FreeLlm } from './kantor/freeLlm';
+import { spawn } from 'child_process';
 import os from 'os';
 
 const config = loadConfig();
@@ -29,6 +31,17 @@ if (tradingArg >= 0) {
     waLoginCli(config.dataDir, process.argv[process.argv.indexOf('--wa-login') + 1])
         .then((out) => { console.log(out); process.exit(0); })
         .catch((e) => { console.error('GAGAL:', e?.message || e); process.exit(1); });
+} else if (process.argv.includes('--wa-reader')) {
+    // Proses terpisah untuk WhatsApp: kalau modul WhatsApp crash, kantor tetap jalan.
+    const notify = telegramNotifier(config.hermesHome);
+    const llm = new FreeLlm({
+        apiKey: config.openRouterApiKey, baseUrl: config.openRouterBaseUrl, model: config.model,
+        dailyLimit: 60, perMinuteLimit: 4, dataDir: path.join(config.dataDir, 'wa'), backups: config.llmBackups
+    });
+    fs.mkdirSync(path.join(config.dataDir, 'wa'), { recursive: true });
+    const kal = new Kalender(config.hermesHome, config.dataDir, notify);
+    const janji = new WaJanji(config.dataDir, () => (llm.enabled || config.llmBackups.length ? llm : null), kal, notify, { abaikan: config.whatsapp.abaikan.map((n) => n.replace(/^0/, '62')) });
+    new WaReader(config.dataDir, janji, notify, { grup: config.whatsapp.grup }).start();
 } else if (process.argv.includes('--wa-logout')) {
     console.log(waLogoutCli(config.dataDir));
     process.exit(0);
@@ -62,6 +75,27 @@ if (tradingArg >= 0) {
     })();
 } else {
     startServer();
+}
+
+/** Jalankan pembaca WhatsApp sebagai proses anak; hidupkan ulang kalau mati (jeda makin lama). */
+function startWaChild() {
+    let fails = 0;
+    let current: ReturnType<typeof spawn> | null = null;
+    process.once('exit', () => current?.kill());
+    const run = () => {
+        if (!waLinked(config.dataDir)) { console.log('[WA] Belum ditautkan (jalankan --wa-login). Pembaca WhatsApp mati.'); return; }
+        const started = Date.now();
+        const child = spawn(process.execPath, [process.argv[1], '--wa-reader'], { stdio: 'inherit', env: process.env });
+        current = child;
+        child.on('exit', (code, signal) => {
+            if (Date.now() - started > 10 * 60_000) fails = 0;
+            fails++;
+            const wait = Math.min(30 * 60_000, 15_000 * 2 ** Math.min(fails, 7));
+            console.warn(`[WA] Proses WhatsApp berhenti (${signal || code}). Dicoba lagi dalam ${Math.round(wait / 60_000) || 1} menit.`);
+            setTimeout(run, wait);
+        });
+    };
+    run();
 }
 
 function startServer() {
@@ -190,11 +224,7 @@ gameServer.listen(config.port, config.host).then(async () => {
     pencatat.start();
     tradingDesk.start();
     kalender.start();
-    if (config.whatsapp.enabled) {
-        const notify = telegramNotifier(config.hermesHome);
-        const janji = new WaJanji(config.dataDir, () => OfficeRoom.sharedLlm(), kalender, notify, { abaikan: config.whatsapp.abaikan.map((n) => n.replace(/^0/, '62')) });
-        new WaReader(config.dataDir, janji, notify, { grup: config.whatsapp.grup }).start();
-    }
+    if (config.whatsapp.enabled) startWaChild();
     console.log(`[Kantor] Buka http://${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.port}`);
     if (config.host !== '127.0.0.1' && config.host !== 'localhost') {
         console.warn('[Kantor] PERINGATAN: server tidak hanya mendengarkan localhost. Pastikan port ini TIDAK terbuka ke internet.');

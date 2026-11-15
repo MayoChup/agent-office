@@ -108,18 +108,28 @@ export class WaJanji {
 
 /* ── Sambungan WhatsApp (Baileys) ───────────────────────────── */
 
-function baileys(): any {
-    try { return require('@whiskeysockets/baileys'); } catch { return null; }
-}
-function silentLogger(): any {
-    try { return require('pino')({ level: 'silent' }); } catch { return undefined; }
+// Dimuat dengan import() asli (Baileys adalah modul ESM); require() untuk ESM bisa membuat Node crash.
+const nativeImport = new Function('m', 'return import(m)') as (m: string) => Promise<any>;
+let cache: { B: any; logger: any } | null | undefined;
+async function baileys(): Promise<{ B: any; logger: any } | null> {
+    if (cache !== undefined) return cache;
+    try {
+        const B = await nativeImport('@whiskeysockets/baileys');
+        let logger: any;
+        try { const pino = await nativeImport('pino'); logger = (pino.default || pino)({ level: 'silent' }); } catch { /* bawaan */ }
+        cache = { B: B.default?.makeWASocket ? B.default : B, logger };
+    } catch (e: any) {
+        console.warn('[WA] Modul WhatsApp gagal dimuat:', e?.message || e);
+        cache = null;
+    }
+    return cache;
 }
 export const waAuthDir = (dataDir: string) => path.join(dataDir, 'wa-auth');
 /** Sudah tertaut sungguhan (bukan sisa percobaan login yang gagal). */
 export const waLinked = (dataDir: string) => {
     try {
         const c = JSON.parse(fs.readFileSync(path.join(waAuthDir(dataDir), 'creds.json'), 'utf8'));
-        return Boolean(c.registered || c.me?.id);
+        return Boolean(c.account); // "account" baru terisi setelah WhatsApp benar-benar menyetujui tautan
     } catch { return false; }
 };
 
@@ -129,16 +139,18 @@ function teksDari(m: any): string {
 }
 
 async function socket(dataDir: string, onOpen?: (sock: any) => void, onClose?: (code: number) => void, onQr?: (sock: any) => void, qrTimeout?: number) {
-    const B = baileys();
-    if (!B) throw new Error('Modul WhatsApp belum terpasang di paket kantor (tunggu update berikutnya).');
-    const { default: makeWASocket, useMultiFileAuthState, Browsers } = B;
+    const mod = await baileys();
+    if (!mod) throw new Error('Modul WhatsApp belum terpasang di paket kantor (tunggu update berikutnya).');
+    const B = mod.B;
+    const makeWASocket = B.makeWASocket || B.default;
+    const { useMultiFileAuthState, Browsers } = B;
     const { state, saveCreds } = await useMultiFileAuthState(waAuthDir(dataDir));
     let version: number[] | undefined;
     try { version = (await B.fetchLatestBaileysVersion()).version; } catch { /* pakai bawaan */ }
     const sock = makeWASocket({
         version,
         auth: state,
-        logger: silentLogger(),
+        logger: mod.logger,
         browser: Browsers.ubuntu('Chrome'),   // nama peramban standar; nama lain membuat kode tautan ditolak
         qrTimeout,
         markOnlineOnConnect: false,        // jangan tampil "online"
@@ -167,7 +179,6 @@ export class WaReader {
 
     start() {
         if (!waLinked(this.dataDir)) { console.log('[WA] Belum ditautkan (jalankan --wa-login). Pembaca WhatsApp mati.'); return; }
-        if (!baileys()) { console.warn('[WA] Modul WhatsApp tidak ada di paket ini.'); return; }
         this.connect();
     }
 
