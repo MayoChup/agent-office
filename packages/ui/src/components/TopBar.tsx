@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useKantor } from '../kantor/store';
 import { logout } from '../kantor/connection';
+import { useTema } from '../kantor/tema';
 
 function useClock() {
     const [now, setNow] = useState(() => new Date());
@@ -18,6 +19,7 @@ export function TopBar() {
     const usage = useKantor((s) => s.usage);
     const clock = useClock();
     const [showQuota, setShowQuota] = useState(false);
+    const [tema, gantiTema] = useTema();
 
     const dotClass = status === 'connected' ? 'ok' : status === 'connecting' || status === 'checking' ? 'wait' : 'bad';
     const statusText = status === 'connected' ? 'Terhubung' : status === 'connecting' || status === 'checking' ? 'Menyambung…' : status === 'login' ? 'Belum masuk' : 'Terputus';
@@ -52,6 +54,7 @@ export function TopBar() {
                 </div>
             )}
             <div className="pill"><span className={`dot ${dotClass}`} /><span className="hide-sm">{statusText}</span></div>
+            <button className="icon-btn tema-btn" title={tema === 'dark' ? 'Ganti ke tampilan terang' : 'Ganti ke tampilan gelap'} aria-label="Ganti tema" onClick={gantiTema}>{tema === 'dark' ? '☀' : '☾'}</button>
             {status !== 'login' && <button className="icon-btn" title="Keluar" onClick={logout}>⎋</button>}
         </div>
     );

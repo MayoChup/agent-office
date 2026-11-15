@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { Ekstra, Berita, Orang, ekstra, skorTeknikal, skorFundamental, skorBerita, skorWhales, gabung, ambilBerita, ambilOrangDalam, bacaLaporanSari, Faktor } from './skor';
 
 /**
  * Penyaring saham AS (S&P 500 + watchlist) — data GRATIS, dihitung di VPS tanpa AI:
@@ -23,9 +24,10 @@ export interface Sinyal {
 export interface Baris {
     s: string; nama: string; sektor: string; harga: number; chg1d: number; chg1m: number; chg3m: number; chg1y: number;
     rsi: number | null; ma50: number | null; ma200: number | null; volX: number; sinyal: Sinyal; f: Fundamental | null;
+    x?: Ekstra; vol?: number;
 }
 interface Spark { s: string; tgl: string[]; c: number[]; ma50: (number | null)[]; ma200: (number | null)[] }
-interface Simpanan { baris: Baris[]; teknikalSesi: string; teknikalAt: number; fundamentalAt: number; gagal: string[] }
+interface Simpanan { baris: Baris[]; teknikalSesi: string; teknikalAt: number; fundamentalAt: number; gagal: string[]; berita?: Record<string, Berita>; beritaAt?: number; orang?: Record<string, Orang>; tape?: Array<{ s: string; nama: string; harga: number; chg: number }> }
 
 /* ── Indikator ─────────────────────────────────────────────── */
 export function sma(x: number[], n: number): (number | null)[] {
@@ -120,10 +122,11 @@ async function harian(s: string) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const r: any = (await res.json() as any)?.chart?.result?.[0];
     const q = r?.indicators?.quote?.[0] || {};
-    const rows = (r?.timestamp || []).map((t: number, i: number) => ({ t: new Date(t * 1000).toISOString().slice(0, 10), c: q.close?.[i], v: q.volume?.[i] || 0 }))
-        .filter((x: any) => Number.isFinite(x.c));
+    const rows = (r?.timestamp || []).map((t: number, i: number) => ({ t: new Date(t * 1000).toISOString().slice(0, 10), o: q.open?.[i], h: q.high?.[i], l: q.low?.[i], c: q.close?.[i], v: q.volume?.[i] || 0 }))
+        .filter((x: any) => [x.o, x.h, x.l, x.c].every((y) => Number.isFinite(y)));
     if (rows.length < 60) throw new Error('data kurang');
-    return { tgl: rows.map((x: any) => x.t) as string[], c: rows.map((x: any) => x.c) as number[], v: rows.map((x: any) => x.v) as number[], nama: String(r?.meta?.longName || r?.meta?.shortName || '') };
+    const col = (k: string) => rows.map((x: any) => x[k]) as number[];
+    return { tgl: col('t') as unknown as string[], o: col('o'), h: col('h'), l: col('l'), c: col('c'), v: col('v'), nama: String(r?.meta?.longName || r?.meta?.shortName || '') };
 }
 
 async function secJson(url: string): Promise<any | null> {
@@ -146,10 +149,10 @@ export class Screener {
     private file: string;
     private sparkDir: string;
     private st: Simpanan;
-    sibuk: '' | 'teknikal' | 'fundamental' = '';
+    sibuk: '' | 'teknikal' | 'fundamental' | 'berita' = '';
     progres = '';
 
-    constructor(dataDir: string, private watchlist: () => string[]) {
+    constructor(dataDir: string, private watchlist: () => string[], private deskDir = '') {
         const dir = path.join(dataDir, 'screener');
         fs.mkdirSync(path.join(dir, 'spark'), { recursive: true });
         this.file = path.join(dir, 'data.json');
@@ -158,9 +161,43 @@ export class Screener {
     }
     private simpan() { fs.writeFileSync(this.file, JSON.stringify(this.st)); }
 
-    data() {
-        return { baris: this.st.baris, teknikalAt: this.st.teknikalAt, teknikalSesi: this.st.teknikalSesi, fundamentalAt: this.st.fundamentalAt, sibuk: this.sibuk, progres: this.progres, gagal: this.st.gagal.length };
+    /** Skor 4 faktor + gabungan untuk satu saham. */
+    skor(b: Baris, sari = bacaLaporanSari(this.deskDir)): Record<string, Faktor | null> {
+        const f: Record<string, Faktor | null> = {
+            teknikal: skorTeknikal(b), fundamental: skorFundamental(b), berita: skorBerita(this.st.berita?.[b.s]),
+            whales: skorWhales(b, b.x, this.st.orang?.[b.s], sari.get(b.s) || 0)
+        };
+        return { semua: gabung(f), ...f };
     }
+
+    data() {
+        const sari = bacaLaporanSari(this.deskDir);
+        const baris = this.st.baris.map((b) => {
+            const sk = this.skor(b, sari);
+            const ringkas: Record<string, { skor: number; label: string } | null> = {};
+            for (const k of Object.keys(sk)) ringkas[k] = sk[k] ? { skor: sk[k]!.skor, label: sk[k]!.label } : null;
+            return { ...b, skor: ringkas };
+        });
+        // Ikhtisar pasar
+        const naik = baris.filter((b) => b.chg1d > 0.05).length, turun = baris.filter((b) => b.chg1d < -0.05).length;
+        const sek = new Map<string, { w: number; s: number; n: number }>();
+        let mcap = 0;
+        for (const b of baris) {
+            const w = b.f?.mcap || 1; mcap += b.f?.mcap || 0;
+            const k = b.sektor || 'Lainnya'; const e = sek.get(k) || { w: 0, s: 0, n: 0 };
+            e.w += w; e.s += b.chg1d * w; e.n++; sek.set(k, e);
+        }
+        const sektor = Array.from(sek.entries()).map(([k, e]) => ({ nama: k, n: e.n, chg: +(e.s / e.w).toFixed(2) })).sort((a, b) => b.chg - a.chg);
+        const pasar = { naik, turun, tetap: baris.length - naik - turun, mcap, sektor, tape: this.st.tape || [] };
+        return { baris, pasar, beritaAt: this.st.beritaAt || 0, teknikalAt: this.st.teknikalAt, teknikalSesi: this.st.teknikalSesi, fundamentalAt: this.st.fundamentalAt, sibuk: this.sibuk, progres: this.progres, gagal: this.st.gagal.length };
+    }
+    /** Detail lengkap satu saham: alasan tiap faktor, berita, orang dalam. */
+    detail(s: string) {
+        const b = this.st.baris.find((x) => x.s === s);
+        if (!b) return null;
+        return { baris: b, skor: this.skor(b), berita: this.st.berita?.[s] || null, orang: this.st.orang?.[s] || null };
+    }
+
     spark(s: string): Spark | null {
         try { return JSON.parse(fs.readFileSync(path.join(this.sparkDir, `${s.replace(/[^A-Z0-9-]/gi, '')}.json`), 'utf8')); } catch { return null; }
     }
@@ -172,7 +209,8 @@ export class Screener {
         if (ada) return ada;
         const d = await harian(s);
         const a = analisis(d.c, d.v);
-        return { s, nama: d.nama || s, sektor: '', harga: +d.c[d.c.length - 1].toFixed(2), chg1d: a.chg1d, chg1m: a.chg1m, chg3m: a.chg3m, chg1y: a.chg1y, rsi: a.rsi, ma50: a.ma50 != null ? +a.ma50.toFixed(2) : null, ma200: a.ma200 != null ? +a.ma200.toFixed(2) : null, volX: a.volX, sinyal: a.sinyal, f: null };
+        const b: Baris = { s, nama: d.nama || s, sektor: '', harga: +d.c[d.c.length - 1].toFixed(2), chg1d: a.chg1d, chg1m: a.chg1m, chg3m: a.chg3m, chg1y: a.chg1y, rsi: a.rsi, ma50: a.ma50 != null ? +a.ma50.toFixed(2) : null, ma200: a.ma200 != null ? +a.ma200.toFixed(2) : null, volX: a.volX, sinyal: a.sinyal, f: null, x: ekstra(d.o, d.h, d.l, d.c, d.v, a.ma50, a.ma200), vol: d.v[d.v.length - 1] };
+        return b;
     }
 
     private async semesta(): Promise<Array<{ s: string; nama: string; sektor: string }>> {
@@ -213,7 +251,7 @@ export class Screener {
                     try {
                         const d = await harian(u.s);
                         const a = analisis(d.c, d.v);
-                        baru.push({ s: u.s, nama: u.nama || d.nama || u.s, sektor: u.sektor, harga: +d.c[d.c.length - 1].toFixed(2), chg1d: a.chg1d, chg1m: a.chg1m, chg3m: a.chg3m, chg1y: a.chg1y, rsi: a.rsi, ma50: a.ma50 != null ? +a.ma50.toFixed(2) : null, ma200: a.ma200 != null ? +a.ma200.toFixed(2) : null, volX: a.volX, sinyal: a.sinyal, f: lama.get(u.s)?.f || null });
+                        baru.push({ s: u.s, nama: u.nama || d.nama || u.s, sektor: u.sektor, harga: +d.c[d.c.length - 1].toFixed(2), chg1d: a.chg1d, chg1m: a.chg1m, chg3m: a.chg3m, chg1y: a.chg1y, rsi: a.rsi, ma50: a.ma50 != null ? +a.ma50.toFixed(2) : null, ma200: a.ma200 != null ? +a.ma200.toFixed(2) : null, volX: a.volX, sinyal: a.sinyal, f: lama.get(u.s)?.f || null, x: ekstra(d.o, d.h, d.l, d.c, d.v, a.ma50, a.ma200), vol: d.v[d.v.length - 1] });
                         const k = Math.max(0, d.c.length - 130);
                         const r2 = (x: number | null) => (x == null ? null : +x.toFixed(2));
                         fs.writeFileSync(path.join(this.sparkDir, `${u.s}.json`), JSON.stringify({ s: u.s, tgl: d.tgl.slice(k), c: d.c.slice(k).map((x) => +x.toFixed(2)), ma50: a.m50.slice(k).map(r2), ma200: a.m200.slice(k).map(r2) }));
@@ -227,8 +265,53 @@ export class Screener {
                 this.st.teknikalSesi = sesi; this.st.teknikalAt = Date.now(); this.st.gagal = gagal;
                 this.simpan();
             }
-            // Fundamental lebih dari 7 hari → perbarui juga.
+            // Pita indeks (S&P 500, Nasdaq 100, Dow, Russell 2000, VIX)
+            const tape: Array<{ s: string; nama: string; harga: number; chg: number }> = [];
+            for (const [s, nama] of [['SPY', 'S&P 500'], ['QQQ', 'Nasdaq 100'], ['DIA', 'Dow Jones'], ['IWM', 'Russell 2000'], ['^VIX', 'VIX']]) {
+                try { const d = await harian(s); const n = d.c.length; tape.push({ s, nama, harga: +d.c[n - 1].toFixed(2), chg: +((d.c[n - 1] / d.c[n - 2] - 1) * 100).toFixed(2) }); } catch { /* lewati */ }
+            }
+            if (tape.length) { this.st.tape = tape; this.simpan(); }
+            // Fundamental lebih dari 7 hari → perbarui juga. Berita & orang dalam tiap sesi.
             if (Date.now() - this.st.fundamentalAt > 7 * 86400_000) { this.sibuk = ''; await this.perbaruiFundamental(); }
+            this.sibuk = ''; await this.perbaruiBerita();
+        } finally { this.sibuk = ''; this.progres = ''; }
+    }
+
+    /** Sentimen berita semua saham + transaksi orang dalam untuk watchlist (±4 menit). */
+    async perbaruiBerita() {
+        if (this.sibuk) return;
+        this.sibuk = 'berita';
+        try {
+            const daftar = this.st.baris.map((b) => b.s);
+            const out: Record<string, Berita> = { ...(this.st.berita || {}) };
+            let i = 0;
+            const kerja = async () => {
+                while (i < daftar.length) {
+                    const s = daftar[i++];
+                    this.progres = `berita ${i}/${daftar.length}`;
+                    try { out[s] = await ambilBerita(s); } catch { /* lewati */ }
+                    await new Promise((r) => setTimeout(r, 200));
+                }
+            };
+            await Promise.all([kerja(), kerja(), kerja()]);
+            this.st.berita = out; this.st.beritaAt = Date.now();
+            this.simpan();
+            // Orang dalam (Form 4) — hanya watchlist/posisi supaya hemat permintaan ke SEC.
+            const map = await secJson('https://www.sec.gov/files/company_tickers.json');
+            if (map) {
+                const cikOf = new Map<string, number>();
+                for (const k of Object.keys(map)) cikOf.set(String(map[k].ticker).toUpperCase(), Number(map[k].cik_str));
+                const orang: Record<string, Orang> = { ...(this.st.orang || {}) };
+                const wl = this.watchlist().slice(0, 25);
+                for (let j = 0; j < wl.length; j++) {
+                    this.progres = `orang dalam ${j + 1}/${wl.length}`;
+                    const cik = cikOf.get(wl[j]);
+                    if (!cik) continue;
+                    try { orang[wl[j]] = await ambilOrangDalam(cik); } catch { /* lewati */ }
+                }
+                this.st.orang = orang;
+                this.simpan();
+            }
         } finally { this.sibuk = ''; this.progres = ''; }
     }
 

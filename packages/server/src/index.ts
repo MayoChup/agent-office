@@ -260,20 +260,25 @@ app.post('/api/kantor/chat/:id', requireToken, (req, res) => {
 });
 
 // ── Penyaring saham (fundamental SEC + teknikal) ─────────────────────
-const screener = new Screener(config.dataDir, () => tradingDesk.load().watchlist);
+const screener = new Screener(config.dataDir, () => { const st = tradingDesk.load(); return Array.from(new Set([...st.positions.map((p) => p.symbol), ...st.watchlist])); }, tradingDeskDir);
 app.get('/api/kantor/screener', requireToken, (_req, res) => { res.json({ ok: true, ...screener.data() }); });
 app.get('/api/kantor/candle/:s', requireToken, async (req, res) => {
     try { res.json({ ok: true, ...(await ambilCandle(String(req.params.s), String(req.query.r || '6B'))) }); }
     catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
 });
 app.get('/api/kantor/saham/:s', requireToken, async (req, res) => {
-    try { res.json({ ok: true, baris: await screener.satu(String(req.params.s)) }); }
+    try { const b = await screener.satu(String(req.params.s)); res.json({ ok: true, baris: b, skor: screener.skor(b) }); }
     catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
+});
+app.get('/api/kantor/saham-detail/:s', requireToken, (req, res) => {
+    const d = screener.detail(String(req.params.s).toUpperCase());
+    if (!d) { res.status(404).json({ ok: false, error: 'Belum ada di data penyaring' }); return; }
+    res.json({ ok: true, ...d });
 });
 app.get('/api/kantor/screener/:s', requireToken, (req, res) => { res.json({ ok: true, spark: screener.spark(String(req.params.s).toUpperCase()) }); });
 app.post('/api/kantor/screener/perbarui', requireToken, (req, res) => {
     if (screener.sibuk) { res.json({ ok: true, sibuk: screener.sibuk }); return; }
-    const p = req.body?.jenis === 'fundamental' ? screener.perbaruiFundamental() : screener.perbaruiTeknikal(true);
+    const p = req.body?.jenis === 'fundamental' ? screener.perbaruiFundamental() : req.body?.jenis === 'berita' ? screener.perbaruiBerita() : screener.perbaruiTeknikal(true);
     p.catch((e) => console.warn('[Screener]', e?.message || e));
     res.json({ ok: true, mulai: true });
 });

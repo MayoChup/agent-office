@@ -1,10 +1,15 @@
 import React, { useState } from 'react';
 import { useApi, TradingData } from '../kantor/api';
+import { apiPost } from '../kantor/connection';
 import { useKantor, statusOf } from '../kantor/store';
 import { Avatar } from '../components/Avatar';
 import { InvestigasiView } from './InvestigasiView';
 import { ScreenerView } from './ScreenerView';
 import { CandleChart } from '../components/CandleChart';
+import { PasarView } from './trading/PasarView';
+import { PilihanView } from './trading/PilihanView';
+import { SahamDetail } from './trading/SahamDetail';
+import { FaktorKey, ScreenerData } from './trading/types';
 
 const LS_TAB = 'kantor:trading-tab';
 
@@ -27,32 +32,50 @@ function Range({ stop, entry, target, price }: { stop: number; entry: number; ta
 }
 
 export function TradingPage() {
-    const { data, error, loading, reload } = useApi<TradingData>('/api/kantor/trading', 120_000);
+    const { data, error, reload } = useApi<TradingData>('/api/kantor/trading', 120_000);
     const agents = useKantor((s) => s.agents);
     const team = agents.filter((a) => a.id === 'trading' || a.id.startsWith('trading-'));
     const [lap, setLap] = useState(0);
     const [grafik, setGrafik] = useState<string | null>(null);
-    type Tab = 'posisi' | 'penyaring' | 'investigasi';
-    const [tab, setTabState] = useState<Tab>(() => { try { const v = localStorage.getItem(LS_TAB); return v === 'investigasi' || v === 'penyaring' ? v : 'posisi'; } catch { return 'posisi'; } });
-    const setTab = (t: Tab) => { setTabState(t); try { localStorage.setItem(LS_TAB, t); } catch { /* */ } };
+    type Tab = 'pasar' | 'pilihan' | 'penyaring' | 'investigasi' | 'posisi';
+    const TABS: Array<{ k: Tab; label: string }> = [{ k: 'pasar', label: 'Pasar' }, { k: 'pilihan', label: 'Pilihan harian' }, { k: 'penyaring', label: 'Penyaring' }, { k: 'investigasi', label: 'Investigasi' }, { k: 'posisi', label: 'Posisi saya' }];
+    const [tab, setTabState] = useState<Tab>(() => { try { const v = localStorage.getItem(LS_TAB) as Tab; return TABS.some((t) => t.k === v) ? v : 'pilihan'; } catch { return 'pilihan'; } });
+    const [saham, setSaham] = useState<string | null>(null);
+    const [faktor, setFaktor] = useState<FaktorKey>(() => { try { return (localStorage.getItem('kantor:faktor') as FaktorKey) || 'semua'; } catch { return 'semua'; } });
+    const setF = (f: FaktorKey) => { setFaktor(f); try { localStorage.setItem('kantor:faktor', f); } catch { /* */ } };
+    const sc = useApi<ScreenerData>('/api/kantor/screener', 600_000);
+    React.useEffect(() => { if (!sc.data?.sibuk) return; const t = setInterval(() => sc.reload(), 8000); return () => clearInterval(t); }, [sc.data?.sibuk]);
+    const setTab = (t: Tab) => { setSaham(null); setTabState(t); try { localStorage.setItem(LS_TAB, t); } catch { /* */ } };
+    const buka = (s: string) => { setSaham(s); document.querySelector('.pg')?.scrollTo({ top: 0 }); };
+    const perbarui = async () => { try { await apiPost('/api/kantor/screener/perbarui', { jenis: 'teknikal' }); setTimeout(() => sc.reload(), 3000); } catch { /* */ } };
     const realized = (data?.history || []).reduce((a, h) => a + (h.pnl || 0), 0);
     const open = (data?.positions || []).reduce((a, p) => a + (p.pnl || 0), 0);
 
     return (
-        <div className="pg">
-            <div className="pg-head">
-                <div><h2>📈 Trading</h2><p>Saham AS · alert target & stop dikirim ke Telegram · bukan nasihat keuangan</p></div>
-                <button className="icon-btn" onClick={() => reload()} disabled={loading} title="Muat ulang">{loading ? '…' : '↻'}</button>
-            </div>
-            <div className="tabs" style={{ margin: 0 }}>
-                <button className={`tab ${tab === 'posisi' ? 'active' : ''}`} onClick={() => setTab('posisi')}>Posisi</button>
-                <button className={`tab ${tab === 'penyaring' ? 'active' : ''}`} onClick={() => setTab('penyaring')}>🧪 Penyaring</button>
-                <button className={`tab ${tab === 'investigasi' ? 'active' : ''}`} onClick={() => setTab('investigasi')}>🔎 Investigasi</button>
-            </div>
-            {tab === 'investigasi' && <InvestigasiView />}
-            {tab === 'penyaring' && <ScreenerView />}
-            {tab === 'posisi' && error && <div className="error">Gagal memuat: {error}</div>}
-            {tab === 'posisi' && data && (
+        <div className="pg pg-trading">
+            {sc.data && sc.data.pasar.tape.length > 0 && (
+                <div className="sb-tape"><div className="sb-tape-in">
+                    {[...sc.data.pasar.tape, ...sc.data.baris.filter((b) => (data?.watchlist || []).includes(b.s)).map((b) => ({ s: b.s, nama: b.s, harga: b.harga, chg: b.chg1d }))].map((t) => (
+                        <button key={t.s} onClick={() => !t.s.startsWith('^') && buka(t.s)}><b>{t.nama}</b> <span className="mono">{t.harga.toLocaleString('en-US', { maximumFractionDigits: 2 })}</span> <em className={`mono ${t.chg >= 0 ? 'up' : 'down'}`}>{t.chg >= 0 ? '▲' : '▼'} {Math.abs(t.chg).toFixed(2)}%</em></button>
+                    ))}
+                </div></div>
+            )}
+            <nav className="sb-nav">
+                {TABS.map((t) => <button key={t.k} className={tab === t.k && !saham ? 'on' : ''} onClick={() => setTab(t.k)}>{t.label}</button>)}
+                <span className="sb-nav-sp" />
+                {sc.data?.sibuk ? <span className="sb-busy">⏳ {sc.data.progres}</span> : <button className="sb-refresh" onClick={() => { perbarui(); reload(); }} title="Ambil data terbaru">↻</button>}
+            </nav>
+            {saham && <SahamDetail simbol={saham} onBack={() => setSaham(null)} />}
+            {!saham && (tab === 'pasar' || tab === 'pilihan') && !sc.data && <div className="fin-empty">{sc.error ? `Gagal memuat: ${sc.error}` : 'Memuat data pasar…'}</div>}
+            {!saham && (tab === 'pasar' || tab === 'pilihan') && sc.data && sc.data.baris.length === 0 && (
+                <div className="sb-card fin-empty">Data pasar belum ada. Tekan ↻ di kanan atas (±5–10 menit untuk ±500 saham + berita), atau tunggu otomatis setelah bursa AS tutup.</div>
+            )}
+            {!saham && tab === 'pasar' && sc.data && sc.data.baris.length > 0 && <PasarView data={sc.data} faktor={faktor} setFaktor={setF} onOpen={buka} />}
+            {!saham && tab === 'pilihan' && sc.data && sc.data.baris.length > 0 && <PilihanView data={sc.data} faktor={faktor} setFaktor={setF} onOpen={buka} watchlist={[...(data?.watchlist || []), ...(data?.positions || []).map((p) => p.symbol)]} />}
+            {!saham && tab === 'investigasi' && <InvestigasiView />}
+            {!saham && tab === 'penyaring' && <ScreenerView onOpen={buka} />}
+            {!saham && tab === 'posisi' && error && <div className="error">Gagal memuat: {error}</div>}
+            {!saham && tab === 'posisi' && data && (
                 <>
                     <div className="fin-mini">
                         <div><span>Modal</span><b>${data.capital}</b></div>

@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useApi } from '../kantor/api';
 import { apiGet, apiPost } from '../kantor/connection';
-import { CandleChart } from '../components/CandleChart';
 
 interface F { roe: number | null; roa: number | null; pbv: number | null; per: number | null; der: number | null; npm: number | null; revGrowth: number | null; mcap: number | null; tahun: string }
 interface Sinyal {
@@ -61,7 +60,7 @@ const fmt = (v: number | null | undefined, sat = '') => (v == null ? '–' : `${
 const pct = (v: number) => <span className={v >= 0 ? 'up' : 'down'}>{v >= 0 ? '+' : '−'}{Math.abs(v).toFixed(1).replace('.', ',')}%</span>;
 const sejak = (at: number) => (at ? new Date(at).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }) : 'belum');
 
-export function ScreenerView() {
+export function ScreenerView({ onOpen }: { onOpen: (s: string) => void }) {
     const { data, error, reload } = useApi<Data>('/api/kantor/screener', 0);
     const simpanan = (() => { try { return JSON.parse(localStorage.getItem(LS) || '{}'); } catch { return {}; } })();
     const [num, setNum] = useState<Partial<Record<NumKey, string>>>(simpanan.num || {});
@@ -69,11 +68,9 @@ export function ScreenerView() {
     const [sektor, setSektor] = useState<string>(simpanan.sektor || '');
     const [urut, setUrut] = useState<string>(simpanan.urut || 'chg1d');
     const [q, setQ] = useState('');
-    const [buka, setBuka] = useState<string | null>(null);
     const [info, setInfo] = useState<string | null>(null);
     const [msg, setMsg] = useState('');
     const [batas, setBatas] = useState(100);
-    const [luar, setLuar] = useState<Baris | null>(null);
     const [cari, setCari] = useState('');
 
     useEffect(() => { setBatas(100); }, [num, sig, sektor, urut, q]);
@@ -119,15 +116,12 @@ export function ScreenerView() {
         catch (e: any) { setMsg(String(e.message || e)); }
     };
     const aktif = Object.values(num).filter((v) => v !== undefined && v !== '').length + sig.length + (sektor ? 1 : 0);
-    const cur = data?.baris.find((b) => b.s === buka);
     const bukaLuar = async (kode: string) => {
         setCari('Mencari…');
-        try { const r = await apiGet<{ baris: Baris }>(`/api/kantor/saham/${encodeURIComponent(kode)}`); setLuar(r.baris); setCari(''); }
+        try { await apiGet<{ baris: Baris }>(`/api/kantor/saham/${encodeURIComponent(kode)}`); onOpen(kode); setCari(''); }
         catch (e: any) { setCari(String(e.message || e)); }
     };
 
-    if (luar) return <Detail b={luar} onBack={() => setLuar(null)} />;
-    if (cur) return <Detail b={cur} onBack={() => setBuka(null)} />;
     const kodeCari = q.trim().toUpperCase().replace(/[^A-Z0-9.-]/g, '');
 
     return (
@@ -190,7 +184,7 @@ export function ScreenerView() {
                         <thead><tr><th>Saham</th><th>Harga</th><th>1H</th><th>1B</th><th>ROE</th><th>PBV</th><th>PER</th><th>Sinyal</th></tr></thead>
                         <tbody>
                             {hasil.slice(0, batas).map((b) => (
-                                <tr key={b.s} onClick={() => setBuka(b.s)}>
+                                <tr key={b.s} onClick={() => onOpen(b.s)}>
                                     <td><b>{b.s}</b><small>{b.nama}</small></td>
                                     <td>${fmt(b.harga)}</td>
                                     <td>{pct(b.chg1d)}</td>
@@ -215,48 +209,6 @@ export function ScreenerView() {
                 </div>
             )}
             <p className="fin-note">Data gratis: harga Yahoo Finance (tertunda), fundamental laporan tahunan SEC. Untuk riset, bukan saran beli/jual.</p>
-        </>
-    );
-}
-
-function Detail({ b, onBack }: { b: Baris; onBack: () => void }) {
-    const [msg, setMsg] = useState('');
-    const aksi = async (fn: () => Promise<any>, ok: string) => { setMsg('…'); try { await fn(); setMsg(ok); } catch (e: any) { setMsg(String(e.message || e)); } };
-    const f = b.f;
-    return (
-        <>
-            <button className="back" onClick={onBack}>‹ Hasil penyaring</button>
-            <section className="inv-hero">
-                <div className="inv-kicker">{b.sektor || 'Saham AS'} · {b.nama}</div>
-                <div className="inv-ticker">{b.s}</div>
-                <div className="inv-price">${fmt(b.harga)} {pct(b.chg1d)}</div>
-                <div className="inv-sub">1 bulan {b.chg1m >= 0 ? '+' : ''}{b.chg1m}% · 3 bulan {b.chg3m >= 0 ? '+' : ''}{b.chg3m}% · 1 tahun {b.chg1y >= 0 ? '+' : ''}{b.chg1y}% · RSI {fmt(b.rsi)} · volume {b.volX}×</div>
-            </section>
-            <section className="fin-card cc-card"><CandleChart simbol={b.s} /></section>
-            <section className="fin-card">
-                <div className="inv-kicker">■ Sinyal teknikal</div>
-                <div className="scr-sigs">
-                    {SINYAL.filter((s) => cocokSinyal(b, s.k)).map((s) => <span key={s.k} className={`scr-sig on ${s.baik === true ? 'baik' : s.baik === false ? 'buruk' : ''}`} title={s.info}>{s.label}{s.k === 'goldenCross' && b.sinyal.goldenCross != null ? ` · ${b.sinyal.goldenCross} hr lalu` : ''}{(s.k === 'doubleTop' || s.k === 'doubleBottom') ? ` · ${(b.sinyal as any)[s.k]}` : ''}</span>)}
-                    {!SINYAL.some((s) => cocokSinyal(b, s.k)) && <span className="inv-muted">Tidak ada sinyal menonjol.</span>}
-                </div>
-                <div className="inv-muted" style={{ marginTop: 8 }}>MA50 ${fmt(b.ma50)} · MA200 ${fmt(b.ma200)} · tren {b.sinyal.tren}</div>
-            </section>
-            <section className="fin-card">
-                <div className="inv-kicker">■ Fundamental {f ? `· laporan ${f.tahun}` : ''}</div>
-                {f ? (
-                    <div className="inv-nums">
-                        {ANGKA.map((a) => <div key={a.k}><b>{a.k === 'mcap' && f.mcap ? (f.mcap >= 1e6 ? `$${(f.mcap / 1e6).toLocaleString('id-ID', { maximumFractionDigits: 2 })} T` : `$${(f.mcap / 1e3).toLocaleString('id-ID', { maximumFractionDigits: 1 })} M`) : fmt(f[a.k], a.satuan)}</b><span>{a.label}</span><small>{a.info}</small></div>)}
-                    </div>
-                ) : <div className="fin-empty">Data fundamental belum ada untuk saham ini.</div>}
-            </section>
-            <section className="fin-card">
-                <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-                    <button className="btn primary" onClick={() => aksi(() => apiPost('/api/kantor/trading/watchlist', { simbol: b.s, aksi: 'tambah' }), `✓ ${b.s} masuk watchlist — Dito ikut memantaunya.`)}>+ Watchlist</button>
-                    <button className="btn" onClick={() => aksi(() => apiPost('/api/kantor/investigasi/selidiki', { simbol: b.s }), `✓ Kasus ${b.s} siap — buka tab Investigasi.`)}>🔎 Selidiki pergerakannya</button>
-                    <button className="btn" onClick={() => aksi(() => apiPost('/api/kantor/chat/grup', { teks: `@Dito @Raka tolong analisis ${b.s}: harga $${b.harga}, ROE ${fmt(f?.roe, '%')}, PBV ${fmt(f?.pbv, '×')}, PER ${fmt(f?.per, '×')}, sinyal: ${SINYAL.filter((s) => cocokSinyal(b, s.k)).map((s) => s.label).join(', ') || 'tidak ada'}. Layak dipantau?` }), '✓ Ditanyakan ke Dito & Raka di Grup Kantor (menu Chat).')}>💬 Tanya Dito & Raka</button>
-                </div>
-                {msg && <div className="fin-note" style={{ textAlign: 'left' }}>{msg}</div>}
-            </section>
         </>
     );
 }
