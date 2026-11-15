@@ -135,8 +135,8 @@ export function skorWhales(b: any, x: Ekstra | undefined, orang: Orang | undefin
     if (!x) return null;
     const a: string[] = []; let s = 0;
     const add = (v: number, why: string) => { s += v; a.push(`${v > 0 ? '+' : '−'} ${why}`); };
-    if (x.cmf > 0.08) add(Math.min(0.35, x.cmf * 2), `dana masuk (CMF ${x.cmf})`); else if (x.cmf < -0.08) add(Math.max(-0.35, x.cmf * 2), `dana keluar (CMF ${x.cmf})`);
-    if (x.obv > 0.15) add(0.15, 'volume hari naik > hari turun (OBV naik)'); else if (x.obv < -0.15) add(-0.15, 'volume hari turun > hari naik (OBV turun)');
+    if (x.cmf > 0.08) add(Math.min(0.3, x.cmf * 1.5), `dana masuk (CMF ${x.cmf})`); else if (x.cmf < -0.08) add(Math.max(-0.3, x.cmf * 1.5), `dana keluar (CMF ${x.cmf})`);
+    if (x.obv > 0.2) add(0.1, 'volume hari naik > hari turun (OBV naik)'); else if (x.obv < -0.2) add(-0.1, 'volume hari turun > hari naik (OBV turun)');
     if (b.volX >= 2) add(b.chg1d >= 0 ? 0.12 : -0.12, `volume ${b.volX}× rata-rata saat harga ${b.chg1d >= 0 ? 'naik' : 'turun'}`);
     if (orang && orang.n) {
         if (orang.net > 0) add(Math.min(0.4, 0.15 + Math.log10(1 + orang.net / 1e5) * 0.08), `orang dalam membeli bersih $${Math.round(orang.net).toLocaleString('en-US')} (Form 4, 30 hari)`);
