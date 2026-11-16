@@ -66,7 +66,7 @@ export function Nav({ page, panel, onGo, hidup = [] }: { page: PageKey; panel: S
                             <span className="sb-ico">{it.ico}</span>
                             <span className="sb-t"><b>{it.label}</b>{it.ket && <small>{it.ket}</small>}</span>
                             {badge(it.key) > 0 && <span className="sb-badge">{N(badge(it.key))}</span>}
-                            {hidup.includes(it.key) && page !== it.key && <i className="sb-hidup" title="Masih terbuka — kembali tanpa memuat ulang" />}
+                            {hidup.includes(it.key as PageKey) && page !== it.key && <i className="sb-hidup" title="Masih terbuka — kembali tanpa memuat ulang" />}
                         </button>
                         {it.key === 'kantor' && page === 'kantor' && ALL.filter((x) => x.key === 'org' || x.key === 'activity').map((x) => (
                             <button key={x.key} className={`sb-item sb-anak ${isActive(x.key) ? 'on' : ''}`} onClick={() => onGo(x.key)} title={x.label}>
