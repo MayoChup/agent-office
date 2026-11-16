@@ -253,14 +253,14 @@ export function saranDariUji(dataDir: string): { at: number; H: Record<number, S
         const m = model[H], sm = statusModel(m);
         const teknikal = sm === 'lulus' ? 'lulus' : sm === 'lebihBaik' ? 'lebihBaik' : m ? 'tidak' : 'belum';
         const b = m?.uji?.baru;
-        const teknikalKet = teknikal === 'lulus' ? `Skor teknikal TERBUKTI (bobot dari data, "Beli kuat" unggul ${b.selisih}% atas "Jual kuat" di data uji).`
-            : teknikal === 'lebihBaik' ? `Skor teknikal belum terbukti, tapi bobot dari data lebih baik dari rumus lama ("Beli kuat" − "Jual kuat" ${b.selisih}% ± ${b.galat}%). Dipakai dengan pengaruh dikecilkan.`
+        const teknikalKet = teknikal === 'lulus' ? `Skor teknikal TERBUKTI (bobot dari data, "Beli kuat" unggul ${(+b.selisih).toFixed(2)}% atas "Jual kuat" di data uji).`
+            : teknikal === 'lebihBaik' ? `Skor teknikal belum terbukti, tapi bobot dari data lebih baik dari rumus lama ("Beli kuat" − "Jual kuat" ${(+b.selisih).toFixed(2)}% ± ${(+b.galat).toFixed(2)}%). Dipakai dengan pengaruh dikecilkan.`
                 : teknikal === 'tidak' ? 'Skor teknikal TIDAK terbukti — pengaruhnya di skor gabungan dikecilkan setengah.' : 'Skor teknikal belum diuji.';
         const preset = r.preset.filter((p: any) => { const a = p.lolos75; return a.n >= 300 && a.rataEx != null && a.rataEx > Math.max(0, r.semua.rataEx ?? 0) + 2 * (a.galatStd ?? 0); })
             .sort((a: any, b2: any) => b2.lolos75.rataEx - a.lolos75.rataEx).map((p: any) => ({ id: p.id, guru: p.guru, nama: p.nama, rataEx: p.lolos75.rataEx }));
         const biaya = H === 1 ? ' Untung rata-rata sekecil ini mudah habis oleh biaya transaksi & selisih harga.' : '';
         const saran = preset.length
-            ? `Gunakan preset ${preset.map((p: any) => `${p.guru} (${p.rataEx >= 0 ? '+' : ''}${p.rataEx}%)`).join(' atau ')} sebagai saringan utama.${biaya}`
+            ? `Gunakan preset ${preset.map((p: any) => `${p.guru} (${p.rataEx >= 0 ? '+' : ''}${(+p.rataEx).toFixed(2)}%)`).join(' atau ')} sebagai saringan utama.${biaya}`
             : teknikal === 'lulus' ? 'Skor teknikal boleh jadi pertimbangan utama, tetap dengan batas risiko.'
                 : 'Belum ada sinyal teknikal yang terbukti: utamakan fundamental, berita & whales, pakai posisi kecil dan batas rugi.';
         out[H] = { H, teknikal, teknikalKet, preset, saran };

@@ -450,7 +450,7 @@ setInterval(() => {
     try {
         const hari = new Date(Date.now() + 7 * 3600_000).getUTCDay();
         if ((hari === 6 || hari === 0) && Date.now() - umurUji() > UJI_HARI * 86400_000 && screener.daftarSimbol().length) jalankanUji('otomatis bulanan');
-        else if (umurUji() && !bacaSaran()) buatSaran().catch(() => {});
+        else if (umurUji() && (!bacaSaran() || (!bacaSaran().teks && Date.now() - (bacaSaran().dibuat || 0) > 6 * 3600_000))) buatSaran().catch(() => {}); // AI gagal → coba lagi tiap 6 jam
     } catch { /* coba lagi jam berikutnya */ }
 }, 3600_000);
 setTimeout(() => { if (umurUji() && !bacaSaran()) buatSaran().catch(() => {}); }, 60_000);
