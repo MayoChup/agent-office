@@ -65,16 +65,17 @@ export function TradingChat({ q, saham, mode }: { q: string; saham: string | nul
                 <section className="tc-panel" role="dialog" aria-label="Chat konsultasi trading">
                     <header className="tc-h">
                         <div>
-                            <select value={ai} onChange={(e) => setAi(e.target.value)} aria-label="Pilih AI">
+                            {!anggota.length ? <b>Tim trading</b> : <select value={ai} onChange={(e) => setAi(e.target.value)} aria-label="Pilih AI">
                                 {anggota.map((x) => <option key={x.id} value={x.id}>{x.nama}{x.peran ? ` · ${x.peran}` : ''}</option>)}
-                            </select>
+                            </select>}
                             <small>{menulis ? 'sedang menulis…' : 'menjawab hanya dari data halaman Trading'}</small>
                         </div>
                         <button className="tc-x" onClick={() => setBuka(false)} aria-label="Tutup">✕</button>
                     </header>
                     <div className="tc-konteks">📎 Data terlampir: {NAMA_MODE[mode] || mode}{saham ? ` · ${saham}` : ''} · skor & sinyal · uji mundur · watchlist & posisi</div>
                     <div className="tc-isi">
-                        {!pesan.length && (
+                        {!anggota.length && <div className="tc-kosong"><p>AI tim trading belum terdeteksi di kantor (profil Hermes tidak terbaca). Coba lagi sebentar lagi.</p></div>}
+                        {!!anggota.length && !pesan.length && (
                             <div className="tc-kosong">
                                 <p>Tanya apa saja tentang data di halaman ini. {a?.nama || 'AI'} hanya menjawab dari skor, alasan, berita, uji mundur, preset, dan watchlist Bapak — kalau datanya tidak ada, dia akan bilang tidak ada.</p>
                                 {CONTOH.map((c) => <button key={c} onClick={() => kirimPesan(saham && c.startsWith('Saham') ? `Bagaimana ${saham} menurut data untuk rencana posisi ini?` : c)}>{saham && c.startsWith('Saham') ? `Bagaimana ${saham} menurut data?` : c}</button>)}
