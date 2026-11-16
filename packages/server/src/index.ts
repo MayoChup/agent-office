@@ -21,7 +21,7 @@ import { bacaPdf, urai, cocokkan } from './kantor/mutasi';
 import { presetInfo, REKOMENDASI } from './kantor/preset';
 import { profil as nasdaqProfil, fundamentalNasdaq } from './kantor/nasdaq';
 import { simulasi, langkahDari } from './kantor/simulasi';
-import { ujiMundur, rekomendasiUji, fileUji, statusPreset, StatusUji } from './kantor/ujimundur';
+import { ujiMundur, rekomendasiUji, fileUji, statusPreset, StatusUji, saranDariUji, fileSaran, namaH } from './kantor/ujimundur';
 import { cnbcChart } from './kantor/harga';
 import { telegramKirim } from './kantor/telegram';
 import { HermesBridge } from './kantor/hermes';
@@ -422,16 +422,49 @@ app.get('/api/kantor/saham-detail/:s', requireToken, (req, res) => {
 app.get('/api/kantor/preset', requireToken, (_req, res) => { res.json({ ok: true, preset: presetInfo(), rekomendasi: REKOMENDASI, rekomendasiUji: rekomendasiUji(fileUji(config.dataDir)), statusUji: statusPreset(fileUji(config.dataDir)) }); });
 // Uji mundur (backtest) — berjalan di latar belakang ±20–40 menit untuk ±500 saham.
 const statusUji: StatusUji = { jalan: false, progres: '', mulai: 0, selesai: 0, galat: '' };
+const UJI_HARI = 30; // uji mundur otomatis tiap ±30 hari
+function umurUji() { try { return JSON.parse(fs.readFileSync(fileUji(config.dataDir), 'utf8')).at as number; } catch { return 0; } }
+function bacaSaran() { try { return JSON.parse(fs.readFileSync(fileSaran(config.dataDir), 'utf8')); } catch { return null; } }
+/** Setelah uji selesai: rekomendasi per horison (dihitung dari angka) + penjelasan bahasa awam oleh AI gratis. */
+async function buatSaran() {
+    const s = saranDariUji(config.dataDir); if (!s) return;
+    const fakta = Object.values(s.H).map((x) => `${namaH(x.H)}: ${x.teknikalKet} Preset terbukti: ${x.preset.length ? x.preset.map((p) => `${p.guru} ${p.nama} (${p.rataEx}% vs S&P 500, disesuaikan risiko)`).join(', ') : 'tidak ada'}. Saran: ${x.saran}`).join('\n');
+    let teks: string | null | undefined = null;
+    try {
+        teks = await OfficeRoom.sharedLlm()?.complete(
+            'Kamu analis di kantor Pak Rico. Tulis ringkasan hasil uji mundur (backtest) saham AS berikut dalam bahasa Indonesia sederhana untuk orang awam, 4–6 kalimat: apa yang terbukti, apa yang tidak, dan cara memakainya per rencana pegang posisi. HANYA pakai angka yang ada di data, jangan menambah angka atau saham. Jangan menjanjikan untung. Akhiri dengan: "Bukan saran keuangan." Tanpa judul, tanpa poin-poin.',
+            fakta, 450, 2);
+    } catch { /* AI tidak tersedia */ }
+    fs.writeFileSync(fileSaran(config.dataDir), JSON.stringify({ ...s, teks: teks?.trim() || null, dibuat: Date.now() }));
+}
+function jalankanUji(sebab: string) {
+    if (statusUji.jalan) return false;
+    const daftar = screener.daftarSimbol();
+    if (!daftar.length) throw new Error('Ambil data pasar dulu (↻ di Trading).');
+    console.log(`[Uji mundur] mulai (${sebab}), ${daftar.length} saham`);
+    ujiMundur(daftar, fileUji(config.dataDir), statusUji).then(() => buatSaran()).catch((e) => console.warn('[Uji mundur]', e?.message || e));
+    return true;
+}
+// Otomatis: dicek tiap jam; jalan saat hasil terakhir ≥30 hari (atau belum ada) dan di akhir pekan WIB (bursa AS tutup).
+setInterval(() => {
+    try {
+        const hari = new Date(Date.now() + 7 * 3600_000).getUTCDay();
+        if ((hari === 6 || hari === 0) && Date.now() - umurUji() > UJI_HARI * 86400_000 && screener.daftarSimbol().length) jalankanUji('otomatis bulanan');
+        else if (umurUji() && !bacaSaran()) buatSaran().catch(() => {});
+    } catch { /* coba lagi jam berikutnya */ }
+}, 3600_000);
+setTimeout(() => { if (umurUji() && !bacaSaran()) buatSaran().catch(() => {}); }, 60_000);
 app.get('/api/kantor/ujimundur', requireToken, (_req, res) => {
     let hasil = null; try { hasil = JSON.parse(fs.readFileSync(fileUji(config.dataDir), 'utf8')); } catch { /* belum ada */ }
-    res.json({ ok: true, status: statusUji, hasil });
+    const at = hasil?.at || 0;
+    res.json({ ok: true, status: statusUji, hasil, saran: bacaSaran(), berikutnya: at ? at + UJI_HARI * 86400_000 : 0 });
+});
+app.get('/api/kantor/ujimundur/saran', requireToken, (_req, res) => {
+    const at = umurUji();
+    res.json({ ok: true, saran: bacaSaran(), berikutnya: at ? at + UJI_HARI * 86400_000 : 0, jalan: statusUji.jalan, progres: statusUji.progres });
 });
 app.post('/api/kantor/ujimundur/jalankan', requireToken, (_req, res) => {
-    if (statusUji.jalan) { res.json({ ok: true, status: statusUji }); return; }
-    const daftar = screener.daftarSimbol();
-    if (!daftar.length) { res.status(400).json({ ok: false, error: 'Ambil data pasar dulu (↻ di Trading).' }); return; }
-    ujiMundur(daftar, fileUji(config.dataDir), statusUji).catch((e) => console.warn('[Uji mundur]', e?.message || e));
-    res.json({ ok: true, status: statusUji });
+    try { jalankanUji('manual'); res.json({ ok: true, status: statusUji }); } catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
 });
 // Profil perusahaan (Nasdaq) + ringkasan singkat berbahasa Indonesia (AI gratis), disimpan 30 hari.
 const profilDir = path.join(config.dataDir, 'profil'); fs.mkdirSync(profilDir, { recursive: true });

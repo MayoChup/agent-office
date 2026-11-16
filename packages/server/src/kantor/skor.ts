@@ -170,7 +170,15 @@ export function skorWhales(b: any, x: Ekstra | undefined, orang: Orang | undefin
 }
 
 /** Bobot faktor per horison: makin pendek, fundamental makin tidak relevan; berita & teknikal makin penting. */
-export function bobot(H: number, mode = ''): Record<string, number> {
+/** Bobot faktor. Bila skor teknikal horison ini belum terbukti, pengaruhnya dipotong setengah dan sisanya dibagi ke faktor lain. */
+export function bobot(H: number, mode = '', teknikalTerbukti = true): Record<string, number> {
+    const W = bobotDasar(H, mode);
+    if (teknikalTerbukti || !W.teknikal) return W;
+    const t = W.teknikal / 2, sisa = 1 - W.teknikal, out: Record<string, number> = { teknikal: t };
+    for (const k of Object.keys(W)) if (k !== 'teknikal') out[k] = sisa > 0 ? +(W[k] + (W[k] / sisa) * t).toFixed(3) : W[k];
+    return out;
+}
+function bobotDasar(H: number, mode = ''): Record<string, number> {
     if (mode === 'scalping') return { teknikal: 0.65, fundamental: 0, berita: 0.25, whales: 0.1 };
     if (H <= 2) return { teknikal: 0.55, fundamental: 0, berita: 0.3, whales: 0.15 };
     if (H <= 5) return { teknikal: 0.5, fundamental: 0.05, berita: 0.25, whales: 0.2 };
@@ -178,13 +186,13 @@ export function bobot(H: number, mode = ''): Record<string, number> {
     if (H <= 60) return { teknikal: 0.3, fundamental: 0.4, berita: 0.1, whales: 0.2 };
     return { teknikal: 0.2, fundamental: 0.55, berita: 0.05, whales: 0.2 };
 }
-export function gabung(f: Record<string, Faktor | null>, H = 20, mode = ''): Faktor {
-    const W = bobot(H, mode);
+export function gabung(f: Record<string, Faktor | null>, H = 20, mode = '', teknikalTerbukti = true): Faktor {
+    const W = bobot(H, mode, teknikalTerbukti);
     let s = 0, w = 0;
     for (const k of Object.keys(W)) if (f[k]) { s += f[k]!.skor * W[k]; w += W[k]; }
     const sk = w ? clamp(s / w) : 0;
     const ada = Object.keys(W).filter((k) => f[k] && W[k] > 0).length;
-    return { skor: +sk.toFixed(2), label: label(sk), alasan: [`gabungan ${ada} faktor untuk ${mode === 'scalping' ? 'scalping (hari ini)' : H === 1 ? 'day trading (hari ini)' : `posisi ≤${H} hari bursa`} (bobot: ${Object.entries(W).filter(([, v]) => v > 0).map(([k, v]) => `${k} ${Math.round(v * 100)}%`).join(', ')})`] };
+    return { skor: +sk.toFixed(2), label: label(sk), alasan: [`gabungan ${ada} faktor untuk ${mode === 'scalping' ? 'scalping (hari ini)' : H === 1 ? 'day trading (hari ini)' : `posisi ≤${H} hari bursa`} (bobot${teknikalTerbukti ? '' : ', teknikal dikecilkan karena belum terbukti'}: ${Object.entries(W).filter(([, v]) => v > 0).map(([k, v]) => `${k} ${Math.round(v * 100)}%`).join(', ')})`] };
 }
 
 /* ── Sentimen berita (kamus kata, tanpa AI) ───────────────────── */

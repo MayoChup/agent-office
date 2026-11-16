@@ -82,7 +82,15 @@ export function bacaModel(file: string): Record<string, Model> {
 }
 export const hModel = (H: number) => (H <= 1 ? 1 : H <= 5 ? 5 : H <= 20 ? 20 : 60);
 
-/** Skor teknikal dari model data (kalau lulus uji). */
+/** Status pemakaian model: 'lulus' = terbukti; 'lebihBaik' = belum terbukti, tapi di data uji jelas lebih baik dari rumus lama; null = pakai rumus lama. */
+export function statusModel(m?: Model | null): 'lulus' | 'lebihBaik' | null {
+    if (!m) return null;
+    if (m.lulus) return 'lulus';
+    const b = m.uji?.baru, l = m.uji?.lama;
+    if (b && b.t >= 1 && (m.uji.ic ?? 0) > 0 && b.selisih > (l?.selisih ?? -Infinity) + (b.galat ?? Infinity)) return 'lebihBaik';
+    return null;
+}
+/** Skor teknikal dari model data. */
 export function skorModel(b: any, ind: any, m: Model): Faktor {
     const mask = fitur(b, ind);
     const raw = nilaiMask(mask, m.w);
@@ -90,7 +98,9 @@ export function skorModel(b: any, ind: any, m: Model): Faktor {
     const alasan = FITUR.map((f, i) => ({ f, w: m.w[i], on: !!(mask & (1 << i)) })).filter((x) => x.on && Math.abs(x.w) >= 0.0003)
         .sort((a, b2) => Math.abs(b2.w) - Math.abs(a.w))
         .map((x) => `${x.w > 0 ? '+' : '−'} ${x.f.t} (secara historis ${x.w > 0 ? '+' : '−'}${Math.abs(x.w * 100).toFixed(2)}% vs pasar dalam ${m.H} hari bursa)`);
-    alasan.unshift(`+ bobot dari uji mundur: dilatih ${m.latih.dari}–${m.latih.sampai}, lulus uji di data ${m.uji.dari}–${m.uji.sampai}`);
+    alasan.unshift(m.lulus
+        ? `+ bobot dari uji mundur: dilatih ${m.latih.dari}–${m.latih.sampai}, lulus uji di data ${m.uji.dari}–${m.uji.sampai}`
+        : `· belum terbukti: bobot dari uji mundur (dilatih ${m.latih.dari.slice(0, 4)}–${m.latih.sampai.slice(0, 4)}) belum lulus uji ${m.uji.dari.slice(0, 4)}–${m.uji.sampai.slice(0, 4)}, tapi di data uji lebih baik dari rumus lama — pengaruh teknikal dikecilkan`);
     if (alasan.length === 1) alasan.push('· tidak ada ciri teknikal yang menonjol hari ini');
     return { skor: sk, label: label(sk), alasan };
 }

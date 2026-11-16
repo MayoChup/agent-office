@@ -8,7 +8,7 @@ type UjiL = { label: Record<string, R>; semua: R; selisih: number; galat: number
 type W = { k: string; t: string; w: number };
 interface BobotH { lulus: boolean; latih: { dari: string; sampai: string; n: number }; uji: { dari: string; sampai: string; n: number; lambda: number; ic: number; baru: UjiL; lama: UjiL; alasan: string[] }; teratas: W[]; terbawah: W[] }
 interface Hasil { bobot?: { batas: string; H: Record<string, BobotH> }; at: number; saham: number; gagal: number; sampel: number; periode: { dari: string; sampai: string }; catatan: string[]; H: Record<string, HasilH> }
-interface Data { status: { jalan: boolean; progres: string; mulai: number; selesai: number; galat: string }; hasil: Hasil | null }
+interface Data { saran?: { teks: string | null } | null; berikutnya?: number; status: { jalan: boolean; progres: string; mulai: number; selesai: number; galat: string }; hasil: Hasil | null }
 
 const MODE: Array<{ H: number; label: string }> = [{ H: 1, label: 'Day trading (1 hari)' }, { H: 5, label: 'Swing pendek (5 hari)' }, { H: 20, label: 'Swing (20 hari)' }, { H: 60, label: 'Posisi/Investasi (60 hari)' }];
 const LABEL = ['Beli kuat', 'Beli', 'Tahan', 'Jual', 'Jual kuat'];
@@ -41,6 +41,8 @@ export function UjiMundur() {
                     <small className="sb-note">{st?.jalan ? `${st.progres} — ±20–40 menit, bisa ditinggal` : h ? `Terakhir: ${new Date(h.at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} · ${h.saham} saham · ${h.sampel.toLocaleString('id-ID')} sampel · ${h.periode.dari} s/d ${h.periode.sampai}` : 'Belum pernah dijalankan.'}</small>
                 </div>
                 {(st?.galat || msg) && <div className="error">{st?.galat || msg}</div>}
+                {!!d.data?.berikutnya && !st?.jalan && <small className="sb-note">🔁 Berjalan otomatis tiap ±30 hari (akhir pekan). Berikutnya: ±{new Date(d.data.berikutnya).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Jakarta' })}. Bobot & rekomendasi di halaman Trading ikut diperbarui sendiri.</small>}
+                {d.data?.saran?.teks && <div className="su-ai-box"><b>✨ Ringkasan AI</b><p>{d.data.saran.teks}</p></div>}
             </section>
             {h && r && (<>
                 <div className="sb-seg scroll">{MODE.map((m) => <button key={m.H} className={H === m.H ? 'on' : ''} onClick={() => setH(m.H)}>{m.label}</button>)}</div>

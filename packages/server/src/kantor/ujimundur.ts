@@ -4,7 +4,7 @@ import { analisis } from './screener';
 import { ekstra, proyeksi, skorTeknikal, label } from './skor';
 import { hitungInd, PRESET, evaluasi } from './preset';
 import { hargaPanjang, Bar } from './harga';
-import { fitur, ridge, nilaiMask, keSkor, FITUR, Model } from './bobot';
+import { fitur, ridge, nilaiMask, keSkor, FITUR, Model, statusModel } from './bobot';
 
 /**
  * Uji mundur (backtest) skor teknikal & preset guru:
@@ -238,3 +238,33 @@ export function statusPreset(file: string): Record<number, Record<string, { terb
         return out;
     } catch { return null; }
 }
+
+/* ── Rekomendasi otomatis dari hasil uji (tanpa AI; AI hanya menulis ulang dengan bahasa awam) ── */
+export const fileSaran = (dataDir: string) => path.join(dataDir, 'ujimundur-saran.json');
+export interface SaranH { H: number; teknikal: 'lulus' | 'lebihBaik' | 'tidak' | 'belum'; teknikalKet: string; preset: Array<{ id: string; guru: string; nama: string; rataEx: number | null }>; saran: string }
+const NAMA_H: Record<number, string> = { 1: 'Scalping & day trading (1 hari)', 5: 'Swing pendek (±5 hari)', 20: 'Swing (±20 hari)', 60: 'Posisi & investasi (±60 hari)' };
+export function saranDariUji(dataDir: string): { at: number; H: Record<number, SaranH> } | null {
+    let h: any, model: Record<string, any> = {};
+    try { h = JSON.parse(fs.readFileSync(fileUji(dataDir), 'utf8')); } catch { return null; }
+    try { model = JSON.parse(fs.readFileSync(fileBobot(dataDir), 'utf8')); } catch { /* */ }
+    const out: Record<number, SaranH> = {};
+    for (const H of HS) {
+        const r = h.H?.[H]; if (!r) continue;
+        const m = model[H], sm = statusModel(m);
+        const teknikal = sm === 'lulus' ? 'lulus' : sm === 'lebihBaik' ? 'lebihBaik' : m ? 'tidak' : 'belum';
+        const b = m?.uji?.baru;
+        const teknikalKet = teknikal === 'lulus' ? `Skor teknikal TERBUKTI (bobot dari data, "Beli kuat" unggul ${b.selisih}% atas "Jual kuat" di data uji).`
+            : teknikal === 'lebihBaik' ? `Skor teknikal belum terbukti, tapi bobot dari data lebih baik dari rumus lama ("Beli kuat" − "Jual kuat" ${b.selisih}% ± ${b.galat}%). Dipakai dengan pengaruh dikecilkan.`
+                : teknikal === 'tidak' ? 'Skor teknikal TIDAK terbukti — pengaruhnya di skor gabungan dikecilkan setengah.' : 'Skor teknikal belum diuji.';
+        const preset = r.preset.filter((p: any) => { const a = p.lolos75; return a.n >= 300 && a.rataEx != null && a.rataEx > Math.max(0, r.semua.rataEx ?? 0) + 2 * (a.galatStd ?? 0); })
+            .sort((a: any, b2: any) => b2.lolos75.rataEx - a.lolos75.rataEx).map((p: any) => ({ id: p.id, guru: p.guru, nama: p.nama, rataEx: p.lolos75.rataEx }));
+        const biaya = H === 1 ? ' Untung rata-rata sekecil ini mudah habis oleh biaya transaksi & selisih harga.' : '';
+        const saran = preset.length
+            ? `Gunakan preset ${preset.map((p: any) => `${p.guru} (${p.rataEx >= 0 ? '+' : ''}${p.rataEx}%)`).join(' atau ')} sebagai saringan utama.${biaya}`
+            : teknikal === 'lulus' ? 'Skor teknikal boleh jadi pertimbangan utama, tetap dengan batas risiko.'
+                : 'Belum ada sinyal teknikal yang terbukti: utamakan fundamental, berita & whales, pakai posisi kecil dan batas rugi.';
+        out[H] = { H, teknikal, teknikalKet, preset, saran };
+    }
+    return { at: h.at, H: out };
+}
+export const namaH = (H: number) => NAMA_H[H] || `${H} hari`;

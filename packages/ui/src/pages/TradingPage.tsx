@@ -13,6 +13,7 @@ import { CandleChart } from '../components/CandleChart';
 import { PasarView } from './trading/PasarView';
 import { PilihanView } from './trading/PilihanView';
 import { SahamDetail } from './trading/SahamDetail';
+import { SaranUji } from './trading/SaranUji';
 import { PetaPanas } from './trading/PetaPanas';
 import { PetaBerita } from './trading/PetaBerita';
 import { WatchlistView } from './trading/WatchlistView';
@@ -144,6 +145,7 @@ export function TradingPage() {
             {!saham && sc.data && sc.data.baris.length > 0 && sc.data.galat && !sc.data.sibuk && <div className="error" style={{ margin: '0 0 12px' }}>⚠️ {sc.data.galat}</div>}
             {!saham && (tab === 'pilihan' || tab === 'pasar' || tab === 'watchlist') && sc.data && sc.data.baris.length > 0 && <HorisonBar h={horison} setH={setHorison} bobot={(sc.data as any).bobot} bukti={(sc.data as any).teknikalBukti} />}
             {!saham && tab === 'pasar' && sc.data && sc.data.baris.length > 0 && <PasarView data={sc.data} faktor={faktor} setFaktor={setF} onOpen={buka} />}
+            {!saham && (tab === 'pilihan' || tab === 'penyaring') && <SaranUji mode={modeAktif} presetAktif={preset.t} pakaiPreset={(t) => setPreset({ ...preset, t })} />}
             {!saham && tab === 'pilihan' && sc.data && sc.data.baris.length > 0 && (
                 <details className="pr-lipat" open={!!(preset.t || preset.f) || undefined}>
                     <summary>🎓 Preset guru{preset.t || preset.f ? `: ${[preset.t, preset.f].filter(Boolean).map((id) => pd.data?.preset.find((x) => x.id === id)?.guru || id).join(' + ')}` : ' (opsional)'} <small>— ketuk untuk memilih</small></summary>
