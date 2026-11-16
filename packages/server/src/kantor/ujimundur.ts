@@ -16,7 +16,7 @@ type Akum = { n: number; ex: number; ex2: number; menang: number };
 const akum = (): Akum => ({ n: 0, ex: 0, ex2: 0, menang: 0 });
 const tambah = (a: Akum, ex: number) => { a.n++; a.ex += ex; a.ex2 += ex * ex; if (ex > 0) a.menang++; };
 const ringkas = (a: Akum) => ({ n: a.n, rataEx: a.n ? +((a.ex / a.n) * 100).toFixed(3) : null, menang: a.n ? +((a.menang / a.n) * 100).toFixed(1) : null, galatStd: a.n > 1 ? +((Math.sqrt(Math.max(0, a.ex2 / a.n - (a.ex / a.n) ** 2)) / Math.sqrt(a.n)) * 100).toFixed(3) : null });
-const kunciAlasan = (s: string) => `${s[0]} ${s.slice(1).replace(/\(.*$/, '').replace(/[\d][\d.,]*\s*[%×]?/g, '#').replace(/\s+/g, ' ').trim()}`;
+const kunciAlasan = (s: string) => `${s[0]} ${s.slice(1).replace(/\(.*$/, '').replace(/(^|\s)[\d][\d.,]*\s*([%×]\s*)?/g, '$1# ').replace(/\s+/g, ' ').trim()}`;
 
 export interface StatusUji { jalan: boolean; progres: string; mulai: number; selesai: number; galat: string }
 
