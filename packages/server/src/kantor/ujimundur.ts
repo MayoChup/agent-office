@@ -269,7 +269,8 @@ export function saranDariUji(dataDir: string): { at: number; H: Record<number, S
         const keputusanTeks = keputusan === 'pakai' ? `PAKAI preset: ${preset.map((p: any) => p.guru).join(' / ')} terbukti lebih baik daripada tanpa preset (rata-rata semua saham ${semua != null ? `${semua >= 0 ? '+' : ''}${(+semua).toFixed(2)}%` : '–'}).`
             : keputusan === 'tipis' ? `Keunggulan preset terlalu tipis (+${unggul.toFixed(2)}% per posisi) dan kemungkinan habis oleh biaya — data tidak mendukung trading harian berdasarkan sinyal.`
                 : 'Pakai preset atau tidak: belum ada bedanya di data. Preset hanya saringan gaya, bukan keunggulan yang terbukti.';
-        out[H] = { H, teknikal, teknikalKet, preset, saran, keputusan, keputusanTeks, semua };
+        const saranAkhir = keputusan === 'tipis' ? `Kalau tetap mau trading harian: ${preset[0].guru} paling baik di data, tapi pakai posisi kecil & hitung biaya transaksi.` : saran;
+        out[H] = { H, teknikal, teknikalKet, preset, saran: saranAkhir, keputusan, keputusanTeks, semua };
     }
     return { at: h.at, H: out };
 }
