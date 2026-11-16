@@ -193,6 +193,7 @@ export class Screener {
     }
     /** Seri harga harian (h,l,c[,o]) untuk simulasi. */
     seriHarian(s: string) { return this.seriDari(s); }
+    daftarSimbol() { return this.st.baris.map((b) => b.s); }
     hargaTerakhir(s: string) { return this.st.baris.find((b) => b.s === s) || null; }
     private segarkanHorison() { this.seri.clear(); this.proyCache.clear(); }
 

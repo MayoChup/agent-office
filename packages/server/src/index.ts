@@ -21,6 +21,7 @@ import { bacaPdf, urai, cocokkan } from './kantor/mutasi';
 import { presetInfo, REKOMENDASI } from './kantor/preset';
 import { profil as nasdaqProfil, fundamentalNasdaq } from './kantor/nasdaq';
 import { simulasi, langkahDari } from './kantor/simulasi';
+import { ujiMundur, rekomendasiUji, fileUji, StatusUji } from './kantor/ujimundur';
 import { cnbcChart } from './kantor/harga';
 import { telegramKirim } from './kantor/telegram';
 import { HermesBridge } from './kantor/hermes';
@@ -418,7 +419,20 @@ app.get('/api/kantor/saham-detail/:s', requireToken, (req, res) => {
     if (!d) { res.status(404).json({ ok: false, error: 'Belum ada di data penyaring' }); return; }
     res.json({ ok: true, ...d });
 });
-app.get('/api/kantor/preset', requireToken, (_req, res) => { res.json({ ok: true, preset: presetInfo(), rekomendasi: REKOMENDASI }); });
+app.get('/api/kantor/preset', requireToken, (_req, res) => { res.json({ ok: true, preset: presetInfo(), rekomendasi: REKOMENDASI, rekomendasiUji: rekomendasiUji(fileUji(config.dataDir)) }); });
+// Uji mundur (backtest) — berjalan di latar belakang ±20–40 menit untuk ±500 saham.
+const statusUji: StatusUji = { jalan: false, progres: '', mulai: 0, selesai: 0, galat: '' };
+app.get('/api/kantor/ujimundur', requireToken, (_req, res) => {
+    let hasil = null; try { hasil = JSON.parse(fs.readFileSync(fileUji(config.dataDir), 'utf8')); } catch { /* belum ada */ }
+    res.json({ ok: true, status: statusUji, hasil });
+});
+app.post('/api/kantor/ujimundur/jalankan', requireToken, (_req, res) => {
+    if (statusUji.jalan) { res.json({ ok: true, status: statusUji }); return; }
+    const daftar = screener.daftarSimbol();
+    if (!daftar.length) { res.status(400).json({ ok: false, error: 'Ambil data pasar dulu (↻ di Trading).' }); return; }
+    ujiMundur(daftar, fileUji(config.dataDir), statusUji).catch((e) => console.warn('[Uji mundur]', e?.message || e));
+    res.json({ ok: true, status: statusUji });
+});
 // Profil perusahaan (Nasdaq) + ringkasan singkat berbahasa Indonesia (AI gratis), disimpan 30 hari.
 const profilDir = path.join(config.dataDir, 'profil'); fs.mkdirSync(profilDir, { recursive: true });
 app.get('/api/kantor/profil/:s', requireToken, async (req, res) => {

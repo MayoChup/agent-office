@@ -193,3 +193,23 @@ export async function cekHargaCli(simbol = 'AAPL') {
     }
     try { const b = await ambilBerita(simbol); console.log(`✅ Berita       ${b.n} judul 7 hari terakhir (${b.sumber})${b.judul[0] ? ` — "${b.judul[0].t.slice(0, 60)}"` : ''}`); } catch (e: any) { console.log(`❌ Berita       ${e?.message || e}`); }
 }
+
+/** Riwayat panjang (±5 tahun) untuk uji mundur: Nasdaq (harian), cadangan Yahoo. */
+export async function hargaPanjang(s: string, tahun = 5): Promise<Bar[]> {
+    const pesan: string[] = [];
+    if (!s.startsWith('^')) {
+        try {
+            const dari = new Date(Date.now() - tahun * 365.25 * 86400_000).toISOString().slice(0, 10);
+            for (const k of ETF.has(s) ? ['etf', 'stocks'] : ['stocks', 'etf']) {
+                const j = await ambilFetch(`https://api.nasdaq.com/api/quote/${encodeURIComponent(s.replace('-', '.'))}/historical?assetclass=${k}&fromdate=${dari}&limit=9999`, { Origin: 'https://www.nasdaq.com', Referer: 'https://www.nasdaq.com/' });
+                if (j.status !== 200) { pesan.push(`Nasdaq HTTP ${j.status}`); continue; }
+                const rows = JSON.parse(j.body)?.data?.tradesTable?.rows;
+                if (!Array.isArray(rows) || rows.length < 300) { pesan.push('Nasdaq: data pendek'); continue; }
+                return rows.map((x: any) => { const [mm, dd, yy] = String(x.date).split('/'); return { t: `${yy}-${mm}-${dd}`, o: angka(x.open), h: angka(x.high), l: angka(x.low), c: angka(x.close), v: angka(x.volume) || 0 }; })
+                    .filter((x: Bar) => /^\d{4}-\d{2}-\d{2}$/.test(x.t) && [x.o, x.h, x.l, x.c].every((y) => Number.isFinite(y) && y > 0)).reverse();
+            }
+        } catch (e: any) { pesan.push(`Nasdaq: ${e?.cause?.code || e?.message || e}`); }
+    }
+    try { const r = await yahooChart(s, `${tahun}y`, '1d'); const d = dariYahoo(r); if (d.rows.length > 300) return d.rows; } catch (e: any) { pesan.push(String(e?.message || e)); }
+    throw new Error(pesan.join('; ') || 'riwayat panjang tidak tersedia');
+}

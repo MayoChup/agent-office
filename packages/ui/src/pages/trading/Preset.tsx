@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { useApi } from '../../kantor/api';
 
 export interface PresetInfo { id: string; jenis: 'teknikal' | 'fundamental'; nama: string; guru: string; ringkas: string; info: string; cocok: string[]; kriteria: string[] }
-export interface PresetData { preset: PresetInfo[]; rekomendasi: Record<string, { teknikal: string[]; fundamental: string[]; alasan: string }> }
+export interface PresetData { preset: PresetInfo[]; rekomendasi: Record<string, { teknikal: string[]; fundamental: string[]; alasan: string }>; rekomendasiUji?: Record<string, { id: string; rataEx: number; menang: number; n: number } | null> | null }
+export const H_MODE: Record<string, number> = { scalping: 1, daytrade: 1, swingpendek: 5, swing: 20, posisi: 60, investasi: 60 };
 export interface PresetEval { id: string; jenis: string; hasil: Array<{ t: string; ok: boolean | null }>; lolos: number; dinilai: number; total: number; persen: number | null }
 export const NAMA_MODE: Record<string, string> = { scalping: 'Scalping', daytrade: 'Day trading', swingpendek: 'Swing pendek', swing: 'Swing', posisi: 'Posisi', investasi: 'Investasi' };
 
@@ -53,7 +54,10 @@ export function PresetRekomendasi({ mode, data, pakai }: { mode: string; data: P
                 <span>🏛️ Fundamental: {r.fundamental.length ? r.fundamental.map(nm).join(' · ') : 'tidak dipakai untuk posisi sependek ini'}</span>
             </div>
             <p>{r.alasan}</p>
-            <button className="btn small" onClick={() => pakai(r.teknikal[0] || '', r.fundamental[0] || '')}>Pakai rekomendasi</button>
+            {data.rekomendasiUji && (() => { const u = data.rekomendasiUji![String(H_MODE[mode] ?? 20)]; return u
+                ? <p className="pr-uji">📊 Uji mundur: <b>{nm(u.id)}</b> terbukti paling baik untuk mode ini — rata-rata {u.rataEx >= 0 ? '+' : ''}{u.rataEx.toFixed(2)}% vs S&P 500, menang {u.menang}% ({u.n.toLocaleString('id-ID')} kasus).</p>
+                : <p className="pr-uji">📊 Uji mundur: belum ada preset teknikal yang terbukti mengalahkan pasar untuk mode ini. Anggap preset sebagai saringan gaya, bukan jaminan.</p>; })()}
+            <button className="btn small" onClick={() => pakai(data.rekomendasiUji?.[String(H_MODE[mode] ?? 20)]?.id || r.teknikal[0] || '', r.fundamental[0] || '')}>Pakai rekomendasi</button>
         </div>
     );
 }

@@ -1521,3 +1521,20 @@ body.no-office #phaser-container { visibility: hidden; }
 .pr-lipat[open] > summary { margin-bottom: 8px; }
 .pg-segar .pr-panel, .pg-segar .hz, .pg-segar .sd-faktor .sb-seg { pointer-events: auto; }
 .pg-segar .pr-panel::after { display: none; }
+
+/* ── Uji mundur ─────────────────────────────────────────── */
+.um { display: flex; flex-direction: column; gap: 12px; }
+.um-vonis { font-size: 15px; font-weight: 600; margin: 0 0 10px; line-height: 1.5; }
+.um-t { width: 100%; border-collapse: collapse; font-size: 13px; }
+.um-t th { text-align: left; font-size: 11.5px; color: var(--muted); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+.um-t td { padding: 8px; border-bottom: 1px solid var(--line); }
+.um-t td small { color: var(--muted); }
+.um-t .um-base td { font-weight: 700; background: rgba(127, 127, 127, 0.06); }
+.um-t .up { color: #16a34a; } .um-t .down { color: #ef4444; }
+.um-komp { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin-bottom: 8px; }
+.um-komp div { display: flex; flex-direction: column; gap: 2px; padding: 10px; border-radius: 12px; border: 1px solid var(--line); }
+.um-komp span { font-size: 12.5px; } .um-komp b { font-size: 18px; } .um-komp small { color: var(--muted); font-size: 11px; }
+.um-komp .up { color: #16a34a; } .um-komp .down { color: #ef4444; }
+.pr-uji { margin: 4px 0 0 !important; padding: 8px 10px; border-radius: 10px; background: rgba(255, 255, 255, 0.5); color: var(--text) !important; }
+[data-theme="dark"] .pr-uji { background: rgba(0, 0, 0, 0.2); }
+@media (max-width: 767px) { .um-t { font-size: 12px; } .um-t th, .um-t td { padding: 6px 4px; } }
