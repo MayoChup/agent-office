@@ -127,6 +127,8 @@ export class Berkas {
         }
     }
 
+    /** Lokasi berkas di disk (untuk diunggah langsung dari VPS, mis. ke YouTube/TikTok). Tetap lewat pemeriksaan path aman. */
+    lokasi(rel: string) { const abs = this.aman(rel); if (!fs.existsSync(abs) || fs.statSync(abs).isDirectory()) throw new Error('Berkas tidak ditemukan'); return abs; }
     /** Tautan sekali pakai (10 menit) untuk unduh/pratinjau tanpa header login. */
     tautan(rel: string, unduh: boolean) {
         const abs = this.aman(rel);

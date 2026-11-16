@@ -2,7 +2,7 @@ import React from 'react';
 
 export type Shot = 'dekat' | 'sedang' | 'jauh' | 'layar' | 'teks';
 export interface Sketsa { shot: Shot; kamera: string; objek: Array<{ jenis: string; posisi: 'kiri' | 'tengah' | 'kanan'; label?: string }> }
-export interface Adegan { no: number; detik: string; visual: string; teksLayar: string; narasi: string; sfx?: string; sketsa?: Sketsa }
+export interface Adegan { no: number; detik: string; visual: string; teksLayar: string; narasi: string; sfx?: string; efek?: string; sketsa?: Sketsa }
 
 const KATA: Array<[RegExp, string]> = [[/\b(hp|ponsel|handphone|smartphone|phone|layar hp|notif)/i, 'hp'], [/laptop|komputer|pc\b/i, 'laptop'], [/wajah|muka|ekspresi|face/i, 'wajah'], [/tangan|jari|hand/i, 'tangan'],
     [/grafik|chart|angka|data|tabel/i, 'grafik'], [/kotak|paket|stok|barang|produk|box/i, 'kotak'], [/uang|rupiah|harga|duit|money/i, 'uang'], [/rumah|toko|warung|kantor/i, 'rumah'], [/mobil|motor|kirim|kurir/i, 'mobil'],
@@ -79,7 +79,7 @@ export function StoryboardSketsa({ adegan, musik, kecil }: { adegan: Adegan[]; m
                 {adegan.map((a) => (
                     <figure key={a.no} className="skt-f">
                         <BingkaiSketsa a={a} />
-                        <figcaption><b>{a.detik ? `${a.detik} dtk` : `#${a.no}`}</b><span>{a.visual}</span>{a.sfx && <em>🔊 {a.sfx}</em>}</figcaption>
+                        <figcaption><b>{a.detik ? `${a.detik} dtk` : `#${a.no}`}</b><span>{a.visual}</span>{a.sfx && <em>🔊 {a.sfx}</em>}{a.efek && <em className="skt-ef">✨ {a.efek}</em>}</figcaption>
                     </figure>
                 ))}
             </div>

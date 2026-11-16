@@ -22,6 +22,10 @@ mkdir -p "$H/skills"
 if [ -d "$SK/.git" ]; then git -C "$SK" pull -q --ff-only || true
 else rm -rf "$SK"; git clone -q --depth 1 https://github.com/Jakeschincariol/instagram-agent-skill "$SK"; fi
 [ -d "$SK/skills/ig-reel" ] || { echo "❌ Skill Instagram gagal diambil."; exit 2; }
+# Skill penyuntingan video (look, efek, zona aman) — dipakai Vino saat menulis prompt edit; rendering tetap di Claude milik Pak Rico.
+VE="$H/skills/video-edit-skill"
+if [ -d "$VE/.git" ]; then git -C "$VE" pull -q --ff-only || true
+else rm -rf "$VE"; git clone -q --depth 1 https://github.com/tenfoldmarc/video-edit-skill "$VE" || echo "  ⚠️  skill video-edit gagal diambil (lanjut tanpa)"; fi
 # Tempat "suara akun" yang dibaca semua skill (diisi kantor dari formulir Profil akun).
 mkdir -p "$HOME/.claude/instagram"
 [ -f "$HOME/.claude/instagram/voice.md" ] || cp "$SK/templates/voice.md" "$HOME/.claude/instagram/voice.md"
@@ -32,6 +36,7 @@ link_skills() {   # link_skills <profil> <skill...>
     for s in "$@"; do
         if [ -d "$SK/skills/$s" ]; then ln -sfn "$SK/skills/$s" "$dir/$s"
         elif [ -d "$KS/$s" ]; then ln -sfn "$KS/$s" "$dir/$s"
+        elif [ "$s" = "video-edit" ] && [ -f "$VE/SKILL.md" ]; then ln -sfn "$VE" "$dir/$s"
         else echo "  ⚠️  skill $s tidak ditemukan"; fi
     done
 }
@@ -78,12 +83,13 @@ write_identity sosmed-produksi "Vino" "Penata Produksi & Admin Unggah: menulis p
 "Kamu Vino, Penata Produksi & Admin Unggah Divisi Social Media.
 $COMMON
 Tugasmu: mengubah naskah & shot list menjadi prompt siap salin sesuai GAYA konten:
-- Animasi: PROMPT VIDEO (arahan adegan demi adegan, 9:16) mengikuti ciri gaya yang dipilih.
-- Real: DAFTAR REKAM (apa yang direkam Pak Rico dengan HP) + PROMPT EDIT untuk Claude yang akan menerima mentahannya.
-- Feed/carousel: PROMPT GAMBAR 4:5 per slide.
-- Selalu: PROMPT SUARA ElevenLabs (narasi dengan tag ekspresi dalam kurung siku, gaya suara, pengaturan).
+- Animasi: PROMPT VIDEO (arahan adegan demi adegan, rasio sesuai platform) mengikuti ciri gaya yang dipilih, lengkap dengan SFX per adegan dan MUSIK & SUASANA LATAR (tanpa narasi).
+- Real: DAFTAR REKAM (apa yang direkam Pak Rico dengan HP) + PROMPT EDIT untuk Claude yang memakai skill /video-edit: sebut look (bold / cool girl / cool dude), color grade, dan efek per adegan.
+- Feed/carousel: PROMPT GAMBAR per slide (rasio sesuai platform).
+- Selalu: PROMPT SUARA ElevenLabs KHUSUS NARASI (tag ekspresi vokal dalam kurung siku, gaya suara, pengaturan) — tanpa musik/efek suara.
+Pelajari /video-edit (references/looks.md, layout.md) supaya prompt edit memakai istilah dan zona aman yang benar.
 Kamu tidak membuat video atau suara sendiri. Unggahan dilakukan kantor hanya setelah Pak Rico menekan Setujui."
-link_skills sosmed-produksi ig-human
+link_skills sosmed-produksi ig-human video-edit
 
 write_identity sosmed-komunitas "Dea" "Komunitas Social Media: menyiapkan draf balasan komentar, komentar ke akun lain, dan DM." \
 "Kamu Dea, Komunitas Divisi Social Media.
