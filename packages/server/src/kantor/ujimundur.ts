@@ -241,7 +241,7 @@ export function statusPreset(file: string): Record<number, Record<string, { terb
 
 /* ── Rekomendasi otomatis dari hasil uji (tanpa AI; AI hanya menulis ulang dengan bahasa awam) ── */
 export const fileSaran = (dataDir: string) => path.join(dataDir, 'ujimundur-saran.json');
-export interface SaranH { H: number; teknikal: 'lulus' | 'lebihBaik' | 'tidak' | 'belum'; teknikalKet: string; preset: Array<{ id: string; guru: string; nama: string; rataEx: number | null }>; saran: string }
+export interface SaranH { H: number; teknikal: 'lulus' | 'lebihBaik' | 'tidak' | 'belum'; teknikalKet: string; preset: Array<{ id: string; guru: string; nama: string; rataEx: number | null }>; saran: string; keputusan: 'pakai' | 'tipis' | 'sama'; keputusanTeks: string; semua: number | null }
 const NAMA_H: Record<number, string> = { 1: 'Scalping & day trading (1 hari)', 5: 'Swing pendek (±5 hari)', 20: 'Swing (±20 hari)', 60: 'Posisi & investasi (±60 hari)' };
 export function saranDariUji(dataDir: string): { at: number; H: Record<number, SaranH> } | null {
     let h: any, model: Record<string, any> = {};
@@ -263,7 +263,13 @@ export function saranDariUji(dataDir: string): { at: number; H: Record<number, S
             ? `Gunakan preset ${preset.map((p: any) => `${p.guru} (${p.rataEx >= 0 ? '+' : ''}${(+p.rataEx).toFixed(2)}%)`).join(' atau ')} sebagai saringan utama.${biaya}`
             : teknikal === 'lulus' ? 'Skor teknikal boleh jadi pertimbangan utama, tetap dengan batas risiko.'
                 : 'Belum ada sinyal teknikal yang terbukti: utamakan fundamental, berita & whales, pakai posisi kecil dan batas rugi.';
-        out[H] = { H, teknikal, teknikalKet, preset, saran };
+        const semua = r.semua.rataEx ?? null;
+        const unggul = preset.length ? (preset[0].rataEx ?? 0) - Math.max(0, semua ?? 0) : 0;
+        const keputusan: SaranH['keputusan'] = !preset.length ? 'sama' : H === 1 && unggul < 0.15 ? 'tipis' : 'pakai';
+        const keputusanTeks = keputusan === 'pakai' ? `PAKAI preset: ${preset.map((p: any) => p.guru).join(' / ')} terbukti lebih baik daripada tanpa preset (rata-rata semua saham ${semua != null ? `${semua >= 0 ? '+' : ''}${(+semua).toFixed(2)}%` : '–'}).`
+            : keputusan === 'tipis' ? `Keunggulan preset terlalu tipis (+${unggul.toFixed(2)}% per posisi) dan kemungkinan habis oleh biaya — data tidak mendukung trading harian berdasarkan sinyal.`
+                : 'Pakai preset atau tidak: belum ada bedanya di data. Preset hanya saringan gaya, bukan keunggulan yang terbukti.';
+        out[H] = { H, teknikal, teknikalKet, preset, saran, keputusan, keputusanTeks, semua };
     }
     return { at: h.at, H: out };
 }

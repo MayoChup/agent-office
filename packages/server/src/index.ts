@@ -462,7 +462,9 @@ app.get('/api/kantor/ujimundur', requireToken, (_req, res) => {
 });
 app.get('/api/kantor/ujimundur/saran', requireToken, (_req, res) => {
     const at = umurUji();
-    res.json({ ok: true, saran: bacaSaran(), berikutnya: at ? at + UJI_HARI * 86400_000 : 0, jalan: statusUji.jalan, progres: statusUji.progres });
+    // Bagian angka selalu dihitung segar dari hasil uji; penjelasan AI diambil dari simpanan.
+    const segar = saranDariUji(config.dataDir), simpan = bacaSaran();
+    res.json({ ok: true, saran: segar ? { ...segar, teks: simpan?.teks || null, dibuat: simpan?.dibuat || 0 } : null, berikutnya: at ? at + UJI_HARI * 86400_000 : 0, jalan: statusUji.jalan, progres: statusUji.progres });
 });
 app.post('/api/kantor/ujimundur/jalankan', requireToken, (_req, res) => {
     try { jalankanUji('manual'); res.json({ ok: true, status: statusUji }); } catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }

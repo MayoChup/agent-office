@@ -1623,3 +1623,9 @@ body.no-office #phaser-container { visibility: hidden; }
 .pasang ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 14px; line-height: 1.5; }
 .pasang-ikon { display: inline-grid; place-items: center; width: 22px; height: 22px; border: 1px solid var(--line-strong); border-radius: 6px; font-size: 12px; }
 .pasang .btn { align-self: flex-end; }
+.su-putus { margin: 0; font-size: 14px; font-weight: 600; line-height: 1.5; padding: 8px 10px; border-radius: 10px; background: rgba(148, 163, 184, 0.1); }
+.su-putus.pakai { background: rgba(34, 197, 94, 0.1); }
+.su-putus.tipis { background: rgba(239, 68, 68, 0.08); }
+.pr-bdg.cocok { background: rgba(124, 131, 255, 0.14); color: #6366f1; }
+.pr-teori { color: var(--muted); font-weight: 400; }
+.pr-uji.ok { border-color: rgba(34, 197, 94, 0.4); }

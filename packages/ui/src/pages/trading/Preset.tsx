@@ -14,9 +14,10 @@ export function PresetPilih({ jenis, aktif, setAktif, mode, data }: { jenis: 'te
     const [info, setInfo] = useState<string | null>(null);
     if (!data) return null;
     const rek = data.rekomendasi[mode]?.[jenis] || [];
-    const list = data.preset.filter((p) => p.jenis === jenis).sort((a, b) => (rek.includes(b.id) ? 1 : 0) - (rek.includes(a.id) ? 1 : 0));
-    const pi = list.find((p) => p.id === info);
     const uji = jenis === 'teknikal' ? data.statusUji?.[String(H_MODE[mode] ?? 20)] : null;
+    const nilai = (id: string) => (uji?.[id]?.terbukti ? 2 : 0) + (rek.includes(id) ? 1 : 0);
+    const list = data.preset.filter((p) => p.jenis === jenis).sort((a, b) => nilai(b.id) - nilai(a.id));
+    const pi = list.find((p) => p.id === info);
     const bdg = (id: string) => { const u = uji?.[id]; if (!u) return null; return u.terbukti ? <em className="pr-bdg ok" title={`Uji mundur: rata-rata ${u.rataEx}% vs S&P 500 (${u.n} kasus)`}>✓ terbukti {u.rataEx != null ? `${u.rataEx >= 0 ? '+' : ''}${u.rataEx.toFixed(2)}%` : ''}</em> : <em className="pr-bdg" title={u.n < 300 ? 'kasus terlalu sedikit untuk dinilai' : `rata-rata ${u.rataEx}% vs S&P 500 — tidak mengalahkan pasar secara meyakinkan`}>belum terbukti</em>; };
     return (
         <div className="pr-pilih">
@@ -24,12 +25,12 @@ export function PresetPilih({ jenis, aktif, setAktif, mode, data }: { jenis: 'te
                 <button className={!aktif ? 'on' : ''} onClick={() => setAktif('')}>Tanpa preset</button>
                 {list.map((p) => (
                     <span key={p.id} className={`pr-chip ${aktif === p.id ? 'on' : ''}`}>
-                        <button onClick={() => setAktif(aktif === p.id ? '' : p.id)} title={p.ringkas}>{rek.includes(p.id) && '⭐ '}{p.guru} <small>· {p.nama}</small>{bdg(p.id)}</button>
+                        <button onClick={() => setAktif(aktif === p.id ? '' : p.id)} title={p.ringkas}>{uji?.[p.id]?.terbukti && '⭐ '}{p.guru} <small>· {p.nama}</small>{bdg(p.id)}{rek.includes(p.id) && <em className="pr-bdg cocok" title="Secara teori cocok untuk rencana posisi ini">cocok</em>}</button>
                         <button className="pr-i" onClick={() => setInfo(info === p.id ? null : p.id)} aria-label={`Info ${p.nama}`}>i</button>
                     </span>
                 ))}
             </div>
-            {jenis === 'teknikal' && (uji ? <small className="pr-catat">Tanda ✓/belum terbukti = hasil uji mundur untuk {NAMA_MODE[mode] || mode} (±{H_MODE[mode] ?? 20} hari bursa).</small> : <small className="pr-catat">Jalankan Uji mundur untuk melihat preset mana yang terbukti di mode ini.</small>)}
+            {jenis === 'teknikal' && (uji ? <small className="pr-catat">⭐ / ✓ terbukti = lolos uji mundur untuk {NAMA_MODE[mode] || mode} (±{H_MODE[mode] ?? 20} hari bursa). "cocok" = sesuai teori gaya trading, belum tentu terbukti.</small> : <small className="pr-catat">Jalankan Uji mundur untuk melihat preset mana yang terbukti di mode ini.</small>)}
             {jenis === 'fundamental' && <small className="pr-catat">Preset fundamental belum bisa diuji mundur (riwayat laporan keuangan per tanggal tidak tersedia gratis) — anggap sebagai saringan kualitas, belum terbukti.</small>}
             {pi && (
                 <div className="pr-info">
@@ -52,16 +53,16 @@ export function PresetRekomendasi({ mode, data, pakai }: { mode: string; data: P
     const nm = (id: string) => { const p = data.preset.find((x) => x.id === id); return p ? `${p.guru} (${p.nama})` : id; };
     return (
         <div className="pr-rek">
-            <div><b>✨ Rekomendasi AI untuk {NAMA_MODE[mode] || mode}</b></div>
+            <div><b>🎓 Gaya yang cocok untuk {NAMA_MODE[mode] || mode}</b> <small className="pr-teori">(teori — lihat bukti di bawah)</small></div>
             <div className="pr-rek-l">
                 <span>📈 Teknikal: {r.teknikal.length ? r.teknikal.map(nm).join(' · ') : '—'}</span>
                 <span>🏛️ Fundamental: {r.fundamental.length ? r.fundamental.map(nm).join(' · ') : 'tidak dipakai untuk posisi sependek ini'}</span>
             </div>
             <p>{r.alasan}</p>
             {data.rekomendasiUji && (() => { const u = data.rekomendasiUji![String(H_MODE[mode] ?? 20)]; return u
-                ? <p className="pr-uji">📊 Uji mundur: <b>{nm(u.id)}</b> terbukti paling baik untuk mode ini — rata-rata {u.rataEx >= 0 ? '+' : ''}{u.rataEx.toFixed(2)}% vs S&P 500, menang {u.menang}% ({u.n.toLocaleString('id-ID')} kasus).</p>
-                : <p className="pr-uji">📊 Uji mundur: belum ada preset teknikal yang terbukti mengalahkan pasar untuk mode ini. Anggap preset sebagai saringan gaya, bukan jaminan.</p>; })()}
-            <button className="btn small" onClick={() => pakai(data.rekomendasiUji?.[String(H_MODE[mode] ?? 20)]?.id || r.teknikal[0] || '', r.fundamental[0] || '')}>Pakai rekomendasi</button>
+                ? <p className="pr-uji ok">📊 Uji mundur: <b>{nm(u.id)}</b> terbukti paling baik untuk mode ini — rata-rata {u.rataEx >= 0 ? '+' : ''}{u.rataEx.toFixed(2)}% vs S&P 500, menang {u.menang}% ({u.n.toLocaleString('id-ID')} kasus).</p>
+                : <p className="pr-uji">📊 Uji mundur: <b>belum ada</b> preset teknikal yang terbukti mengalahkan pasar untuk mode ini — gaya di atas hanya teori. Anggap preset sebagai saringan gaya, bukan jaminan.</p>; })()}
+            <button className="btn small" onClick={() => pakai(data.rekomendasiUji?.[String(H_MODE[mode] ?? 20)]?.id || r.teknikal[0] || '', r.fundamental[0] || '')}>{data.rekomendasiUji?.[String(H_MODE[mode] ?? 20)] ? 'Pakai yang terbukti' : 'Pakai gaya ini (belum terbukti)'}</button>
         </div>
     );
 }
