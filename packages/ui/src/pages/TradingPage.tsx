@@ -88,6 +88,8 @@ export function TradingPage() {
         }, 150);
         return () => clearTimeout(t);
     }, [segar, sc.loading, detailMemuat]);
+    // Skeleton hanya tampil kalau memang sedang memuat (kombinasi dari simpanan → langsung tanpa kedip).
+    const tampilSegar = segar && (sc.loading || detailMemuat);
     const presetPanel = (
         <section className="sb-card pr-panel">
             <PresetRekomendasi mode={modeAktif} data={pd.data} pakai={(t, f) => setPreset({ t, f })} />
@@ -109,9 +111,9 @@ export function TradingPage() {
     const perbarui = async () => { try { await apiPost('/api/kantor/screener/perbarui', { jenis: 'teknikal' }); setTimeout(() => sc.reload(), 1500); setTimeout(() => sc.reload(), 6000); } catch (e: any) { alert(`Gagal memulai: ${e?.message || e}`); } };
 
     return (
-        <div className={`pg pg-trading ${segar ? 'pg-segar' : ''}`} ref={pgRef}>
+        <div className={`pg pg-trading ${tampilSegar ? 'pg-segar' : ''}`} ref={pgRef}>
             <div style={{ minHeight: kunciTinggi || undefined }}>
-            {segar && <div className="pg-segar-pill">⏳ Menghitung ulang sinyal…</div>}
+            {tampilSegar && <div className="pg-segar-pill">⏳ Menghitung ulang sinyal…</div>}
             {sc.data && sc.data.pasar.tape.length > 0 && (() => {
                 const isi = [...sc.data.pasar.tape, ...sc.data.baris.filter((b) => (data?.watchlist || []).includes(b.s)).map((b) => ({ s: b.s, nama: b.s, harga: b.harga, chg: b.chg1d }))];
                 const item = (t: typeof isi[number], k: string) => (
