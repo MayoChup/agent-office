@@ -2277,9 +2277,11 @@ body.no-office #phaser-container { visibility: hidden; }
 .br-kpi b { font-size: 22px; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .br-kpi em { font-style: normal; font-size: 11px; color: var(--muted); line-height: 1.35; } .br-kpi em.naik { color: #16a34a; } .br-kpi em.turun { color: #dc2626; }
 .br-dua { display: grid; grid-template-columns: 1.4fr 1fr; gap: 14px; } .br-dua > .sb-card { min-width: 0; }
-.br-garis svg { width: 100%; height: 170px; display: block; }
+.br-plot { position: relative; height: 170px; } .br-plot svg { width: 100%; height: 100%; display: block; }
+.br-ay { position: absolute; left: 0; width: 38px; text-align: right; transform: translateY(-50%); }
+.br-axx { position: absolute; bottom: 0; transform: translateX(-50%); white-space: nowrap; }
 .br-grid { stroke: var(--line); stroke-width: 1; vector-effect: non-scaling-stroke; }
-.br-ax { font-size: 10px; fill: var(--muted); font-family: inherit; }
+.br-ax { font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; line-height: 1; }
 .br-leg { display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin-top: 4px; } .br-leg i { display: inline-block; width: 10px; height: 3px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
 .br-ai .sm-lead { margin-bottom: 10px; }
 .br-arah { padding: 10px 12px; border-radius: 12px; background: var(--grad-lembut, var(--panel-2)); margin-bottom: 12px; } .br-arah small { font-size: 12px; font-weight: 600; } .br-arah p { margin: 4px 0 0; font-size: 13.5px; line-height: 1.55; }

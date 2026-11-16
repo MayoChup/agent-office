@@ -33,13 +33,17 @@ function Garis({ label, seri, tinggi = 150 }: { label: string[]; seri: Array<{ n
     const x = (i: number) => pad.l + (i / Math.max(1, label.length - 1)) * (W - pad.l - pad.r), y = (v: number) => pad.t + (1 - (v - lo) / (hi - lo)) * (H - pad.t - pad.b);
     const garis = (nilai: Array<number | null>) => nilai.map((v, i) => (v == null ? null : `${x(i).toFixed(1)},${y(v).toFixed(1)}`)).filter(Boolean).join(' ');
     const lang = Math.max(1, Math.ceil(label.length / 6));
+    const pctX = (i: number) => (x(i) / W) * 100, pctY = (v: number) => (y(v) / H) * 100;
     return (
         <div className="br-garis">
-            <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={seri.map((s) => s.nama).join(' dan ')}>
-                {[0, 0.5, 1].map((f) => { const v = lo + (hi - lo) * f; return <g key={f}><line x1={pad.l} x2={W - pad.r} y1={y(v)} y2={y(v)} className="br-grid" /><text x={pad.l - 6} y={y(v) + 3} textAnchor="end" className="br-ax">{angka(Math.round(v))}</text></g>; })}
-                {label.map((l, i) => (i % lang === 0 || i === label.length - 1 ? <text key={l} x={x(i)} y={H - 6} textAnchor="middle" className="br-ax">{tgl(l)}</text> : null))}
-                {seri.map((s) => <polyline key={s.nama} points={garis(s.nilai)} fill="none" stroke={s.warna} strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />)}
-            </svg>
+            <div className="br-plot">
+                <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={seri.map((s) => s.nama).join(' dan ')}>
+                    {[0, 0.5, 1].map((f) => { const v = lo + (hi - lo) * f; return <line key={f} x1={pad.l} x2={W - pad.r} y1={y(v)} y2={y(v)} className="br-grid" />; })}
+                    {seri.map((s) => <polyline key={s.nama} points={garis(s.nilai)} fill="none" stroke={s.warna} strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />)}
+                </svg>
+                {[0, 0.5, 1].map((f) => { const v = lo + (hi - lo) * f; return <span key={f} className="br-ax br-ay" style={{ top: `${pctY(v)}%` }}>{angka(Math.round(v))}</span>; })}
+                {label.map((l, i) => (i % lang === 0 || i === label.length - 1 ? <span key={l} className="br-ax br-axx" style={{ left: `${pctX(i)}%` }}>{tgl(l)}</span> : null))}
+            </div>
             {seri.length > 1 && <div className="br-leg">{seri.map((s) => <span key={s.nama}><i style={{ background: s.warna }} />{s.nama}</span>)}</div>}
         </div>
     );
@@ -74,7 +78,7 @@ export function Beranda({ tab, akun, platform, pilihAkun, kabar }: { tab: string
         ['Pengikut', angka(t.pengikut), t.tumbuh != null ? `${t.tumbuh >= 0 ? '▲ +' : '▼ '}${angka(t.tumbuh)} periode ini` : 'isi/sambungkan akun'],
         ['Tayangan', angka(t.tayang), t.rataTayang != null ? `rata-rata ${angka(t.rataTayang)}/posting` : undefined],
         ['Jangkauan', angka(t.jangkauan)], ['Interaksi', angka(t.interaksi), t.rataInteraksi != null ? `rata-rata ${angka(t.rataInteraksi)}/posting` : undefined],
-        ['Engagement rate', t.er == null ? '–' : `${t.er}%`, '(suka+komen+simpan+bagikan) ÷ jangkauan'],
+        ['Engagement rate', t.er == null ? '–' : `${t.er}%`, 'interaksi ÷ jangkauan'],
         ['Posting terbit', String(t.posting), `${t.terukur} sudah ada angkanya`], ['Komentar', angka(t.komentar)], ['Disimpan', angka(t.simpan)], ['Dibagikan', angka(t.bagikan)],
         ['Menunggu Bapak', String(t.menunggu), `${t.terjadwal} terjadwal`]
     ];
