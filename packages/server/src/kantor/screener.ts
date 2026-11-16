@@ -177,7 +177,9 @@ export class Screener {
         this.sparkDir = path.join(dir, 'spark');
         try { this.st = JSON.parse(fs.readFileSync(this.file, 'utf8')); } catch { this.st = { baris: [], teknikalSesi: '', teknikalAt: 0, fundamentalAt: 0, gagal: [] }; }
     }
-    private simpan() { fs.writeFileSync(this.file, JSON.stringify(this.st)); }
+    private simpan() { fs.writeFileSync(this.file, JSON.stringify(this.st)); this.cacheData.clear(); }
+    /** Hasil data() per kombinasi horison/preset — dihitung sekali, dipakai ulang sampai data berubah (maks. 2 menit). */
+    private cacheData = new Map<string, { at: number; v: any }>();
     private langkah(k: string, n: number, galat: string) { this.st.status = { ...(this.st.status || {}), [k]: { at: Date.now(), n, galat } }; }
 
     /* ── Horison: proyeksi & skor dihitung ulang untuk H hari bursa ── */
@@ -242,6 +244,15 @@ export class Screener {
 
     data(H = 20, mode = '', pt = '', pf = '') {
         H = Math.max(1, Math.min(120, Math.round(H) || 20));
+        const kunci = `${H}|${mode}|${pt}|${pf}|${this.sibuk}|${this.progres}`;
+        const c = this.cacheData.get(kunci);
+        if (c && Date.now() - c.at < 120_000) return c.v;
+        const v = this.hitungData(H, mode, pt, pf);
+        if (this.cacheData.size > 40) this.cacheData.clear();
+        this.cacheData.set(kunci, { at: Date.now(), v });
+        return v;
+    }
+    private hitungData(H: number, mode: string, pt: string, pf: string) {
         const sari = bacaLaporanSari(this.deskDir);
         const pT = PRESET.find((x) => x.id === pt), pF = PRESET.find((x) => x.id === pf);
         const baris = this.st.baris.map((b) => {
@@ -272,7 +283,7 @@ export class Screener {
         const b0 = this.st.baris.find((x) => x.s === s);
         if (!b0) return null;
         const b = { ...b0, x: b0.x ? { ...b0.x, proyeksi: this.proyeksiH(b0, H) } : b0.x };
-        return { horizon: H, teknikalBukti: this.teknikalTerbukti(H, mode), baris: b, skor: this.skor(b0, undefined, H, mode, pt, pf), preset: this.presetSaham(b0), berita: this.st.berita?.[s] || null, orang: this.st.orang?.[s] || null };
+        return { horizon: H, teknikalBukti: this.teknikalTerbukti(H, mode), bobot: bobot(H, mode, this.teknikalTerbukti(H, mode).terbukti), baris: b, skor: this.skor(b0, undefined, H, mode, pt, pf), preset: this.presetSaham(b0), berita: this.st.berita?.[s] || null, orang: this.st.orang?.[s] || null };
     }
 
     /** Peta berita: berita (unik) ↔ saham yang terkait, untuk tampilan "tata surya". */

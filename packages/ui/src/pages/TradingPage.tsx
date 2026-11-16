@@ -16,6 +16,7 @@ import { PilihanView } from './trading/PilihanView';
 import { SahamDetail } from './trading/SahamDetail';
 import { SaranUji } from './trading/SaranUji';
 import { TradingChat } from './trading/TradingChat';
+import { Portofolio } from './trading/Portofolio';
 import { PetaPanas } from './trading/PetaPanas';
 import { PetaBerita } from './trading/PetaBerita';
 import { WatchlistView } from './trading/WatchlistView';
@@ -46,9 +47,8 @@ export function TradingPage() {
     const agents = useKantor((s) => s.agents);
     const team = agents.filter((a) => a.id === 'trading' || a.id.startsWith('trading-'));
     const [lap, setLap] = useState(0);
-    const [grafik, setGrafik] = useState<string | null>(null);
     type Tab = 'pasar' | 'pilihan' | 'panas' | 'berita' | 'watchlist' | 'penyaring' | 'investigasi' | 'posisi' | 'uji';
-    const TABS: Array<{ k: Tab; label: string }> = [{ k: 'pasar', label: 'Pasar' }, { k: 'pilihan', label: 'Pilihan sinyal' }, { k: 'panas', label: 'Peta panas' }, { k: 'berita', label: 'Peta berita' }, { k: 'watchlist', label: 'Watchlist' }, { k: 'penyaring', label: 'Penyaring' }, { k: 'investigasi', label: 'Investigasi' }, { k: 'posisi', label: 'Posisi saya' }, { k: 'uji', label: 'Uji mundur' }];
+    const TABS: Array<{ k: Tab; label: string }> = [{ k: 'pasar', label: 'Pasar' }, { k: 'pilihan', label: 'Pilihan sinyal' }, { k: 'panas', label: 'Peta panas' }, { k: 'berita', label: 'Peta berita' }, { k: 'watchlist', label: 'Watchlist' }, { k: 'penyaring', label: 'Penyaring' }, { k: 'investigasi', label: 'Investigasi' }, { k: 'posisi', label: 'Portofolio' }, { k: 'uji', label: 'Uji mundur' }];
     const [tab, setTabState] = useState<Tab>(() => { try { const v = localStorage.getItem(LS_TAB) as Tab; return TABS.some((t) => t.k === v) ? v : 'pilihan'; } catch { return 'pilihan'; } });
     const [saham, setSaham] = useState<string | null>(null);
     const [faktor, setFaktor] = useState<FaktorKey>(() => { try { return (localStorage.getItem('kantor:faktor') as FaktorKey) || 'semua'; } catch { return 'semua'; } });
@@ -61,7 +61,11 @@ export function TradingPage() {
     const pd = usePreset();
     const modeAktif = horison.mode === 'tanggal' ? (H <= 1 ? 'daytrade' : H <= 5 ? 'swingpendek' : H <= 20 ? 'swing' : H <= 60 ? 'posisi' : 'investasi') : horison.mode;
     const qApi = `${paramH(horison)}${preset.t ? `&pt=${preset.t}` : ''}${preset.f ? `&pf=${preset.f}` : ''}`;
-    const sc = useApi<ScreenerData>(`/api/kantor/screener?${qApi}`, 600_000);
+    // Saat halaman saham dibuka, daftar 500 saham tidak perlu dihitung ulang tiap ganti preset/horison (data lama tetap dipakai).
+    const [qDaftar, setQDaftar] = useState(qApi);
+    useEffect(() => { if (!saham) setQDaftar(qApi); }, [qApi, saham]);
+    const sc = useApi<ScreenerData>(`/api/kantor/screener?${qDaftar}`, 600_000);
+    const [infoDetail, setInfoDetail] = useState<{ bukti: any; bobot: any } | null>(null);
     // Ganti preset/horison: data dimuat ulang, tapi posisi gulir tetap & tampil efek "memuat" (skeleton) di atas isi lama.
     const pgRef = useRef<HTMLDivElement>(null);
     const [kunciTinggi, setKunciTinggi] = useState(0);
@@ -99,12 +103,10 @@ export function TradingPage() {
     const setTab = (t: Tab) => { setSaham(null); setTabState(t); try { localStorage.setItem(LS_TAB, t); } catch { /* */ } document.querySelector('.page:not([hidden]) .pg')?.scrollTo({ top: 0 }); };
     // Menu bawah HP: yang paling sering dipakai di depan, sisanya masuk "Lainnya".
     const IKON: Record<Tab, string> = { pilihan: '🎯', watchlist: '⭐', panas: '🟩', berita: '🪐', pasar: '🌐', penyaring: '🔍', investigasi: '🕵️', posisi: '💼', uji: '🧪' };
-    const PENDEK: Partial<Record<Tab, string>> = { pilihan: 'Sinyal', panas: 'Heatmap', berita: 'Berita', posisi: 'Posisi' };
+    const PENDEK: Partial<Record<Tab, string>> = { pilihan: 'Sinyal', panas: 'Heatmap', berita: 'Berita', posisi: 'Portofolio' };
     useSubNav((['pilihan', 'watchlist', 'panas', 'berita', 'pasar', 'penyaring', 'investigasi', 'posisi', 'uji'] as Tab[]).map((k) => ({ k, ico: IKON[k], label: PENDEK[k] || TABS.find((t) => t.k === k)!.label })), tab, (k) => setTab(k as Tab));
     const buka = (s: string) => { setSaham(s); document.querySelector('.page:not([hidden]) .pg')?.scrollTo({ top: 0 }); };
     const perbarui = async () => { try { await apiPost('/api/kantor/screener/perbarui', { jenis: 'teknikal' }); setTimeout(() => sc.reload(), 1500); setTimeout(() => sc.reload(), 6000); } catch (e: any) { alert(`Gagal memulai: ${e?.message || e}`); } };
-    const realized = (data?.history || []).reduce((a, h) => a + (h.pnl || 0), 0);
-    const open = (data?.positions || []).reduce((a, p) => a + (p.pnl || 0), 0);
 
     return (
         <div className={`pg pg-trading ${segar ? 'pg-segar' : ''}`} ref={pgRef}>
@@ -129,7 +131,7 @@ export function TradingPage() {
                 <span className="sb-nav-sp" />
                 {sc.data?.sibuk ? <span className="sb-busy">⏳ {sc.data.progres}</span> : <button className="sb-refresh" onClick={() => { perbarui(); reload(); }} title="Ambil data terbaru">↻</button>}
             </nav>
-            {saham && <><HorisonBar h={horison} setH={setHorison} bukti={(sc.data as any)?.teknikalBukti} /><SahamDetail key={saham} onMemuat={setDetailMemuat} simbol={saham} H={H} q={qApi} preset={preset} setPreset={setPreset} mode={modeAktif} pd={pd.data} onBack={() => setSaham(null)} /></>}
+            {saham && <><HorisonBar h={horison} setH={setHorison} bobot={infoDetail?.bobot} bukti={infoDetail?.bukti ?? (sc.data as any)?.teknikalBukti} /><SahamDetail key={saham} onInfo={setInfoDetail} onMemuat={setDetailMemuat} simbol={saham} H={H} q={qApi} preset={preset} setPreset={setPreset} mode={modeAktif} pd={pd.data} onBack={() => setSaham(null)} /></>}
             {!saham && ['pasar', 'pilihan', 'panas', 'watchlist'].includes(tab) && !sc.data && <div className="fin-empty">{sc.error ? `Gagal memuat: ${sc.error}` : 'Memuat data pasar…'}</div>}
             {!saham && ['pasar', 'pilihan', 'panas'].includes(tab) && sc.data && sc.data.baris.length === 0 && (
                 <div className="sb-card sb-kosong">
@@ -165,28 +167,7 @@ export function TradingPage() {
             {!saham && tab === 'posisi' && error && <div className="error">Gagal memuat: {error}</div>}
             {!saham && tab === 'posisi' && data && (
                 <>
-                    <div className="fin-mini">
-                        <div><span>Modal</span><b>${data.capital}</b></div>
-                        <div><span>Risiko / transaksi</span><b>{data.riskPct}% (${(data.capital * data.riskPct / 100).toFixed(0)})</b></div>
-                        <div><span>Berjalan</span><b style={{ color: open >= 0 ? 'var(--good)' : '#fb7185' }}>{open >= 0 ? '+' : '−'}${Math.abs(open).toFixed(2)}</b></div>
-                        <div><span>Sudah ditutup</span><b style={{ color: realized >= 0 ? 'var(--good)' : '#fb7185' }}>{realized >= 0 ? '+' : '−'}${Math.abs(realized).toFixed(2)}</b></div>
-                    </div>
-
-                    <section className="fin-card">
-                        <h3>Posisi terbuka <small>{data.positions.length} saham</small></h3>
-                        {data.positions.length === 0 && <div className="fin-empty">Belum ada. Setelah beli di broker, bilang ke Dito: "eksekusi #1 di 251".</div>}
-                        {data.positions.map((p) => (
-                            <div key={p.symbol} className="tr-pos">
-                                <div className="tr-pos-head" onClick={() => setGrafik(grafik === p.symbol ? null : p.symbol)} style={{ cursor: 'pointer' }}>
-                                    <b>{p.symbol}</b><span className="tr-chart-btn">{grafik === p.symbol ? '▾ grafik' : '📊 grafik'}</span><span>{p.shares || '?'} lembar @ ${p.entry}</span>
-                                    {p.pnl !== null && <span className={`tr-pnl ${p.pnl >= 0 ? 'in' : 'out'}`}>{p.pnl >= 0 ? '+' : '−'}${Math.abs(p.pnl).toFixed(2)}</span>}
-                                </div>
-                                <Range stop={p.stop} entry={p.entry} target={p.target} price={p.price} />
-                                {grafik === p.symbol && <div className="tr-chart"><CandleChart simbol={p.symbol} /></div>}
-                                {(p.notified?.target || p.notified?.stop) && <div className="fin-alert" style={{ marginTop: 6 }}>{p.notified?.target ? '🟢 Target sudah tercapai — sudah jual?' : '🔴 Stop loss tersentuh — sudah jual?'}</div>}
-                            </div>
-                        ))}
-                    </section>
+                    <Portofolio onBuka={buka} />
 
                     <section className="fin-card">
                         <h3>Strategi terbaru <small>dari Dito</small></h3>

@@ -39,7 +39,14 @@ export interface Position {
     closedAt?: string;
     exit?: number;
     pnl?: number;
+    /** Portofolio: profil target, catatan sinyal AI saat beli (untuk menilai "hasil pakai AI"). */
+    profil?: 'konservatif' | 'moderat' | 'agresif' | 'kustom';
+    ai?: { label?: string; skor?: number; mode?: string; H?: number; pt?: string; pf?: string };
+    catatan?: string;
 }
+
+/** Arus dana portofolio: modal awal, suntik dana (setor), tarik dana. */
+export interface Dana { id: string; tgl: string; jenis: 'awal' | 'setor' | 'tarik'; jumlah: number; catatan?: string }
 
 export interface TradingState {
     capital: number;          // USD
@@ -51,6 +58,7 @@ export interface TradingState {
     plans: Plan[];
     positions: Position[];
     history: Position[];
+    dana?: Dana[];
     lastPlansDate?: string;
 }
 

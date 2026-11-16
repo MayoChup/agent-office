@@ -1,3 +1,4 @@
+import zlib from 'zlib';
 import fs from 'fs';
 import path from 'path';
 import { cekHargaCli } from './kantor/harga';
@@ -22,6 +23,7 @@ import { presetInfo, REKOMENDASI } from './kantor/preset';
 import { profil as nasdaqProfil, fundamentalNasdaq } from './kantor/nasdaq';
 import { simulasi, langkahDari } from './kantor/simulasi';
 import { konteksTrading } from './kantor/konteksTrading';
+import * as porto from './kantor/portofolio';
 import { ujiMundur, rekomendasiUji, fileUji, statusPreset, StatusUji, saranDariUji, fileSaran, namaH } from './kantor/ujimundur';
 import { cnbcChart } from './kantor/harga';
 import { telegramKirim } from './kantor/telegram';
@@ -203,6 +205,21 @@ app.set('trust proxy', true);
 app.use(['/api/kantor/catatan', '/api/kantor/berkas'], express.json({ limit: '12mb' }));
 app.use('/api/kantor/keuangan/mutasi/terapkan', express.json({ limit: '2mb' }));
 app.use(express.json({ limit: '32kb' }));
+// Kompres jawaban JSON besar (mis. data 500 saham ±1 MB → ±150 KB): jauh lebih cepat di jaringan HP.
+app.use('/api', (req, res, next) => {
+    if (!/\bgzip\b/.test(String(req.headers['accept-encoding'] || ''))) return next();
+    const asli = res.json.bind(res);
+    res.json = ((body: any) => {
+        const teks = JSON.stringify(body);
+        if (teks.length < 4096) return asli(body);
+        const z = zlib.gzipSync(teks, { level: 5 });
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.setHeader('Content-Encoding', 'gzip');
+        res.setHeader('Vary', 'Accept-Encoding');
+        return res.end(z);
+    }) as any;
+    next();
+});
 
 // CORS: supaya tampilan di Vercel boleh memanggil server ini.
 app.use('/api/kantor', (req, res, next) => {
@@ -551,6 +568,31 @@ app.post('/api/kantor/screener/perbarui', requireToken, (req, res) => {
     const p = req.body?.jenis === 'fundamental' ? screener.perbaruiFundamental() : req.body?.jenis === 'berita' ? screener.perbaruiBerita() : screener.perbaruiTeknikal(true);
     p.catch((e) => console.warn('[Screener]', e?.message || e));
     res.json({ ok: true, mulai: true });
+});
+// ── Portofolio (pencatatan; eksekusi tetap di broker Pak Rico) ──
+async function hargaKiniPorto(sym: string): Promise<number | null> {
+    const c = priceCache.get(sym);
+    if (c && Date.now() - c.at < 120_000) return c.p;
+    try { const p = await fetchPrice(sym); priceCache.set(sym, { at: Date.now(), p }); return p; } catch { return screener.hargaTerakhir(sym)?.harga ?? null; }
+}
+app.get('/api/kantor/portofolio', requireToken, async (req, res) => {
+    try {
+        const r = String(req.query.res || 'harian');
+        res.json({ ok: true, ...(await porto.laporan(tradingDesk, config.dataDir, hargaKiniPorto, (['harian', 'mingguan', 'bulanan'].includes(r) ? r : 'harian') as porto.Resolusi)) });
+    } catch (e: any) { res.status(500).json({ ok: false, error: String(e?.message || e) }); }
+});
+app.post('/api/kantor/portofolio/:aksi', requireToken, (req, res) => {
+    try {
+        const b = req.body || {}, a = String(req.params.aksi);
+        let hasil: any = null;
+        if (a === 'buka') hasil = porto.buka(tradingDesk, b);
+        else if (a === 'ubah') hasil = porto.ubah(tradingDesk, String(b.symbol || ''), b);
+        else if (a === 'tutup') hasil = porto.tutup(tradingDesk, String(b.symbol || ''), +b.harga, b.shares ? +b.shares : undefined, b.tgl);
+        else if (a === 'hapus') porto.hapus(tradingDesk, b.jenis === 'riwayat' ? 'riwayat' : 'posisi', String(b.symbol || ''), String(b.openedAt || ''), b.closedAt);
+        else if (a === 'dana') porto.aturDana(tradingDesk, b);
+        else throw new Error('Aksi tidak dikenal.');
+        res.json({ ok: true, hasil });
+    } catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
 });
 app.post('/api/kantor/trading/watchlist', requireToken, (req, res) => {
     const simbol = String(req.body?.simbol || '').toUpperCase().replace(/[^A-Z0-9.-]/g, '').slice(0, 12);

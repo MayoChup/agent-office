@@ -2,19 +2,36 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiGet } from './connection';
 import { useAktif } from './aktif';
 
+/** Simpanan jawaban terakhir per alamat: kembali ke kombinasi yang pernah dibuka (preset/horison) tampil seketika. */
+const SIMPAN = new Map<string, { at: number; d: any }>();
+export function simpanApi<T>(path: string): T | null { return (SIMPAN.get(path)?.d as T) ?? null; }
+export function taruhApi(path: string, d: any) { SIMPAN.set(path, { at: Date.now(), d }); if (SIMPAN.size > 80) SIMPAN.delete(SIMPAN.keys().next().value as string); }
+/** Ambil lewat simpanan: kalau masih segar (< maksMs) tidak perlu ke server. */
+export async function apiGetSimpan<T>(path: string, maksMs = 60_000): Promise<T> {
+    const c = SIMPAN.get(path);
+    if (c && Date.now() - c.at < maksMs) return c.d as T;
+    const d = await apiGet<T>(path); taruhApi(path, d); return d;
+}
+
 /** Ambil data API kantor + muat ulang berkala. Data lama tetap tampil saat memuat ulang. */
 export function useApi<T>(path: string, refreshMs = 0) {
-    const [data, setData] = useState<T | null>(null);
+    const [data, setData] = useState<T | null>(() => simpanApi<T>(path));
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const alive = useRef(true);
     const terakhir = useRef(0);
     const aktif = useAktif();
-    const load = useCallback(async (extra = '') => {
+    const load = useCallback(async (extra = '', cepat = false) => {
         if (!path) return;
-        setLoading(true);
+        const c = SIMPAN.get(path);
+        if (cepat && c && !extra) {
+            setData(c.d); terakhir.current = c.at;
+            if (Date.now() - c.at < 60_000) return; // masih segar → tidak perlu ke server
+        }
+        setLoading(!(cepat && c));
         try {
             const d = await apiGet<T>(path + extra);
+            if (!extra) taruhApi(path, d);
             terakhir.current = Date.now();
             if (alive.current) { setData(d); setError(''); }
         } catch (e: any) {
@@ -23,7 +40,7 @@ export function useApi<T>(path: string, refreshMs = 0) {
         if (alive.current) setLoading(false);
     }, [path]);
     useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
-    useEffect(() => { load(); }, [load]);
+    useEffect(() => { load('', true); }, [load]);
     // Muat ulang berkala hanya saat halaman terlihat.
     useEffect(() => {
         if (!aktif || !refreshMs) return;

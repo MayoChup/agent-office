@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { apiGet } from '../../kantor/connection';
+import { apiGetSimpan } from '../../kantor/api';
 import { usd } from './types';
 
 interface Prof { nama: string; masuk: number; target: number; stop: number; ket: string; pMasuk: number; pTarget: number; pStop: number; pTidak: number; rr: number; harapan: number; hariTarget: number | null }
@@ -10,7 +10,7 @@ export function Simulasi({ simbol, q, onTutup }: { simbol: string; q: string; on
     const [d, setD] = useState<Sim | null>(null);
     const [err, setErr] = useState('');
     const [pil, setPil] = useState(1);
-    useEffect(() => { let a = true; apiGet<Sim>(`/api/kantor/simulasi/${encodeURIComponent(simbol)}?${q}`).then((r) => a && setD(r)).catch((e) => a && setErr(String(e.message || e))); return () => { a = false; }; }, [simbol, q]);
+    useEffect(() => { let a = true; apiGetSimpan<Sim>(`/api/kantor/simulasi/${encodeURIComponent(simbol)}?${q}`, 600_000).then((r) => a && setD(r)).catch((e) => a && setErr(String(e.message || e))); return () => { a = false; }; }, [simbol, q]);
     const p = d?.profil[pil];
     const W = 1000, Hh = 340, padR = 0;
     const view = (() => {

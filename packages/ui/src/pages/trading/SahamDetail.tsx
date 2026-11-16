@@ -1,18 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import { apiGet, apiPost } from '../../kantor/connection';
-import { useApi } from '../../kantor/api';
+import { useApi, apiGetSimpan, simpanApi } from '../../kantor/api';
 import type { FolderData } from './WatchlistView';
 import { CandleChart } from '../../components/CandleChart';
 import { Baris, FAKTOR, FaktorKey, Label, kelas, usd, persen, kap, skorBar } from './types';
 import { PresetPilih, PresetCek, PresetData, PresetEval } from './Preset';
 import { Simulasi } from './Simulasi';
 import { Bintang, useWatch } from './Bintang';
+import { PegangPosisi } from './PegangPosisi';
+import type { TradingData } from '../../kantor/api';
 
 interface FaktorFull { skor: number; label: Label; alasan: string[] }
 interface Profil { nama: string; ringkas: string; deskripsi: string; situs: string; sektor: string; industri: string; alamat: string }
 interface Detail { preset?: PresetEval[]; baris: Baris; skor: Record<FaktorKey, FaktorFull | null>; berita: { n: number; judul: Array<{ t: string; s: number; tgl: string; url: string }> } | null; orang: { net: number; beli: number; jual: number; n: number } | null }
 
-export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPreset, mode = 'swing', pd, onMemuat }: { simbol: string; onBack: () => void; H?: number; q?: string; preset?: { t: string; f: string }; setPreset?: (x: { t: string; f: string }) => void; mode?: string; pd?: PresetData | null; onMemuat?: (x: boolean) => void }) {
+export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPreset, mode = 'swing', pd, onMemuat, onInfo }: { simbol: string; onBack: () => void; H?: number; q?: string; preset?: { t: string; f: string }; setPreset?: (x: { t: string; f: string }) => void; mode?: string; pd?: PresetData | null; onMemuat?: (x: boolean) => void; onInfo?: (x: { bukti: any; bobot: any }) => void }) {
     const [prof, setProf] = useState<Profil | null>(null);
     const [profErr, setProfErr] = useState('');
     const [sim, setSim] = useState(false);
@@ -22,14 +24,21 @@ export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPre
     const [msg, setMsg] = useState('');
     const [tab, setTab] = useState<FaktorKey>('teknikal');
     const [menuWl, setMenuWl] = useState(false);
+    const [pegang, setPegang] = useState(false);
+    const td = useApi<TradingData>('/api/kantor/trading', 0);
+    const dipegang = td.data?.positions.find((p) => p.symbol === simbol);
     const fd = useApi<FolderData>('/api/kantor/watchlist-folder', 0);
     const diWatch = useWatch().has(simbol) || !!fd.data?.folders?.some((f) => f.simbol.includes(simbol));
     useEffect(() => {
         let alive = true;
-        setErr(''); onMemuat?.(true);
-        apiGet<Detail>(`/api/kantor/saham-detail/${encodeURIComponent(simbol)}?${q}`)
+        const url = `/api/kantor/saham-detail/${encodeURIComponent(simbol)}?${q}`;
+        const c = simpanApi<Detail>(url);
+        setErr('');
+        if (c) { setD(c); onInfo?.({ bukti: (c as any).teknikalBukti, bobot: (c as any).bobot }); } // kombinasi yang pernah dibuka → tampil seketika
+        else onMemuat?.(true);
+        apiGetSimpan<Detail>(url, 60_000)
             .catch(() => apiGet<Detail>(`/api/kantor/saham/${encodeURIComponent(simbol)}`).then((r) => ({ ...r, berita: null, orang: null })))
-            .then((r) => alive && setD(r)).catch((e) => alive && setErr(String(e.message || e)))
+            .then((r) => { if (alive) { setD(r); onInfo?.({ bukti: (r as any).teknikalBukti, bobot: (r as any).bobot }); } }).catch((e) => alive && setErr(String(e.message || e)))
             .finally(() => alive && onMemuat?.(false));
         return () => { alive = false; onMemuat?.(false); };
     }, [simbol, q]);
@@ -62,6 +71,11 @@ export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPre
                         </div>
                     </div>
                     <div className="sd-price mono">{usd(b.harga)} <span className={b.chg1d >= 0 ? 'up' : 'down'}>{b.chg1d >= 0 ? '▲' : '▼'} {Math.abs(b.chg1d).toFixed(2)}%</span></div>
+                    <div className="sd-pegang">
+                        {dipegang
+                            ? <span className="sd-dipegang">📌 Dipegang {dipegang.shares} lembar @ {usd(dipegang.entry)}{dipegang.pnl != null && <b className={dipegang.pnl >= 0 ? 'up' : 'down'}> {dipegang.pnl >= 0 ? '+' : '−'}{usd(Math.abs(dipegang.pnl))}</b>} · target {usd(dipegang.target)} · stop {usd(dipegang.stop)}</span>
+                            : <button className="btn primary" onClick={() => setPegang(true)}>📌 Pegang posisi</button>}
+                    </div>
                     <div className="sd-sub mono">1B {persen(b.chg1m, 1)} · 3B {persen(b.chg3m, 1)} · 1T {persen(b.chg1y, 1)} · RSI {b.rsi ?? '–'} · vol {b.volX}×</div>
                 </div>
                 {all && (
@@ -73,6 +87,9 @@ export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPre
                 )}
             </section>
 
+            {pegang && <PegangPosisi simbol={b.s} harga={b.harga} proyeksi={pr as any} kas={null}
+                ai={{ label: all?.label, skor: all?.skor, mode, H, pt: preset?.t || '', pf: preset?.f || '' }}
+                onTutup={() => setPegang(false)} onSelesai={(m) => { setPegang(false); setMsg(m); td.reload(); }} />}
             <section className="sb-card sd-prof">
                 <div className="sd-h"><h3>Tentang {prof?.nama || b.nama}</h3></div>
                 {prof ? (<>
@@ -88,7 +105,7 @@ export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPre
 
             <section className="sb-card cc-card"><CandleChart simbol={b.s} /></section>
 
-            {sim ? <Simulasi simbol={b.s} q={q} onTutup={() => setSim(false)} /> : (
+            {sim ? <Simulasi simbol={b.s} q={q.replace(/&p[tf]=[^&]*/g, '')} onTutup={() => setSim(false)} /> : (
                 <section className="sb-card sim-cta">
                     <div><b>🎲 Simulasi 10.000 jalur</b><small>Berapa kali harga menyentuh harga masuk, target, atau stop — untuk profil Konservatif, Moderat & Agresif.</small></div>
                     <button className="btn primary" onClick={() => setSim(true)}>Jalankan simulasi</button>
