@@ -210,6 +210,6 @@ export async function hargaPanjang(s: string, tahun = 5): Promise<Bar[]> {
             }
         } catch (e: any) { pesan.push(`Nasdaq: ${e?.cause?.code || e?.message || e}`); }
     }
-    try { const r = await yahooChart(s, `${tahun}y`, '1d'); const d = dariYahoo(r); if (d.rows.length > 300) return d.rows; } catch (e: any) { pesan.push(String(e?.message || e)); }
+    try { const r = await yahooChart(s, tahun > 5 ? '10y' : `${tahun}y`, '1d'); const d = dariYahoo(r); if (d.rows.length > 300) return d.rows; } catch (e: any) { pesan.push(String(e?.message || e)); }
     throw new Error(pesan.join('; ') || 'riwayat panjang tidak tersedia');
 }

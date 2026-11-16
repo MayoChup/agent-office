@@ -35,7 +35,7 @@ export function UjiMundur() {
         <div className="um">
             <section className="sb-card">
                 <div className="sd-h"><h3>🧪 Uji mundur (backtest)</h3></div>
-                <p className="sb-note">Skor teknikal & preset guru dihitung ulang di setiap tanggal selama ±4 tahun terakhir (hanya memakai data sampai tanggal itu), lalu dibandingkan dengan hasil sesudahnya — <b>dibanding S&P 500 pada periode yang sama</b>. Positif = mengalahkan pasar.</p>
+                <p className="sb-note">Skor teknikal & preset guru dihitung ulang di setiap tanggal selama ±5 tahun terakhir (hanya memakai data sampai tanggal itu), lalu dibandingkan dengan hasil sesudahnya — <b>dibanding S&P 500 pada periode yang sama, disesuaikan risiko</b> (saham yang biasa bergerak 1,5× pasar dibandingkan dengan 1,5× hasil S&P 500). Positif = mengalahkan pasar.</p>
                 <div className="row" style={{ gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                     <button className="btn primary" disabled={!!st?.jalan} onClick={jalankan}>{st?.jalan ? '⏳ Sedang berjalan…' : h ? '↻ Jalankan ulang' : '▶ Jalankan uji mundur'}</button>
                     <small className="sb-note">{st?.jalan ? `${st.progres} — ±20–40 menit, bisa ditinggal` : h ? `Terakhir: ${new Date(h.at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} · ${h.saham} saham · ${h.sampel.toLocaleString('id-ID')} sampel · ${h.periode.dari} s/d ${h.periode.sampai}` : 'Belum pernah dijalankan.'}</small>
@@ -52,7 +52,7 @@ export function UjiMundur() {
                             {lbl.map((x) => <tr key={x.k}><td>{x.k}</td><td className="mono">{x.n.toLocaleString('id-ID')}</td><td className={`mono ${kelasEx(x.rataEx)}`}>{p(x.rataEx)}</td><td className="mono">{x.menang ?? '–'}%</td></tr>)}
                             <tr className="um-base"><td>Semua saham</td><td className="mono">{r.semua.n.toLocaleString('id-ID')}</td><td className={`mono ${kelasEx(r.semua.rataEx)}`}>{p(r.semua.rataEx)}</td><td className="mono">{r.semua.menang}%</td></tr>
                         </tbody></table>
-                    <p className="sb-note">Rata-rata per posisi selama {H} hari bursa. Contoh: +0,50% artinya rata-rata unggul 0,5% dari S&P 500 dalam {H} hari.</p>
+                    <p className="sb-note">Rata-rata per posisi selama {H} hari bursa, sudah disesuaikan risiko. Contoh: +0,50% artinya rata-rata unggul 0,5% dari S&P 500 dalam {H} hari.</p>
                 </section>
                 <BobotBaru b={h.bobot?.H[String(H)]} H={H} />
                 <section className="sb-card">

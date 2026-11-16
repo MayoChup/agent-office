@@ -16,12 +16,25 @@ export const HS = [1, 5, 20, 60];
 type Akum = { n: number; ex: number; ex2: number; menang: number };
 const akum = (): Akum => ({ n: 0, ex: 0, ex2: 0, menang: 0 });
 const tambah = (a: Akum, ex: number) => { a.n++; a.ex += ex; a.ex2 += ex * ex; if (ex > 0) a.menang++; };
+/** Beta saham terhadap SPY dari ±252 hari bursa sampai t (hanya data lampau), dibatasi 0,2–3. */
+function betaDi(d: Bar[], t: number, spy: Bar[], spyIdx: Map<string, number>) {
+    const xs: number[] = [], ys: number[] = [];
+    for (let i = Math.max(1, t - 251); i <= t; i++) {
+        const a = spyIdx.get(d[i].t), b = spyIdx.get(d[i - 1].t);
+        if (a == null || b == null || a !== b + 1) continue;
+        xs.push(spy[a].c / spy[b].c - 1); ys.push(d[i].c / d[i - 1].c - 1);
+    }
+    if (xs.length < 120) return 1;
+    const mx = xs.reduce((p, q) => p + q, 0) / xs.length, my = ys.reduce((p, q) => p + q, 0) / ys.length;
+    let cov = 0, v = 0; for (let k = 0; k < xs.length; k++) { cov += (xs[k] - mx) * (ys[k] - my); v += (xs[k] - mx) ** 2; }
+    return v > 0 ? Math.max(0.2, Math.min(3, cov / v)) : 1;
+}
 const ringkas = (a: Akum) => ({ n: a.n, rataEx: a.n ? +((a.ex / a.n) * 100).toFixed(3) : null, menang: a.n ? +((a.menang / a.n) * 100).toFixed(1) : null, galatStd: a.n > 1 ? +((Math.sqrt(Math.max(0, a.ex2 / a.n - (a.ex / a.n) ** 2)) / Math.sqrt(a.n)) * 100).toFixed(3) : null });
 const kunciAlasan = (s: string) => `${s[0]} ${s.slice(1).replace(/\(.*$/, '').replace(/(^|\s)[\d][\d.,]*\s*([%×]\s*)?/g, '$1# ').replace(/\s+/g, ' ').trim()}`;
 
 export interface StatusUji { jalan: boolean; progres: string; mulai: number; selesai: number; galat: string }
 
-export async function ujiMundur(semesta: string[], file: string, st: StatusUji, opsi = { tahun: 5, langkah: 5 }, ambil: (s: string, tahun: number) => Promise<Bar[]> = hargaPanjang) {
+export async function ujiMundur(semesta: string[], file: string, st: StatusUji, opsi = { tahun: 6.5, langkah: 5 }, ambil: (s: string, tahun: number) => Promise<Bar[]> = hargaPanjang) {
     st.jalan = true; st.mulai = Date.now(); st.galat = ''; st.progres = 'mengambil SPY…';
     try {
         const spy = await ambil('SPY', opsi.tahun);
@@ -51,11 +64,13 @@ export async function ujiMundur(semesta: string[], file: string, st: StatusUji, 
                 const sm50 = spyS.slice(-50).reduce((p, q) => p + q, 0) / 50;
                 const ind = hitungInd({ h: hs, l: ls, c: cs, v: vs }, { c: spyS }, spyS[spyS.length - 1] > sm50);
                 const mask = fitur({ ...b, harga: cs[cs.length - 1] }, ind);
+                const beta = betaDi(d, t, spy, spyIdx);
                 const evs = PRESET.filter((p) => p.jenis === 'teknikal').map((p) => ({ id: p.id, e: evaluasi(p, ind) }));
                 for (const H of HS) {
                     if (t + H >= d.length || js + H >= spy.length) continue;
                     // Hasil: tutup t → tutup t+H, dikurangi hasil SPY periode yang sama (selisih vs pasar).
-                    const ex = c[t + H] / c[t] - (spy[js + H].c / spy[js].c);
+                    // Disesuaikan risiko: saham yang biasanya bergerak 1,5× pasar dibandingkan dengan 1,5× hasil SPY.
+                    const ex = (c[t + H] / c[t] - 1) - beta * (spy[js + H].c / spy[js].c - 1);
                     const pr = H === 20 ? x.proyeksi : proyeksi(hs, ls, cs, x.atr, H);
                     const f = skorTeknikal(b, H, pr);
                     const r = R[H];
@@ -80,7 +95,8 @@ export async function ujiMundur(semesta: string[], file: string, st: StatusUji, 
             catatan: [
                 'Daftar saham = anggota S&P 500 hari ini; saham yang sudah keluar indeks (biasanya yang jatuh) tidak ikut, jadi hasil cenderung sedikit terlalu bagus.',
                 'Hasil dihitung dari harga penutupan ke penutupan, belum dipotong biaya transaksi/selisih harga.',
-                'Selisih vs S&P 500 = hasil saham dikurangi hasil SPY pada periode yang sama. Positif = mengalahkan pasar.',
+                'Selisih vs S&P 500 sudah DISESUAIKAN RISIKO (beta): saham yang biasanya bergerak 1,5× pasar dibandingkan dengan 1,5× hasil SPY. Jadi saham liar tidak terlihat hebat hanya karena pasar sedang naik. Positif = mengalahkan pasar.',
+                'Beta tiap saham dihitung dari 1 tahun harga SEBELUM tanggal itu saja (tidak mengintip masa depan).',
                 'Day trading/scalping diuji dengan tutup → tutup besok (data menit tidak tersedia untuk 5 tahun).'
             ],
             H: Object.fromEntries(HS.map((H) => {
