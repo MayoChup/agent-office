@@ -1,3 +1,4 @@
+import { TombolPasang } from '../kantor/pasang';
 import React, { useEffect, useState } from 'react';
 import { useKantor } from '../kantor/store';
 import { useSubNavState } from '../kantor/subnav';
@@ -23,7 +24,7 @@ const ALL: Array<{ key: PageKey | 'org' | 'activity'; ico: string; label: string
 const LACI = ALL.filter((i) => i.key !== 'org' && i.key !== 'activity');
 const MAKS_BAWAH = 5;
 
-export function Nav({ page, panel, onGo }: { page: PageKey; panel: SidePanel; onGo: (k: PageKey | 'org' | 'activity') => void }) {
+export function Nav({ page, panel, onGo, hidup = [] }: { page: PageKey; panel: SidePanel; onGo: (k: PageKey | 'org' | 'activity') => void; hidup?: PageKey[] }) {
     const tasks = useKantor((s) => s.tasks);
     const activeTasks = tasks.filter((t) => t.status === 'in_progress' || t.status === 'blocked').length;
     const sub = useSubNavState();
@@ -65,6 +66,7 @@ export function Nav({ page, panel, onGo }: { page: PageKey; panel: SidePanel; on
                             <span className="sb-ico">{it.ico}</span>
                             <span className="sb-t"><b>{it.label}</b>{it.ket && <small>{it.ket}</small>}</span>
                             {badge(it.key) > 0 && <span className="sb-badge">{N(badge(it.key))}</span>}
+                            {hidup.includes(it.key) && page !== it.key && <i className="sb-hidup" title="Masih terbuka — kembali tanpa memuat ulang" />}
                         </button>
                         {it.key === 'kantor' && page === 'kantor' && ALL.filter((x) => x.key === 'org' || x.key === 'activity').map((x) => (
                             <button key={x.key} className={`sb-item sb-anak ${isActive(x.key) ? 'on' : ''}`} onClick={() => onGo(x.key)} title={x.label}>
@@ -74,6 +76,7 @@ export function Nav({ page, panel, onGo }: { page: PageKey; panel: SidePanel; on
                     </React.Fragment>
                 ))}
                 <span className="sb-spacer" />
+                <TombolPasang className="sb-item" kecil />
                 <button className="sb-item sb-kecilkan" onClick={() => setKecil(!kecil)} title={kecil ? 'Lebarkan menu' : 'Perkecil menu'}>
                     <span className="sb-ico">{kecil ? '»' : '«'}</span><span className="sb-t"><b>Perkecil menu</b></span>
                 </button>
@@ -110,6 +113,7 @@ export function Nav({ page, panel, onGo }: { page: PageKey; panel: SidePanel; on
                                 {badge(it.key) > 0 && <span className="laci-badge">{N(badge(it.key))}</span>}
                             </button>
                         ))}
+                        <TombolPasang className="laci-btn laci-pasang" />
                     </aside>
                 </div>
             )}

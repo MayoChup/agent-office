@@ -17,8 +17,10 @@ import { BerkasPage } from './pages/BerkasPage';
 import { HomePage } from './pages/HomePage';
 import { TradingPage } from './pages/TradingPage';
 import { SchedulePage } from './pages/SchedulePage';
+import { AktifCtx } from './kantor/aktif';
 
 const LS_PAGE = 'kantor:page';
+const MAKS_HIDUP = 4; // halaman yang tetap hidup di belakang layar (paling lama tidak dibuka ditutup otomatis)
 const PAGES: PageKey[] = ['home', 'kantor', 'keuangan', 'trading', 'tugas', 'jadwal', 'obrolan', 'catatan', 'berkas'];
 
 function initialPage(): PageKey {
@@ -36,6 +38,9 @@ export function App() {
     const [division, setDivision] = useState<string | null>(null);
     const [agentId, setAgentId] = useState<string | null>(null);
     const [prefill, setPrefill] = useState('');
+    const [prefillKe, setPrefillKe] = useState(0);
+    const [hidup, setHidup] = useState<PageKey[]>(() => (initialPage() === 'kantor' ? [] : [initialPage()]));
+    useEffect(() => { if (page !== 'kantor') setHidup((h) => [page, ...h.filter((x) => x !== page)].slice(0, MAKS_HIDUP)); }, [page]);
 
     const go = (k: PageKey | 'org' | 'activity') => {
         if (k === 'org' || k === 'activity') {
@@ -65,6 +70,7 @@ export function App() {
         };
         const onChat = (e: Event) => {
             setPrefill(String((e as CustomEvent).detail?.text || ''));
+            setPrefillKe((n) => n + 1);
             setPanel(null);
             setPage('obrolan');
         };
@@ -93,18 +99,21 @@ export function App() {
                 <div className="banner interactive">{status === 'connecting' ? 'Menghubungkan ke kantor…' : error || 'Koneksi terputus.'}</div>
             )}
 
-            {page !== 'kantor' && (
-                <main className={`page interactive page-${page}`}>
-                    {page === 'home' && <HomePage go={(p) => go(p)} />}
-                    {page === 'keuangan' && <KeuanganApp />}
-                    {page === 'trading' && <TradingPage />}
-                    {page === 'jadwal' && <SchedulePage />}
-                    {page === 'catatan' && <CatatanPage />}
-                    {page === 'berkas' && <BerkasPage />}
-                    {page === 'tugas' && <TasksPanel onClose={back} />}
-                    {page === 'obrolan' && <ChatPage prefill={prefill} />}
+            {/* Halaman yang pernah dibuka tetap hidup (maks. 4) → pindah menu tanpa memuat ulang; posisi gulir & isi tetap. */}
+            {PAGES.filter((k) => k !== 'kantor' && (hidup.includes(k) || k === page)).map((k) => (
+                <main key={k} className={`page interactive page-${k}`} hidden={k !== page}>
+                    <AktifCtx.Provider value={k === page}>
+                        {k === 'home' && <HomePage go={(p) => go(p)} />}
+                        {k === 'keuangan' && <KeuanganApp />}
+                        {k === 'trading' && <TradingPage />}
+                        {k === 'jadwal' && <SchedulePage />}
+                        {k === 'catatan' && <CatatanPage />}
+                        {k === 'berkas' && <BerkasPage />}
+                        {k === 'tugas' && <TasksPanel onClose={back} />}
+                        {k === 'obrolan' && <ChatPage key={`chat-${prefillKe}`} prefill={prefill} />}
+                    </AktifCtx.Provider>
                 </main>
-            )}
+            ))}
 
             {page === 'kantor' && panel === 'org' && <OrgPanel selected={division} onSelect={setDivision} onClose={() => setPanel(null)} />}
             {page === 'kantor' && panel === 'activity' && <ActivityPanel onClose={() => setPanel(null)} />}
@@ -117,7 +126,7 @@ export function App() {
             )}
             {page === 'kantor' && <KantorSub panel={panel} go={go} />}
             <Toasts />
-            <Nav page={page} panel={panel} onGo={go} />
+            <Nav page={page} panel={panel} onGo={go} hidup={hidup} />
         </>
     );
 }

@@ -1,5 +1,6 @@
 import type { PresetData } from './trading/Preset';
 import { Bintang } from './trading/Bintang';
+import { useAktif } from '../kantor/aktif';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useApi } from '../kantor/api';
 import { apiGet, apiPost } from '../kantor/connection';
@@ -82,7 +83,8 @@ export function ScreenerView({ onOpen, q: qApi = '', presetAktif, pd, sumber }: 
     useEffect(() => { setBatas(100); }, [num, sig, sektor, urut, q]);
     useEffect(() => { try { localStorage.setItem(LS, JSON.stringify({ num, sig, sektor, urut })); } catch { /* */ } }, [num, sig, sektor, urut]);
     // Saat server sedang memperbarui data, muat ulang berkala.
-    useEffect(() => { if (!data?.sibuk) return; const t = setInterval(() => reload(), 8000); return () => clearInterval(t); }, [data?.sibuk]);
+    const terlihat = useAktif();
+    useEffect(() => { if (!data?.sibuk || !terlihat) return; const t = setInterval(() => reload(), 8000); return () => clearInterval(t); }, [data?.sibuk, terlihat]);
 
     const sektorList = useMemo(() => Array.from(new Set((data?.baris || []).map((b) => b.sektor).filter(Boolean))).sort(), [data]);
     const hasil = useMemo(() => {

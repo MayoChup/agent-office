@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { apiGet, apiPost, getRoom } from '../kantor/connection';
+import { useAktif } from '../kantor/aktif';
 import { useKantor, setChatOpen } from '../kantor/store';
 import { Avatar } from '../components/Avatar';
 import { RichText } from '../components/common/RichText';
@@ -27,13 +28,15 @@ export function ChatPage({ prefill }: { prefill?: string }) {
     const [q, setQ] = useState('');
     const [err, setErr] = useState('');
 
+    const aktif = useAktif();
     useEffect(() => {
+        if (!aktif) return;
         let alive = true;
         const load = () => apiGet<{ thread: ThreadInfo[] }>('/api/kantor/chat').then((d) => { if (alive) { setThreads(d.thread); setErr(''); } }).catch((e) => alive && setErr(String(e.message || e)));
         load();
         const t = setInterval(load, 5000);
         return () => { alive = false; clearInterval(t); };
-    }, []);
+    }, [aktif]);
 
     const markSeen = (id: string, at: number) => setSeen((s) => {
         if ((s[id] || 0) >= at) return s;
@@ -109,11 +112,13 @@ function Thread({ info, threads, skin, onBack, onSeen }: { info: ThreadInfo; thr
             if (last) onSeen(last.at);
         } catch (e: any) { setErr(String(e.message || e)); }
     };
+    const aktif = useAktif();
     useEffect(() => {
+        if (!aktif) return;
         load();
         const t = setInterval(load, 2500);
         return () => clearInterval(t);
-    }, [info.id]);
+    }, [info.id, aktif]);
     useEffect(() => { endRef.current?.scrollIntoView({ block: 'end' }); }, [pesan.length, menulis.length]);
 
     const send = async (e?: React.FormEvent) => {

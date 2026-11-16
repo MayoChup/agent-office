@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiGet } from './connection';
+import { useAktif } from './aktif';
 
 /** Ambil data API kantor + muat ulang berkala. Data lama tetap tampil saat memuat ulang. */
 export function useApi<T>(path: string, refreshMs = 0) {
@@ -7,23 +8,32 @@ export function useApi<T>(path: string, refreshMs = 0) {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const alive = useRef(true);
+    const terakhir = useRef(0);
+    const aktif = useAktif();
     const load = useCallback(async (extra = '') => {
         if (!path) return;
         setLoading(true);
         try {
             const d = await apiGet<T>(path + extra);
+            terakhir.current = Date.now();
             if (alive.current) { setData(d); setError(''); }
         } catch (e: any) {
             if (alive.current) setError(String(e?.message || e));
         }
         if (alive.current) setLoading(false);
     }, [path]);
+    useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+    useEffect(() => { load(); }, [load]);
+    // Muat ulang berkala hanya saat halaman terlihat.
     useEffect(() => {
-        alive.current = true;
-        load();
-        const t = refreshMs ? setInterval(() => load(), refreshMs) : undefined;
-        return () => { alive.current = false; if (t) clearInterval(t); };
-    }, [load, refreshMs]);
+        if (!aktif || !refreshMs) return;
+        const t = setInterval(() => { if (document.visibilityState !== 'hidden') load(); }, refreshMs);
+        return () => clearInterval(t);
+    }, [load, refreshMs, aktif]);
+    // Kembali ke halaman ini setelah lama ditinggal → segarkan diam-diam (isi lama tetap tampil).
+    useEffect(() => {
+        if (aktif && terakhir.current && Date.now() - terakhir.current > Math.min(refreshMs || Infinity, 120_000)) load();
+    }, [aktif]); // eslint-disable-line react-hooks/exhaustive-deps
     return { data, error, loading, reload: load };
 }
 

@@ -1,3 +1,4 @@
+import { useInterval } from '../../kantor/aktif';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSubNav } from '../../kantor/subnav';
 import { useApi } from '../../kantor/api';
@@ -19,7 +20,7 @@ export function KeuanganApp() {
     const rep = useApi<Report>('/api/kantor/keuangan', 120_000);
     const ang = useApi<Anggaran>('/api/kantor/keuangan/anggaran', 0);
     const [tab, setTabS] = useState<Tab>(() => { try { return (localStorage.getItem('kantor:keu-tab') as Tab) || 'beranda'; } catch { return 'beranda'; } });
-    const setTab = (t: Tab) => { setTabS(t); try { localStorage.setItem('kantor:keu-tab', t); } catch { /* */ } document.querySelector('.pg')?.scrollTo({ top: 0 }); };
+    const setTab = (t: Tab) => { setTabS(t); try { localStorage.setItem('kantor:keu-tab', t); } catch { /* */ } document.querySelector('.page:not([hidden]) .pg')?.scrollTo({ top: 0 }); };
     useSubNav(TABS.map((t) => ({ k: t.k, ico: t.ico, label: t.k === 'chat' ? 'Catat' : t.k === 'pengeluaran' ? 'Keluar' : t.label })), tab, (k) => { setTab(k as Tab); if (k !== 'transaksi') setFilter({}); });
     const [geser, setGeser] = useState(0);
     const [tambah, setTambah] = useState(false);
@@ -366,7 +367,8 @@ function ChatUang({ ang, onSaved }: { ang: Anggaran | null; onSaved: () => void 
     const [busy, setBusy] = useState(false);
     const end = useRef<HTMLDivElement>(null);
     const load = () => apiGet<{ pesan: Pesan[]; menulis: string[] }>('/api/kantor/chat/keuangan').then((d) => { setPesan(d.pesan); setMenulis(d.menulis); }).catch(() => undefined);
-    useEffect(() => { load(); const t = setInterval(load, 3000); return () => clearInterval(t); }, []);
+    useEffect(() => { load(); }, []);
+    useInterval(load, 3000);
     useEffect(() => { end.current?.scrollIntoView({ block: 'end' }); }, [pesan.length, menulis.length, draf, info]);
     const SARAN = ['Beli nasi goreng 20rb pakai BCA', 'Gajian 8,5jt masuk Mandiri', 'Pengeluaran terbesar bulan ini apa?', 'Berapa sisa anggaran makan?'];
     const kirim = async (t: string) => {

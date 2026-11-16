@@ -1,3 +1,4 @@
+import { useAktif } from '../kantor/aktif';
 import React, { useState, useRef, useEffect } from 'react';
 import { useSubNav } from '../kantor/subnav';
 import { Horison, HorisonBar, nilaiH, paramH, MODE_LAMA } from './trading/Horison';
@@ -93,13 +94,14 @@ export function TradingPage() {
             <p className="sb-note">Preset aktif ikut menentukan skor teknikal/fundamental semua saham: makin banyak kriteria yang lolos, makin tinggi skornya (tidak harus lolos semua).</p>
         </section>
     );
-    React.useEffect(() => { if (!sc.data?.sibuk) return; const t = setInterval(() => sc.reload(), 8000); return () => clearInterval(t); }, [sc.data?.sibuk]);
-    const setTab = (t: Tab) => { setSaham(null); setTabState(t); try { localStorage.setItem(LS_TAB, t); } catch { /* */ } document.querySelector('.pg')?.scrollTo({ top: 0 }); };
+    const terlihat = useAktif();
+    React.useEffect(() => { if (!sc.data?.sibuk || !terlihat) return; const t = setInterval(() => sc.reload(), 8000); return () => clearInterval(t); }, [sc.data?.sibuk, terlihat]);
+    const setTab = (t: Tab) => { setSaham(null); setTabState(t); try { localStorage.setItem(LS_TAB, t); } catch { /* */ } document.querySelector('.page:not([hidden]) .pg')?.scrollTo({ top: 0 }); };
     // Menu bawah HP: yang paling sering dipakai di depan, sisanya masuk "Lainnya".
     const IKON: Record<Tab, string> = { pilihan: '🎯', watchlist: '⭐', panas: '🟩', berita: '🪐', pasar: '🌐', penyaring: '🔍', investigasi: '🕵️', posisi: '💼', uji: '🧪' };
     const PENDEK: Partial<Record<Tab, string>> = { pilihan: 'Sinyal', panas: 'Heatmap', berita: 'Berita', posisi: 'Posisi' };
     useSubNav((['pilihan', 'watchlist', 'panas', 'berita', 'pasar', 'penyaring', 'investigasi', 'posisi', 'uji'] as Tab[]).map((k) => ({ k, ico: IKON[k], label: PENDEK[k] || TABS.find((t) => t.k === k)!.label })), tab, (k) => setTab(k as Tab));
-    const buka = (s: string) => { setSaham(s); document.querySelector('.pg')?.scrollTo({ top: 0 }); };
+    const buka = (s: string) => { setSaham(s); document.querySelector('.page:not([hidden]) .pg')?.scrollTo({ top: 0 }); };
     const perbarui = async () => { try { await apiPost('/api/kantor/screener/perbarui', { jenis: 'teknikal' }); setTimeout(() => sc.reload(), 1500); setTimeout(() => sc.reload(), 6000); } catch (e: any) { alert(`Gagal memulai: ${e?.message || e}`); } };
     const realized = (data?.history || []).reduce((a, h) => a + (h.pnl || 0), 0);
     const open = (data?.positions || []).reduce((a, p) => a + (p.pnl || 0), 0);

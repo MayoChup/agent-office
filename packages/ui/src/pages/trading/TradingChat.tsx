@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { apiGet, apiPost } from '../../kantor/connection';
 import { RichText } from '../../components/common/RichText';
 import { NAMA_MODE } from './Preset';
+import { useAktif } from '../../kantor/aktif';
 
 interface Pesan { id: string; dari: string; nama: string; teks: string; at: number; status?: 'gagal' }
 interface Anggota { id: string; nama: string; peran: string }
@@ -38,7 +39,8 @@ export function TradingChat({ q, saham, mode }: { q: string; saham: string | nul
     };
     useEffect(() => { terakhir.current = 0; muat(); }, [ai]);
     // Saat panel terbuka / AI sedang menulis: cek tiap 2,5 dtk; selain itu tiap 20 dtk (supaya tanda balasan baru muncul).
-    useEffect(() => { const t = setInterval(muat, buka || menulis ? 2500 : 20_000); return () => clearInterval(t); }, [ai, buka, menulis]);
+    const terlihat = useAktif();
+    useEffect(() => { if (!terlihat) return; const t = setInterval(muat, buka || menulis ? 2500 : 20_000); return () => clearInterval(t); }, [ai, buka, menulis, terlihat]);
     useEffect(() => { if (buka) { setBelum(0); endRef.current?.scrollIntoView({ block: 'end' }); } }, [buka, pesan.length, menulis]);
 
     const kirimPesan = async (t = teks) => {
@@ -52,6 +54,7 @@ export function TradingChat({ q, saham, mode }: { q: string; saham: string | nul
     // Dibuka dari tombol lain (mis. "Tanya tim trading" di halaman saham) dengan pertanyaan siap kirim.
     useEffect(() => { const f = (e: Event) => { setBuka(true); const t = (e as CustomEvent).detail; if (typeof t === 'string') setTeks(t); }; window.addEventListener('kantor:tanya-trading', f); return () => window.removeEventListener('kantor:tanya-trading', f); }, []);
     const a = anggota.find((x) => x.id === ai);
+    if (!terlihat) return null; // halaman Trading sedang tersembunyi → tombol mengambang ikut hilang
 
     return createPortal(
         <>

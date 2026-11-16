@@ -1,0 +1,23 @@
+{
+  "name": "Kantor Virtual Pak Rico",
+  "short_name": "Kantor",
+  "description": "Kantor virtual: tim AI, keuangan, trading, catatan, dan jadwal.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f5f4ef",
+  "theme_color": "#15803d",
+  "lang": "id",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Trading", "url": "/#trading", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Keuangan", "url": "/#keuangan", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Chat", "url": "/#obrolan", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

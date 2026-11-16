@@ -4,6 +4,7 @@ import './styles.css';
 import { App } from './App';
 import { setupPhaser } from './game/Game';
 import { startConnection } from './kantor/connection';
+import { mulaiPasang } from './kantor/pasang';
 
 const rootElement = document.getElementById('ui-root');
 if (rootElement) {
@@ -12,3 +13,4 @@ if (rootElement) {
 
 setupPhaser('phaser-container');
 startConnection();
+mulaiPasang();
