@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { SimMemuat } from './SimMemuat';
 import { apiGetSimpan, taruhApi } from '../../kantor/api';
 import { apiGet, apiPost } from '../../kantor/connection';
 import { usd } from './types';
@@ -69,7 +70,7 @@ export function Simulasi({ simbol, q, onTutup }: { simbol: string; q: string; on
                 <div className="sim-n">{!d ? <><b>Prediksi</b> sedang dihitung…</> : K ? <><b>Kronos</b> · {d.simulasi} jalur prediksi</> : <><b>10.000</b> simulasi acak</>}</div>
                 <button className="icon-btn" onClick={onTutup} aria-label="Tutup">✕</button>
             </div>
-            {!d && !err && <div className="fin-empty">Menghitung prediksi… (Kronos di CPU VPS bisa butuh ½–2 menit untuk saham yang baru pertama dibuka)</div>}
+            {!d && !err && <SimMemuat simbol={simbol} />}
             {d && !K && <PasangKronos onSiap={() => setUlang((n) => n + 1)} />}
             {d?.kronos?.catatan && <div className="hz-bukti warn">⚠️ <span>Kronos gagal untuk permintaan ini ({d.kronos.catatan}) — yang tampil adalah simulasi acak cadangan. <button className="btn small" onClick={() => setUlang((n) => n + 1)}>Coba lagi</button></span></div>}
             {err && <div className="error">{err}</div>}

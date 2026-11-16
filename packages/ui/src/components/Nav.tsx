@@ -4,7 +4,7 @@ import { useKantor } from '../kantor/store';
 import { useSubNavState } from '../kantor/subnav';
 import { eventBus } from '../events';
 
-export type PageKey = 'home' | 'kantor' | 'keuangan' | 'trading' | 'tugas' | 'jadwal' | 'obrolan' | 'catatan' | 'berkas';
+export type PageKey = 'home' | 'kantor' | 'keuangan' | 'trading' | 'sosmed' | 'tugas' | 'jadwal' | 'obrolan' | 'catatan' | 'berkas';
 export type SidePanel = 'org' | 'activity' | 'papan' | null;
 export type KunciPanel = 'org' | 'activity' | 'papan';
 const PANEL = new Set(['org', 'activity', 'papan']);
@@ -14,6 +14,7 @@ const ALL: Array<{ key: PageKey | KunciPanel; ico: string; label: string; ket?: 
     { key: 'obrolan', ico: '💬', label: 'Chat', ket: 'Ngobrol dengan tim AI' },
     { key: 'keuangan', ico: '💰', label: 'Keuangan', ket: 'Pengeluaran, anggaran, transaksi' },
     { key: 'trading', ico: '📈', label: 'Trading', ket: 'Watchlist, sinyal, peta pasar' },
+    { key: 'sosmed', ico: '🎬', label: 'Konten', ket: 'Social media: rencana & prompt' },
     { key: 'catatan', ico: '📓', label: 'Catatan', ket: 'Buku catatan & gambar' },
     { key: 'berkas', ico: '☁️', label: 'Berkas', ket: 'Cloud pribadi 5 GB' },
     { key: 'tugas', ico: '📋', label: 'Tugas', ket: 'Pekerjaan tim' },

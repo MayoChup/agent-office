@@ -18,11 +18,12 @@ import { BerkasPage } from './pages/BerkasPage';
 import { HomePage } from './pages/HomePage';
 import { TradingPage } from './pages/TradingPage';
 import { SchedulePage } from './pages/SchedulePage';
+import { SosmedPage } from './pages/SosmedPage';
 import { AktifCtx } from './kantor/aktif';
 
 const LS_PAGE = 'kantor:page';
 const MAKS_HIDUP = 4; // halaman yang tetap hidup di belakang layar (paling lama tidak dibuka ditutup otomatis)
-const PAGES: PageKey[] = ['home', 'kantor', 'keuangan', 'trading', 'tugas', 'jadwal', 'obrolan', 'catatan', 'berkas'];
+const PAGES: PageKey[] = ['home', 'kantor', 'keuangan', 'trading', 'sosmed', 'tugas', 'jadwal', 'obrolan', 'catatan', 'berkas'];
 
 function initialPage(): PageKey {
     const h = location.hash.replace('#', '') as PageKey;
@@ -107,6 +108,7 @@ export function App() {
                         {k === 'home' && <HomePage go={(p) => go(p)} />}
                         {k === 'keuangan' && <KeuanganApp />}
                         {k === 'trading' && <TradingPage />}
+                        {k === 'sosmed' && <SosmedPage />}
                         {k === 'jadwal' && <SchedulePage />}
                         {k === 'catatan' && <CatatanPage />}
                         {k === 'berkas' && <BerkasPage />}
