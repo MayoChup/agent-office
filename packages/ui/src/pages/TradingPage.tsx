@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useSubNav } from '../kantor/subnav';
 import { Horison, HorisonBar, nilaiH, paramH, MODE_LAMA } from './trading/Horison';
 import { usePreset, PresetPilih, PresetRekomendasi } from './trading/Preset';
@@ -58,6 +58,28 @@ export function TradingPage() {
     const modeAktif = horison.mode === 'tanggal' ? (H <= 1 ? 'daytrade' : H <= 5 ? 'swingpendek' : H <= 20 ? 'swing' : H <= 60 ? 'posisi' : 'investasi') : horison.mode;
     const qApi = `${paramH(horison)}${preset.t ? `&pt=${preset.t}` : ''}${preset.f ? `&pf=${preset.f}` : ''}`;
     const sc = useApi<ScreenerData>(`/api/kantor/screener?${qApi}`, 600_000);
+    // Ganti preset/horison: data dimuat ulang, tapi posisi gulir tetap & tampil efek "memuat" (skeleton) di atas isi lama.
+    const pgRef = useRef<HTMLDivElement>(null);
+    const [kunciTinggi, setKunciTinggi] = useState(0);
+    const [segar, setSegar] = useState(false);
+    const gulir = useRef(0);
+    const qLama = useRef(qApi);
+    useEffect(() => {
+        if (qLama.current === qApi) return;
+        qLama.current = qApi;
+        const el = pgRef.current;
+        if (el) { gulir.current = el.scrollTop; setKunciTinggi(el.scrollHeight); }
+        setSegar(true);
+    }, [qApi]);
+    const [detailMemuat, setDetailMemuat] = useState(false);
+    useEffect(() => {
+        if (!segar || sc.loading || detailMemuat) return;
+        const t = setTimeout(() => {
+            setSegar(false);
+            requestAnimationFrame(() => { if (pgRef.current) pgRef.current.scrollTop = gulir.current; setKunciTinggi(0); });
+        }, 150);
+        return () => clearTimeout(t);
+    }, [segar, sc.loading, detailMemuat]);
     const presetPanel = (
         <section className="sb-card pr-panel">
             <PresetRekomendasi mode={modeAktif} data={pd.data} pakai={(t, f) => setPreset({ t, f })} />
@@ -80,7 +102,9 @@ export function TradingPage() {
     const open = (data?.positions || []).reduce((a, p) => a + (p.pnl || 0), 0);
 
     return (
-        <div className="pg pg-trading">
+        <div className={`pg pg-trading ${segar ? 'pg-segar' : ''}`} ref={pgRef}>
+            <div style={{ minHeight: kunciTinggi || undefined }}>
+            {segar && <div className="pg-segar-pill">⏳ Menghitung ulang sinyal…</div>}
             {sc.data && sc.data.pasar.tape.length > 0 && (() => {
                 const isi = [...sc.data.pasar.tape, ...sc.data.baris.filter((b) => (data?.watchlist || []).includes(b.s)).map((b) => ({ s: b.s, nama: b.s, harga: b.harga, chg: b.chg1d }))];
                 const item = (t: typeof isi[number], k: string) => (
@@ -100,7 +124,7 @@ export function TradingPage() {
                 <span className="sb-nav-sp" />
                 {sc.data?.sibuk ? <span className="sb-busy">⏳ {sc.data.progres}</span> : <button className="sb-refresh" onClick={() => { perbarui(); reload(); }} title="Ambil data terbaru">↻</button>}
             </nav>
-            {saham && <><HorisonBar h={horison} setH={setHorison} /><SahamDetail key={`${saham}-${qApi}`} simbol={saham} H={H} q={qApi} preset={preset} setPreset={setPreset} mode={modeAktif} pd={pd.data} onBack={() => setSaham(null)} /></>}
+            {saham && <><HorisonBar h={horison} setH={setHorison} /><SahamDetail key={saham} onMemuat={setDetailMemuat} simbol={saham} H={H} q={qApi} preset={preset} setPreset={setPreset} mode={modeAktif} pd={pd.data} onBack={() => setSaham(null)} /></>}
             {!saham && ['pasar', 'pilihan', 'panas', 'watchlist'].includes(tab) && !sc.data && <div className="fin-empty">{sc.error ? `Gagal memuat: ${sc.error}` : 'Memuat data pasar…'}</div>}
             {!saham && ['pasar', 'pilihan', 'panas'].includes(tab) && sc.data && sc.data.baris.length === 0 && (
                 <div className="sb-card sb-kosong">
@@ -119,12 +143,18 @@ export function TradingPage() {
             {!saham && sc.data && sc.data.baris.length > 0 && sc.data.galat && !sc.data.sibuk && <div className="error" style={{ margin: '0 0 12px' }}>⚠️ {sc.data.galat}</div>}
             {!saham && (tab === 'pilihan' || tab === 'pasar' || tab === 'watchlist') && sc.data && sc.data.baris.length > 0 && <HorisonBar h={horison} setH={setHorison} bobot={(sc.data as any).bobot} />}
             {!saham && tab === 'pasar' && sc.data && sc.data.baris.length > 0 && <PasarView data={sc.data} faktor={faktor} setFaktor={setF} onOpen={buka} />}
+            {!saham && tab === 'pilihan' && sc.data && sc.data.baris.length > 0 && (
+                <details className="pr-lipat" open={!!(preset.t || preset.f) || undefined}>
+                    <summary>🎓 Preset guru{preset.t || preset.f ? `: ${[preset.t, preset.f].filter(Boolean).map((id) => pd.data?.preset.find((x) => x.id === id)?.guru || id).join(' + ')}` : ' (opsional)'} <small>— ketuk untuk memilih</small></summary>
+                    {presetPanel}
+                </details>
+            )}
             {!saham && tab === 'pilihan' && sc.data && sc.data.baris.length > 0 && <PilihanView data={sc.data} faktor={faktor} setFaktor={setF} onOpen={buka} watchlist={[...(data?.watchlist || []), ...(data?.positions || []).map((p) => p.symbol)]} />}
             {!saham && tab === 'panas' && sc.data && sc.data.baris.length > 0 && <PetaPanas data={sc.data} onOpen={buka} watch={[...(data?.watchlist || []), ...(data?.positions || []).map((p) => p.symbol)]} />}
             {!saham && tab === 'berita' && <PetaBerita onOpen={buka} />}
             {!saham && tab === 'watchlist' && sc.data && <WatchlistView data={sc.data} faktor={faktor} onOpen={buka} />}
             {!saham && tab === 'investigasi' && <InvestigasiView />}
-            {!saham && tab === 'penyaring' && <><HorisonBar h={horison} setH={setHorison} bobot={(sc.data as any)?.bobot} />{presetPanel}<ScreenerView onOpen={buka} q={qApi} presetAktif={preset} pd={pd.data} /></>}
+            {!saham && tab === 'penyaring' && <><HorisonBar h={horison} setH={setHorison} bobot={(sc.data as any)?.bobot} />{presetPanel}<ScreenerView onOpen={buka} q={qApi} presetAktif={preset} pd={pd.data} sumber={sc} /></>}
             {!saham && tab === 'posisi' && error && <div className="error">Gagal memuat: {error}</div>}
             {!saham && tab === 'posisi' && data && (
                 <>
@@ -201,6 +231,7 @@ export function TradingPage() {
                     <section className="fin-card"><h3>Watchlist</h3><div className="tr-watch">{data.watchlist.map((s) => <span key={s} className="chip" style={{ ['--c' as any]: '#22c55e' }}>{s}</span>)}</div></section>
                 </>
             )}
+            </div>
         </div>
     );
 }

@@ -61,8 +61,9 @@ const fmt = (v: number | null | undefined, sat = '') => (v == null ? '–' : `${
 const pct = (v: number) => <span className={v >= 0 ? 'up' : 'down'}>{v >= 0 ? '+' : '−'}{Math.abs(v).toFixed(1).replace('.', ',')}%</span>;
 const sejak = (at: number) => (at ? new Date(at).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }) : 'belum');
 
-export function ScreenerView({ onOpen, q: qApi = '', presetAktif, pd }: { onOpen: (s: string) => void; q?: string; presetAktif?: { t: string; f: string }; pd?: PresetData | null }) {
-    const { data, error, reload } = useApi<Data>(`/api/kantor/screener${qApi ? `?${qApi}` : ''}`, 0);
+export function ScreenerView({ onOpen, q: qApi = '', presetAktif, pd, sumber }: { onOpen: (s: string) => void; q?: string; presetAktif?: { t: string; f: string }; pd?: PresetData | null; sumber?: { data: any; error: string; reload: (x?: string) => any } }) {
+    const sendiri = useApi<Data>(sumber ? '' : `/api/kantor/screener${qApi ? `?${qApi}` : ''}`, 0);
+    const { data, error, reload } = (sumber || sendiri) as { data: Data | null; error: string; reload: (x?: string) => any };
     const [minPreset, setMinPreset] = useState(50);
     const adaPreset = !!(presetAktif?.t || presetAktif?.f);
     const pctPreset = (b: Baris) => { const xs = [(b as any).preset?.teknikal?.persen, (b as any).preset?.fundamental?.persen].filter((x) => x != null) as number[]; return xs.length ? Math.min(...xs) : null; };

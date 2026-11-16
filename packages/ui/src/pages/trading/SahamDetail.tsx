@@ -11,7 +11,7 @@ interface FaktorFull { skor: number; label: Label; alasan: string[] }
 interface Profil { nama: string; ringkas: string; deskripsi: string; situs: string; sektor: string; industri: string; alamat: string }
 interface Detail { preset?: PresetEval[]; baris: Baris; skor: Record<FaktorKey, FaktorFull | null>; berita: { n: number; judul: Array<{ t: string; s: number; tgl: string; url: string }> } | null; orang: { net: number; beli: number; jual: number; n: number } | null }
 
-export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPreset, mode = 'swing', pd }: { simbol: string; onBack: () => void; H?: number; q?: string; preset?: { t: string; f: string }; setPreset?: (x: { t: string; f: string }) => void; mode?: string; pd?: PresetData | null }) {
+export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPreset, mode = 'swing', pd, onMemuat }: { simbol: string; onBack: () => void; H?: number; q?: string; preset?: { t: string; f: string }; setPreset?: (x: { t: string; f: string }) => void; mode?: string; pd?: PresetData | null; onMemuat?: (x: boolean) => void }) {
     const [prof, setProf] = useState<Profil | null>(null);
     const [profErr, setProfErr] = useState('');
     const [sim, setSim] = useState(false);
@@ -24,12 +24,13 @@ export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPre
     const fd = useApi<FolderData>('/api/kantor/watchlist-folder', 0);
     useEffect(() => {
         let alive = true;
-        setD(null); setErr('');
+        setErr(''); onMemuat?.(true);
         apiGet<Detail>(`/api/kantor/saham-detail/${encodeURIComponent(simbol)}?${q}`)
             .catch(() => apiGet<Detail>(`/api/kantor/saham/${encodeURIComponent(simbol)}`).then((r) => ({ ...r, berita: null, orang: null })))
-            .then((r) => alive && setD(r)).catch((e) => alive && setErr(String(e.message || e)));
-        return () => { alive = false; };
-    }, [simbol]);
+            .then((r) => alive && setD(r)).catch((e) => alive && setErr(String(e.message || e)))
+            .finally(() => alive && onMemuat?.(false));
+        return () => { alive = false; onMemuat?.(false); };
+    }, [simbol, q]);
     const aksi = async (fn: () => Promise<any>, ok: string) => { setMsg('…'); try { await fn(); setMsg(ok); } catch (e: any) { setMsg(String(e.message || e)); } };
 
     if (err) return <><button className="back" onClick={onBack}>‹ Kembali</button><div className="error">{err}</div></>;

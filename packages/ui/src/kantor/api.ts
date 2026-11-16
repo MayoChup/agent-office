@@ -8,6 +8,7 @@ export function useApi<T>(path: string, refreshMs = 0) {
     const [loading, setLoading] = useState(false);
     const alive = useRef(true);
     const load = useCallback(async (extra = '') => {
+        if (!path) return;
         setLoading(true);
         try {
             const d = await apiGet<T>(path + extra);
