@@ -3,14 +3,16 @@ import { useApi } from '../kantor/api';
 import { apiPost, serverBase, tokenLogin } from '../kantor/connection';
 import { useSubNav } from '../kantor/subnav';
 import { useInterval } from '../kantor/aktif';
+import { StoryboardSketsa, type Adegan as AdeganS } from './sosmed/Sketsa';
 
 type Format = 'feed' | 'reel' | 'carousel' | 'story';
-type Status = 'rencana' | 'naskah' | 'prompt' | 'aset' | 'terjadwal' | 'mengunggah' | 'terbit' | 'manual' | 'gagal';
-interface Adegan { no: number; detik: string; visual: string; teksLayar: string; narasi: string; sfx?: string }
+type Status = 'rencana' | 'sketsa' | 'naskah' | 'prompt' | 'aset' | 'terjadwal' | 'mengunggah' | 'terbit' | 'manual' | 'gagal';
+type Adegan = AdeganS;
+interface Varian { no: number; sudut: string; hook: string; ringkas: string; scroll: number; relevansi: number; skor: number; voiceover?: string; jumlahKata?: number; storyboard: Adegan[]; musik?: string; caption?: string; promptVideo?: string; promptSuara?: { teks: string; gaya: string; pengaturan: string }; rekam?: string; promptEdit?: string; galat?: string }
 interface Hasil { at: number; sumber: 'ig' | 'manual'; umurJam: number; tayang?: number; jangkauan?: number; suka?: number; komentar?: number; simpan?: number; bagikan?: number; ikuti?: number }
 interface Aset { path: string; nama: string }
 interface Konten {
-    id: string; tgl: string; pilar: string; format: Format; judul: string; sudut: string; tujuan: string; dasar?: string; gayaId?: string;
+    id: string; kode?: string; varian?: Varian[]; pilih?: number; tgl: string; pilar: string; format: Format; judul: string; sudut: string; tujuan: string; dasar?: string; gayaId?: string;
     sudutPilihan?: Array<{ sudut: string; hook: string; scroll: number; relevansi: number; skor: number }>; hook?: string; hookLain?: string[]; naskah?: string; voiceover?: string; jumlahKata?: number;
     storyboard?: Adegan[]; subtitle?: string[]; slide?: Array<{ no: number; judul: string; isi: string; visual: string }>;
     caption?: string; hashtag?: string[]; ajakan?: string; captionTiktok?: string; youtube?: { judul: string; deskripsi: string };
@@ -33,7 +35,7 @@ type Aksi = (p: Promise<any>, ok?: string) => void;
 const LS = 'kantor:sosmed-tab';
 const FMT: Record<Format, { label: string; ico: string; pendek: string }> = { reel: { label: 'Reel', ico: '🎞️', pendek: 'R' }, feed: { label: 'Feed', ico: '🖼️', pendek: 'F' }, carousel: { label: 'Carousel', ico: '🗂️', pendek: 'C' }, story: { label: 'Story', ico: '⭕', pendek: 'S' } };
 const FORMAT_URUT: Format[] = ['reel', 'feed', 'carousel', 'story'];
-const LANGKAH: Array<{ s: Status[]; label: string }> = [{ s: ['rencana'], label: 'Ide' }, { s: ['naskah'], label: 'Naskah' }, { s: ['prompt'], label: 'Prompt siap' }, { s: ['aset', 'gagal'], label: 'Berkas masuk' }, { s: ['terjadwal', 'mengunggah', 'manual'], label: 'Dijadwalkan' }, { s: ['terbit'], label: 'Terbit' }];
+const LANGKAH: Array<{ s: Status[]; label: string }> = [{ s: ['rencana'], label: 'Ide' }, { s: ['sketsa', 'naskah'], label: 'Sketsa / naskah' }, { s: ['prompt'], label: 'Prompt siap' }, { s: ['aset', 'gagal'], label: 'Berkas masuk' }, { s: ['terjadwal', 'mengunggah', 'manual'], label: 'Dijadwalkan' }, { s: ['terbit'], label: 'Terbit' }];
 const SIBUK: Record<string, string> = { analisa: 'Tara sedang menganalisa niche…', strategi: 'Tara menganalisa niche, lalu Maya menyusun strategi & jadwal…', rencana: 'Maya sedang mengisi kalender…', naskah: 'Lala menulis naskah, lalu Vino menyiapkan prompt…', harian: 'Tim menyiapkan konten hari ini & besok…', hasil: 'Mengambil angka hasil dari Instagram…', komentar: 'Mengambil komentar & menyiapkan draf balasan…', evaluasi: 'Maya sedang menganalisa hasil postingan…', pelajaran: 'Maya menarik pelajaran dari semua postingan…' };
 const HARI = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
 const HARI_PANJANG = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
@@ -43,6 +45,8 @@ const angka = (n?: number) => (n == null ? '–' : n >= 10000 ? `${(n / 1000).to
 const jamK = (k: Konten, x: Data) => (k.jam || x.strategi?.jam || '19:00').padStart(5, '0');
 const waktuK = (k: Konten, x: Data) => Date.parse(`${k.tgl}T${jamK(k, x)}:00+07:00`);
 const kapan = (k: Konten, x: Data) => `${tglId(k.tgl, { weekday: 'short', day: 'numeric', month: 'short' })} · ${jamK(k, x)}`;
+const label = (k: Konten) => `${k.kode || ''}${k.pilih ? `-${k.pilih}` : ''}`;
+const normal = (t: string) => t.toLowerCase().replace(/[^a-z0-9]/g, '');
 const cocok = (f: File, k: Konten) => (f.type.startsWith('video/') ? k.format === 'reel' || k.format === 'story' || k.format === 'carousel' : k.format !== 'reel');
 const akhir = (k: Konten) => k.hasil?.slice().sort((a, b) => b.umurJam - a.umurJam)[0];
 
@@ -125,6 +129,7 @@ function TabHari({ x, jalankan, kartu, setTab }: P) {
     const minggu = Array.from({ length: 7 }, (_, i) => tambah(x.hari, i));
     const per = (t: string) => x.semua.filter((k) => k.tgl === t);
     const perluAksi = x.semua.filter((k) => k.tgl <= tambah(x.hari, 1) && ['prompt', 'aset', 'gagal'].includes(k.status)).length;
+    const perluPilih = x.semua.filter((k) => k.tgl >= x.hari && k.status === 'sketsa').length;
     return (<>
         <section className="sb-card sm-pekan" aria-label="7 hari ke depan">
             {minggu.map((t, i) => {
@@ -142,6 +147,7 @@ function TabHari({ x, jalankan, kartu, setTab }: P) {
         <section className="sb-card">
             <div className="sd-h"><h3>Hari ini <small>{tglId(x.hari)} · unggah ±{x.strategi?.jam || '19:00'} WIB</small></h3><button className="btn small" disabled={!!x.sibuk} onClick={() => jalankan('harian')}>↻ Siapkan sekarang</button></div>
             {perluAksi > 0 && <p className="sm-tugas">👉 {perluAksi} konten menunggu Bapak: salin prompt → buat videonya → unggah berkas → Setujui. Mau sekaligus banyak? <button className="btn small" onClick={() => setTab('antre')}>Buka Antrean unggah</button></p>}
+            {perluPilih > 0 && <p className="sm-tugas">✏️ {perluPilih} konten punya 4 sketsa ide yang menunggu Bapak pilih. Buka kartunya, lihat storyboard-nya, lalu tekan "Pilih sketsa".</p>}
             {!x.hariIni.length && <div className="fin-empty">Tidak ada jadwal unggah hari ini.</div>}
             {x.hariIni.map(kartu)}
         </section>
@@ -159,13 +165,16 @@ function TabAntre({ x, aksi, kabar, setTab }: P) {
     const [jalan, setJalan] = useState<string | null>(null);
     const [pilih, setPilih] = useState<Record<string, boolean>>({});
     const ref = useRef<HTMLInputElement>(null);
+    const calon = [...butuh, ...siap];
+    /** Dicocokkan HANYA lewat kode di nama berkas (mis. R1117-3.mp4). Selebihnya Bapak pilih sendiri supaya tidak tertukar. */
     const ambil = (files: File[]) => {
-        const sisa = [...butuh, ...siap.filter((k) => k.format === 'carousel')];
-        const dipakai = new Set<string>();
-        setPasang(files.map((f) => { const k = sisa.find((y) => !dipakai.has(y.id) && cocok(f, y)); if (k && k.format !== 'carousel') dipakai.add(k.id); return { f, id: k?.id || '' }; }));
+        const urut = calon.slice().sort((a, b) => label(b).length - label(a).length);
+        setPasang(files.map((f) => { const n = normal(f.name); const k = urut.find((y) => y.kode && n.includes(normal(label(y))) && cocok(f, y)); return { f, id: k?.id || '' }; }));
     };
+    const kembar = new Set(pasang.filter((p, i) => p.id && p.id !== '-' && calon.find((k) => k.id === p.id)?.format !== 'carousel' && pasang.findIndex((q) => q.id === p.id) !== i).map((p) => p.id));
+    const belumDipilih = pasang.filter((p) => !p.id).length;
     const unggahSemua = async () => {
-        const per = new Map<string, File[]>(); for (const p of pasang) if (p.id) per.set(p.id, [...(per.get(p.id) || []), p.f]);
+        const per = new Map<string, File[]>(); for (const p of pasang) if (p.id && p.id !== '-') per.set(p.id, [...(per.get(p.id) || []), p.f]);
         let i = 0, n = [...per.values()].reduce((a, b) => a + b.length, 0);
         try {
             for (const [id, files] of per) {
@@ -177,23 +186,24 @@ function TabAntre({ x, aksi, kabar, setTab }: P) {
     };
     const dipilih = siap.filter((k) => pilih[k.id] !== false);
     const Baris = ({ k, kanan }: { k: Konten; kanan?: React.ReactNode }) => (
-        <div className={`sm-ab f-${k.format}`}><span className="sm-ab-w">{kapan(k, x)}</span><Fmt f={k.format} /><b>{k.judul}</b>{kanan}</div>
+        <div className={`sm-ab f-${k.format}`}><span className="sm-kode">{label(k)}</span><span className="sm-ab-w">{kapan(k, x)}</span><Fmt f={k.format} /><b>{k.judul}{k.pilih ? <small> · sketsa #{k.pilih}</small> : null}</b>{kanan}</div>
     );
     return (<>
         <section className="sb-card">
             <div className="sd-h"><h3>1 · Taruh banyak berkas sekaligus <small>{butuh.length} konten menunggu berkas</small></h3>
                 <button className="btn primary" disabled={!butuh.length || !!jalan} onClick={() => ref.current?.click()}>⬆️ Pilih berkas</button></div>
-            <p className="sb-note" style={{ marginTop: 0 }}>Buat beberapa video/gambar sekaligus, pilih semuanya di sini. Sistem mencocokkan otomatis ke jadwal terdekat sesuai jenisnya (video → reel/story, gambar → feed/carousel/story). Periksa pasangannya, lalu tekan Unggah semua.</p>
+            <p className="sb-note" style={{ marginTop: 0 }}>Pilih semua video/gambar yang sudah jadi sekaligus, lalu tentukan <b>tiap berkas untuk konten yang mana</b>. Berkas yang namanya diawali kode konten (mis. <span className="mono">R1117-3.mp4</span> = Reel 17 Nov, sketsa #3) langsung dikenali; selebihnya Bapak pilih sendiri.</p>
             <input ref={ref} type="file" multiple hidden accept="video/mp4,video/quicktime,image/jpeg,image/png" onChange={(e) => { const f = Array.from<File>(e.target.files || []).slice(0, 30); if (f.length) ambil(f); e.target.value = ''; }} />
             {pasang.length > 0 && (<>
                 <div className="sm-pasang">{pasang.map((p, i) => (
-                    <div key={i}><span className="sm-pasang-f">{p.f.type.startsWith('video/') ? '🎞️' : '🖼️'} {p.f.name}<small>{(p.f.size / 1048576).toFixed(1)} MB</small></span><span aria-hidden="true">→</span>
+                    <div key={i} className={!p.id ? 'kurang' : kembar.has(p.id) ? 'kembar' : p.id === '-' ? 'lewat' : 'ok'}><span className="sm-pasang-f">{p.f.type.startsWith('video/') ? '🎞️' : '🖼️'} {p.f.name}<small>{(p.f.size / 1048576).toFixed(1)} MB{p.id && p.id !== '-' && normal(p.f.name).includes(normal(label(calon.find((k) => k.id === p.id)!))) ? ' · dikenali dari nama berkas' : ''}</small></span><span aria-hidden="true">→</span>
                         <select value={p.id} onChange={(e) => setPasang(pasang.map((y, j) => (j === i ? { ...y, id: e.target.value } : y)))} aria-label={`Konten untuk ${p.f.name}`}>
-                            <option value="">— jangan diunggah —</option>
-                            {[...butuh, ...siap].filter((k) => cocok(p.f, k)).map((k) => <option key={k.id} value={k.id}>{kapan(k, x)} · {FMT[k.format].label} · {k.judul}</option>)}
-                        </select></div>
+                            <option value="">— pilih untuk konten mana —</option>
+                            {calon.filter((k) => cocok(p.f, k)).map((k) => <option key={k.id} value={k.id}>[{label(k)}] {FMT[k.format].label} · {kapan(k, x)} · {k.judul}{k.pilih ? ` · sketsa #${k.pilih}` : ''}</option>)}
+                            <option value="-">Lewati berkas ini</option>
+                        </select>{kembar.has(p.id) && <small className="sm-kembar">Dua berkas menuju konten yang sama</small>}</div>
                 ))}</div>
-                <div className="sm-aksi"><button className="btn primary" disabled={!!jalan || !pasang.some((p) => p.id)} onClick={unggahSemua}>{jalan ? `Mengunggah ${jalan}…` : `Unggah semua (${pasang.filter((p) => p.id).length})`}</button><button className="btn small" disabled={!!jalan} onClick={() => setPasang([])}>Batal</button></div>
+                <div className="sm-aksi"><button className="btn primary" disabled={!!jalan || belumDipilih > 0 || kembar.size > 0 || !pasang.some((p) => p.id && p.id !== '-')} onClick={unggahSemua}>{jalan ? `Mengunggah ${jalan}…` : `Unggah semua (${pasang.filter((p) => p.id && p.id !== '-').length})`}</button>{belumDipilih > 0 && <small className="sb-note" style={{ margin: 0 }}>{belumDipilih} berkas belum ditentukan kontennya.</small>}<button className="btn small" disabled={!!jalan} onClick={() => setPasang([])}>Batal</button></div>
                 <p className="sb-note">Carousel: beberapa gambar boleh dipasangkan ke carousel yang sama; urutannya mengikuti urutan di sini.</p>
             </>)}
             {!pasang.length && butuh.length > 0 && <div className="sm-ablist">{butuh.map((k) => <Baris key={k.id} k={k} kanan={<em className="sm-ab-s">{k.status === 'prompt' ? 'prompt siap' : 'belum ada berkas'}</em>} />)}</div>}
@@ -507,12 +517,13 @@ function KartuKonten({ k, x, buka, onBuka, aksi, kabar }: { k: Konten; x: Data; 
     const langkah = Math.max(0, LANGKAH.findIndex((l) => l.s.includes(k.status)));
     const gaya = x.gaya.find((g) => g.id === (k.gayaId || (x.profil.gayaVideo !== 'otomatis' ? x.profil.gayaVideo : '')));
     const [sub, setSub] = useState(k.status === 'terbit' ? 'hasil' : 'produksi');
+    const [ganti, setGanti] = useState(false);
     const sibuk = !!x.sibuk;
     const url = (a: string) => `/api/kantor/sosmed/konten/${k.id}/${a}`;
     return (
         <article className={`sm-k ${buka ? 'buka' : ''} st-${k.status} f-${k.format}`}>
             <button className="sm-k-h" onClick={onBuka} aria-expanded={buka}>
-                <div className="sm-k-atas"><Fmt f={k.format} />{(k.format === 'reel' || k.format === 'story') && <span className="sm-pil">{gaya ? `🎨 ${gaya.nama}` : '🎨 gaya otomatis'}</span>}<span className="sm-pil">{k.pilar}</span><small>{tglId(k.tgl, { weekday: 'short', day: 'numeric', month: 'short' })}</small></div>
+                <div className="sm-k-atas">{k.kode && <span className="sm-kode" title="Kode konten: pakai di nama berkas supaya tidak tertukar">{label(k)}</span>}<Fmt f={k.format} />{k.status === 'sketsa' && <span className="sm-pilihkan">✏️ {k.varian?.length || 4} sketsa, pilih satu</span>}{k.pilih && <span className="sm-pil">✏️ sketsa #{k.pilih}</span>}{(k.format === 'reel' || k.format === 'story') && <span className="sm-pil">{gaya ? `🎨 ${gaya.nama}` : '🎨 gaya otomatis'}</span>}<span className="sm-pil">{k.pilar}</span><small>{tglId(k.tgl, { weekday: 'short', day: 'numeric', month: 'short' })}</small></div>
                 <b>{k.judul}</b>
                 {k.hook ? <em>"{k.hook}"</em> : k.sudut ? <em>{k.sudut}</em> : null}
                 {k.dasar && <span className="sm-dasar">🎯 {k.dasar}</span>}
@@ -521,11 +532,12 @@ function KartuKonten({ k, x, buka, onBuka, aksi, kabar }: { k: Konten; x: Data; 
             {k.galat && <div className="error">Terkendala: {k.galat}</div>}
             {buka && (
                 <div className="sm-isi">
-                    {k.status === 'rencana' ? (<>
+                    {k.varian?.length && (k.status === 'sketsa' || ganti) ? <PilihSketsa k={k} x={x} aksi={aksi} tutup={k.pilih ? () => setGanti(false) : undefined} /> : k.status === 'rencana' ? (<>
                         {k.tujuan && <p className="sm-sudut"><b>Tujuan:</b> {k.tujuan}</p>}
                         <PilihGaya k={k} x={x} aksi={aksi} />
-                        <div className="sm-aksi"><button className="btn primary" disabled={sibuk} onClick={() => aksi(apiPost(url('kembangkan'), {}), 'Lala menulis naskah (format reels-cepat), lalu Vino menyiapkan prompt (±2–5 menit).')}>Buat naskah & prompt sekarang</button></div>
+                        <div className="sm-aksi"><button className="btn primary" disabled={sibuk} onClick={() => aksi(apiPost(url('kembangkan'), {}), k.format === 'reel' || k.format === 'story' ? 'Lala menulis 4 sketsa ide, lalu Vino menyiapkan prompt video & voiceover untuk tiap sketsa (±5–10 menit).' : 'Lala menulis naskah, lalu Vino menyiapkan prompt (±2–5 menit).')}>{k.format === 'reel' || k.format === 'story' ? 'Buat 4 sketsa ide sekarang' : 'Buat naskah & prompt sekarang'}</button></div>
                     </>) : (<>
+                        {k.pilih && k.varian?.length ? <p className="sm-dipilih">✏️ Paket dari <b>sketsa #{k.pilih}</b> · kode berkas <b className="mono">{label(k)}</b> {!['terjadwal', 'mengunggah', 'terbit'].includes(k.status) && <button className="btn small" onClick={() => setGanti(true)}>Lihat / ganti sketsa</button>}</p> : null}
                         <div className="sm-sub-tab" role="tablist">{[['produksi', '🎬 Produksi'], ['naskah', '📝 Naskah'], ['caption', '✍️ Caption'], ['hasil', '📈 Hasil']].map(([kk, l]) => <button key={kk} role="tab" aria-selected={sub === kk} className={sub === kk ? 'on' : ''} onClick={() => setSub(kk)}>{l}</button>)}</div>
                         {sub === 'produksi' && <Produksi k={k} x={x} aksi={aksi} kabar={kabar} />}
                         {sub === 'naskah' && <Naskah k={k} durasi={x.profil.durasi} />}
@@ -540,6 +552,28 @@ function KartuKonten({ k, x, buka, onBuka, aksi, kabar }: { k: Konten; x: Data; 
             )}
         </article>
     );
+}
+/** 4 sketsa ide untuk satu konten video: storyboard, hook, prompt video & voiceover per sketsa. Pak Rico memilih satu. */
+function PilihSketsa({ k, x, aksi, tutup }: { k: Konten; x: Data; aksi: Aksi; tutup?: () => void }) {
+    const v = k.varian || [], top = Math.max(...v.map((y) => y.skor));
+    const belum = v.filter((y) => !y.promptVideo && !y.promptEdit).length;
+    return (<>
+        <div className="sm-psk-h"><p className="sm-sudut" style={{ margin: 0 }}>Pilih satu dari {v.length} sketsa. Setelah dipilih, paketnya (prompt video + voiceover + caption) jadi milik konten <b className="mono">{k.kode}</b> dan kolom unggahnya terbuka.</p>{tutup && <button className="btn small" onClick={tutup}>Tutup</button>}</div>
+        {belum > 0 && <div className="hz-bukti ok"><span className="pk-jalan"><i /></span><span>{x.sibuk ? `Vino masih menyiapkan prompt untuk ${belum} sketsa…` : `${belum} sketsa belum punya prompt.`} Bapak sudah bisa memilih; prompt sketsa yang dipilih bisa dibuat setelahnya.</span></div>}
+        <div className="sm-psk">{v.map((y) => (
+            <div key={y.no} className={`sm-sk ${k.pilih === y.no ? 'on' : ''}`}>
+                <div className="sm-sk-h"><b>Sketsa #{y.no}</b><span className="sm-skor" title={`Daya tahan scroll ${y.scroll}% · relevansi ${y.relevansi}% (perkiraan, bukan data performa)`}>{y.skor === top ? '⭐ ' : ''}{y.skor}%</span>{k.pilih === y.no && <em>dipilih</em>}</div>
+                <small className="sm-sk-sudut">{y.sudut}</small>
+                <p className="sm-sk-hook">"{y.hook}"</p>
+                <p className="sm-sk-ring">{y.ringkas}</p>
+                <StoryboardSketsa adegan={y.storyboard} musik={y.musik} kecil />
+                <details className="sm-sk-d"><summary>🎬 Prompt video {y.promptVideo || y.promptEdit ? '' : '(belum ada)'}</summary>{(y.promptVideo || y.promptEdit) && <><pre>{y.promptVideo || y.promptEdit}</pre><Salin teks={y.promptVideo || y.promptEdit || ''} /></>}</details>
+                <details className="sm-sk-d"><summary>🎙️ Prompt voiceover {y.jumlahKata ? `· ${y.jumlahKata} kata` : ''}</summary><pre>{y.promptSuara?.teks || y.voiceover || '–'}</pre>{y.promptSuara && <small className="sb-note">{y.promptSuara.gaya} · {y.promptSuara.pengaturan}</small>}</details>
+                {y.galat && <div className="error">Prompt sketsa ini terkendala: {y.galat}</div>}
+                <button className={`btn ${k.pilih === y.no ? '' : 'primary'}`} disabled={k.pilih === y.no} onClick={() => { if (!k.aset || confirm('Berkas yang sudah diunggah untuk sketsa sebelumnya akan dilepas. Lanjut?')) { aksi(apiPost(`/api/kantor/sosmed/konten/${k.id}/pilih`, { no: y.no }), `Sketsa #${y.no} dipilih. Kode berkasnya ${k.kode}-${y.no}.`); tutup?.(); } }}>{k.pilih === y.no ? '✓ Sketsa ini dipakai' : `Pilih sketsa #${y.no}`}</button>
+            </div>
+        ))}</div>
+    </>);
 }
 function PilihGaya({ k, x, aksi, onGanti }: { k: Konten; x: Data; aksi: Aksi; onGanti?: () => void }) {
     if (k.format !== 'reel' && k.format !== 'story') return null;
@@ -580,6 +614,7 @@ function Produksi({ k, x, aksi, kabar }: { k: Konten; x: Data; aksi: Aksi; kabar
     return (<>
         <PilihGaya k={k} x={x} aksi={aksi} onGanti={() => setGayaBaru(true)} />
         {gayaBaru && <div className="hz-bukti warn"><span>Gaya diganti. Buat ulang prompt supaya sesuai gaya baru? <button className="btn small" disabled={!!x.sibuk} onClick={() => { setGayaBaru(false); aksi(apiPost(url('kembangkan'), { produksiSaja: true }), 'Vino menulis ulang prompt sesuai gaya baru.'); }}>Buat ulang prompt</button></span></div>}
+        {!!k.storyboard?.length && <section className="sm-blok"><div className="sm-blok-h"><b>Storyboard sketsa</b><small className="sb-note" style={{ margin: 0 }}>gambaran kasar urutan adegan di prompt</small></div><StoryboardSketsa adegan={k.storyboard} musik={k.musik} /></section>}
         {k.status === 'naskah' && !k.promptVideo && !k.promptGambar && !k.promptEdit && <div className="sm-aksi"><button className="btn primary" disabled={!!x.sibuk} onClick={() => aksi(apiPost(url('kembangkan'), {}), 'Vino menyiapkan prompt.')}>Buat prompt produksi</button></div>}
         {k.rekam && <Blok utama judul={`${langkah++} · Yang perlu direkam`} teks={k.rekam} salin="Salin daftar rekam" />}
         {k.promptEdit && <Blok utama judul={`${langkah++} · Prompt edit untuk Claude`} teks={k.promptEdit} salin="Salin prompt edit"><small className="sb-note">Tempel ke Claude bersama video mentahan Bapak.</small></Blok>}
@@ -594,6 +629,7 @@ function Produksi({ k, x, aksi, kabar }: { k: Konten; x: Data; aksi: Aksi; kabar
         {(k.promptVideo || k.promptGambar || k.promptEdit || k.aset) && (
             <section className="sm-blok utama">
                 <div className="sm-blok-h"><b>{langkah} · Taruh hasil & setujui</b></div>
+                {k.kode && <p className="sm-namaf">Beri nama berkas diawali <b className="mono">{label(k)}</b> (mis. <span className="mono">{label(k)}{k.format === 'reel' ? '.mp4' : k.format === 'carousel' ? '_1.png' : '.png'}</span>) supaya otomatis dikenali saat unggah banyak sekaligus. <Salin teks={label(k)} label="Salin kode" /></p>}
                 {k.aset ? <p className="sm-aset">📁 {k.aset.nama}{banyak && n > 1 ? ` + ${n - 1} berkas lain` : ''} <small>tersimpan di Berkas → Sosmed</small></p> : <p className="sb-note" style={{ marginTop: 0 }}>Setelah {k.format === 'reel' ? 'video' : banyak ? 'semua slide' : k.format === 'story' ? 'gambar/video story' : 'gambar'} jadi, unggah di sini. Berkasnya tersimpan di cloud VPS Bapak.</p>}
                 <input ref={input} type="file" multiple={banyak} accept={k.format === 'reel' ? 'video/mp4,video/quicktime' : k.format === 'story' ? 'video/mp4,video/quicktime,image/jpeg,image/png' : banyak ? 'image/jpeg,image/png,video/mp4' : 'image/jpeg,image/png'} hidden onChange={(e) => { const f = Array.from<File>(e.target.files || []).slice(0, 10); if (f.length) unggah(f); e.target.value = ''; }} />
                 <div className="sm-aksi">
@@ -642,6 +678,9 @@ function Naskah({ k, durasi }: { k: Konten; durasi: number }) {
         {!!k.slide?.length && (
             <section className="sm-blok"><div className="sm-blok-h"><b>{k.format === 'feed' ? 'Isi gambar' : `Slide (${k.slide.length})`}</b></div>
                 <div className="sm-slide">{k.slide.map((s) => <div key={s.no}><small>{s.no}</small><b>{s.judul}</b><p>{s.isi}</p><em>{s.visual}</em></div>)}</div></section>
+        )}
+        {!!k.storyboard?.length && (
+            <section className="sm-blok"><div className="sm-blok-h"><b>Storyboard sketsa</b></div><StoryboardSketsa adegan={k.storyboard} musik={k.musik} kecil /></section>
         )}
         {!!k.storyboard?.length && (
             <section className="sm-blok"><div className="sm-blok-h"><b>{k.format === 'story' ? 'Bingkai story' : 'Shot list'}</b><small className="sb-note" style={{ margin: 0 }}>waktu = perkiraan sampai suara direkam</small></div>

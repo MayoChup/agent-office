@@ -2186,3 +2186,48 @@ body.no-office #phaser-container { visibility: hidden; }
 .sm-jamk label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
 .sm-terjadwal { font-size: 13px; font-weight: 600; color: var(--accent); }
 @media (max-width: 640px) { .sm-pasang > div { grid-template-columns: 1fr; } .sm-pasang > div > span[aria-hidden] { display: none; } .sm-ab-w { min-width: 0; width: 100%; } }
+
+/* Konten: sketsa storyboard & pilihan 4 sketsa */
+.skt { display: block; width: 100%; height: auto; }
+.skt-kertas { fill: #f8f6f0; stroke: #d6d1c4; stroke-width: 0.8; }
+.skt-garis { fill: none; stroke: #3b3a36; stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
+.skt-garis .tipis { stroke-width: 0.8; stroke: #8a867c; }
+.skt-garis .isi { fill: #3b3a36; } .skt-garis .isi-tipis { fill: #e2ddd0; }
+.skt-kam { stroke: #0d9488; stroke-width: 1.4; }
+.skt-teks rect { fill: #fff; stroke: #3b3a36; stroke-width: 0.7; stroke-dasharray: 2 1.5; }
+.skt-teks text { font: 700 6.4px 'Plus Jakarta Sans', system-ui, sans-serif; fill: #1f1e1b; }
+.skt-label { font: italic 5.2px 'Segoe Print', 'Bradley Hand', 'Comic Sans MS', cursive; fill: #6b675e; }
+.skt-no { font: 600 6px system-ui, sans-serif; fill: #a39e91; }
+.skt-strip { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; scroll-snap-type: x proximity; }
+.skt-f { margin: 0; flex: 0 0 112px; scroll-snap-align: start; display: flex; flex-direction: column; gap: 5px; }
+.skt-wrap.kecil .skt-f { flex-basis: 88px; }
+.skt-f figcaption { display: flex; flex-direction: column; gap: 2px; font-size: 11px; line-height: 1.35; }
+.skt-f figcaption b { font-size: 11px; font-variant-numeric: tabular-nums; }
+.skt-f figcaption span { color: var(--muted); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.skt-f figcaption em { font-style: normal; color: var(--accent); font-size: 10.5px; }
+.skt-wrap.kecil figcaption span { -webkit-line-clamp: 2; }
+.skt-musik { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
+.sm-psk-h { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+.sm-psk { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); gap: 10px; }
+.sm-sk { display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: 14px; border: 1px solid var(--line); background: var(--panel); min-width: 0; }
+.sm-sk.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.sm-sk-h { display: flex; align-items: center; gap: 8px; } .sm-sk-h b { font-size: 15px; }
+.sm-sk-h em { font-style: normal; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--grad); color: #fff; }
+.sm-skor { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.sm-sk-sudut { font-size: 11.5px; color: var(--muted); }
+.sm-sk-hook { margin: 0; font-size: 14.5px; font-weight: 700; line-height: 1.4; }
+.sm-sk-ring { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+.sm-sk-d { font-size: 12.5px; border-top: 1px dashed var(--line); padding-top: 6px; }
+.sm-sk-d summary { cursor: pointer; font-weight: 600; }
+.sm-sk-d pre { margin: 6px 0; white-space: pre-wrap; word-break: break-word; font: 11.5px/1.55 ui-monospace, Menlo, monospace; max-height: 200px; overflow: auto; padding: 8px; border-radius: 8px; background: var(--latar, var(--bg)); border: 1px solid var(--line); }
+.sm-sk > .btn:last-child { margin-top: auto; align-self: stretch; }
+.sm-kode { font: 700 11px ui-monospace, Menlo, monospace; padding: 2px 7px; border-radius: 6px; background: var(--text); color: var(--panel-solid, #111); letter-spacing: 0.02em; }
+.sm-pilihkan { font-size: 11.5px; font-weight: 700; padding: 2px 9px; border-radius: 999px; background: rgba(245, 158, 11, 0.16); color: #d97706; }
+.sm-dipilih { margin: 0; font-size: 12.5px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; color: var(--muted); }
+.sm-namaf { margin: 0 0 8px; font-size: 12.5px; line-height: 1.6; color: var(--muted); }
+.sm-pasang > div.kurang { border-color: rgba(245, 158, 11, 0.6); }
+.sm-pasang > div.kembar { border-color: rgba(239, 68, 68, 0.7); }
+.sm-pasang > div.ok { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+.sm-pasang > div.lewat { opacity: 0.6; }
+.sm-kembar { grid-column: 1 / -1; color: #dc2626; font-size: 11.5px; }
+.sm-ab b small { color: var(--muted); font-weight: 500; }

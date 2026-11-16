@@ -705,6 +705,16 @@ async function sosmedRencana(mulai = hariWib(), hari = 7) {
     return baru;
 }
 async function sosmedKembangkan(k: Konten) {
+    if ((k.format === 'reel' || k.format === 'story') && !k.pilih) {
+        // Video: 4 sketsa ide lengkap (Lala), lalu prompt video + voiceover per sketsa (Vino). Pak Rico memilih salah satu.
+        if (!k.varian?.length || k.status === 'rencana') await duaKali(async () => sosmed.terimaSketsa(k, await kerjaSosmed(ID_SOSMED.penulis, `4 sketsa ide (${k.format}): ${k.judul}`, sosmed.promptSketsa(k), `${k.tgl} · pilar ${k.pilar} · skill reels-cepat`)));
+        for (const v of k.varian || []) {
+            if (v.promptVideo || v.promptEdit) continue;
+            await duaKali(async () => sosmed.terimaProduksiVarian(v, await kerjaSosmed(ID_SOSMED.produksi, `Prompt sketsa #${v.no}: ${k.judul}`, sosmed.promptProduksiVarian(k, v), `Gaya: ${sosmed.gayaDari(k)?.nama || 'dipilih AI'}`)))
+                .catch((e) => { v.galat = String(e?.message || e).slice(0, 160); sosmed.simpan(); });
+        }
+        return;
+    }
     if (!k.naskah || k.status === 'rencana') await duaKali(async () => sosmed.terimaNaskah(k, await kerjaSosmed(ID_SOSMED.penulis, `Naskah (${k.format}): ${k.judul}`, sosmed.promptNaskah(k), `${k.tgl} · pilar ${k.pilar} · skill reels-cepat`)));
     await duaKali(async () => sosmed.terimaProduksi(k, await kerjaSosmed(ID_SOSMED.produksi, `Prompt produksi: ${k.judul}`, sosmed.promptProduksi(k), `Gaya: ${sosmed.gayaDari(k)?.nama || (k.format === 'feed' || k.format === 'carousel' ? 'gambar' : 'dipilih AI')}`)));
 }
@@ -757,11 +767,11 @@ async function sosmedHarian(sebab: string) {
         }
         if (sosmed.slotKosong(hari, 7).length) { sosmed.sibuk = 'rencana'; await sosmedRencana(hari, 7).catch((e) => console.warn('[Sosmed] rencana:', e?.message || e)); }
         sosmed.sibuk = 'naskah';
-        for (const k of sosmed.st.konten.filter((x) => (x.tgl === hari || x.tgl === besok) && (x.status === 'rencana' || x.status === 'naskah'))) {
+        for (const k of sosmed.st.konten.filter((x) => (x.tgl === hari || x.tgl === besok) && (x.status === 'rencana' || x.status === 'naskah' || (x.status === 'sketsa' && x.varian?.some((v) => !v.promptVideo && !v.promptEdit))))) {
             await sosmedKembangkan(k).catch((e) => { k.galat = String(e?.message || e).slice(0, 200); sosmed.simpan(); });
         }
         const r = sosmed.ringkas(hari);
-        const baris = (k: Konten) => `• ${k.format.toUpperCase()} — ${k.judul} (${sosmed.gayaDari(k)?.nama || 'pilar ' + k.pilar}) — ${k.status === 'prompt' ? 'prompt SIAP disalin' : k.status === 'aset' ? 'berkas masuk, menunggu Bapak setujui' : k.status === 'terbit' ? 'sudah terbit' : k.galat ? `terkendala: ${k.galat}` : 'sedang disiapkan'}`;
+        const baris = (k: Konten) => `• [${sosmed.labelBerkas(k)}] ${k.format.toUpperCase()} — ${k.judul} (${sosmed.gayaDari(k)?.nama || 'pilar ' + k.pilar}) — ${k.status === 'sketsa' ? `${k.varian?.length || 4} sketsa ide menunggu Bapak pilih` : k.status === 'prompt' ? 'prompt SIAP disalin' : k.status === 'aset' ? 'berkas masuk, menunggu Bapak setujui' : k.status === 'terbit' ? 'sudah terbit' : k.galat ? `terkendala: ${k.galat}` : 'sedang disiapkan'}`;
         const isi = [`Pak Rico, agenda konten (${sebab}):`, r.hariIni.length ? `**Hari ini**\n${r.hariIni.map(baris).join('\n')}` : '**Hari ini** tidak ada jadwal unggah.', r.besok.length ? `**Besok**\n${r.besok.map(baris).join('\n')}` : '',
             nKom ? `💬 ${nKom} komentar baru, draf balasannya sudah disiapkan Dea.` : '', 'Buka menu **Konten** untuk menyalin prompt, menaruh hasil, lalu tekan Setujui.'].filter(Boolean).join('\n\n');
         const kepala = roster().some((a) => a.id === ID_SOSMED.kepala);
@@ -871,8 +881,11 @@ app.post('/api/kantor/sosmed/konten/:id/:aksi', requireToken, sm(async (req) => 
     const k = sosmed.cari(String(req.params.id)), a = String(req.params.aksi), b = req.body || {};
     if (a === 'ubah') return { konten: sosmed.ubah(k.id, b) };
     if (a === 'hapus') { sosmed.hapus(k.id); return {}; }
+    if (a === 'pilih') return { konten: sosmed.pilihVarian(k.id, Math.round(+b.no)) };
     if (a === 'kembangkan') {
+        if (b.ulang) { k.varian = undefined; k.pilih = undefined; }
         if (b.ulang) { k.status = 'rencana'; k.naskah = undefined; }
+        if (b.produksiSaja && k.varian?.length && !k.pilih) { for (const v of k.varian) { v.promptVideo = v.promptEdit = v.rekam = undefined; v.promptSuara = undefined; } return latarSosmed('naskah', () => sosmedKembangkan(k).catch((e) => { k.galat = String(e?.message || e).slice(0, 200); sosmed.simpan(); })); }
         if (b.produksiSaja && k.naskah) return latarSosmed('naskah', () => duaKali(async () => sosmed.terimaProduksi(k, await kerjaSosmed(ID_SOSMED.produksi, `Prompt produksi: ${k.judul}`, sosmed.promptProduksi(k), `Gaya: ${sosmed.gayaDari(k)?.nama || '-'}`))).catch((e) => { k.galat = String(e?.message || e).slice(0, 200); sosmed.simpan(); }));
         return latarSosmed('naskah', () => sosmedKembangkan(k).catch((e) => { k.galat = String(e?.message || e).slice(0, 200); sosmed.simpan(); }));
     }

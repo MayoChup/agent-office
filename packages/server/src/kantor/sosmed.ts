@@ -19,15 +19,24 @@ export interface Pilar { nama: string; tujuan: string; porsi: number; contoh: st
 /** jadwal[0..6] = Minggu..Sabtu → format yang diunggah hari itu (boleh lebih dari satu, mis. reel + story). */
 export interface Strategi { at: number; niche: string; alasan: string; audiens: string; janji: string; pilar: Pilar[]; ritme: string; jadwal: Format[][]; jam: string; opsiNiche?: Array<{ niche: string; alasan: string }> }
 export interface Analisa { at: number; ringkas: string; masalah: string[]; pertanyaan: string[]; berhasil: string[]; celah: string[]; acuan: Array<{ akun: string; alasan: string }>; formatTerbaik: string; jamTerbaik: string; sumber: string }
-export interface Adegan { no: number; detik: string; visual: string; teksLayar: string; narasi: string; sfx?: string }
+/** Sketsa ringan satu adegan: dibuat dari kosakata tetap supaya bisa digambar tampilan (bukan gambar AI). */
+export const JENIS_OBJEK = ['orang', 'wajah', 'tangan', 'hp', 'laptop', 'kotak', 'grafik', 'teks', 'ikon', 'rumah', 'mobil', 'uang', 'makanan', 'pohon'] as const;
+export interface Sketsa { shot: 'dekat' | 'sedang' | 'jauh' | 'layar' | 'teks'; kamera: 'diam' | 'zoom-in' | 'zoom-out' | 'geser-kiri' | 'geser-kanan' | 'naik' | 'turun'; objek: Array<{ jenis: typeof JENIS_OBJEK[number]; posisi: 'kiri' | 'tengah' | 'kanan'; label?: string }> }
+export interface Adegan { no: number; detik: string; visual: string; teksLayar: string; narasi: string; sfx?: string; sketsa?: Sketsa }
+/** Satu dari 4 ide (sketsa) untuk konten video. Setelah Pak Rico memilih, isinya disalin ke konten. */
+export interface Varian {
+    no: number; sudut: string; hook: string; ringkas: string; scroll: number; relevansi: number; skor: number;
+    voiceover?: string; jumlahKata?: number; storyboard: Adegan[]; musik?: string; sampul?: string; caption?: string; hashtag?: string[]; ajakan?: string;
+    promptVideo?: string; promptSuara?: { teks: string; gaya: string; pengaturan: string }; rekam?: string; promptEdit?: string; galat?: string;
+}
 export interface Slide { no: number; judul: string; isi: string; visual: string }
 export interface Sudut { sudut: string; hook: string; scroll: number; relevansi: number; skor: number }
 export interface Gaya { id: string; nama: string; jenis: 'real' | 'animasi'; deskripsi: string; contoh?: { path: string; nama: string } | null; bawaan?: boolean }
 export interface Aset { path: string; nama: string; at: number }
 export interface Hasil { at: number; sumber: 'ig' | 'manual'; umurJam: number; tayang?: number; jangkauan?: number; suka?: number; komentar?: number; simpan?: number; bagikan?: number; ikuti?: number }
-export type StatusKonten = 'rencana' | 'naskah' | 'prompt' | 'aset' | 'terjadwal' | 'mengunggah' | 'terbit' | 'manual' | 'gagal';
+export type StatusKonten = 'rencana' | 'sketsa' | 'naskah' | 'prompt' | 'aset' | 'terjadwal' | 'mengunggah' | 'terbit' | 'manual' | 'gagal';
 export interface Konten {
-    id: string; tgl: string; pilar: string; format: Format; judul: string; sudut: string; tujuan: string; dasar?: string; gayaId?: string;
+    id: string; kode?: string; tgl: string; pilar: string; format: Format; judul: string; varian?: Varian[]; pilih?: number; sudut: string; tujuan: string; dasar?: string; gayaId?: string;
     sudutPilihan?: Sudut[]; hook?: string; hookLain?: string[]; naskah?: string; voiceover?: string; jumlahKata?: number; storyboard?: Adegan[]; subtitle?: string[]; slide?: Slide[];
     caption?: string; hashtag?: string[]; ajakan?: string; captionTiktok?: string; youtube?: { judul: string; deskripsi: string };
     promptVideo?: string; promptGambar?: string; rekam?: string; promptEdit?: string; promptSuara?: { teks: string; gaya: string; pengaturan: string }; musik?: string; sampul?: string;
@@ -84,6 +93,40 @@ const bacaJadwal = (x: any, cadangan: Format[][]): Format[][] => {
     return j.some((d) => d.length) ? j : cadangan;
 };
 
+export function hitungKata(vo: string) { return vo.replace(/\[[^\]]*\]|\/+|\*+/g, ' ').split(/\s+/).filter((w) => /\w/.test(w)).length; }
+function bacaTag(x: any) { return daftar(x, 10, 40).map((h: string) => `#${h.replace(/^#+/, '').replace(/\s+/g, '')}`).filter((h: string) => h.length > 1); }
+const SHOT = ['dekat', 'sedang', 'jauh', 'layar', 'teks'], KAMERA = ['diam', 'zoom-in', 'zoom-out', 'geser-kiri', 'geser-kanan', 'naik', 'turun'], POSISI = ['kiri', 'tengah', 'kanan'];
+function bacaSketsa(x: any): Sketsa | undefined {
+    if (!x || typeof x !== 'object') return undefined;
+    const objek = (Array.isArray(x.objek) ? x.objek : []).slice(0, 3).map((o: any) => ({ jenis: String(o?.jenis || '').toLowerCase(), posisi: POSISI.includes(o?.posisi) ? o.posisi : 'tengah', label: satu(o?.label, 30) || undefined }))
+        .filter((o: any) => (JENIS_OBJEK as readonly string[]).includes(o.jenis));
+    return { shot: SHOT.includes(x.shot) ? x.shot : 'sedang', kamera: KAMERA.includes(x.kamera) ? x.kamera : 'diam', objek } as Sketsa;
+}
+function bacaAdegan(x: any): Adegan[] {
+    return (Array.isArray(x) ? x : []).slice(0, 16).map((a: any, i: number) => ({ no: i + 1, detik: satu(a?.detik, 20), visual: satu(a?.visual, 400), teksLayar: satu(a?.teksLayar, 160), narasi: satu(a?.narasi, 500), sfx: satu(a?.sfx, 160) || undefined, sketsa: bacaSketsa(a?.sketsa) }))
+        .filter((a: Adegan) => a.visual || a.narasi);
+}
+/** Subtitle 1–3 kata per baris dari voiceover (format reels-cepat); kata KAPITAL jadi kata kunci tebal. */
+export function keSubtitle(vo: string): string[] {
+    const kata = vo.replace(/\[[^\]]*\]/g, ' ').replace(/\/+/g, ' | ').split(/\s+/).filter(Boolean);
+    const out: string[] = []; let baris: string[] = [];
+    const tutup = () => { if (baris.length) out.push(baris.join(' ')); baris = []; };
+    for (const w of kata) {
+        if (w === '|') { tutup(); continue; }
+        const besar = w.length > 1 && /[A-Z]/.test(w) && w === w.toUpperCase() && /[A-Z]{2}/.test(w);
+        baris.push(besar ? `**${w.toLowerCase()}**` : w.toLowerCase());
+        if (baris.length >= 3 || /[.,!?]$/.test(w)) tutup();
+    }
+    tutup(); return out.slice(0, 120);
+}
+function bacaProduksi(raw: string) {
+    const j = ambilJson(raw); if (!j) throw new Error('Prompt produksi dari AI tidak terbaca.');
+    const ps = j.promptSuara && teks(j.promptSuara.teks, 10) ? { teks: teks(j.promptSuara.teks, 5000), gaya: satu(j.promptSuara.gaya, 400), pengaturan: satu(j.promptSuara.pengaturan, 300) } : undefined;
+    const v = teks(j.promptVideo, 7000), gb = teks(j.promptGambar, 6000), rk = teks(j.rekam, 3000), ed = teks(j.promptEdit, 5000);
+    if (!v && !gb && !(rk && ed)) throw new Error('Prompt produksi dari AI tidak lengkap.');
+    return { promptVideo: v || undefined, promptGambar: gb || undefined, rekam: rk || undefined, promptEdit: ed || undefined, promptSuara: ps };
+}
+
 export class Sosmed {
     private file: string;
     st: St = { profil: { ...PROFIL_AWAL }, strategi: null, analisa: null, konten: [], tren: null, gaya: [], pelajaran: null, komentar: [], harianKe: '', mingguKe: '', evaluasiKe: '' };
@@ -96,6 +139,7 @@ export class Sosmed {
         if (!Array.isArray(this.st.gaya)) this.st.gaya = [];
         if (!Array.isArray(this.st.komentar)) this.st.komentar = [];
         // Unggahan yang terputus karena kantor dimulai ulang: tandai gagal supaya bisa dicoba lagi (tidak diulang otomatis agar tidak dobel).
+        this.pastikanKode();
         for (const k of this.st.konten) if (k.status === 'mengunggah') { k.status = 'gagal'; k.galat = 'Unggahan terputus karena kantor dimulai ulang. Cek Instagram dulu; kalau belum terbit, tekan Unggah sekarang.'; }
     }
     simpan() {
@@ -249,9 +293,77 @@ export class Sosmed {
         this.urut(); this.simpan();
         return baru;
     }
-    private urut() { const o: Record<Format, number> = { feed: 1, reel: 0, carousel: 2, story: 3 }; this.st.konten.sort((a, b) => a.tgl.localeCompare(b.tgl) || o[a.format] - o[b.format]); }
+    private urut() { const o: Record<Format, number> = { feed: 1, reel: 0, carousel: 2, story: 3 }; this.st.konten.sort((a, b) => a.tgl.localeCompare(b.tgl) || o[a.format] - o[b.format]); this.pastikanKode(); }
+    /** Kode pendek tiap konten, mis. R1117 (Reel 17 Nov) atau R1117b (reel kedua di hari itu). Dipakai untuk menamai berkas supaya tidak tertukar. */
+    pastikanKode() {
+        const huruf: Record<Format, string> = { reel: 'R', feed: 'F', carousel: 'C', story: 'S' };
+        const ada = new Set(this.st.konten.map((k) => k.kode).filter(Boolean));
+        for (const k of this.st.konten) {
+            if (k.kode) continue;
+            const dasar = `${huruf[k.format]}${k.tgl.slice(5, 7)}${k.tgl.slice(8, 10)}`;
+            let kode = dasar; for (let i = 1; ada.has(kode); i++) kode = dasar + 'bcdefghijk'[i - 1];
+            k.kode = kode; ada.add(kode);
+        }
+    }
+    /** Label berkas untuk konten (plus nomor sketsa bila konten video sudah dipilih sketsanya). */
+    labelBerkas(k: Konten) { return `${k.kode || ''}${k.pilih ? `-${k.pilih}` : ''}`; }
 
     /* ── 4. Naskah (Lala) — mengikuti skill reels-cepat ── */
+    /* ── 4a. Konten video (reel/story): 4 sketsa ide lengkap, Pak Rico memilih satu ── */
+    promptSketsa(k: Konten) {
+        const p = this.st.profil, kata = [Math.round(p.durasi * 2.5), Math.round(p.durasi * 3)];
+        const reel = k.format === 'reel';
+        return [`Kamu penulis konten Instagram. Buat 4 SKETSA IDE yang BENAR-BENAR BERBEDA untuk satu ${NAMA_FORMAT[k.format]} berikut. Pemilik akan memilih satu.`,
+            `JUDUL KERJA: ${k.judul}`, `SUDUT AWAL: ${k.sudut}`, `PILAR: ${k.pilar}`, `TUJUAN: ${k.tujuan}`, k.dasar ? `DASAR DARI ANALISA NICHE: ${k.dasar}` : '', '',
+            reel ? `Ikuti skill /reels-cepat (dan /ig-reel, /ig-human bila tersedia). Tiap sketsa = sudut berbeda bentuknya (mis. kesalahan, daftar/angka, tutorial, kontra-intuitif, cerita, sebelum-sesudah) dan cara visual berbeda.`
+                : 'Pakai skill /ig-story bila tersedia. Story 3–5 bingkai; tujuannya kedekatan & interaksi (polling/kuis/pertanyaan/slider).',
+            'Untuk TIAP sketsa isi:',
+            '- "sudut", "hook" (≤3 detik, ±8–10 kata, isi wajib memenuhi janji hook), "ringkas" (1 kalimat: alur videonya),',
+            '- "scroll" & "relevansi" 0–100 (daya tahan 3 detik pertama & kedekatan dengan masalah penonton). Jangan semua tinggi; beri jarak yang masuk akal.',
+            reel ? `- "voiceover": HANYA kata-kata narasi untuk diucapkan, struktur [HOOK] [MASALAH] [SOLUSI] [CTA]; satu baris = satu tarikan napas; "/" jeda pendek, "//" jeda panjang, KAPITAL = kata ditekan (maks 1 per kalimat); angka ditulis seperti diucapkan; ${kata[0]}–${kata[1]} kata.`
+                : '- "voiceover": narasi singkat bila story memakai suara (boleh kosong).',
+            `- "storyboard": ${reel ? '5–7 adegan, waktu berurutan tanpa celah, total ±' + p.durasi + ' detik' : '3–5 bingkai'}. Tiap adegan: "detik", "visual" (apa yang terlihat), "teksLayar" (≤6 kata), "narasi" (potongan voiceover), "sfx" (efek suara adegan itu, mis. "whoosh", "klik mouse", "ding notifikasi"${reel ? '' : ', atau stiker interaksi'}), dan "sketsa" untuk digambar sebagai sketsa ringan:`,
+            `  "sketsa": {"shot":"dekat|sedang|jauh|layar|teks","kamera":"diam|zoom-in|zoom-out|geser-kiri|geser-kanan|naik|turun","objek":[{"jenis":"${JENIS_OBJEK.join('|')}","posisi":"kiri|tengah|kanan","label":"≤3 kata"}]} — maksimal 3 objek, pilih yang paling mewakili adegan. "layar" = rekaman layar HP/laptop; "teks" = hanya tulisan besar.`,
+            '- "musik": musik/suasana latar (genre, tempo, suasana) — BUKAN bagian voiceover,',
+            '- "sampul": teks & gambar sampul, "caption" Instagram (baris pertama = hook ulang, 150–300 huruf, ajakan simpan/komen), "hashtag" 5–8 (1–2 luas, sisanya niche), "ajakan" (satu aksi).',
+            'Jangan mengarang angka/klaim; tandai [cek: …]. Bahasa manusia: tanpa klise AI, tanpa tanda pisah panjang, emoji 0–2.', '', this.konteks(), '', this.ATURAN,
+            '{"varian":[{"sudut":"…","hook":"…","ringkas":"…","scroll":80,"relevansi":75,"voiceover":"[HOOK]\\n…","storyboard":[{"detik":"0–3","visual":"…","teksLayar":"…","narasi":"…","sfx":"…","sketsa":{"shot":"dekat","kamera":"zoom-in","objek":[{"jenis":"hp","posisi":"tengah","label":"notif stok habis"}]}}],"musik":"…","sampul":"…","caption":"…","hashtag":["#…"],"ajakan":"…"}]}'
+        ].filter(Boolean).join('\n');
+    }
+    terimaSketsa(k: Konten, raw: string) {
+        const j = ambilJson(raw); const arr = Array.isArray(j?.varian) ? j.varian : [];
+        const v: Varian[] = arr.slice(0, 4).map((x: any, i: number) => {
+            const sc = pct(x?.scroll), rl = pct(x?.relevansi), vo = teks(x?.voiceover, 4000) || undefined;
+            return { no: i + 1, sudut: satu(x?.sudut, 160), hook: satu(x?.hook, 220), ringkas: satu(x?.ringkas, 300), scroll: sc, relevansi: rl, skor: Math.round((sc + rl) / 2),
+                voiceover: vo, jumlahKata: vo ? hitungKata(vo) : undefined, storyboard: bacaAdegan(x?.storyboard), musik: satu(x?.musik, 240) || undefined, sampul: satu(x?.sampul, 240) || undefined,
+                caption: teks(x?.caption, 2200) || undefined, hashtag: bacaTag(x?.hashtag), ajakan: satu(x?.ajakan, 200) || undefined };
+        }).filter((x: Varian) => x.hook && x.storyboard.length >= 2);
+        if (v.length < 2) throw new Error('Sketsa ide dari AI tidak terbaca (kurang dari 2 ide yang lengkap).');
+        v.forEach((x, i) => { x.no = i + 1; });
+        k.varian = v; k.pilih = undefined; k.status = 'sketsa'; k.diubah = Date.now(); k.galat = undefined; this.simpan();
+    }
+    /** Konten sementara dari satu sketsa, supaya prompt produksi bisa ditulis per sketsa. */
+    private dariVarian(k: Konten, v: Varian): Konten { return { ...k, hook: v.hook, naskah: v.ringkas, voiceover: v.voiceover, storyboard: v.storyboard, musik: v.musik, sampul: v.sampul }; }
+    promptProduksiVarian(k: Konten, v: Varian) { return this.promptProduksi(this.dariVarian(k, v)); }
+    terimaProduksiVarian(v: Varian, raw: string) { Object.assign(v, bacaProduksi(raw)); v.galat = undefined; this.simpan(); }
+    /** Pak Rico memilih sketsa ke-n: isinya jadi paket konten (naskah, prompt, caption) dan konten masuk antrean berkas. */
+    pilihVarian(id: string, no: number) {
+        const k = this.cari(id), v = k.varian?.find((x) => x.no === no);
+        if (!v) throw new Error('Sketsa tidak ditemukan.');
+        if (['terjadwal', 'mengunggah', 'terbit'].includes(k.status)) throw new Error('Konten ini sudah dijadwalkan/terbit; batalkan jadwalnya dulu untuk mengganti sketsa.');
+        const terbaik = (k.varian || []).slice().sort((a, b) => b.skor - a.skor);
+        k.pilih = no; k.sudutPilihan = [v, ...terbaik.filter((x) => x !== v)].map((x) => ({ sudut: x.sudut, hook: x.hook, scroll: x.scroll, relevansi: x.relevansi, skor: x.skor }));
+        k.hook = v.hook; k.hookLain = (k.varian || []).filter((x) => x !== v).map((x) => x.hook).slice(0, 3); k.naskah = v.ringkas; k.voiceover = v.voiceover; k.jumlahKata = v.jumlahKata;
+        k.storyboard = v.storyboard; k.subtitle = v.voiceover ? keSubtitle(v.voiceover) : undefined; k.musik = v.musik; k.sampul = v.sampul;
+        k.caption = v.caption; k.hashtag = v.hashtag; k.ajakan = v.ajakan;
+        k.captionTiktok = v.caption ? `${v.caption.split('\n')[0].slice(0, 120)} ${(v.hashtag || []).slice(0, 3).join(' ')}`.trim() : undefined;
+        k.youtube = { judul: v.hook.slice(0, 100), deskripsi: `${v.ringkas.slice(0, 300)} #Shorts` };
+        k.promptVideo = v.promptVideo; k.promptSuara = v.promptSuara; k.rekam = v.rekam; k.promptEdit = v.promptEdit; k.promptGambar = undefined;
+        if (k.aset) { k.aset = null; k.asetLain = []; } // berkas lama dibuat untuk sketsa lain
+        k.status = v.promptVideo || v.promptEdit ? 'prompt' : 'naskah'; k.galat = undefined; k.diubah = Date.now(); this.simpan();
+        return k;
+    }
+
     promptNaskah(k: Konten) {
         const p = this.st.profil, kata = [Math.round(p.durasi * 2.5), Math.round(p.durasi * 3)];
         const bagian: Record<Format, string> = {
@@ -280,7 +392,7 @@ export class Sosmed {
         k.hook = satu(j.hook, 220); k.hookLain = daftar(j.hookLain, 3, 220);
         k.naskah = teks(j.naskah, 4000); k.voiceover = teks(j.voiceover, 4000) || undefined;
         k.jumlahKata = k.voiceover ? k.voiceover.replace(/\[[^\]]*\]|\/+|\*+/g, ' ').split(/\s+/).filter((w) => /\w/.test(w)).length : undefined;
-        k.storyboard = (Array.isArray(j.storyboard) ? j.storyboard : []).slice(0, 16).map((a: any, i: number) => ({ no: i + 1, detik: satu(a.detik, 20), visual: satu(a.visual, 400), teksLayar: satu(a.teksLayar, 160), narasi: satu(a.narasi, 500), sfx: satu(a.sfx, 160) || undefined }));
+        k.storyboard = bacaAdegan(j.storyboard);
         k.subtitle = daftar(j.subtitle, 120, 60);
         k.slide = (Array.isArray(j.slide) ? j.slide : []).slice(0, 10).map((s: any, i: number) => ({ no: i + 1, judul: satu(s.judul, 120), isi: satu(s.isi, 400), visual: satu(s.visual, 400) })).filter((s: Slide) => s.judul || s.isi);
         k.caption = teks(j.caption, 2200); k.hashtag = daftar(j.hashtag, 10, 40).map((h: string) => `#${h.replace(/^#+/, '').replace(/\s+/g, '')}`).filter((h: string) => h.length > 1);
@@ -294,9 +406,10 @@ export class Sosmed {
         const p = this.st.profil, g = this.gayaDari(k);
         const acuan = g?.contoh ? ` Pemilik punya GAMBAR ACUAN gaya ini ("${g.contoh.nama}") yang akan ikut dilampirkan; tulis "Ikuti gaya gambar acuan terlampir" di awal prompt.` : '';
         const isi = [`JUDUL: ${k.judul} | FORMAT: ${k.format} | DURASI ±${p.durasi} detik`, `HOOK: ${k.hook || ''}`, k.voiceover ? `VOICEOVER:\n${k.voiceover}` : `NASKAH:\n${k.naskah || ''}`,
-            k.storyboard?.length ? `SHOT LIST:\n${k.storyboard.map((a) => `${a.no}. (${a.detik}) visual: ${a.visual} | teks layar: ${a.teksLayar} | sfx: ${a.sfx || '-'} | narasi: ${a.narasi}`).join('\n')}` : '',
+            k.storyboard?.length ? `SHOT LIST:\n${k.storyboard.map((a) => `${a.no}. (${a.detik}) visual: ${a.visual}${a.sketsa ? ` [${a.sketsa.shot}, kamera ${a.sketsa.kamera}]` : ''} | teks layar: ${a.teksLayar} | sfx: ${a.sfx || '-'} | narasi: ${a.narasi}`).join('\n')}` : '',
             k.slide?.length ? `SLIDE:\n${k.slide.map((s) => `${s.no}. ${s.judul} — ${s.isi} | visual: ${s.visual}`).join('\n')}` : '', `SAMPUL: ${k.sampul || '-'} | MUSIK: ${k.musik || '-'} | KARAKTER SUARA: ${p.suara || '-'}`].filter(Boolean).join('\n');
-        const suara = `"promptSuara" untuk ElevenLabs (model v3): "teks" = voiceover lengkap dalam bahasa ${p.bahasa} — ubah tanda "/" "//" menjadi tanda baca/jeda alami, pertahankan KAPITAL untuk penekanan, hapus penanda [HOOK] dst., lalu sisipkan TAG EKSPRESI berbahasa Inggris dalam kurung siku di tempat yang pas, mis. [excited], [curious], [whispers], [laughs], [sighs], [serious], [short pause] (maks ±1 per kalimat). "gaya" = deskripsi suara (umur, jenis kelamin, tempo, energi, logat). "pengaturan" = saran Stability / Similarity / Style / Speed dalam satu baris.`;
+        const suara = `"promptSuara" untuk ElevenLabs (model v3) — KHUSUS SUARA NARASI SAJA: "teks" = voiceover lengkap dalam bahasa ${p.bahasa} — ubah tanda "/" "//" menjadi tanda baca/jeda alami, pertahankan KAPITAL untuk penekanan, hapus penanda [HOOK] dst., lalu sisipkan TAG EKSPRESI VOKAL berbahasa Inggris dalam kurung siku di tempat yang pas, mis. [excited], [curious], [whispers], [laughs], [sighs], [serious], [short pause] (maks ±1 per kalimat). JANGAN masukkan musik, efek suara, atau tag non-vokal (mis. [music], [door slam], [whoosh]) — semua itu ada di prompt video. "gaya" = deskripsi suara (umur, jenis kelamin, tempo, energi, logat). "pengaturan" = saran Stability / Similarity / Style / Speed dalam satu baris.`;
+        const audio = 'AUDIO WAJIB ADA DI PROMPT VIDEO: (1) per adegan tulis "SFX:" efek suaranya (dari shot list, boleh ditambah yang wajar: whoosh transisi, pop teks, klik, ambience tempat), (2) di akhir bagian "MUSIK & SUASANA LATAR:" genre, tempo/BPM, suasana, instrumen, kapan naik/turun, dan volume tetap rendah di bawah narasi, (3) tulis jelas "Tanpa narasi/dialog di audio video — voiceover dibuat terpisah di ElevenLabs dan ditempel saat editing; sisakan ruang suara untuknya."';
         let tugas: string, contoh: string;
         if (k.format === 'feed' || k.format === 'carousel') {
             tugas = `"promptGambar": prompt pembuat gambar AI, rasio 4:5 (1080×1350). ${k.format === 'carousel' ? 'Satu blok per slide bernomor ("SLIDE 1: …") dengan gaya visual yang SAMA di semua slide (sebutkan palet warna & gaya di awal sekali saja).' : 'Satu gambar.'} Sebutkan komposisi, subjek, latar, pencahayaan, palet warna, dan ruang kosong untuk teks. Teks di gambar ditulis persis dalam tanda kutip dan disarankan ditambahkan saat editing.`;
@@ -304,24 +417,21 @@ export class Sosmed {
         } else if (g?.jenis === 'real') {
             tugas = ['Gaya: REAL — pemilik merekam mentahan sendiri, lalu memberikannya ke Claude bersama prompt edit.',
                 '"rekam": daftar bernomor apa saja yang harus direkam pemilik dengan HP (posisi kamera, framing, durasi tiap klip, aksi/kalimat yang diucapkan, tips cahaya & suara). Singkat dan praktis.',
-                '"promptEdit": prompt untuk Claude yang akan menerima video mentahan: urutan potongan per detik sesuai shot list, buang jeda & salah ucap, subtitle (1–3 kata, kata kunci disorot), teks di layar persis, zoom/punch-in, b-roll, SFX, musik latar (volume di bawah suara), koreksi warna, rasio 9:16, ekspor 1080×1920.',
+                '"promptEdit": prompt untuk Claude yang akan menerima video mentahan: urutan potongan per detik sesuai shot list, buang jeda & salah ucap, subtitle (1–3 kata, kata kunci disorot), teks di layar persis, zoom/punch-in, b-roll, SFX per adegan (sebutkan satu per satu), musik & suasana latar (genre, tempo, suasana; volume di bawah suara), koreksi warna, rasio 9:16, ekspor 1080×1920.',
                 k.format === 'reel' ? `Kalau narasi memakai suara AI (bukan suara pemilik), isi juga ${suara}` : ''].join('\n');
             contoh = '{"rekam":"…","promptEdit":"…","promptSuara":{"teks":"…","gaya":"…","pengaturan":"…"}}';
         } else {
             const gy = g || null;
             tugas = [`Gaya: ANIMASI${gy ? ` — "${gy.nama}": ${gy.deskripsi}` : ' — pilih satu gaya animasi yang paling cocok dengan isi dan sebutkan di awal prompt'}.${acuan}`,
-                '"promptVideo": satu prompt utuh untuk pembuat video AI, ditulis seperti arahan sutradara: format vertikal 9:16, durasi total, GAYA VISUAL (ulangi ciri gaya di atas), tokoh (ciri yang sama di semua adegan supaya konsisten), palet warna, lalu DAFTAR ADEGAN bernomor sesuai shot list (durasi, yang terlihat, gerak kamera, transisi, teks di layar persis). Akhiri dengan catatan subtitle dan musik. Bahasa Indonesia, kecuali istilah teknis.',
+                '"promptVideo": satu prompt utuh untuk pembuat video AI, ditulis seperti arahan sutradara: format vertikal 9:16, durasi total, GAYA VISUAL (ulangi ciri gaya di atas), tokoh (ciri yang sama di semua adegan supaya konsisten), palet warna, lalu DAFTAR ADEGAN bernomor sesuai shot list (durasi, yang terlihat, gerak kamera, transisi, teks di layar persis, SFX). Bahasa Indonesia, kecuali istilah teknis.', audio,
                 suara].join('\n');
             contoh = '{"promptVideo":"…","promptSuara":{"teks":"…","gaya":"…","pengaturan":"…"}}';
         }
         return ['Kamu penata produksi. Pemilik membuat video/gambar/suara SENDIRI dengan alat AI, jadi tulis PROMPT yang tinggal disalin-tempel. Jangan mengubah isi naskah; hanya menata penyampaian dan visualnya.', '', tugas, '', isi, '', this.ATURAN, contoh].join('\n');
     }
     terimaProduksi(k: Konten, raw: string) {
-        const j = ambilJson(raw); if (!j) throw new Error('Prompt produksi dari AI tidak terbaca.');
-        const ps = j.promptSuara && teks(j.promptSuara.teks, 10) ? { teks: teks(j.promptSuara.teks, 5000), gaya: satu(j.promptSuara.gaya, 400), pengaturan: satu(j.promptSuara.pengaturan, 300) } : undefined;
-        const v = teks(j.promptVideo, 6000), gb = teks(j.promptGambar, 6000), rk = teks(j.rekam, 3000), ed = teks(j.promptEdit, 5000);
-        if (!v && !gb && !(rk && ed)) throw new Error('Prompt produksi dari AI tidak lengkap.');
-        k.promptVideo = v || undefined; k.promptGambar = gb || undefined; k.rekam = rk || undefined; k.promptEdit = ed || undefined; k.promptSuara = ps;
+        Object.assign(k, bacaProduksi(raw));
+        if (k.pilih && k.varian) { const v = k.varian.find((x) => x.no === k.pilih); if (v) Object.assign(v, { promptVideo: k.promptVideo, promptSuara: k.promptSuara, rekam: k.rekam, promptEdit: k.promptEdit }); }
         k.status = k.aset ? k.status : 'prompt'; k.diubah = Date.now(); k.galat = undefined; this.simpan();
     }
 
