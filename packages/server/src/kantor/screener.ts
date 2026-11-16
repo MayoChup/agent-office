@@ -211,7 +211,7 @@ export class Screener {
             if (ev.persen == null) continue;
             const base = f[k]?.skor ?? 0;
             const sk = Math.max(-1, Math.min(1, 0.55 * (ev.persen / 50 - 1) + 0.45 * base));
-            f[k] = { skor: +sk.toFixed(2), label: label(sk), alasan: [`preset ${p.guru} — ${p.nama}: lolos ${ev.lolos}/${ev.dinilai} kriteria (${ev.persen}%)`, ...ev.hasil.map((h) => `${h.ok == null ? '·' : h.ok ? '+' : '−'} ${h.t}${h.ok == null ? ' (data belum ada)' : ''}`), ...(f[k]?.alasan || []).map((a) => `dasar: ${a}`)] };
+            f[k] = { skor: +sk.toFixed(2), label: label(sk), alasan: [`${ev.persen >= 50 ? '+' : '−'} preset ${p.guru} — ${p.nama}: lolos ${ev.lolos}/${ev.dinilai} kriteria (${ev.persen}%), bobot 55% dari skor ini`, ...(f[k]?.alasan || []).map((a) => (/^[+−]/.test(a) ? `${a[0]} ${a.slice(1).trim()}` : a))] };
         }
         return { semua: gabung(f, H, mode), ...f };
     }

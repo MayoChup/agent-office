@@ -48,9 +48,17 @@ export function Simulasi({ simbol, q, onTutup }: { simbol: string; q: string; on
                             <line x1={0} x2={W} y1={view.y(p.stop)} y2={view.y(p.stop)} stroke="#ef4444" strokeWidth={2} vectorEffect="non-scaling-stroke" />
                             <line x1={0} x2={W} y1={view.y(p.masuk)} y2={view.y(p.masuk)} stroke="#fff" strokeWidth={1.5} strokeDasharray="6 5" vectorEffect="non-scaling-stroke" />
                         </svg>
-                        <div className="sim-lbl t" style={{ top: `${(view.y(p.target) / Hh) * 100}%` }}><small>TARGET</small><b className="mono">{usd(p.target)}</b></div>
-                        <div className="sim-lbl m" style={{ top: `${(view.y(p.masuk) / Hh) * 100}%` }}><small>MASUK</small><b className="mono">{usd(p.masuk)}</b></div>
-                        <div className="sim-lbl s" style={{ top: `${(view.y(p.stop) / Hh) * 100}%` }}><small>STOP LOSS</small><b className="mono">{usd(p.stop)}</b></div>
+                        {(() => {
+                            // Label tidak boleh bertumpuk: jaga jarak minimal ±17% tinggi grafik.
+                            const g = 17; let t = (view.y(p.target) / Hh) * 100, m = (view.y(p.masuk) / Hh) * 100, st = (view.y(p.stop) / Hh) * 100;
+                            m = Math.max(m, t + g); st = Math.max(st, m + g);
+                            if (st > 100 - 8) { const geser = st - 92; st -= geser; m -= geser; t -= geser; }
+                            return (<>
+                                <div className="sim-lbl t" style={{ top: `${t}%` }}><small>TARGET</small><b className="mono">{usd(p.target)}</b></div>
+                                <div className="sim-lbl m" style={{ top: `${m}%` }}><small>MASUK</small><b className="mono">{usd(p.masuk)}</b></div>
+                                <div className="sim-lbl s" style={{ top: `${st}%` }}><small>STOP LOSS</small><b className="mono">{usd(p.stop)}</b></div>
+                            </>);
+                        })()}
                     </div>
                     <div className="sim-axis"><span>SEKARANG</span><i /><span>🕑 {akhirLabel}</span></div>
                     <div className="sim-grid">

@@ -63,7 +63,7 @@ const sejak = (at: number) => (at ? new Date(at).toLocaleString('id-ID', { day: 
 
 export function ScreenerView({ onOpen, q: qApi = '', presetAktif, pd }: { onOpen: (s: string) => void; q?: string; presetAktif?: { t: string; f: string }; pd?: PresetData | null }) {
     const { data, error, reload } = useApi<Data>(`/api/kantor/screener${qApi ? `?${qApi}` : ''}`, 0);
-    const [minPreset, setMinPreset] = useState(75);
+    const [minPreset, setMinPreset] = useState(50);
     const adaPreset = !!(presetAktif?.t || presetAktif?.f);
     const pctPreset = (b: Baris) => { const xs = [(b as any).preset?.teknikal?.persen, (b as any).preset?.fundamental?.persen].filter((x) => x != null) as number[]; return xs.length ? Math.min(...xs) : null; };
     const simpanan = (() => { try { return JSON.parse(localStorage.getItem(LS) || '{}'); } catch { return {}; } })();
