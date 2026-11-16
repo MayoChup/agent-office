@@ -5,9 +5,11 @@ import { useSubNavState } from '../kantor/subnav';
 import { eventBus } from '../events';
 
 export type PageKey = 'home' | 'kantor' | 'keuangan' | 'trading' | 'tugas' | 'jadwal' | 'obrolan' | 'catatan' | 'berkas';
-export type SidePanel = 'org' | 'activity' | null;
+export type SidePanel = 'org' | 'activity' | 'papan' | null;
+export type KunciPanel = 'org' | 'activity' | 'papan';
+const PANEL = new Set(['org', 'activity', 'papan']);
 
-const ALL: Array<{ key: PageKey | 'org' | 'activity'; ico: string; label: string; ket?: string }> = [
+const ALL: Array<{ key: PageKey | KunciPanel; ico: string; label: string; ket?: string }> = [
     { key: 'home', ico: '🏠', label: 'Beranda', ket: 'Ringkasan hari ini' },
     { key: 'obrolan', ico: '💬', label: 'Chat', ket: 'Ngobrol dengan tim AI' },
     { key: 'keuangan', ico: '💰', label: 'Keuangan', ket: 'Pengeluaran, anggaran, transaksi' },
@@ -16,15 +18,16 @@ const ALL: Array<{ key: PageKey | 'org' | 'activity'; ico: string; label: string
     { key: 'berkas', ico: '☁️', label: 'Berkas', ket: 'Cloud pribadi 5 GB' },
     { key: 'tugas', ico: '📋', label: 'Tugas', ket: 'Pekerjaan tim' },
     { key: 'jadwal', ico: '📅', label: 'Jadwal', ket: 'Kalender & pengingat' },
-    { key: 'kantor', ico: '🏢', label: 'Kantor', ket: 'Kantor 2D, bagan, aktivitas' },
+    { key: 'kantor', ico: '🏢', label: 'Kantor', ket: 'Kantor 2D, papan kerja AI' },
+    { key: 'papan', ico: '🗂️', label: 'Papan kerja' },
     { key: 'org', ico: '🧭', label: 'Bagan' },
     { key: 'activity', ico: '⚡', label: 'Aktivitas' }
 ];
 /** Di HP, Bagan & Aktivitas jadi menu bawah halaman Kantor, jadi tidak perlu ada di menu samping. */
-const LACI = ALL.filter((i) => i.key !== 'org' && i.key !== 'activity');
+const LACI = ALL.filter((i) => !PANEL.has(i.key));
 const MAKS_BAWAH = 5;
 
-export function Nav({ page, panel, onGo, hidup = [] }: { page: PageKey; panel: SidePanel; onGo: (k: PageKey | 'org' | 'activity') => void; hidup?: PageKey[] }) {
+export function Nav({ page, panel, onGo, hidup = [] }: { page: PageKey; panel: SidePanel; onGo: (k: PageKey | KunciPanel) => void; hidup?: PageKey[] }) {
     const tasks = useKantor((s) => s.tasks);
     const activeTasks = tasks.filter((t) => t.status === 'in_progress' || t.status === 'blocked').length;
     const sub = useSubNavState();
@@ -34,7 +37,7 @@ export function Nav({ page, panel, onGo, hidup = [] }: { page: PageKey; panel: S
     useEffect(() => { document.body.classList.toggle('menu-kecil', kecil); }, [kecil]);
     const [more, setMore] = useState(false);
     const badge = (k: string) => (k === 'tugas' ? activeTasks : 0);
-    const isActive = (k: string) => (k === 'org' || k === 'activity' ? page === 'kantor' && panel === k : page === k && !(k === 'kantor' && panel));
+    const isActive = (k: string) => (PANEL.has(k) ? page === 'kantor' && panel === k : page === k && !(k === 'kantor' && panel));
 
     useEffect(() => {
         // ☰: di HP membuka laci menu, di laptop memperkecil/melebarkan menu samping.
@@ -68,7 +71,7 @@ export function Nav({ page, panel, onGo, hidup = [] }: { page: PageKey; panel: S
                             {badge(it.key) > 0 && <span className="sb-badge">{N(badge(it.key))}</span>}
                             {hidup.includes(it.key as PageKey) && page !== it.key && <i className="sb-hidup" title="Masih terbuka — kembali tanpa memuat ulang" />}
                         </button>
-                        {it.key === 'kantor' && page === 'kantor' && ALL.filter((x) => x.key === 'org' || x.key === 'activity').map((x) => (
+                        {it.key === 'kantor' && page === 'kantor' && ALL.filter((x) => PANEL.has(x.key)).map((x) => (
                             <button key={x.key} className={`sb-item sb-anak ${isActive(x.key) ? 'on' : ''}`} onClick={() => onGo(x.key)} title={x.label}>
                                 <span className="sb-ico">{x.ico}</span><span className="sb-t"><b>{x.label}</b></span>
                             </button>

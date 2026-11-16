@@ -21,9 +21,11 @@ import { AnggaranStore, bacaTransaksi } from './kantor/anggaran';
 import { bacaPdf, urai, cocokkan } from './kantor/mutasi';
 import { presetInfo, REKOMENDASI } from './kantor/preset';
 import { profil as nasdaqProfil, fundamentalNasdaq } from './kantor/nasdaq';
-import { simulasi, langkahDari } from './kantor/simulasi';
+import { simulasi, langkahDari, ringkasJalur } from './kantor/simulasi';
 import { konteksTrading } from './kantor/konteksTrading';
 import * as porto from './kantor/portofolio';
+import { Papan, Kerja, bulanWib } from './kantor/papan';
+import { Kronos, BarK, hariBursaBerikut } from './kantor/kronos';
 import { ujiMundur, rekomendasiUji, fileUji, statusPreset, StatusUji, saranDariUji, fileSaran, namaH } from './kantor/ujimundur';
 import { cnbcChart } from './kantor/harga';
 import { telegramKirim } from './kantor/telegram';
@@ -405,7 +407,9 @@ app.get('/api/kantor/trading', requireToken, async (_req, res) => {
     res.json({ ok: true, capital: st.capital, riskPct: st.riskPct, positions, plans: st.plans, history: st.history.slice(-30), watchlist: st.watchlist, laporan });
 });
 // ── Chat ala WhatsApp dengan AI Hermes (pribadi & grup) ─────────────
+const papan = new Papan(config.dataDir);
 const percakapan = new Percakapan(config.dataDir, config.hermesBin, config.ownerName, roster, () => OfficeRoom.sharedLlm(), kuotaBerat);
+percakapan.papan = papan;
 app.get('/api/kantor/chat', requireToken, (_req, res) => { res.json({ ok: true, thread: percakapan.daftar() }); });
 app.get('/api/kantor/chat/:id', requireToken, (req, res) => { res.json({ ok: true, ...percakapan.thread(String(req.params.id)) }); });
 app.post('/api/kantor/chat/:id', requireToken, (req, res) => {
@@ -460,7 +464,8 @@ function jalankanUji(sebab: string) {
     const daftar = screener.daftarSimbol();
     if (!daftar.length) throw new Error('Ambil data pasar dulu (↻ di Trading).');
     console.log(`[Uji mundur] mulai (${sebab}), ${daftar.length} saham`);
-    ujiMundur(daftar, fileUji(config.dataDir), statusUji).then(() => buatSaran()).catch((e) => console.warn('[Uji mundur]', e?.message || e));
+    papan.jalankan({ judul: `Uji mundur ${daftar.length} saham (${sebab})`, detail: 'Menguji skor teknikal & preset di data ±5 tahun, lalu memperbarui bobot dan rekomendasi.', sumber: 'trading' },
+        () => ujiMundur(daftar, fileUji(config.dataDir), statusUji).then(() => buatSaran()), () => 'Bobot & rekomendasi di halaman Trading diperbarui.').catch((e) => console.warn('[Uji mundur]', e?.message || e));
     return true;
 }
 // Otomatis: dicek tiap jam; jalan saat hasil terakhir ≥30 hari (atau belum ada) dan di akhir pekan WIB (bursa AS tutup).
@@ -485,6 +490,29 @@ app.get('/api/kantor/ujimundur/saran', requireToken, (_req, res) => {
 });
 app.post('/api/kantor/ujimundur/jalankan', requireToken, (_req, res) => {
     try { jalankanUji('manual'); res.json({ ok: true, status: statusUji }); } catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
+});
+// ── Papan kerja AI (To do / Proses / Selesai), dibersihkan tiap ganti bulan ──
+for (const [m, judul] of [['perbaruiTeknikal', 'Memperbarui harga & sinyal teknikal ±500 saham'], ['perbaruiFundamental', 'Memperbarui data fundamental (laporan keuangan)'], ['perbaruiBerita', 'Membaca & menilai berita saham']] as const) {
+    const asli = (screener as any)[m].bind(screener);
+    (screener as any)[m] = (...a: any[]) => papan.jalankanLama({ judul, sumber: 'trading' }, () => asli(...a));
+}
+app.get('/api/kantor/papan', requireToken, async (req, res) => {
+    try {
+        const kini = papan.bulanIni();
+        const bulan = /^\d{4}-\d{2}$/.test(String(req.query.bulan || '')) ? String(req.query.bulan) : kini;
+        const nama = new Map(roster().map((a) => [a.id, a.nama]));
+        const sendiri: Kerja[] = papan.daftar(bulan);
+        // Tugas di papan Kanban Hermes (dikerjakan agen sendiri): hanya-baca.
+        const kanban = await hermesProfiles.recentTasks(70 * 86400, 600).catch(() => []);
+        const dariKanban: Kerja[] = kanban.map((t) => {
+            const status = t.status === 'done' ? 'selesai' : ['running', 'review'].includes(t.status) ? 'proses' : 'todo';
+            const ai = t.assignee || 'default';
+            return { id: `h${t.id}`, ai, nama: nama.get(ai) || ai, judul: t.title, detail: t.status === 'blocked' ? 'Terhenti — menunggu sesuatu.' : t.status === 'review' ? 'Menunggu diperiksa.' : undefined, hasil: t.result ? String(t.result).replace(/\s+/g, ' ').slice(0, 300) : undefined,
+                sumber: 'tugas' as const, status: status as Kerja['status'], dibuat: t.createdAt * 1000, mulai: t.startedAt ? t.startedAt * 1000 : undefined, selesai: t.completedAt ? t.completedAt * 1000 : undefined };
+        }).filter((k) => (bulan === kini && k.status !== 'selesai') || bulanWib(k.selesai || k.mulai || k.dibuat) === bulan);
+        const items = [...sendiri, ...dariKanban].sort((a, b) => (b.selesai || b.mulai || b.dibuat) - (a.selesai || a.mulai || a.dibuat));
+        res.json({ ok: true, bulan, bulanIni: kini, daftarBulan: papan.daftarBulan(), items, anggota: [...roster().map((a) => ({ id: a.id, nama: a.nama })), { id: 'sistem', nama: 'Sistem kantor' }] });
+    } catch (e: any) { res.status(500).json({ ok: false, error: String(e?.message || e) }); }
 });
 // ── Chat konsultasi Trading: AI menjawab HANYA dari data halaman Trading ──
 const RE_TRADING = /trad|saham|invest|analis|pasar|market|stock|portofolio|bursa/i;
@@ -531,33 +559,85 @@ app.get('/api/kantor/profil/:s', requireToken, async (req, res) => {
 });
 // Simulasi 10.000 jalur (bootstrap dari pergerakan historis saham itu sendiri).
 const simCache = new Map<string, { at: number; v: any }>();
+// ── Prediksi harga: Kronos (model dasar candlestick) — cadangan: simulasi acak dari riwayat ──
+const kronos = new Kronos(config.dataDir);
+const JALUR_KRONOS = Math.max(8, Math.min(48, Number(process.env.KRONOS_JALUR) || 24));
+app.get('/api/kantor/kronos/status', requireToken, (_req, res) => { res.json({ ok: true, ...kronos.status(), jalur: JALUR_KRONOS }); });
+app.post('/api/kantor/kronos/pasang', requireToken, (_req, res) => {
+    if (kronos.pasang()) papan.catat({ ai: 'sistem', nama: 'Sistem kantor', judul: 'Memasang Kronos (model prediksi candlestick) di VPS', sumber: 'trading', status: 'selesai' });
+    res.json({ ok: true, ...kronos.status() });
+});
+/** Jalur prediksi Kronos → ringkasan profil target/stop + pita sebaran untuk grafik. */
+async function prediksiKronos(s: string, H: number, harga: number, batang: BarK[], yT: string[], satuan: 'hari' | 'batang') {
+    const P = yT.length;
+    const n = Math.max(8, Math.min(JALUR_KRONOS, Math.round((JALUR_KRONOS * 40) / Math.max(40, P)))); // horison panjang → jalur lebih sedikit supaya CPU VPS kuat
+    const r = await papan.jalankanLama({ judul: `Prediksi Kronos ${s} (${P} ${satuan === 'hari' ? 'hari bursa' : 'batang'} ke depan)`, sumber: 'trading' }, () => kronos.prediksi(batang.slice(-Math.min(kronos.maksKonteks - P, P <= 20 ? 400 : 256)), yT, n)); // horison panjang → konteks lebih pendek supaya CPU kuat
+    const jalur = new Float64Array(n * P * 3);
+    const tutup: number[][] = [];
+    r.paths.forEach((p, i) => {
+        const cs: number[] = [];
+        p.forEach(([o, h, l, c], t) => {
+            const hi = Math.max(o, h, l, c), lo = Math.max(0.0001, Math.min(o, h, l, c)), k = (i * P + t) * 3;
+            jalur[k] = hi; jalur[k + 1] = lo; jalur[k + 2] = Math.max(0.0001, c); cs.push(Math.max(0.0001, c));
+        });
+        tutup.push(cs);
+    });
+    const kuantil = (a: number[], q: number) => { const x = [...a].sort((u, v) => u - v); return x[Math.min(x.length - 1, Math.max(0, Math.round(q * (x.length - 1))))]; };
+    const pita = Array.from({ length: P }, (_, t) => { const a = tutup.map((c) => c[t]); return { p10: +kuantil(a, 0.1).toFixed(2), p50: +kuantil(a, 0.5).toFixed(2), p90: +kuantil(a, 0.9).toFixed(2) }; });
+    const akhir = tutup.map((c) => c[P - 1]);
+    return {
+        ...ringkasJalur(harga, jalur, n, P, { profil: ['konservatif', 'moderat', 'agresif'], jalur: n, satuan }),
+        mesin: 'kronos', model: kronos.status().model, simulasi: n, pita, waktu: yT,
+        riwayat: batang.slice(-90).map((b) => ({ t: b.t, c: b.c })),
+        pNaik: Math.round((akhir.filter((x) => x > harga).length / n) * 100), medianAkhir: +kuantil(akhir, 0.5).toFixed(2), medianPct: +((kuantil(akhir, 0.5) / harga - 1) * 100).toFixed(2), detik: r.detik
+    };
+}
 app.get('/api/kantor/simulasi/:s', requireToken, async (req, res) => {
     const s = String(req.params.s).toUpperCase().slice(0, 12);
     const [H, mode] = qH(req);
-    const kunci = `${s}|${H}|${mode}`;
+    const kunci = `${s}|${H}|${mode}|${kronos.terpasang ? 'k' : 's'}`;
     const c = simCache.get(kunci);
-    if (c && Date.now() - c.at < 20 * 60_000) { res.json({ ok: true, ...c.v }); return; }
+    if (c && Date.now() - c.at < (c.v.mesin === 'kronos' && H > 1 ? 6 * 3600_000 : 20 * 60_000)) { res.json({ ok: true, ...c.v }); return; }
     try {
         const b = screener.hargaTerakhir(s);
-        let out: any;
+        let out: any, catatan = '';
         if (H === 1) {
-            // Scalping / day trading: pakai batang menit (CNBC 5 hari) — simulasi dari sekarang sampai bursa tutup.
+            // Scalping / day trading: batang menit (CNBC 5 hari).
             const r = await cnbcChart(s, '5D');
             const q0 = r.indicators.quote[0];
             const ts: number[] = r.timestamp;
             const step = ts.length > 2 ? Math.round(Math.min(...ts.slice(1).map((t, i) => t - ts[i]).filter((x) => x > 0)) / 60) : 5;
             const hari = new Map<string, number>(); for (const t of ts) { const k = new Date((t - 4 * 3600) * 1000).toISOString().slice(0, 10); hari.set(k, (hari.get(k) || 0) + 1); }
             const perSesi = Math.max(...hari.values());
-            const langkah = langkahDari(q0.high, q0.low, q0.close).filter((x) => Math.abs(x.c - 1) < 0.08);
             const harga = Number(q0.close[q0.close.length - 1]) || b?.harga || 0;
-            out = { ...simulasi(harga, langkah, Math.min(perSesi, 400), { profil: ['konservatif', 'moderat', 'agresif'], satuan: 'batang' }), menitPerBatang: step, sumber: 'CNBC (menit)' };
+            if (kronos.terpasang) {
+                try {
+                    const batang: BarK[] = ts.map((t, i) => ({ t: new Date(t * 1000).toISOString(), o: +q0.open[i], h: +q0.high[i], l: +q0.low[i], c: +q0.close[i], v: +(q0.volume?.[i] || 0) })).filter((x) => x.c > 0 && x.h >= x.l && x.o > 0);
+                    const P = Math.min(perSesi, 48);
+                    const t0 = ts[ts.length - 1];
+                    out = { ...(await prediksiKronos(s, H, harga, batang, Array.from({ length: P }, (_, i) => new Date((t0 + (i + 1) * step * 60) * 1000).toISOString()), 'batang')), menitPerBatang: step, sumber: `CNBC (batang ${step} menit)` };
+                } catch (e: any) { catatan = String(e?.message || e); }
+            }
+            if (!out) {
+                const langkah = langkahDari(q0.high, q0.low, q0.close).filter((x) => Math.abs(x.c - 1) < 0.08);
+                out = { ...simulasi(harga, langkah, Math.min(perSesi, 400), { profil: ['konservatif', 'moderat', 'agresif'], satuan: 'batang' }), mesin: 'acak', menitPerBatang: step, sumber: 'CNBC (menit)' };
+            }
         } else {
             const seri = screener.seriHarian(s);
             if (!seri || !b) throw new Error('Data harga harian belum ada. Tekan ↻ di Trading dulu.');
-            out = { ...simulasi(b.harga, langkahDari(seri.h, seri.l, seri.c), H, { profil: ['konservatif', 'moderat', 'agresif'], satuan: 'hari' }), sumber: 'harga harian 1 tahun' };
+            if (kronos.terpasang) {
+                try {
+                    const rows = await porto.harian(path.join(config.dataDir, 'portofolio-harga'), s);
+                    if (rows.length < 60) throw new Error('Riwayat harga bertanggal kurang dari 60 hari.');
+                    const batang: BarK[] = rows.filter((x) => x.c > 0 && x.h >= x.l).map((x) => ({ t: x.t, o: x.o || x.c, h: x.h, l: x.l, c: x.c, v: x.v }));
+                    const P = Math.min(H, 120);
+                    out = { ...(await prediksiKronos(s, H, batang[batang.length - 1].c, batang, hariBursaBerikut(batang[batang.length - 1].t, P), 'hari')), sumber: `harga harian ${batang.length} hari` };
+                } catch (e: any) { catatan = String(e?.message || e); }
+            }
+            if (!out) out = { ...simulasi(b.harga, langkahDari(seri.h, seri.l, seri.c), H, { profil: ['konservatif', 'moderat', 'agresif'], satuan: 'hari' }), mesin: 'acak', sumber: 'harga harian 1 tahun' };
         }
-        out.horizon = H; out.mode = mode;
-        simCache.set(kunci, { at: Date.now(), v: out });
+        out.horizon = H; out.mode = mode; out.kronos = { terpasang: kronos.terpasang, memasang: kronos.status().memasang, catatan };
+        if (!catatan) simCache.set(kunci, { at: Date.now(), v: out });
         if (simCache.size > 100) simCache.delete(simCache.keys().next().value as string);
         res.json({ ok: true, ...out });
     } catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
@@ -606,6 +686,7 @@ const investigasi = new Investigasi(config.dataDir, () => OfficeRoom.sharedLlm()
     const st = tradingDesk.load();
     return Array.from(new Set([...st.positions.map((p) => p.symbol), ...st.watchlist]));
 });
+investigasi.papan = papan;
 const jalankan = (fn: () => Promise<any>): express.RequestHandler => async (_req, res) => {
     try { res.json({ ok: true, ...(await fn()) }); } catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
 };

@@ -97,7 +97,7 @@ export function aturDana(desk: TradingDesk, x: { aksi: 'tambah' | 'hapus'; id?: 
 
 /* ── Harga harian bertanggal (cache 6 jam) ── */
 const cacheHarga = new Map<string, { at: number; rows: Bar[] }>();
-async function harian(dir: string, s: string): Promise<Bar[]> {
+export async function harian(dir: string, s: string): Promise<Bar[]> {
     const c = cacheHarga.get(s);
     if (c && Date.now() - c.at < 6 * 3600_000) return c.rows;
     const f = path.join(dir, `${s}.json`);

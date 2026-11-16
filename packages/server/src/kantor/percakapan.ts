@@ -56,6 +56,15 @@ export class Percakapan {
     private antrean = new Map<string, Promise<void>>(); // satu proses Hermes per profil
     private jalan = 0;
     private seq = Date.now();
+    /** Papan kerja AI (opsional): tiap kali AI bekerja dicatat To do → Proses → Selesai. */
+    papan?: { catat: (x: { ai: string; nama: string; judul: string; detail?: string; sumber: 'chat' | 'trading'; status?: 'todo' | 'proses' }) => string; ubah: (id: string | undefined, status: 'proses' | 'selesai' | 'gagal', hasil?: string) => void };
+    private catatKerja(thread: string, aiId: string): string | undefined {
+        if (!this.papan) return undefined;
+        const ai = this.roster().find((a) => a.id === aiId);
+        const trading = thread.startsWith('trading-');
+        const terakhir = [...this.baca(thread)].reverse().find((m) => m.dari === 'owner')?.teks || '';
+        return this.papan.catat({ ai: aiId, nama: ai?.nama || aiId, judul: trading ? 'Konsultasi di halaman Trading' : thread === 'grup' ? 'Membalas di Grup Kantor' : 'Membalas chat pribadi', detail: terakhir, sumber: trading ? 'trading' : 'chat', status: 'todo' });
+    }
 
     constructor(
         dataDir: string,
@@ -177,7 +186,8 @@ export class Percakapan {
     /** Minta satu AI membalas di thread tertentu. */
     balas(thread: string, aiId: string, opts: { instruksi?: string; berat?: boolean; data?: string; aturan?: string } = {}): Promise<void> {
         const prev = this.antrean.get(aiId) || Promise.resolve();
-        const next = prev.then(() => this.balasSekarang(thread, aiId, opts)).catch(() => undefined);
+        const kerja = this.catatKerja(thread, aiId); // masuk antrean → "To do"
+        const next = prev.then(() => this.balasSekarang(thread, aiId, { ...opts, kerja })).catch(() => undefined);
         this.antrean.set(aiId, next);
         return next;
     }
@@ -187,22 +197,29 @@ export class Percakapan {
     }
 
     /** Jalankan Hermes untuk satu AI sambil menampilkan "mengetik…". Mengembalikan teks jawaban. */
-    private async jalankanAi(thread: string, aiId: string, prompt: string, berat: boolean): Promise<string> {
+    private async jalankanAi(thread: string, aiId: string, prompt: string, berat: boolean, kerja?: string): Promise<string> {
+        const idK = kerja ?? this.catatKerja(thread, aiId);
         while (this.jalan >= 3) await new Promise((r) => setTimeout(r, 1500)); // maks 3 AI berpikir bersamaan
         this.jalan++;
         const set = this.menulis.get(thread) || new Set<string>();
         set.add(aiId); this.menulis.set(thread, set);
+        this.papan?.ubah(idK, 'proses');
         try {
-            return await hermesSekali(this.run, this.hermesBin, aiId, prompt, berat ? this.kuota?.model : undefined);
+            const out = await hermesSekali(this.run, this.hermesBin, aiId, prompt, berat ? this.kuota?.model : undefined);
+            this.papan?.ubah(idK, 'selesai', out);
+            return out;
+        } catch (e: any) {
+            this.papan?.ubah(idK, 'gagal', String(e?.message || e));
+            throw e;
         } finally {
             this.jalan--;
             set.delete(aiId);
         }
     }
 
-    private async balasSekarang(thread: string, aiId: string, opts: { instruksi?: string; berat?: boolean; data?: string; aturan?: string }) {
+    private async balasSekarang(thread: string, aiId: string, opts: { instruksi?: string; berat?: boolean; data?: string; aturan?: string; kerja?: string }) {
         const ai = this.roster().find((a) => a.id === aiId);
-        if (!ai) return;
+        if (!ai) { this.papan?.ubah(opts.kerja, 'gagal', 'AI tidak ditemukan.'); return; }
         const grup = thread === 'grup';
         const berat = Boolean(opts.berat && this.kuota?.ambil());
         const prompt = opts.data ? [
@@ -223,7 +240,7 @@ export class Percakapan {
             'Kalau diminta mengerjakan sesuatu, kerjakan dengan alat/skill-mu seperti biasa, lalu laporkan hasilnya di sini.'
         ].filter(Boolean).join('\n');
         try {
-            const out = await this.jalankanAi(thread, aiId, prompt, berat);
+            const out = await this.jalankanAi(thread, aiId, prompt, berat, opts.kerja);
             this.tambah(thread, { dari: aiId, nama: ai.nama, teks: out || '(tidak ada jawaban)', at: Date.now(), ...(berat ? { berat: true } : {}) });
         } catch (e: any) { this.gagal(thread, ai, e); }
     }

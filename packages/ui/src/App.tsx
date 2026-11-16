@@ -3,7 +3,8 @@ import { eventBus } from './events';
 import { useKantor } from './kantor/store';
 import { useSubNav } from './kantor/subnav';
 import { TopBar } from './components/TopBar';
-import { Nav, PageKey, SidePanel } from './components/Nav';
+import { Nav, PageKey, SidePanel, KunciPanel } from './components/Nav';
+import { PapanPanel } from './components/PapanPanel';
 import { OrgPanel } from './components/OrgPanel';
 import { TasksPanel } from './components/TasksPanel';
 import { ChatPage } from './pages/ChatPage';
@@ -42,8 +43,8 @@ export function App() {
     const [hidup, setHidup] = useState<PageKey[]>(() => (initialPage() === 'kantor' ? [] : [initialPage()]));
     useEffect(() => { if (page !== 'kantor') setHidup((h) => [page, ...h.filter((x) => x !== page)].slice(0, MAKS_HIDUP)); }, [page]);
 
-    const go = (k: PageKey | 'org' | 'activity') => {
-        if (k === 'org' || k === 'activity') {
+    const go = (k: PageKey | KunciPanel) => {
+        if (k === 'org' || k === 'activity' || k === 'papan') {
             setPage('kantor');
             setPanel(panel === k ? null : k);
             if (k !== 'org') setDivision(null);
@@ -117,6 +118,7 @@ export function App() {
 
             {page === 'kantor' && panel === 'org' && <OrgPanel selected={division} onSelect={setDivision} onClose={() => setPanel(null)} />}
             {page === 'kantor' && panel === 'activity' && <ActivityPanel onClose={() => setPanel(null)} />}
+            {page === 'kantor' && panel === 'papan' && <PapanPanel onClose={() => setPanel(null)} />}
             {page === 'kantor' && agentId && (
                 <AgentCard
                     id={agentId}
@@ -131,7 +133,7 @@ export function App() {
     );
 }
 
-function KantorSub({ panel, go }: { panel: SidePanel; go: (k: PageKey | 'org' | 'activity') => void }) {
-    useSubNav([{ k: 'kantor', ico: '🏢', label: 'Kantor' }, { k: 'org', ico: '🧭', label: 'Bagan' }, { k: 'activity', ico: '⚡', label: 'Aktivitas' }], panel || 'kantor', (k) => { if (k !== (panel || 'kantor')) go(k === 'kantor' ? 'kantor' : (k as 'org' | 'activity')); });
+function KantorSub({ panel, go }: { panel: SidePanel; go: (k: PageKey | KunciPanel) => void }) {
+    useSubNav([{ k: 'kantor', ico: '🏢', label: 'Kantor' }, { k: 'papan', ico: '🗂️', label: 'Papan kerja' }, { k: 'org', ico: '🧭', label: 'Bagan' }, { k: 'activity', ico: '⚡', label: 'Aktivitas' }], panel || 'kantor', (k) => { if (k !== (panel || 'kantor')) go(k === 'kantor' ? 'kantor' : (k as KunciPanel)); });
     return null;
 }

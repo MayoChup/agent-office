@@ -134,6 +134,8 @@ export class Investigasi {
     private file: string;
     private st: State;
     private sibuk = new Set<string>();
+    /** Papan kerja AI (opsional). */
+    papan?: { catat: (x: any) => string; ubah: (id: string | undefined, status: 'selesai' | 'gagal', hasil?: string) => void };
 
     constructor(dataDir: string, private llm: () => Llm, private notify: (t: string) => Promise<void>, private daftarSimbol: () => string[]) {
         const dir = path.join(dataDir, 'investigasi');
@@ -206,7 +208,9 @@ export class Investigasi {
             ].join('\n');
 
             const llm = this.llm();
+            const idK = this.papan?.catat({ ai: 'sistem', nama: 'Tim investigasi', judul: `Menyelidiki pergerakan ${simbol}`, detail: `${bukti.length} bukti (berita & dokumen) untuk sesi ${g.tanggal}`, sumber: 'trading', status: 'proses' });
             const raw = llm ? await llm.complete(SYSTEM, prompt, 1100, 3).catch(() => null) : null;
+            this.papan?.ubah(idK, raw ? 'selesai' : 'gagal', raw ? 'Analisis penyebab selesai — lihat tab Investigasi.' : 'AI tidak menjawab.');
             const j = extractJson(raw || '') || {};
             const okIds = (xs: any) => (Array.isArray(xs) ? xs : [xs]).map(String).filter((x) => ids.has(x));
             const kyk = (x: any) => (['tinggi', 'sedang', 'rendah'].includes(x) ? x : 'rendah');

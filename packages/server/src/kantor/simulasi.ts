@@ -25,7 +25,6 @@ export function simulasi(harga: number, langkah: Bar[], N: number, opsi: { profi
     const SIM = 10_000, rnd = acak(Math.round(harga * 1000) + N * 7919);
     // 1) Bangun 10.000 jalur (disimpan ringkas: maks/min berjalan & penutupan tiap langkah).
     const jalur = new Float64Array(SIM * N * 3); // [h,l,c] per langkah, nilai absolut
-    const maksNaik: number[] = [], maksTurun: number[] = [];
     for (let s = 0; s < SIM; s++) {
         let p = harga, hi = harga, lo = harga;
         for (let t = 0; t < N; t++) {
@@ -34,8 +33,23 @@ export function simulasi(harga: number, langkah: Bar[], N: number, opsi: { profi
             jalur[k] = p * b.h; jalur[k + 1] = p * b.l; jalur[k + 2] = p * b.c;
             hi = Math.max(hi, jalur[k]); lo = Math.min(lo, jalur[k + 1]); p = jalur[k + 2];
         }
-        maksNaik.push(hi / harga - 1); maksTurun.push(1 - lo / harga);
     }
+    return ringkasJalur(harga, jalur, SIM, N, opsi);
+}
+
+/**
+ * Menilai sekumpulan jalur harga masa depan (dari simulasi acak ATAU dari model prediksi seperti Kronos):
+ * menyusun profil konservatif/moderat/agresif dan menghitung seberapa sering target/stop tersentuh.
+ * jalur = [h, l, c] per langkah (nilai absolut), SIM jalur × N langkah.
+ */
+export function ringkasJalur(harga: number, jalur: Float64Array, SIM: number, N: number, opsi: { profil: Array<'konservatif' | 'moderat' | 'agresif'>; jalur?: number; atr?: number; satuan: 'hari' | 'batang' }) {
+    const maksNaik: number[] = [], maksTurun: number[] = [];
+    for (let s = 0; s < SIM; s++) {
+        let hi = harga, lo = harga;
+        for (let t = 0; t < N; t++) { const k = (s * N + t) * 3; hi = Math.max(hi, jalur[k]); lo = Math.min(lo, jalur[k + 1]); }
+        maksNaik.push(hi / harga - 1); maksTurun.push(Math.max(0, 1 - lo / harga));
+    }
+    const ambilContoh = Math.max(1, Math.floor(SIM / Math.max(1, opsi.jalur ?? 70))); // sebar contoh merata
     // 2) Profil: target dari sebaran kenaikan maksimum, stop dari sebaran penurunan maksimum, masuk konservatif = tunggu koreksi.
     const P: Record<string, Profil> = {
         konservatif: { nama: 'Konservatif', masuk: harga * (1 - q(maksTurun, 0.3) * 0.5), target: 0, stop: 0, ket: 'Tunggu koreksi kecil untuk masuk, target dekat, stop rapat.' },
@@ -70,7 +84,7 @@ export function simulasi(harga: number, langkah: Bar[], N: number, opsi: { profi
             if (akhir === 'target') { tgt++; untung += pr.target / pr.masuk - 1; }
             else if (akhir === 'stop') { stp++; untung += pr.stop / pr.masuk - 1; }
             else untung += lastC / pr.masuk - 1;
-            if (id === 'moderat' && contoh.length < (opsi.jalur ?? 70) && s % 13 === 0) {
+            if (id === 'moderat' && contoh.length < (opsi.jalur ?? 70) && s % ambilContoh === 0) {
                 const cs: number[] = [harga];
                 for (let t = 0; t < N; t++) cs.push(+jalur[(s * N + t) * 3 + 2].toFixed(4));
                 contoh.push({ c: cs, akhir });

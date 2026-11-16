@@ -1681,3 +1681,53 @@ body.no-office #phaser-container { visibility: hidden; }
 .porto-sub { margin: 14px 0 6px; font-size: 14px; }
 .porto-stat { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 @media (max-width: 640px) { .ph-grid, .porto-stat { grid-template-columns: 1fr 1fr; } .ph-utama > b { font-size: 28px; } .porto-box { height: 230px; } }
+/* Papan kerja AI */
+.papan { position: absolute; top: 76px; left: 12px; right: 12px; bottom: 12px; display: flex; flex-direction: column; gap: 10px; padding: 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); backdrop-filter: blur(14px); overflow: hidden; animation: slideIn 0.22s ease-out; }
+@media (min-width: 768px) { .papan { left: 236px; } body.menu-kecil .papan { left: 92px; } }
+.pk-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
+.pk-judul-besar h2 { margin: 0; font-size: 19px; } .pk-judul-besar small { color: var(--muted); font-size: 12px; }
+.pk-saring { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.pk-saring select { font: inherit; font-size: 12.5px; padding: 7px 10px; border-radius: 10px; border: 1px solid var(--line-strong); background: var(--panel-solid); color: var(--text); }
+.pk-rekap { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; font-size: 12px; color: var(--muted); }
+.pk-rekap button { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: transparent; color: var(--text); border-radius: 999px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
+.pk-rekap button.on { border-color: #15803d; background: rgba(21, 128, 61, 0.1); }
+.pk-rekap i { width: 8px; height: 8px; border-radius: 50%; }
+.pk-tab { display: none; }
+.pk-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.pk-kolom { display: flex; flex-direction: column; min-height: 0; border-radius: 14px; background: rgba(148, 163, 184, 0.08); border-top: 3px solid #94a3b8; }
+.pk-kolom.k-proses { border-top-color: #f59e0b; } .pk-kolom.k-selesai { border-top-color: #16a34a; }
+.pk-kh { display: flex; align-items: baseline; gap: 8px; padding: 10px 12px 6px; }
+.pk-kh b { font-size: 14px; } .pk-kh span { font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 999px; background: rgba(148, 163, 184, 0.2); } .pk-kh small { color: var(--muted); font-size: 11.5px; margin-left: auto; }
+.pk-isi { flex: 1; overflow-y: auto; padding: 4px 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.pk-kartu { text-align: left; display: flex; flex-direction: column; gap: 5px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel-solid); color: var(--text); cursor: pointer; font: inherit; }
+.pk-kartu:hover { border-color: var(--line-strong); }
+.pk-kartu.gagal { border-color: rgba(239, 68, 68, 0.4); }
+.pk-atas { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.pk-av { width: 20px; height: 20px; border-radius: 50%; color: #fff; font-size: 11px; font-weight: 700; display: grid; place-items: center; flex: none; }
+.pk-nama { font-weight: 600; } .pk-sumber { margin-left: auto; color: var(--muted); font-size: 11px; white-space: nowrap; }
+.pk-judul { font-size: 13.5px; font-weight: 600; line-height: 1.35; }
+.pk-detail { font-size: 12px; color: var(--muted); line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.pk-kartu.buka .pk-detail { -webkit-line-clamp: unset; }
+.pk-hasil { font-size: 12px; line-height: 1.5; padding: 8px 10px; border-radius: 8px; background: rgba(148, 163, 184, 0.1); }
+.pk-bawah { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--muted); }
+.pk-bawah em { font-style: normal; margin-left: auto; } .pk-gagal { color: #ef4444; font-weight: 700; } .pk-lihat { text-decoration: underline; }
+.pk-jalan { display: inline-flex; align-items: center; gap: 6px; color: #d97706; } .pk-jalan i { width: 7px; height: 7px; border-radius: 50%; background: #f59e0b; animation: pk-denyut 1.2s infinite; }
+@keyframes pk-denyut { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+.pk-hari { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; margin-top: 6px; }
+.pk-kosong { font-size: 12.5px; color: var(--muted); padding: 14px 4px; text-align: center; }
+@media (max-width: 767px) {
+  .papan { top: 70px; left: 8px; right: 8px; bottom: 84px; padding: 12px; }
+  .pk-tab { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; border-radius: 12px; background: rgba(148, 163, 184, 0.12); }
+  .pk-tab button { border: none; background: transparent; color: var(--muted); padding: 8px 4px; border-radius: 9px; font-size: 13px; font-weight: 600; }
+  .pk-tab button.on { background: var(--panel-solid); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+  .pk-grid { grid-template-columns: 1fr; } .pk-kolom { display: none; } .pk-kolom.tampil { display: flex; } .pk-kh { display: none; }
+  .pk-saring select { flex: 1; min-width: 0; }
+}
+/* Prediksi Kronos */
+.sim-pasang { display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: 14px; border: 1px dashed rgba(45, 212, 191, 0.5); background: rgba(45, 212, 191, 0.07); font-size: 13px; }
+.sim-pasang p { margin: 0; line-height: 1.55; color: var(--muted); } .sim-pasang small { color: var(--muted); } .sim-pasang .btn { align-self: flex-start; }
+.sim-log { display: flex; flex-direction: column; gap: 3px; } .sim-log code { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sim-kronos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.sim-kronos > div { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px; background: rgba(148, 163, 184, 0.08); }
+.sim-kronos small { font-size: 11.5px; color: var(--muted); } .sim-kronos b { font-size: 16px; } .sim-kronos em { font-style: normal; font-size: 12.5px; }
+@media (max-width: 640px) { .sim-kronos { grid-template-columns: 1fr; } }
