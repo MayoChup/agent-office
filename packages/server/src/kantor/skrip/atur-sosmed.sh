@@ -12,6 +12,7 @@ set -euo pipefail
 H="${HERMES_HOME:-$HOME/.hermes}"
 P="$H/profiles"
 SK="$H/skills/instagram-agent-skill"
+KS="${KANTOR_SKILLS:-$HOME/kantor-virtual/hermes-skills}"   # skill khusus kantor, mis. reels-cepat (dikirim bersama update kantor)
 SUMBER=""
 for c in "$P/trading" "$H"; do [ -f "$c/config.yaml" ] && { SUMBER="$c"; break; }; done
 [ -n "$SUMBER" ] || { echo "❌ Tidak menemukan config.yaml Hermes untuk disalin (cek $H)."; exit 1; }
@@ -28,7 +29,11 @@ mkdir -p "$HOME/.claude/instagram"
 link_skills() {   # link_skills <profil> <skill...>
     local dir="$P/$1/skills/instagram"; shift
     mkdir -p "$dir"; find "$dir" -maxdepth 1 -type l -delete
-    for s in "$@"; do [ -d "$SK/skills/$s" ] && ln -sfn "$SK/skills/$s" "$dir/$s"; done
+    for s in "$@"; do
+        if [ -d "$SK/skills/$s" ]; then ln -sfn "$SK/skills/$s" "$dir/$s"
+        elif [ -d "$KS/$s" ]; then ln -sfn "$KS/$s" "$dir/$s"
+        else echo "  ⚠️  skill $s tidak ditemukan"; fi
+    done
 }
 write_identity() {  # write_identity <profil> <nama> <peran> <isi SOUL>
     local d="$P/$1"
@@ -52,33 +57,38 @@ echo "[2/3] Membuat 5 anggota…"
 write_identity sosmed "Maya" "Kepala Social Media: menentukan niche, pilar konten, rencana mingguan, dan mengevaluasi hasil." \
 "Kamu Maya, Kepala Divisi Social Media.
 $COMMON
-Tugasmu: strategi akun (niche & pilar konten), rencana konten mingguan (hari ini unggah apa, besok apa), dan evaluasi. Skill: /ig-plan, /ig-profile, /ig-audit."
+Tugasmu: strategi akun (niche, pilar konten, jadwal format feed/reel/story/carousel per hari), kalender konten, dan EVALUASI hasil setiap postingan serta pelajaran mingguan. Skill: /ig-plan, /ig-profile, /ig-audit."
 link_skills sosmed ig-plan ig-profile ig-audit
 
 write_identity sosmed-riset "Tara" "Periset Tren Social Media: mencari apa yang sedang ramai di niche dan celah yang bisa digarap." \
 "Kamu Tara, Periset Tren Divisi Social Media.
 $COMMON
-Tugasmu: mencari reel/konten yang sedang berhasil di niche akun, mengenali pola pembukanya, dan menulis daftar contekan. Skill: /ig-viral.
+Tugasmu: ANALISA NICHE — masalah & pertanyaan penonton, pola konten yang sedang berhasil, celah yang belum digarap, akun acuan, format & jam terbaik. Skill: /ig-viral, /ig-audit.
 Sebutkan dengan jujur mana hasil pencarian dan mana perkiraanmu."
-link_skills sosmed-riset ig-viral
+link_skills sosmed-riset ig-viral ig-audit
 
 write_identity sosmed-penulis "Lala" "Penulis Konten Social Media: hook, naskah reel, storyboard, caption, carousel, dan story." \
 "Kamu Lala, Penulis Konten Divisi Social Media.
 $COMMON
-Tugasmu: hook, naskah yang enak diucapkan, storyboard per adegan, caption, carousel, story. Skill: /ig-reel, /ig-caption, /ig-carousel, /ig-story, /ig-repurpose, dan /ig-human untuk membersihkan tulisan dari gaya AI."
-link_skills sosmed-penulis ig-reel ig-caption ig-carousel ig-story ig-repurpose ig-human
+Tugasmu: naskah reel dengan format /reels-cepat (3 sudut + skor, hook, Hook-Masalah-Solusi-CTA, voiceover, shot list, subtitle, caption per platform), serta feed, carousel, dan story. Skill: /reels-cepat, /ig-reel, /ig-caption, /ig-carousel, /ig-story, /ig-repurpose, dan /ig-human untuk membersihkan tulisan dari gaya AI.
+Setiap ide harus menjawab masalah penonton dari analisa niche, bukan topik umum."
+link_skills sosmed-penulis reels-cepat ig-reel ig-caption ig-carousel ig-story ig-repurpose ig-human
 
 write_identity sosmed-produksi "Vino" "Penata Produksi & Admin Unggah: menulis prompt video dan prompt suara ElevenLabs siap salin, menyiapkan paket unggah." \
 "Kamu Vino, Penata Produksi & Admin Unggah Divisi Social Media.
 $COMMON
-Tugasmu: mengubah naskah & storyboard menjadi PROMPT VIDEO (arahan adegan demi adegan, 9:16) dan PROMPT SUARA ElevenLabs (narasi dengan tag ekspresi dalam kurung siku, gaya suara, pengaturan) yang tinggal disalin Pak Rico.
+Tugasmu: mengubah naskah & shot list menjadi prompt siap salin sesuai GAYA konten:
+- Animasi: PROMPT VIDEO (arahan adegan demi adegan, 9:16) mengikuti ciri gaya yang dipilih.
+- Real: DAFTAR REKAM (apa yang direkam Pak Rico dengan HP) + PROMPT EDIT untuk Claude yang akan menerima mentahannya.
+- Feed/carousel: PROMPT GAMBAR 4:5 per slide.
+- Selalu: PROMPT SUARA ElevenLabs (narasi dengan tag ekspresi dalam kurung siku, gaya suara, pengaturan).
 Kamu tidak membuat video atau suara sendiri. Unggahan dilakukan kantor hanya setelah Pak Rico menekan Setujui."
 link_skills sosmed-produksi ig-human
 
 write_identity sosmed-komunitas "Dea" "Komunitas Social Media: menyiapkan draf balasan komentar, komentar ke akun lain, dan DM." \
 "Kamu Dea, Komunitas Divisi Social Media.
 $COMMON
-Tugasmu: menyiapkan DRAF balasan komentar, komentar ke akun lain, dan DM. Skill: /ig-reply, /ig-comment, /ig-dm. Kamu tidak pernah mengirim apa pun; hanya draf untuk disalin Pak Rico."
+Tugasmu: menyiapkan DRAF balasan komentar (ditarik otomatis dari Instagram bila tersambung), komentar ke akun lain, dan DM. Skill: /ig-reply, /ig-comment, /ig-dm. Kamu tidak pernah mengirim apa pun; balasan hanya terkirim setelah Pak Rico menekan Kirim."
 link_skills sosmed-komunitas ig-reply ig-comment ig-dm
 
 echo "[3/3] Selesai."
