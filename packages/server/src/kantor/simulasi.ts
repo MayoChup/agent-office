@@ -58,10 +58,12 @@ export function simulasi(harga: number, langkah: Bar[], N: number, opsi: { profi
             let aktif = id !== 'konservatif', akhir: 'target' | 'stop' | 'tidak' = 'tidak', lastC = harga;
             for (let t = 0; t < N; t++) {
                 const k = (s * N + t) * 3, H = jalur[k], L = jalur[k + 1]; lastC = jalur[k + 2];
-                if (!aktif) { if (L <= pr.masuk) aktif = true; else continue; }
+                let baruMasuk = false;
+                if (!aktif) { if (L <= pr.masuk) { aktif = true; baruMasuk = true; } else continue; }
                 // Kalau target & stop tersentuh di langkah yang sama, dianggap stop dulu (lebih hati-hati).
                 if (L <= pr.stop) { akhir = 'stop'; break; }
-                if (H >= pr.target) { akhir = 'target'; hari.push(t + 1); break; }
+                // Di langkah saat baru masuk, urutan tertinggi/terendah tidak diketahui → target belum dihitung.
+                if (!baruMasuk && H >= pr.target) { akhir = 'target'; hari.push(t + 1); break; }
             }
             if (!aktif) continue;
             masuk++;
