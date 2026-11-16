@@ -57,7 +57,7 @@ export class Percakapan {
     private jalan = 0;
     private seq = Date.now();
     /** Papan kerja AI (opsional): tiap kali AI bekerja dicatat To do → Proses → Selesai. */
-    papan?: { catat: (x: { ai: string; nama: string; judul: string; detail?: string; sumber: 'chat' | 'trading'; status?: 'todo' | 'proses' }) => string; ubah: (id: string | undefined, status: 'proses' | 'selesai' | 'gagal', hasil?: string) => void };
+    papan?: { catat: (x: { ai: string; nama: string; judul: string; detail?: string; sumber: 'chat' | 'trading' | 'tugas'; status?: 'todo' | 'proses' }) => string; ubah: (id: string | undefined, status: 'proses' | 'selesai' | 'gagal', hasil?: string) => void };
     private catatKerja(thread: string, aiId: string): string | undefined {
         if (!this.papan) return undefined;
         const ai = this.roster().find((a) => a.id === aiId);
@@ -130,6 +130,30 @@ export class Percakapan {
         const msg = this.tambah(thread, { dari: 'owner', nama: this.ownerName, teks: t, at: Date.now() });
         this.balas(thread, aiId, { data, aturan }).catch((e) => console.warn('[Chat data]', e?.message || e));
         return msg;
+    }
+
+    /**
+     * Beri pekerjaan langsung ke satu AI (lewat Hermes, antre per AI) tanpa menulis ke chat.
+     * Tercatat di papan kerja atas nama AI itu. Mengembalikan teks hasilnya.
+     */
+    tugas(aiId: string, judul: string, prompt: string, detail?: string, sumber: 'tugas' | 'trading' = 'tugas'): Promise<string> {
+        const ai = this.roster().find((a) => a.id === aiId);
+        if (!ai) return Promise.reject(new Error(`AI "${aiId}" tidak ada di kantor.`));
+        const kerja = this.papan?.catat({ ai: aiId, nama: ai.nama, judul, detail, sumber, status: 'todo' });
+        const prev = this.antrean.get(aiId) || Promise.resolve();
+        const hasil = prev.then(() => this.jalankanAi(`kerja-${aiId}`, aiId, prompt, false, kerja));
+        this.antrean.set(aiId, hasil.then(() => undefined, () => undefined));
+        return hasil;
+    }
+    /** Pesan dari AI/sistem ke sebuah thread tanpa memicu balasan (mis. laporan HR, permintaan persetujuan Joni). */
+    pesan(thread: string, dari: string, nama: string, teks: string): Pesan {
+        return this.tambah(thread, { dari, nama, teks: teks.slice(0, 6000), at: Date.now() });
+    }
+    /** Kapan terakhir Pak Rico menulis di chat mana pun (untuk "minggu ini belum ada perintah"). */
+    terakhirOwner(): number {
+        let t = 0;
+        for (const id of ['grup', ...this.roster().map((a) => a.id)]) for (const m of this.baca(id)) if (m.dari === 'owner' && m.at > t) t = m.at;
+        return t;
     }
 
     /** Anggota yang di-@sebut (atau @semua = para kepala). Kosong = Joni yang menentukan. */

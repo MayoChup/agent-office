@@ -14,6 +14,7 @@ import { UA, yahooChart, hargaHarian, statusHarga, cnbcChart } from './harga';
 import { hitungInd, Ind, Fund, PRESET, evaluasi } from './preset';
 import { fundamentalNasdaq } from './nasdaq';
 import { bacaModel, hModel, skorModel, statusModel } from './bobot';
+import { BeritaTerkait, gabungBerita } from './beritaTerkait';
 export { yahooChart, statusHarga };
 const SEC_UA = 'KantorRico research kantor-rico@users.noreply.github.com';
 const SP500_CSV = 'https://raw.githubusercontent.com/datasets/s-and-p-500-companies/main/data/constituents.csv';
@@ -169,6 +170,9 @@ export class Screener {
     progres = '';
 
     private fileBobot: string;
+    /** Berita terkait (global/tidak langsung) — dipasang dari index.ts. */
+    terkait?: BeritaTerkait;
+    bersihkanCache() { this.cacheData.clear(); }
     constructor(dataDir: string, private watchlist: () => string[], private deskDir = '') {
         this.fileBobot = path.join(dataDir, 'bobot-teknikal.json');
         const dir = path.join(dataDir, 'screener');
@@ -199,6 +203,11 @@ export class Screener {
     /** Seri harga harian (h,l,c[,o]) untuk simulasi. */
     seriHarian(s: string) { return this.seriDari(s); }
     daftarSimbol() { return this.st.baris.map((b) => b.s); }
+    /** Nama sektor & industri yang ada di semesta saham (untuk pemetaan berita terkait). */
+    kelompok() {
+        const hit = (k: 'sektor' | 'industri') => { const m = new Map<string, number>(); for (const b of this.st.baris) { const v = (b as any)[k]; if (v) m.set(v, (m.get(v) || 0) + 1); } return [...m.entries()].sort((a, b) => b[1] - a[1]).map(([n]) => n); };
+        return { sektor: hit('sektor'), industri: hit('industri').slice(0, 70) };
+    }
     hargaTerakhir(s: string) { return this.st.baris.find((b) => b.s === s) || null; }
     private segarkanHorison() { this.seri.clear(); this.proyCache.clear(); }
 
@@ -224,7 +233,7 @@ export class Screener {
     skor(b: Baris, sari = bacaLaporanSari(this.deskDir), H = 20, mode = '', pt = '', pf = ''): Record<string, Faktor | null> {
         const pr = this.proyeksiH(b, H);
         const f: Record<string, Faktor | null> = {
-            teknikal: this.teknikalDasar(b, H, mode, pr), fundamental: skorFundamental(b), berita: skorBerita(this.st.berita?.[b.s]),
+            teknikal: this.teknikalDasar(b, H, mode, pr), fundamental: skorFundamental(b), berita: this.terkait ? gabungBerita(skorBerita(this.st.berita?.[b.s]), this.terkait.skor(b), this.terkait.atur) : skorBerita(this.st.berita?.[b.s]),
             whales: skorWhales(b, b.x, this.st.orang?.[b.s], sari.get(b.s) || 0)
         };
         // Preset guru aktif: skor faktor ikut kepatuhan preset (tidak harus lolos semua kriteria).

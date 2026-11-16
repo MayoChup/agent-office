@@ -17,6 +17,7 @@ import { SahamDetail } from './trading/SahamDetail';
 import { SaranUji } from './trading/SaranUji';
 import { TradingChat } from './trading/TradingChat';
 import { Portofolio } from './trading/Portofolio';
+import { BeritaTerkaitKartu } from './trading/BeritaTerkait';
 import { PetaPanas } from './trading/PetaPanas';
 import { PetaBerita } from './trading/PetaBerita';
 import { WatchlistView } from './trading/WatchlistView';
@@ -161,6 +162,7 @@ export function TradingPage() {
             )}
             {!saham && tab === 'pilihan' && sc.data && sc.data.baris.length > 0 && <PilihanView data={sc.data} faktor={faktor} setFaktor={setF} onOpen={buka} watchlist={[...(data?.watchlist || []), ...(data?.positions || []).map((p) => p.symbol)]} />}
             {!saham && tab === 'panas' && sc.data && sc.data.baris.length > 0 && <PetaPanas data={sc.data} onOpen={buka} watch={[...(data?.watchlist || []), ...(data?.positions || []).map((p) => p.symbol)]} />}
+            {!saham && tab === 'berita' && <BeritaTerkaitKartu onUbah={() => sc.reload()} />}
             {!saham && tab === 'berita' && <PetaBerita onOpen={buka} />}
             {!saham && tab === 'watchlist' && sc.data && <WatchlistView data={sc.data} faktor={faktor} onOpen={buka} />}
             {!saham && tab === 'investigasi' && <InvestigasiView />}

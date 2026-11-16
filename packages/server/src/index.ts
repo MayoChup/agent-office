@@ -26,6 +26,10 @@ import { konteksTrading } from './kantor/konteksTrading';
 import * as porto from './kantor/portofolio';
 import { Papan, Kerja, bulanWib } from './kantor/papan';
 import { Kronos, BarK, hariBursaBerikut } from './kantor/kronos';
+import { BeritaTerkait } from './kantor/beritaTerkait';
+import ATUR_HR from './kantor/skrip/atur-hr.sh';
+import { execFile as jalankanBerkas } from 'child_process';
+import { Hr, statistik, kunciMinggu, ambilUsulanJson, ID_HR, ID_JONI, StatAi } from './kantor/hr';
 import { ujiMundur, rekomendasiUji, fileUji, statusPreset, StatusUji, saranDariUji, fileSaran, namaH } from './kantor/ujimundur';
 import { cnbcChart } from './kantor/harga';
 import { telegramKirim } from './kantor/telegram';
@@ -491,29 +495,180 @@ app.get('/api/kantor/ujimundur/saran', requireToken, (_req, res) => {
 app.post('/api/kantor/ujimundur/jalankan', requireToken, (_req, res) => {
     try { jalankanUji('manual'); res.json({ ok: true, status: statusUji }); } catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
 });
+// ── Berita terkait (global / tidak langsung): dipetakan Nina, dipisah dari berita langsung ──
+const beritaTerkait = new BeritaTerkait(config.dataDir);
+screener.terkait = beritaTerkait;
+const ID_NINA = 'trading-berita';
+async function perbaruiBeritaTerkait(sebab: string) {
+    if (beritaTerkait.sibuk) return;
+    const { sektor, industri } = screener.kelompok();
+    if (!sektor.length) throw new Error('Ambil data pasar dulu (↻ di Trading).');
+    const st = tradingDesk.load();
+    const pantau = Array.from(new Set([...st.positions.map((p) => p.symbol), ...st.watchlist])).slice(0, 40);
+    const nina = roster().find((a) => a.id === ID_NINA);
+    await beritaTerkait.perbarui(sektor, industri, pantau, async (prompt) => {
+        // Utama: Nina (profil Hermes pembaca berita). Cadangan: otak AI gratis kantor, tetap dicatat sebagai kerja tim berita.
+        if (nina) {
+            try { return { teks: await percakapan.tugas(ID_NINA, 'Memetakan berita dunia ke saham (berita terkait)', prompt, `Mencari efek domino dari berita global (${sebab}).`, 'trading'), oleh: nina.nama }; }
+            catch (e: any) { console.warn('[Berita terkait] Nina gagal, pakai cadangan:', e?.message || e); }
+        }
+        const teks = await papan.jalankan({ ai: nina ? ID_NINA : 'sistem', nama: nina ? `${nina.nama} (otak cadangan)` : 'Sistem kantor', judul: 'Memetakan berita dunia ke saham (berita terkait)', detail: `Mencari efek domino dari berita global (${sebab}).`, sumber: 'trading' },
+            async () => { const o = await OfficeRoom.sharedLlm()?.complete('Kamu analis berita pasar saham. Jawab hanya JSON valid.', prompt, 1800, 3); if (!o) throw new Error('AI gratis tidak menjawab.'); return o; });
+        return { teks, oleh: nina ? `${nina.nama} (otak cadangan)` : 'AI kantor' };
+    });
+    screener.bersihkanCache();
+}
+// Tiap jam: kalau peta berita terkait sudah basi (>30 jam) dan fitur aktif → perbarui.
+setInterval(() => { if (beritaTerkait.atur.aktif && !beritaTerkait.segar && screener.daftarSimbol().length) perbaruiBeritaTerkait('otomatis harian').catch((e) => console.warn('[Berita terkait]', e?.message || e)); }, 3600_000);
+setTimeout(() => { if (beritaTerkait.atur.aktif && !beritaTerkait.segar && screener.daftarSimbol().length) perbaruiBeritaTerkait('otomatis').catch((e) => console.warn('[Berita terkait]', e?.message || e)); }, 120_000);
+app.get('/api/kantor/berita-terkait', requireToken, (_req, res) => { res.json({ ok: true, data: beritaTerkait.data, atur: beritaTerkait.atur, sibuk: beritaTerkait.sibuk }); });
+app.post('/api/kantor/berita-terkait/atur', requireToken, (req, res) => { beritaTerkait.setAtur(req.body || {}); screener.bersihkanCache(); res.json({ ok: true, atur: beritaTerkait.atur }); });
+app.post('/api/kantor/berita-terkait/perbarui', requireToken, (_req, res) => {
+    perbaruiBeritaTerkait('diminta Pak Rico').catch((e) => console.warn('[Berita terkait]', e?.message || e));
+    res.json({ ok: true, sibuk: true });
+});
+
 // ── Papan kerja AI (To do / Proses / Selesai), dibersihkan tiap ganti bulan ──
 for (const [m, judul] of [['perbaruiTeknikal', 'Memperbarui harga & sinyal teknikal ±500 saham'], ['perbaruiFundamental', 'Memperbarui data fundamental (laporan keuangan)'], ['perbaruiBerita', 'Membaca & menilai berita saham']] as const) {
     const asli = (screener as any)[m].bind(screener);
     (screener as any)[m] = (...a: any[]) => papan.jalankanLama({ judul, sumber: 'trading' }, () => asli(...a));
 }
+/** Semua pekerjaan AI satu bulan: catatan kantor + tugas papan Kanban Hermes (hanya-baca). */
+async function semuaKerja(bulan?: string): Promise<{ bulan: string; kini: string; items: Kerja[] }> {
+    const kini = papan.bulanIni();
+    const bln = bulan && /^\d{4}-\d{2}$/.test(bulan) ? bulan : kini;
+    const nama = new Map(roster().map((a) => [a.id, a.nama]));
+    const sendiri: Kerja[] = papan.daftar(bln);
+    const kanban = await hermesProfiles.recentTasks(70 * 86400, 600).catch(() => []);
+    const dariKanban: Kerja[] = kanban.map((t) => {
+        const status = t.status === 'done' ? 'selesai' : ['running', 'review'].includes(t.status) ? 'proses' : 'todo';
+        const ai = t.assignee || 'default';
+        return { id: `h${t.id}`, ai, nama: nama.get(ai) || ai, judul: t.title, detail: t.status === 'blocked' ? 'Terhenti — menunggu sesuatu.' : t.status === 'review' ? 'Menunggu diperiksa.' : undefined, hasil: t.result ? String(t.result).replace(/\s+/g, ' ').slice(0, 300) : undefined,
+            sumber: 'tugas' as const, status: status as Kerja['status'], dibuat: t.createdAt * 1000, mulai: t.startedAt ? t.startedAt * 1000 : undefined, selesai: t.completedAt ? t.completedAt * 1000 : undefined };
+    }).filter((k) => (bln === kini && k.status !== 'selesai') || bulanWib(k.selesai || k.mulai || k.dibuat) === bln);
+    const items = [...sendiri, ...dariKanban].sort((x, y) => (y.selesai || y.mulai || y.dibuat) - (x.selesai || x.mulai || x.dibuat));
+    return { bulan: bln, kini, items };
+}
 app.get('/api/kantor/papan', requireToken, async (req, res) => {
     try {
-        const kini = papan.bulanIni();
-        const bulan = /^\d{4}-\d{2}$/.test(String(req.query.bulan || '')) ? String(req.query.bulan) : kini;
-        const nama = new Map(roster().map((a) => [a.id, a.nama]));
-        const sendiri: Kerja[] = papan.daftar(bulan);
-        // Tugas di papan Kanban Hermes (dikerjakan agen sendiri): hanya-baca.
-        const kanban = await hermesProfiles.recentTasks(70 * 86400, 600).catch(() => []);
-        const dariKanban: Kerja[] = kanban.map((t) => {
-            const status = t.status === 'done' ? 'selesai' : ['running', 'review'].includes(t.status) ? 'proses' : 'todo';
-            const ai = t.assignee || 'default';
-            return { id: `h${t.id}`, ai, nama: nama.get(ai) || ai, judul: t.title, detail: t.status === 'blocked' ? 'Terhenti — menunggu sesuatu.' : t.status === 'review' ? 'Menunggu diperiksa.' : undefined, hasil: t.result ? String(t.result).replace(/\s+/g, ' ').slice(0, 300) : undefined,
-                sumber: 'tugas' as const, status: status as Kerja['status'], dibuat: t.createdAt * 1000, mulai: t.startedAt ? t.startedAt * 1000 : undefined, selesai: t.completedAt ? t.completedAt * 1000 : undefined };
-        }).filter((k) => (bulan === kini && k.status !== 'selesai') || bulanWib(k.selesai || k.mulai || k.dibuat) === bulan);
-        const items = [...sendiri, ...dariKanban].sort((a, b) => (b.selesai || b.mulai || b.dibuat) - (a.selesai || a.mulai || a.dibuat));
-        res.json({ ok: true, bulan, bulanIni: kini, daftarBulan: papan.daftarBulan(), items, anggota: [...roster().map((a) => ({ id: a.id, nama: a.nama })), { id: 'sistem', nama: 'Sistem kantor' }] });
+        const r = await semuaKerja(String(req.query.bulan || ''));
+        res.json({ ok: true, bulan: r.bulan, bulanIni: r.kini, daftarBulan: papan.daftarBulan(), items: r.items, anggota: [...roster().map((a) => ({ id: a.id, nama: a.nama })), { id: 'sistem', nama: 'Sistem kantor' }], menunggu: hr.menunggu.length });
     } catch (e: any) { res.status(500).json({ ok: false, error: String(e?.message || e) }); }
 });
+
+// ── HR: review kinerja berkala, tidak boleh ada AI menganggur, delegasi lewat persetujuan Pak Rico ──
+const hr = new Hr(config.dataDir);
+if (!hr.st.reviewAt) { hr.st.reviewAt = Date.now() - (hr.hariReview - 7) * 86400_000; hr.simpan(); } // review pertama ±seminggu setelah dipasang (butuh data dulu)
+const kabariTelegram = telegramNotifier(config.hermesHome);
+const namaJoni = () => roster().find((a) => a.id === ID_JONI)?.nama || 'Joni';
+/** Statistik N hari: gabungan bulan ini + bulan lalu (supaya awal bulan tidak terlihat kosong). */
+async function statHr(hari: number): Promise<StatAi[]> {
+    const kini = papan.bulanIni();
+    const lalu = bulanWib(Date.now() - 31 * 86400_000);
+    const a = (await semuaKerja(kini)).items, b = lalu !== kini ? papan.daftar(lalu) : [];
+    return statistik([...a, ...b], roster().filter((x) => x.id !== ID_HR).map((x) => ({ id: x.id, nama: x.nama, peran: x.peran })), hari);
+}
+const TERLARANG = /\b(beli|membeli|jual|menjual|transfer|kirim(kan)?\s+(email|pesan|uang)|posting|unggah|hapus|menghapus|bayar|membayar)\b/i;
+/** Joni menyusun usulan tugas untuk AI yang menganggur lalu MEMINTA PERSETUJUAN Pak Rico lewat chat pribadi. */
+async function usulkanTugas(ngg: StatAi[], pembuka: string, tanyaPerintah: boolean) {
+    const desk = new Map(roster().map((a) => [a.id, a.deskripsi]));
+    let dariAi = new Map<string, { judul: string; isi: string }>();
+    if (ngg.length) {
+        try { dariAi = ambilUsulanJson(await percakapan.tugas(ID_JONI, 'Menyusun usulan tugas untuk anggota yang menganggur', hr.promptUsulan(ngg, desk), `${ngg.length} anggota belum punya pekerjaan minggu ini: ${ngg.map((s) => s.nama).join(', ')}`), new Set(ngg.map((s) => s.id))); }
+        catch (e: any) { console.warn('[HR] Joni gagal menyusun usulan, pakai cadangan:', e?.message || e); }
+    }
+    const baru = hr.tambahUsulan(ngg.map((s) => {
+        const u = dariAi.get(s.id); const aman = u && !TERLARANG.test(`${u.judul} ${u.isi}`) ? u : hr.usulanPolos(s);
+        return { s, judul: aman.judul, isi: aman.isi, alasan: `Tidak ada pekerjaan selesai maupun berjalan dalam 7 hari terakhir.` };
+    }));
+    const baris: string[] = [pembuka];
+    if (baru.length) {
+        baris.push('', 'Saya usul mendelegasikan tugas berikut — mohon persetujuan Bapak:');
+        baru.forEach((u, i) => baris.push(`${i + 1}. **${u.nama}** — ${u.judul}\n   ${u.isi}`));
+        baris.push('', 'Setujui / tolak / ubah di **Kantor → Papan kerja → Persetujuan**. Tugas baru saya kirim setelah Bapak setuju.');
+    }
+    if (tanyaPerintah) baris.push('', 'Minggu ini Bapak belum memberi perintah apa pun ke tim. Ada yang ingin dikerjakan? Tulis saja di sini, nanti saya bagi ke orang yang tepat.');
+    if (baris.length > 1) {
+        percakapan.pesan(ID_JONI, ID_JONI, namaJoni(), baris.join('\n'));
+        kabariTelegram(`🧑‍💼 ${namaJoni()}: ${baru.length ? `${baru.length} usulan tugas menunggu persetujuan Bapak` : 'minggu ini belum ada perintah dari Bapak'} — buka Chat ${namaJoni()} / Kantor → Papan kerja.`).catch(() => undefined);
+    }
+    return baru;
+}
+/** Cek mingguan (Senin): siapa menganggur → usulan tugas; belum ada perintah → Joni bertanya. */
+async function cekMingguan(sebab: string) {
+    if (hr.sibuk) return; hr.sibuk = 'cek';
+    try {
+        const stat = await statHr(7);
+        const ngg = stat.filter((s) => s.menganggur && s.id !== ID_JONI && !hr.menunggu.some((u) => u.ai === s.id)); // Joni kepala tim: tidak mengusulkan tugas untuk dirinya sendiri
+        const diam = Date.now() - percakapan.terakhirOwner() > 7 * 86400_000;
+        await usulkanTugas(ngg, ngg.length ? `Pak Rico, hasil cek mingguan (${sebab}): ${ngg.map((s) => s.nama).join(', ')} belum punya pekerjaan dalam 7 hari terakhir.` : `Pak Rico, cek mingguan (${sebab}): semua anggota tim punya pekerjaan minggu ini.`, diam);
+        hr.st.mingguKe = kunciMinggu(); hr.simpan();
+    } finally { hr.sibuk = ''; }
+}
+/** Review HR berkala: bandingkan kinerja semua AI, laporkan ke Grup Kantor, teruskan yang menganggur ke Joni. */
+async function reviewHr(sebab: string) {
+    if (hr.sibuk) return; hr.sibuk = 'review';
+    try {
+        const stat = await statHr(hr.hariReview);
+        const adaHr = roster().find((a) => a.id === ID_HR);
+        let teks = '', oleh = adaHr?.nama || 'HR Officer';
+        try {
+            if (adaHr) teks = await percakapan.tugas(ID_HR, `Review kinerja tim AI (${hr.hariReview} hari)`, hr.promptReview(stat), `Membandingkan ${stat.length} anggota (${sebab}).`);
+            else { teks = (await papan.jalankan({ ai: ID_HR, nama: 'HR Officer', judul: `Review kinerja tim AI (${hr.hariReview} hari)`, detail: `Membandingkan ${stat.length} anggota (${sebab}).`, sumber: 'tugas' }, async () => (await OfficeRoom.sharedLlm()?.complete('Kamu HR Officer yang adil dan lugas.', hr.promptReview(stat), 500, 2)) || '')) || ''; }
+        } catch (e: any) { console.warn('[HR] review AI gagal:', e?.message || e); }
+        if (!teks.trim()) { teks = hr.reviewPolos(stat); oleh = `${oleh} (ringkasan otomatis)`; }
+        hr.st.review.push({ at: Date.now(), oleh, hari: hr.hariReview, teks: teks.trim().slice(0, 2500), stat }); hr.st.reviewAt = Date.now(); hr.simpan();
+        const papanTeks = stat.map((s) => `${s.peringkat}. ${s.nama}: ${s.selesai} selesai, ${s.gagal} gagal${s.menganggur ? ' ⚠️ menganggur' : ''}`).join('\n');
+        percakapan.pesan('grup', ID_HR, oleh, `📋 **Review kinerja ${hr.hariReview} hari**\n${teks.trim()}\n\n${papanTeks}`);
+        const ngg = stat.filter((s) => s.menganggur && s.id !== ID_JONI && !hr.menunggu.some((u) => u.ai === s.id)); // Joni kepala tim: tidak mengusulkan tugas untuk dirinya sendiri
+        if (ngg.length) await usulkanTugas(ngg, `Pak Rico, ${oleh} melaporkan ke saya: ${ngg.map((s) => s.nama).join(', ')} menganggur.`, false);
+    } finally { hr.sibuk = ''; }
+}
+setInterval(() => {
+    const w = new Date(Date.now() + 7 * 3600_000), jam = w.getUTCHours();
+    if (jam < 9 || jam > 20 || !roster().length) return;
+    if (Date.now() >= hr.reviewBerikut()) reviewHr('terjadwal').catch((e) => console.warn('[HR]', e?.message || e));
+    else if (w.getUTCDay() === 1 && hr.st.mingguKe !== kunciMinggu()) cekMingguan('Senin').catch((e) => console.warn('[HR]', e?.message || e));
+}, 3600_000);
+app.get('/api/kantor/hr', requireToken, async (_req, res) => {
+    try { res.json({ ok: true, hari: hr.hariReview, stat: await statHr(hr.hariReview), review: hr.st.review.slice(-3).reverse(), usulan: hr.st.usulan.slice(-30).reverse(), reviewBerikut: hr.reviewBerikut(), sibuk: hr.sibuk, adaHr: roster().some((a) => a.id === ID_HR) }); }
+    catch (e: any) { res.status(500).json({ ok: false, error: String(e?.message || e) }); }
+});
+/** Buat profil Hermes "HR Officer" (Hana) di VPS — sekali saja, lewat tombol di Papan kerja. */
+app.post('/api/kantor/hr/pasang', requireToken, (_req, res) => {
+    const f = path.join(config.dataDir, 'atur-hr.sh');
+    try { fs.writeFileSync(f, ATUR_HR); } catch (e: any) { res.status(500).json({ ok: false, error: String(e?.message || e) }); return; }
+    jalankanBerkas('bash', [f], { timeout: 60_000, env: { ...process.env, HERMES_HOME: config.hermesHome } }, (err, stdout, stderr) => {
+        rosterCache.at = 0;
+        if (err) { res.status(400).json({ ok: false, error: String(stdout || stderr || err.message).trim().split('\n').slice(-2).join(' ').slice(0, 300) }); return; }
+        papan.catat({ ai: 'sistem', nama: 'Sistem kantor', judul: 'Menambah AI baru: Hana (HR Officer)', sumber: 'sistem', status: 'selesai' });
+        res.json({ ok: true, pesan: String(stdout).trim().split('\n').slice(-2).join(' ') });
+    });
+});
+app.post('/api/kantor/hr/jalankan', requireToken, (req, res) => {
+    const p = req.body?.jenis === 'cek' ? cekMingguan('diminta Pak Rico') : reviewHr('diminta Pak Rico');
+    p.catch((e) => console.warn('[HR]', e?.message || e));
+    res.json({ ok: true });
+});
+app.post('/api/kantor/hr/usulan/:id', requireToken, async (req, res) => {
+    try {
+        const u = hr.st.usulan.find((x) => x.id === String(req.params.id));
+        if (!u || u.status !== 'menunggu') throw new Error('Usulan tidak ditemukan atau sudah diputus.');
+        if (req.body?.aksi === 'tolak') {
+            u.status = 'ditolak'; u.diputus = Date.now(); hr.simpan();
+            percakapan.pesan(ID_JONI, ID_JONI, namaJoni(), `Baik Pak, usulan tugas untuk ${u.nama} ("${u.judul}") saya batalkan.`);
+        } else {
+            const judul = String(req.body?.judul || u.judul).trim().slice(0, 120), isi = String(req.body?.isi || u.isi).trim().slice(0, 600);
+            if (!judul) throw new Error('Judul tugas kosong.');
+            const r = await hermesProfiles.createTask({ title: judul, assignee: u.ai, body: `${isi}\n\n(Didelegasikan ${namaJoni()} setelah disetujui ${config.ownerName}. Hanya riset/laporan — jangan membeli/menjual, mengirim pesan keluar, memposting, atau menghapus data.)`, createdBy: 'kantor:joni', idempotencyKey: `usulan-${u.id}` });
+            if (!r.ok) throw new Error(`Tugas gagal dikirim ke ${u.nama}: ${r.error || 'Hermes tidak menjawab'}`);
+            u.status = 'disetujui'; u.diputus = Date.now(); u.judul = judul; u.isi = isi; u.tugasId = r.id; hr.simpan();
+            percakapan.pesan(ID_JONI, ID_JONI, namaJoni(), `✅ Disetujui. Tugas "${judul}" sudah saya delegasikan ke ${u.nama}. Perkembangannya bisa dilihat di Papan kerja.`);
+        }
+        res.json({ ok: true, usulan: u });
+    } catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
+});
+
 // ── Chat konsultasi Trading: AI menjawab HANYA dari data halaman Trading ──
 const RE_TRADING = /trad|saham|invest|analis|pasar|market|stock|portofolio|bursa/i;
 const anggotaTrading = () => { const r = roster(); const c = r.filter((a) => RE_TRADING.test(`${a.id} ${a.peran} ${a.deskripsi}`)); return (c.length ? c : r).map((a) => ({ id: a.id, nama: a.nama, peran: a.peran })); };

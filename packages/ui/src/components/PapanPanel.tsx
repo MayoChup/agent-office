@@ -1,9 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import { useApi } from '../kantor/api';
+import { apiPost } from '../kantor/connection';
 
 type Status = 'todo' | 'proses' | 'selesai' | 'gagal';
 interface Kerja { id: string; ai: string; nama: string; judul: string; detail?: string; hasil?: string; sumber: 'chat' | 'tugas' | 'sistem' | 'trading' | 'laporan'; status: Status; dibuat: number; mulai?: number; selesai?: number }
-interface Data { bulan: string; bulanIni: string; daftarBulan: string[]; items: Kerja[]; anggota: Array<{ id: string; nama: string }> }
+interface StatAi { id: string; nama: string; peran: string; selesai: number; gagal: number; proses: number; todo: number; rataDetik: number | null; terakhir: number; selesai7: number; menganggur: boolean; peringkat: number }
+interface Usulan { id: string; ai: string; nama: string; judul: string; isi: string; alasan: string; status: 'menunggu' | 'disetujui' | 'ditolak'; dibuat: number }
+interface HrData { hari: number; stat: StatAi[]; review: Array<{ at: number; oleh: string; hari: number; teks: string }>; usulan: Usulan[]; reviewBerikut: number; sibuk: string; adaHr: boolean }
+interface Data { menunggu?: number; bulan: string; bulanIni: string; daftarBulan: string[]; items: Kerja[]; anggota: Array<{ id: string; nama: string }> }
 
 const KOLOM: Array<{ k: 'todo' | 'proses' | 'selesai'; label: string; ket: string }> = [
     { k: 'todo', label: 'To do', ket: 'menunggu giliran' },
@@ -27,6 +31,10 @@ export function PapanPanel({ onClose }: { onClose: () => void }) {
     const [sumber, setSumber] = useState('');
     const [kolomHp, setKolomHp] = useState<'todo' | 'proses' | 'selesai'>('selesai');
     const [buka, setBuka] = useState<string | null>(null);
+    const [tampil, setTampil] = useState<'papan' | 'kinerja'>('papan');
+    const hr = useApi<HrData>('/api/kantor/hr', 15000);
+    const [pesan, setPesan] = useState('');
+    const tunggu = (hr.data?.usulan || []).filter((u) => u.status === 'menunggu');
 
     const items = useMemo(() => (d.data?.items || []).filter((k) => (!ai || k.ai === ai) && (!sumber || k.sumber === sumber)), [d.data, ai, sumber]);
     const per = useMemo(() => ({
@@ -95,6 +103,14 @@ export function PapanPanel({ onClose }: { onClose: () => void }) {
                 </div>
             )}
             {d.error && <div className="error">{d.error}</div>}
+            <div className="pk-mode">
+                <div className="sb-seg"><button className={tampil === 'papan' ? 'on' : ''} onClick={() => setTampil('papan')}>Papan</button><button className={tampil === 'kinerja' ? 'on' : ''} onClick={() => setTampil('kinerja')}>Kinerja & HR</button></div>
+                {tunggu.length > 0 && <span className="pk-tunggu">🔔 {tunggu.length} usulan tugas menunggu persetujuan Bapak</span>}
+            </div>
+            {pesan && <div className="fin-alert">{pesan}</div>}
+            {tunggu.length > 0 && <Persetujuan list={tunggu} onSelesai={(m) => { setPesan(m); hr.reload(); d.reload(); setTimeout(() => setPesan(''), 6000); }} />}
+            {tampil === 'kinerja' && hr.data && <Kinerja h={hr.data} onJalan={(jenis) => jenis === 'muat' ? (setPesan('✓ Hana (HR Officer) ditambahkan. Muncul di kantor dalam ±1 menit.'), void setTimeout(() => hr.reload(), 1500)) : apiPost('/api/kantor/hr/jalankan', { jenis }).then(() => { setPesan(jenis === 'cek' ? 'Cek mingguan dijalankan — Joni akan mengirim hasilnya ke chat pribadi Bapak.' : 'Review HR dijalankan — hasilnya muncul di Grup Kantor & di sini.'); setTimeout(() => hr.reload(), 4000); }).catch((e) => setPesan(String(e.message || e)))} />}
+            {tampil === 'papan' && <>
             <div className="pk-tab">{KOLOM.map((c) => <button key={c.k} className={kolomHp === c.k ? 'on' : ''} onClick={() => setKolomHp(c.k)}>{c.label} <b>{per[c.k].length}</b></button>)}</div>
             <div className="pk-grid">
                 {KOLOM.map((c) => (
@@ -104,6 +120,74 @@ export function PapanPanel({ onClose }: { onClose: () => void }) {
                     </section>
                 ))}
             </div>
+            </>}
+        </div>
+    );
+}
+
+/** Usulan tugas dari Joni untuk AI yang menganggur — baru dikirim setelah Pak Rico setuju. */
+function Persetujuan({ list, onSelesai }: { list: Usulan[]; onSelesai: (m: string) => void }) {
+    const [ubah, setUbah] = useState<Record<string, { judul: string; isi: string }>>({});
+    const [sibuk, setSibuk] = useState('');
+    const putus = (u: Usulan, aksi: 'setuju' | 'tolak') => {
+        setSibuk(u.id);
+        apiPost(`/api/kantor/hr/usulan/${u.id}`, { aksi, ...(ubah[u.id] || {}) }).then(() => onSelesai(aksi === 'setuju' ? `✓ Tugas untuk ${u.nama} dikirim.` : `Usulan untuk ${u.nama} ditolak.`)).catch((e) => onSelesai(String(e.message || e))).finally(() => setSibuk(''));
+    };
+    return (
+        <div className="pk-setuju">
+            {list.map((u) => {
+                const e = ubah[u.id];
+                return (
+                    <div key={u.id} className="pk-usul">
+                        <div className="pk-atas"><span className="pk-av" style={{ background: warna(u.ai) }}>{u.nama.slice(0, 1).toUpperCase()}</span><span className="pk-nama">Untuk {u.nama}</span><span className="pk-sumber">usulan Joni · {lalu(u.dibuat)}</span></div>
+                        {e ? (<>
+                            <input value={e.judul} maxLength={120} onChange={(x) => setUbah({ ...ubah, [u.id]: { ...e, judul: x.target.value } })} aria-label="Judul tugas" />
+                            <textarea value={e.isi} rows={3} maxLength={600} onChange={(x) => setUbah({ ...ubah, [u.id]: { ...e, isi: x.target.value } })} aria-label="Isi tugas" />
+                        </>) : (<><div className="pk-judul">{u.judul}</div><div className="pk-detail">{u.isi}</div></>)}
+                        <small className="pk-alasan">Alasan: {u.alasan}</small>
+                        <div className="pk-aksi">
+                            <button className="btn small primary" disabled={sibuk === u.id} onClick={() => putus(u, 'setuju')}>✓ Setujui & kirim</button>
+                            {!e && <button className="btn small" onClick={() => setUbah({ ...ubah, [u.id]: { judul: u.judul, isi: u.isi } })}>✏️ Ubah dulu</button>}
+                            <button className="btn small" disabled={sibuk === u.id} onClick={() => putus(u, 'tolak')}>Tolak</button>
+                        </div>
+                    </div>
+                );
+            })}
+        </div>
+    );
+}
+
+/** Perbandingan kinerja tiap AI + review HR terakhir. */
+function Kinerja({ h, onJalan }: { h: HrData; onJalan: (jenis: 'review' | 'cek' | 'muat') => void }) {
+    const maks = Math.max(1, ...h.stat.map((s) => s.selesai));
+    const r = h.review[0];
+    return (
+        <div className="pk-kinerja">
+            <section className="pk-kotak">
+                <div className="pk-kh2"><b>Perbandingan {h.hari} hari terakhir</b><small>dihitung dari Papan kerja — angka pasti, bukan penilaian AI</small></div>
+                <div className="pk-tabel">
+                    {h.stat.map((s) => (
+                        <div key={s.id} className={`pk-baris ${s.menganggur ? 'ngg' : ''}`}>
+                            <span className="pk-rk">{s.peringkat}</span>
+                            <span className="pk-av" style={{ background: warna(s.id) }}>{s.nama.slice(0, 1).toUpperCase()}</span>
+                            <div className="pk-siapa"><b>{s.nama}</b><small>{s.peran || s.id}</small></div>
+                            <div className="pk-batang"><i style={{ width: `${(s.selesai / maks) * 100}%` }} /></div>
+                            <div className="pk-angka"><b>{s.selesai}</b> selesai{s.gagal > 0 && <em> · {s.gagal} gagal</em>}{s.proses + s.todo > 0 && <span> · {s.proses + s.todo} berjalan/antre</span>}</div>
+                            <div className="pk-ket">{s.menganggur ? <em className="pk-gagal">menganggur 7 hari</em> : s.terakhir ? `terakhir ${lalu(s.terakhir)}` : 'belum ada catatan'}</div>
+                        </div>
+                    ))}
+                </div>
+                <small className="pk-alasan">"Menganggur" = 7 hari tidak menyelesaikan apa pun dan tidak sedang mengerjakan atau antre apa pun. Tiap Senin Joni mengecek; kalau ada yang menganggur, dia mengusulkan tugas dan meminta persetujuan Bapak lewat chat pribadi.</small>
+            </section>
+            <section className="pk-kotak">
+                <div className="pk-kh2"><b>Review HR Officer</b><small>tiap {h.hari} hari · berikutnya ±{new Date(h.reviewBerikut).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', timeZone: 'Asia/Jakarta' })}</small></div>
+                {!h.adaHr && <div className="hz-bukti">ℹ️ <span>AI "HR Officer" (Hana) belum ada di kantor — sementara review ditulis otak AI kantor. <button className="btn small primary" onClick={() => apiPost<{ pesan: string }>('/api/kantor/hr/pasang', {}).then(() => onJalan('muat')).catch((e) => alert(String(e.message || e)))}>Tambahkan Hana ke kantor</button></span></div>}
+                {r ? <><div className="pk-review">{r.teks}</div><small className="pk-alasan">{r.oleh} · {new Date(r.at).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' })}</small></> : <div className="pk-kosong">Belum ada review. Review pertama berjalan otomatis setelah ada data ±seminggu.</div>}
+                <div className="pk-aksi">
+                    <button className="btn small" disabled={!!h.sibuk} onClick={() => onJalan('review')}>{h.sibuk === 'review' ? 'Sedang direview…' : 'Jalankan review sekarang'}</button>
+                    <button className="btn small" disabled={!!h.sibuk} onClick={() => onJalan('cek')}>{h.sibuk === 'cek' ? 'Sedang dicek…' : 'Cek siapa menganggur'}</button>
+                </div>
+            </section>
         </div>
     );
 }

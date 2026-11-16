@@ -1904,3 +1904,46 @@ body.no-office #phaser-container { visibility: hidden; }
 :root:not([data-theme="light"]) .wa-ava { background: #12261f; }
 :root .wa-send { background: var(--grad); color: #fff; }
 :root .wa { border-radius: var(--r-kartu); overflow: hidden; box-shadow: var(--shadow); }
+/* Berita terkait */
+.bt { display: flex; flex-direction: column; gap: 10px; }
+.bt-h { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+.bt-h h3 { margin: 0; font-size: 17px; letter-spacing: -0.02em; } .bt-h h3 small { font-weight: 500; font-size: 12.5px; color: var(--muted); }
+.bt-saklar { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.bt-saklar input { appearance: none; width: 42px; height: 24px; border-radius: 999px; background: var(--line-strong); position: relative; cursor: pointer; transition: background 0.15s; margin: 0; }
+.bt-saklar input::after { content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform 0.15s; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25); }
+.bt-saklar input:checked { background: #10b981; } .bt-saklar input:checked::after { transform: translateX(18px); }
+.bt-porsi { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); padding: 10px 12px; border-radius: 12px; background: var(--sb-soft); }
+.bt-porsi input { flex: 1; min-width: 140px; accent-color: #10b981; } .bt-porsi b { color: var(--text); font-size: 12px; }
+.bt-meta { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); }
+.bt-tema { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.bt-tema-h { width: 100%; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; text-align: left; padding: 11px 14px; border: none; background: transparent; color: var(--text); cursor: pointer; font: inherit; }
+.bt-tema-h b { font-size: 14px; } .bt-tema.buka .bt-tema-h { background: var(--sb-soft); }
+.bt-chip-baris { display: flex; gap: 6px; flex-wrap: wrap; }
+.bt-chip-baris i { font-style: normal; font-size: 11.5px; padding: 2px 8px; border-radius: 999px; background: rgba(148, 163, 184, 0.14); color: var(--muted); }
+.bt-chip-baris i.up { background: rgba(16, 185, 129, 0.14); color: var(--up); } .bt-chip-baris i.down { background: rgba(244, 63, 94, 0.12); color: var(--down); }
+.bt-isi { padding: 4px 14px 14px; display: flex; flex-direction: column; gap: 8px; font-size: 13px; } .bt-isi p { margin: 4px 0 0; color: var(--muted); line-height: 1.55; }
+.bt-isi td small { color: var(--muted); }
+.bt-bukti { display: flex; flex-direction: column; gap: 4px; } .bt-bukti small { color: var(--muted); }
+.bt-bukti a { font-size: 12.5px; color: var(--text); text-decoration: none; padding: 6px 10px; border-radius: 10px; background: var(--sb-soft); } .bt-bukti a:hover { text-decoration: underline; } .bt-bukti em { font-style: normal; color: var(--muted); font-size: 11.5px; }
+/* Papan: persetujuan & kinerja */
+.pk-mode { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.pk-tunggu { font-size: 12.5px; font-weight: 600; color: #b45309; padding: 5px 12px; border-radius: 999px; background: rgba(245, 158, 11, 0.14); }
+.pk-setuju { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; max-height: 42%; overflow-y: auto; flex: none; }
+.pk-usul { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 14px; border: 1px solid rgba(245, 158, 11, 0.45); background: linear-gradient(180deg, rgba(245, 158, 11, 0.09), transparent 60%), var(--panel-solid); }
+.pk-usul input, .pk-usul textarea { font: inherit; font-size: 13px; padding: 8px 10px; border: 1px solid var(--line-strong); background: transparent; color: var(--text); resize: vertical; }
+.pk-alasan { font-size: 11.5px; color: var(--muted); line-height: 1.5; }
+.pk-aksi { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
+.pk-kinerja { flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 12px; align-content: start; }
+.pk-kotak { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border-radius: 16px; background: var(--panel-solid); border: 1px solid var(--line); }
+.pk-kh2 { display: flex; flex-direction: column; gap: 2px; } .pk-kh2 b { font-size: 15px; letter-spacing: -0.01em; } .pk-kh2 small { color: var(--muted); font-size: 11.5px; }
+.pk-tabel { display: flex; flex-direction: column; }
+.pk-baris { display: grid; grid-template-columns: 18px 22px minmax(90px, 1.1fr) minmax(60px, 1fr) auto; grid-template-areas: 'rk av siapa batang angka' '. . ket ket ket'; gap: 2px 10px; align-items: center; padding: 9px 0; border-top: 1px solid var(--line); font-size: 12.5px; }
+.pk-baris:first-child { border-top: none; }
+.pk-rk { grid-area: rk; font-weight: 700; color: var(--muted); } .pk-baris .pk-av { grid-area: av; }
+.pk-siapa { grid-area: siapa; display: flex; flex-direction: column; min-width: 0; } .pk-siapa small { color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pk-batang { grid-area: batang; height: 8px; border-radius: 999px; background: rgba(148, 163, 184, 0.16); overflow: hidden; } .pk-batang i { display: block; height: 100%; border-radius: 999px; background: var(--grad, #10b981); }
+.pk-angka { grid-area: angka; white-space: nowrap; } .pk-angka em { font-style: normal; color: #ef4444; } .pk-angka span { color: var(--muted); }
+.pk-ket { grid-area: ket; font-size: 11px; color: var(--muted); } .pk-ket em { font-style: normal; }
+.pk-baris.ngg { background: linear-gradient(90deg, rgba(239, 68, 68, 0.06), transparent 70%); }
+.pk-review { font-size: 13.5px; line-height: 1.65; white-space: pre-wrap; }
+@media (max-width: 767px) { .pk-kinerja { grid-template-columns: 1fr; } .pk-baris { grid-template-columns: 18px 22px 1fr auto; grid-template-areas: 'rk av siapa angka' '. . batang batang' '. . ket ket'; } .pk-setuju { grid-template-columns: 1fr; } }
