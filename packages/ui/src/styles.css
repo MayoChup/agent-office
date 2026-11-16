@@ -1538,3 +1538,17 @@ body.no-office #phaser-container { visibility: hidden; }
 .pr-uji { margin: 4px 0 0 !important; padding: 8px 10px; border-radius: 10px; background: rgba(255, 255, 255, 0.5); color: var(--text) !important; }
 [data-theme="dark"] .pr-uji { background: rgba(0, 0, 0, 0.2); }
 @media (max-width: 767px) { .um-t { font-size: 12px; } .um-t th, .um-t td { padding: 6px 4px; } }
+
+/* Bukti skor teknikal & tanda preset */
+.hz-bukti { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; line-height: 1.5; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); color: var(--muted); }
+.hz-bukti b { color: var(--text); }
+.hz-bukti small { display: block; margin-top: 2px; opacity: 0.85; }
+.hz-bukti.warn { border-color: rgba(245, 158, 11, 0.45); background: rgba(245, 158, 11, 0.09); }
+.hz-bukti.ok { border-color: rgba(34, 197, 94, 0.4); background: rgba(34, 197, 94, 0.08); }
+.pr-bdg { font-style: normal; font-size: 10.5px; margin-left: 6px; padding: 1px 6px; border-radius: 999px; background: rgba(148, 163, 184, 0.16); color: var(--muted); white-space: nowrap; }
+.pr-bdg.ok { background: rgba(34, 197, 94, 0.16); color: #22c55e; }
+.pr-catat { display: block; margin-top: 6px; font-size: 11.5px; color: var(--muted); }
+.um-w { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.um-w > div { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; }
+.um-w > div > div { display: flex; justify-content: space-between; gap: 8px; }
+@media (max-width: 640px) { .um-w { grid-template-columns: 1fr; } }

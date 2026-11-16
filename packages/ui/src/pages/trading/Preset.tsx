@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useApi } from '../../kantor/api';
 
 export interface PresetInfo { id: string; jenis: 'teknikal' | 'fundamental'; nama: string; guru: string; ringkas: string; info: string; cocok: string[]; kriteria: string[] }
-export interface PresetData { preset: PresetInfo[]; rekomendasi: Record<string, { teknikal: string[]; fundamental: string[]; alasan: string }>; rekomendasiUji?: Record<string, { id: string; rataEx: number; menang: number; n: number } | null> | null }
+export interface PresetData { preset: PresetInfo[]; rekomendasi: Record<string, { teknikal: string[]; fundamental: string[]; alasan: string }>; rekomendasiUji?: Record<string, { id: string; rataEx: number; menang: number; n: number } | null> | null; statusUji?: Record<string, Record<string, { terbukti: boolean; rataEx: number | null; n: number }>> | null }
 export const H_MODE: Record<string, number> = { scalping: 1, daytrade: 1, swingpendek: 5, swing: 20, posisi: 60, investasi: 60 };
 export interface PresetEval { id: string; jenis: string; hasil: Array<{ t: string; ok: boolean | null }>; lolos: number; dinilai: number; total: number; persen: number | null }
 export const NAMA_MODE: Record<string, string> = { scalping: 'Scalping', daytrade: 'Day trading', swingpendek: 'Swing pendek', swing: 'Swing', posisi: 'Posisi', investasi: 'Investasi' };
@@ -16,17 +16,21 @@ export function PresetPilih({ jenis, aktif, setAktif, mode, data }: { jenis: 'te
     const rek = data.rekomendasi[mode]?.[jenis] || [];
     const list = data.preset.filter((p) => p.jenis === jenis).sort((a, b) => (rek.includes(b.id) ? 1 : 0) - (rek.includes(a.id) ? 1 : 0));
     const pi = list.find((p) => p.id === info);
+    const uji = jenis === 'teknikal' ? data.statusUji?.[String(H_MODE[mode] ?? 20)] : null;
+    const bdg = (id: string) => { const u = uji?.[id]; if (!u) return null; return u.terbukti ? <em className="pr-bdg ok" title={`Uji mundur: rata-rata ${u.rataEx}% vs S&P 500 (${u.n} kasus)`}>✓ terbukti {u.rataEx != null ? `${u.rataEx >= 0 ? '+' : ''}${u.rataEx.toFixed(2)}%` : ''}</em> : <em className="pr-bdg" title={u.n < 300 ? 'kasus terlalu sedikit untuk dinilai' : `rata-rata ${u.rataEx}% vs S&P 500 — tidak mengalahkan pasar secara meyakinkan`}>belum terbukti</em>; };
     return (
         <div className="pr-pilih">
             <div className="pr-chips">
                 <button className={!aktif ? 'on' : ''} onClick={() => setAktif('')}>Tanpa preset</button>
                 {list.map((p) => (
                     <span key={p.id} className={`pr-chip ${aktif === p.id ? 'on' : ''}`}>
-                        <button onClick={() => setAktif(aktif === p.id ? '' : p.id)} title={p.ringkas}>{rek.includes(p.id) && '⭐ '}{p.guru} <small>· {p.nama}</small></button>
+                        <button onClick={() => setAktif(aktif === p.id ? '' : p.id)} title={p.ringkas}>{rek.includes(p.id) && '⭐ '}{p.guru} <small>· {p.nama}</small>{bdg(p.id)}</button>
                         <button className="pr-i" onClick={() => setInfo(info === p.id ? null : p.id)} aria-label={`Info ${p.nama}`}>i</button>
                     </span>
                 ))}
             </div>
+            {jenis === 'teknikal' && (uji ? <small className="pr-catat">Tanda ✓/belum terbukti = hasil uji mundur untuk {NAMA_MODE[mode] || mode} (±{H_MODE[mode] ?? 20} hari bursa).</small> : <small className="pr-catat">Jalankan Uji mundur untuk melihat preset mana yang terbukti di mode ini.</small>)}
+            {jenis === 'fundamental' && <small className="pr-catat">Preset fundamental belum bisa diuji mundur (riwayat laporan keuangan per tanggal tidak tersedia gratis) — anggap sebagai saringan kualitas, belum terbukti.</small>}
             {pi && (
                 <div className="pr-info">
                     <b>{pi.guru} — {pi.nama}</b>

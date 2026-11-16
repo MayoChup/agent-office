@@ -13,6 +13,7 @@ import { Ekstra, Berita, Orang, ekstra, skorTeknikal, skorFundamental, skorBerit
 import { UA, yahooChart, hargaHarian, statusHarga, cnbcChart } from './harga';
 import { hitungInd, Ind, Fund, PRESET, evaluasi } from './preset';
 import { fundamentalNasdaq } from './nasdaq';
+import { bacaModel, hModel, skorModel } from './bobot';
 export { yahooChart, statusHarga };
 const SEC_UA = 'KantorRico research kantor-rico@users.noreply.github.com';
 const SP500_CSV = 'https://raw.githubusercontent.com/datasets/s-and-p-500-companies/main/data/constituents.csv';
@@ -167,7 +168,9 @@ export class Screener {
     sibuk: '' | 'teknikal' | 'fundamental' | 'berita' = '';
     progres = '';
 
+    private fileBobot: string;
     constructor(dataDir: string, private watchlist: () => string[], private deskDir = '') {
+        this.fileBobot = path.join(dataDir, 'bobot-teknikal.json');
         const dir = path.join(dataDir, 'screener');
         fs.mkdirSync(path.join(dir, 'spark'), { recursive: true });
         this.file = path.join(dir, 'data.json');
@@ -197,11 +200,27 @@ export class Screener {
     hargaTerakhir(s: string) { return this.st.baris.find((b) => b.s === s) || null; }
     private segarkanHorison() { this.seri.clear(); this.proyCache.clear(); }
 
+    /** Status bukti skor teknikal untuk horison H: bobot dari data (lulus uji) atau rumus lama (belum terbukti). */
+    teknikalTerbukti(H: number, mode = '') {
+        const hm = mode === 'scalping' ? 1 : hModel(H);
+        const m = bacaModel(this.fileBobot)[hm];
+        if (m?.lulus) return { terbukti: true, sumber: 'data', H: hm, latih: m.latih, uji: { dari: m.uji.dari, sampai: m.uji.sampai, selisih: m.uji.baru?.selisih, t: m.uji.baru?.t } };
+        return { terbukti: false, sumber: m ? 'gagal-uji' : 'belum-diuji', H: hm, alasan: m?.uji?.alasan || [] };
+    }
+    private teknikalDasar(b: Baris, H: number, mode: string, pr: Proyeksi | null): Faktor {
+        const hm = mode === 'scalping' ? 1 : hModel(H);
+        const m = bacaModel(this.fileBobot)[hm];
+        if (m?.lulus && b.ind) return skorModel({ ...b }, b.ind, m);
+        const f = skorTeknikal(b, H, pr);
+        const ket = m ? `· belum terbukti: rumus teknikal untuk ±${hm} hari bursa tidak lulus uji mundur 2025–2026 — anggap sebagai gambaran grafik, bukan ramalan` : `· belum terbukti: jalankan Uji mundur untuk menguji skor teknikal horison ini`;
+        return { ...f, alasan: [ket, ...f.alasan] };
+    }
+
     /** Skor 4 faktor + gabungan untuk satu saham, untuk posisi ≤H hari bursa. */
     skor(b: Baris, sari = bacaLaporanSari(this.deskDir), H = 20, mode = '', pt = '', pf = ''): Record<string, Faktor | null> {
         const pr = this.proyeksiH(b, H);
         const f: Record<string, Faktor | null> = {
-            teknikal: skorTeknikal(b, H, pr), fundamental: skorFundamental(b), berita: skorBerita(this.st.berita?.[b.s]),
+            teknikal: this.teknikalDasar(b, H, mode, pr), fundamental: skorFundamental(b), berita: skorBerita(this.st.berita?.[b.s]),
             whales: skorWhales(b, b.x, this.st.orang?.[b.s], sari.get(b.s) || 0)
         };
         // Preset guru aktif: skor faktor ikut kepatuhan preset (tidak harus lolos semua kriteria).
@@ -244,14 +263,14 @@ export class Screener {
         }
         const sektor = Array.from(sek.entries()).map(([k, e]) => ({ nama: k, n: e.n, chg: +(e.s / e.w).toFixed(2) })).sort((a, b) => b.chg - a.chg);
         const pasar = { naik, turun, tetap: baris.length - naik - turun, mcap, sektor, tape: this.st.tape || [] };
-        return { horizon: H, mode, bobot: bobot(H, mode), baris, pasar, beritaAt: this.st.beritaAt || 0, teknikalAt: this.st.teknikalAt, teknikalSesi: this.st.teknikalSesi, fundamentalAt: this.st.fundamentalAt, sibuk: this.sibuk, progres: this.progres, gagal: this.st.gagal.length, galat: [statusHarga.galat, ...['fundamental', 'berita', 'kap'].map((k) => (this.st.baris.length ? this.st.status?.[k]?.galat : '') || '')].filter(Boolean).join('\n'), sumber: statusHarga.sumber, status: this.st.status || {} };
+        return { horizon: H, mode, bobot: bobot(H, mode), teknikalBukti: this.teknikalTerbukti(H, mode), baris, pasar, beritaAt: this.st.beritaAt || 0, teknikalAt: this.st.teknikalAt, teknikalSesi: this.st.teknikalSesi, fundamentalAt: this.st.fundamentalAt, sibuk: this.sibuk, progres: this.progres, gagal: this.st.gagal.length, galat: [statusHarga.galat, ...['fundamental', 'berita', 'kap'].map((k) => (this.st.baris.length ? this.st.status?.[k]?.galat : '') || '')].filter(Boolean).join('\n'), sumber: statusHarga.sumber, status: this.st.status || {} };
     }
     /** Detail lengkap satu saham: alasan tiap faktor, berita, orang dalam. */
     detail(s: string, H = 20, mode = '', pt = '', pf = '') {
         const b0 = this.st.baris.find((x) => x.s === s);
         if (!b0) return null;
         const b = { ...b0, x: b0.x ? { ...b0.x, proyeksi: this.proyeksiH(b0, H) } : b0.x };
-        return { horizon: H, baris: b, skor: this.skor(b0, undefined, H, mode, pt, pf), preset: this.presetSaham(b0), berita: this.st.berita?.[s] || null, orang: this.st.orang?.[s] || null };
+        return { horizon: H, teknikalBukti: this.teknikalTerbukti(H, mode), baris: b, skor: this.skor(b0, undefined, H, mode, pt, pf), preset: this.presetSaham(b0), berita: this.st.berita?.[s] || null, orang: this.st.orang?.[s] || null };
     }
 
     /** Peta berita: berita (unik) ↔ saham yang terkait, untuk tampilan "tata surya". */

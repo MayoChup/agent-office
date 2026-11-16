@@ -21,7 +21,7 @@ import { bacaPdf, urai, cocokkan } from './kantor/mutasi';
 import { presetInfo, REKOMENDASI } from './kantor/preset';
 import { profil as nasdaqProfil, fundamentalNasdaq } from './kantor/nasdaq';
 import { simulasi, langkahDari } from './kantor/simulasi';
-import { ujiMundur, rekomendasiUji, fileUji, StatusUji } from './kantor/ujimundur';
+import { ujiMundur, rekomendasiUji, fileUji, statusPreset, StatusUji } from './kantor/ujimundur';
 import { cnbcChart } from './kantor/harga';
 import { telegramKirim } from './kantor/telegram';
 import { HermesBridge } from './kantor/hermes';
@@ -419,7 +419,7 @@ app.get('/api/kantor/saham-detail/:s', requireToken, (req, res) => {
     if (!d) { res.status(404).json({ ok: false, error: 'Belum ada di data penyaring' }); return; }
     res.json({ ok: true, ...d });
 });
-app.get('/api/kantor/preset', requireToken, (_req, res) => { res.json({ ok: true, preset: presetInfo(), rekomendasi: REKOMENDASI, rekomendasiUji: rekomendasiUji(fileUji(config.dataDir)) }); });
+app.get('/api/kantor/preset', requireToken, (_req, res) => { res.json({ ok: true, preset: presetInfo(), rekomendasi: REKOMENDASI, rekomendasiUji: rekomendasiUji(fileUji(config.dataDir)), statusUji: statusPreset(fileUji(config.dataDir)) }); });
 // Uji mundur (backtest) — berjalan di latar belakang ±20–40 menit untuk ±500 saham.
 const statusUji: StatusUji = { jalan: false, progres: '', mulai: 0, selesai: 0, galat: '' };
 app.get('/api/kantor/ujimundur', requireToken, (_req, res) => {

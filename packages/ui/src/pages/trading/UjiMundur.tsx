@@ -4,7 +4,10 @@ import { apiPost } from '../../kantor/connection';
 
 type R = { n: number; rataEx: number | null; menang: number | null; galatStd: number | null };
 interface HasilH { semua: R; label: Record<string, R>; kuintil: R[]; komponen: Array<R & { nama: string }>; preset: Array<{ id: string; guru: string; nama: string; lolos75: R; lolos50: R; kurang: R }> }
-interface Hasil { at: number; saham: number; gagal: number; sampel: number; periode: { dari: string; sampai: string }; catatan: string[]; H: Record<string, HasilH> }
+type UjiL = { label: Record<string, R>; semua: R; selisih: number; galat: number; t: number; tanggal: number };
+type W = { k: string; t: string; w: number };
+interface BobotH { lulus: boolean; latih: { dari: string; sampai: string; n: number }; uji: { dari: string; sampai: string; n: number; lambda: number; ic: number; baru: UjiL; lama: UjiL; alasan: string[] }; teratas: W[]; terbawah: W[] }
+interface Hasil { bobot?: { batas: string; H: Record<string, BobotH> }; at: number; saham: number; gagal: number; sampel: number; periode: { dari: string; sampai: string }; catatan: string[]; H: Record<string, HasilH> }
 interface Data { status: { jalan: boolean; progres: string; mulai: number; selesai: number; galat: string }; hasil: Hasil | null }
 
 const MODE: Array<{ H: number; label: string }> = [{ H: 1, label: 'Day trading (1 hari)' }, { H: 5, label: 'Swing pendek (5 hari)' }, { H: 20, label: 'Swing (20 hari)' }, { H: 60, label: 'Posisi/Investasi (60 hari)' }];
@@ -42,7 +45,7 @@ export function UjiMundur() {
             {h && r && (<>
                 <div className="sb-seg scroll">{MODE.map((m) => <button key={m.H} className={H === m.H ? 'on' : ''} onClick={() => setH(m.H)}>{m.label}</button>)}</div>
                 <section className="sb-card">
-                    <div className="sd-h"><h3>Apakah skor teknikal berguna?</h3></div>
+                    <div className="sd-h"><h3>Rumus lama: apakah skor teknikal berguna?</h3></div>
                     <p className="um-vonis">{vonis}</p>
                     <table className="um-t"><thead><tr><th>Label saat itu</th><th>Kasus</th><th>Rata-rata vs S&P 500</th><th>Mengalahkan pasar</th></tr></thead>
                         <tbody>
@@ -51,6 +54,7 @@ export function UjiMundur() {
                         </tbody></table>
                     <p className="sb-note">Rata-rata per posisi selama {H} hari bursa. Contoh: +0,50% artinya rata-rata unggul 0,5% dari S&P 500 dalam {H} hari.</p>
                 </section>
+                <BobotBaru b={h.bobot?.H[String(H)]} H={H} />
                 <section className="sb-card">
                     <div className="sd-h"><h3>Preset guru (teknikal) — saham yang lolos ≥75% kriteria</h3></div>
                     <table className="um-t"><thead><tr><th>Preset</th><th>Kasus</th><th>Rata-rata vs S&P 500</th><th>Menang</th><th>Terbukti?</th></tr></thead>
@@ -73,5 +77,31 @@ export function UjiMundur() {
                 <section className="sb-card"><div className="sd-h"><h3>Catatan kejujuran</h3></div><ul className="sd-alasan">{h.catatan.map((c) => <li key={c}>{c}</li>)}</ul></section>
             </>)}
         </div>
+    );
+}
+
+/** Hasil "bobot dari data": dilatih pada data lama, diuji pada data baru yang tidak dipakai saat melatih. */
+function BobotBaru({ b, H }: { b?: BobotH; H: number }) {
+    if (!b) return <section className="sb-card"><div className="sd-h"><h3>🧠 Bobot baru dari data</h3></div><p className="sb-note">Belum ada — jalankan ulang uji mundur supaya bobot dicari dari data & diuji. (Perlu cukup data sebelum dan sesudah 2025.)</p></section>;
+    const th = (t: string) => t.slice(0, 4);
+    const bar = (u: UjiL, k: string) => u.label[k];
+    return (
+        <section className="sb-card">
+            <div className="sd-h"><h3>🧠 Bobot baru dari data</h3></div>
+            <p className="sb-note">Bobot tiap ciri grafik <b>disusun dari data {th(b.latih.dari)}–{th(b.latih.sampai)}</b> ({b.latih.n.toLocaleString('id-ID')} kasus), lalu <b>diuji di data {th(b.uji.dari)}–{th(b.uji.sampai)}</b> ({b.uji.n.toLocaleString('id-ID')} kasus) yang sama sekali tidak dipakai saat menyusun — seperti ujian dengan soal baru.</p>
+            <p className="um-vonis">{b.lulus ? `✅ LULUS: dipakai otomatis sebagai skor teknikal untuk horison ±${H} hari.` : `❌ TIDAK LULUS: horison ±${H} hari tetap memakai rumus lama, diberi tanda "belum terbukti".`}</p>
+            {!b.lulus && !!b.uji.alasan.length && <ul className="sd-alasan">{b.uji.alasan.map((a) => <li key={a}>{a}</li>)}</ul>}
+            <table className="um-t"><thead><tr><th>Di data uji {th(b.uji.dari)}–{th(b.uji.sampai)}</th><th>Bobot baru</th><th>Rumus lama</th></tr></thead>
+                <tbody>
+                    {LABEL.map((k) => <tr key={k}><td>{k}</td><td className={`mono ${kelasEx(bar(b.uji.baru, k)?.rataEx ?? null)}`}>{p(bar(b.uji.baru, k)?.rataEx ?? null)} <small>({(bar(b.uji.baru, k)?.n ?? 0).toLocaleString('id-ID')})</small></td><td className={`mono ${kelasEx(bar(b.uji.lama, k)?.rataEx ?? null)}`}>{p(bar(b.uji.lama, k)?.rataEx ?? null)} <small>({(bar(b.uji.lama, k)?.n ?? 0).toLocaleString('id-ID')})</small></td></tr>)}
+                    <tr className="um-base"><td>"Beli kuat" − "Jual kuat"</td><td className={`mono ${kelasEx(b.uji.baru.selisih)}`}>{p(b.uji.baru.selisih)} <small>± {b.uji.baru.galat?.toFixed(2)}</small></td><td className={`mono ${kelasEx(b.uji.lama.selisih)}`}>{p(b.uji.lama.selisih)} <small>± {b.uji.lama.galat?.toFixed(2)}</small></td></tr>
+                </tbody></table>
+            <p className="sb-note">Lulus kalau selisih "Beli kuat" − "Jual kuat" lebih dari 2× galat (sudah memperhitungkan periode yang tumpang tindih), "Beli kuat" lebih baik dari rata-rata, dan urutan skor searah dengan hasil.</p>
+            <div className="um-w">
+                <div><b>Ciri yang paling menaikkan skor</b>{b.teratas.filter((x) => x.w > 0).map((x) => <div key={x.k}><span>{x.t}</span><b className="mono up">{p(x.w, 3)}</b></div>)}</div>
+                <div><b>Ciri yang paling menurunkan skor</b>{b.terbawah.filter((x) => x.w < 0).map((x) => <div key={x.k}><span>{x.t}</span><b className="mono down">{p(x.w, 3)}</b></div>)}</div>
+            </div>
+            <p className="sb-note">Angka = pengaruh rata-rata ciri itu terhadap hasil vs saham lain dalam {H} hari bursa (sudah diperhitungkan bersama ciri lain).</p>
+        </section>
     );
 }

@@ -125,7 +125,7 @@ export function TradingPage() {
                 <span className="sb-nav-sp" />
                 {sc.data?.sibuk ? <span className="sb-busy">⏳ {sc.data.progres}</span> : <button className="sb-refresh" onClick={() => { perbarui(); reload(); }} title="Ambil data terbaru">↻</button>}
             </nav>
-            {saham && <><HorisonBar h={horison} setH={setHorison} /><SahamDetail key={saham} onMemuat={setDetailMemuat} simbol={saham} H={H} q={qApi} preset={preset} setPreset={setPreset} mode={modeAktif} pd={pd.data} onBack={() => setSaham(null)} /></>}
+            {saham && <><HorisonBar h={horison} setH={setHorison} bukti={(sc.data as any)?.teknikalBukti} /><SahamDetail key={saham} onMemuat={setDetailMemuat} simbol={saham} H={H} q={qApi} preset={preset} setPreset={setPreset} mode={modeAktif} pd={pd.data} onBack={() => setSaham(null)} /></>}
             {!saham && ['pasar', 'pilihan', 'panas', 'watchlist'].includes(tab) && !sc.data && <div className="fin-empty">{sc.error ? `Gagal memuat: ${sc.error}` : 'Memuat data pasar…'}</div>}
             {!saham && ['pasar', 'pilihan', 'panas'].includes(tab) && sc.data && sc.data.baris.length === 0 && (
                 <div className="sb-card sb-kosong">
@@ -142,7 +142,7 @@ export function TradingPage() {
                 </div>
             )}
             {!saham && sc.data && sc.data.baris.length > 0 && sc.data.galat && !sc.data.sibuk && <div className="error" style={{ margin: '0 0 12px' }}>⚠️ {sc.data.galat}</div>}
-            {!saham && (tab === 'pilihan' || tab === 'pasar' || tab === 'watchlist') && sc.data && sc.data.baris.length > 0 && <HorisonBar h={horison} setH={setHorison} bobot={(sc.data as any).bobot} />}
+            {!saham && (tab === 'pilihan' || tab === 'pasar' || tab === 'watchlist') && sc.data && sc.data.baris.length > 0 && <HorisonBar h={horison} setH={setHorison} bobot={(sc.data as any).bobot} bukti={(sc.data as any).teknikalBukti} />}
             {!saham && tab === 'pasar' && sc.data && sc.data.baris.length > 0 && <PasarView data={sc.data} faktor={faktor} setFaktor={setF} onOpen={buka} />}
             {!saham && tab === 'pilihan' && sc.data && sc.data.baris.length > 0 && (
                 <details className="pr-lipat" open={!!(preset.t || preset.f) || undefined}>
@@ -156,7 +156,7 @@ export function TradingPage() {
             {!saham && tab === 'watchlist' && sc.data && <WatchlistView data={sc.data} faktor={faktor} onOpen={buka} />}
             {!saham && tab === 'investigasi' && <InvestigasiView />}
             {!saham && tab === 'uji' && <UjiMundur />}
-            {!saham && tab === 'penyaring' && <><HorisonBar h={horison} setH={setHorison} bobot={(sc.data as any)?.bobot} />{presetPanel}<ScreenerView onOpen={buka} q={qApi} presetAktif={preset} pd={pd.data} sumber={sc} /></>}
+            {!saham && tab === 'penyaring' && <><HorisonBar h={horison} setH={setHorison} bobot={(sc.data as any)?.bobot} bukti={(sc.data as any)?.teknikalBukti} />{presetPanel}<ScreenerView onOpen={buka} q={qApi} presetAktif={preset} pd={pd.data} sumber={sc} /></>}
             {!saham && tab === 'posisi' && error && <div className="error">Gagal memuat: {error}</div>}
             {!saham && tab === 'posisi' && data && (
                 <>
