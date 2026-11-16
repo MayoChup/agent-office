@@ -2168,3 +2168,21 @@ body.no-office #phaser-container { visibility: hidden; }
   .sm-pekan { gap: 3px; } .sm-pk { padding: 7px 2px; } .sm-pk b { font-size: 15px; } .sm-pk i { width: 15px; height: 15px; font-size: 9px; }
 }
 [data-theme="light"] .sm-tabs button.on { color: #fff; }
+
+/* Konten: antrean unggah & jadwal */
+.sm-ablist { display: flex; flex-direction: column; gap: 6px; }
+.sm-ab { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line); border-left: 3px solid var(--fc, var(--line)); background: var(--panel-2); font-size: 13px; flex: 1; min-width: 0; }
+.sm-ab > b { flex: 1; min-width: 160px; font-weight: 600; }
+.sm-ab-w { font-variant-numeric: tabular-nums; font-size: 12px; color: var(--muted); min-width: 120px; }
+.sm-ab-s { font-style: normal; font-size: 12px; color: var(--muted); }
+.sm-ab-c { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.sm-ab-c input { width: 18px; height: 18px; accent-color: var(--accent); flex-shrink: 0; }
+.sm-pasang { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.sm-pasang > div { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.4fr); gap: 8px; align-items: center; padding: 8px 10px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); font-size: 13px; }
+.sm-pasang-f { display: flex; flex-direction: column; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sm-pasang-f small { color: var(--muted); font-size: 11px; }
+.sm-pasang select, .sm-jamk input { width: 100%; background: var(--latar, var(--bg)); border: 1px solid var(--line); color: var(--text); border-radius: 8px; padding: 7px 9px; font: inherit; font-size: 13px; }
+.sm-jamk { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.sm-jamk label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.sm-terjadwal { font-size: 13px; font-weight: 600; color: var(--accent); }
+@media (max-width: 640px) { .sm-pasang > div { grid-template-columns: 1fr; } .sm-pasang > div > span[aria-hidden] { display: none; } .sm-ab-w { min-width: 0; width: 100%; } }

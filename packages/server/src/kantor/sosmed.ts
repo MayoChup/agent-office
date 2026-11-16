@@ -25,13 +25,13 @@ export interface Sudut { sudut: string; hook: string; scroll: number; relevansi:
 export interface Gaya { id: string; nama: string; jenis: 'real' | 'animasi'; deskripsi: string; contoh?: { path: string; nama: string } | null; bawaan?: boolean }
 export interface Aset { path: string; nama: string; at: number }
 export interface Hasil { at: number; sumber: 'ig' | 'manual'; umurJam: number; tayang?: number; jangkauan?: number; suka?: number; komentar?: number; simpan?: number; bagikan?: number; ikuti?: number }
-export type StatusKonten = 'rencana' | 'naskah' | 'prompt' | 'aset' | 'mengunggah' | 'terbit' | 'manual' | 'gagal';
+export type StatusKonten = 'rencana' | 'naskah' | 'prompt' | 'aset' | 'terjadwal' | 'mengunggah' | 'terbit' | 'manual' | 'gagal';
 export interface Konten {
     id: string; tgl: string; pilar: string; format: Format; judul: string; sudut: string; tujuan: string; dasar?: string; gayaId?: string;
     sudutPilihan?: Sudut[]; hook?: string; hookLain?: string[]; naskah?: string; voiceover?: string; jumlahKata?: number; storyboard?: Adegan[]; subtitle?: string[]; slide?: Slide[];
     caption?: string; hashtag?: string[]; ajakan?: string; captionTiktok?: string; youtube?: { judul: string; deskripsi: string };
     promptVideo?: string; promptGambar?: string; rekam?: string; promptEdit?: string; promptSuara?: { teks: string; gaya: string; pengaturan: string }; musik?: string; sampul?: string;
-    status: StatusKonten; aset?: Aset | null; asetLain?: Aset[]; ig?: { id?: string; tautan?: string; at: number } | null;
+    status: StatusKonten; jam?: string; disetujui?: number; aset?: Aset | null; asetLain?: Aset[]; ig?: { id?: string; tautan?: string; at: number } | null;
     hasil?: Hasil[]; evaluasi?: { at: number; nilai: 'bagus' | 'biasa' | 'kurang'; teks: string } | null;
     galat?: string; dibuat: number; diubah: number;
 }
@@ -95,6 +95,8 @@ export class Sosmed {
         if (this.st.strategi && !this.st.strategi.jam) this.st.strategi.jam = '19:00';
         if (!Array.isArray(this.st.gaya)) this.st.gaya = [];
         if (!Array.isArray(this.st.komentar)) this.st.komentar = [];
+        // Unggahan yang terputus karena kantor dimulai ulang: tandai gagal supaya bisa dicoba lagi (tidak diulang otomatis agar tidak dobel).
+        for (const k of this.st.konten) if (k.status === 'mengunggah') { k.status = 'gagal'; k.galat = 'Unggahan terputus karena kantor dimulai ulang. Cek Instagram dulu; kalau belum terbit, tekan Unggah sekarang.'; }
     }
     simpan() {
         if (this.st.konten.length > 600) this.st.konten = this.st.konten.slice(-600);
@@ -384,6 +386,7 @@ export class Sosmed {
         for (const f of ['judul', 'sudut', 'hook', 'caption', 'ajakan', 'pilar', 'captionTiktok'] as const) if (x[f] != null) (k as any)[f] = teks(x[f], f === 'caption' ? 2200 : 300);
         for (const f of ['naskah', 'voiceover', 'promptVideo', 'promptGambar', 'rekam', 'promptEdit'] as const) if (x[f] != null) (k as any)[f] = teks(x[f], 6000);
         if (x.tgl && /^\d{4}-\d{2}-\d{2}$/.test(x.tgl)) k.tgl = x.tgl;
+        if (x.jam !== undefined) k.jam = /^\d{1,2}[:.]\d{2}$/.test(String(x.jam)) ? String(x.jam).replace('.', ':').padStart(5, '0') : undefined;
         if (x.format && FORMAT.includes(x.format)) k.format = x.format;
         if (x.gayaId !== undefined) k.gayaId = x.gayaId && this.semuaGaya.some((g) => g.id === x.gayaId) ? String(x.gayaId) : undefined;
         if (Array.isArray(x.hashtag)) k.hashtag = x.hashtag.slice(0, 12).map((h: any) => `#${satu(h, 40).replace(/^#+/, '').replace(/\s+/g, '')}`).filter((h: string) => h.length > 1);
@@ -398,6 +401,10 @@ export class Sosmed {
         else { k.aset = a; k.asetLain = []; }
         if (!['terbit', 'mengunggah'].includes(k.status)) k.status = 'aset'; k.diubah = Date.now(); k.galat = undefined; this.simpan(); return k;
     }
+    /** Waktu unggah konten (epoch ms): tanggal kalender + jam konten (atau jam strategi), dalam WIB. */
+    waktuUnggah(k: Konten) { const j = (k.jam || this.st.strategi?.jam || '19:00').padStart(5, '0'); return Date.parse(`${k.tgl}T${j}:00+07:00`); }
+    /** Konten terjadwal yang waktunya sudah tiba. */
+    jatuhTempo(now = Date.now()) { return this.st.konten.filter((k) => k.status === 'terjadwal' && this.waktuUnggah(k) <= now); }
     teksUnggah(k: Konten) { return [k.caption || '', k.ajakan && !(k.caption || '').includes(k.ajakan) ? k.ajakan : '', (k.hashtag || []).join(' ')].filter(Boolean).join('\n\n').slice(0, 2200); }
     ringkas(hariIni = hariWib()) {
         const k = this.st.konten, besok = tambahHari(hariIni, 1);

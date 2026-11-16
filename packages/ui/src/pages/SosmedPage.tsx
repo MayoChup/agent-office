@@ -5,7 +5,7 @@ import { useSubNav } from '../kantor/subnav';
 import { useInterval } from '../kantor/aktif';
 
 type Format = 'feed' | 'reel' | 'carousel' | 'story';
-type Status = 'rencana' | 'naskah' | 'prompt' | 'aset' | 'mengunggah' | 'terbit' | 'manual' | 'gagal';
+type Status = 'rencana' | 'naskah' | 'prompt' | 'aset' | 'terjadwal' | 'mengunggah' | 'terbit' | 'manual' | 'gagal';
 interface Adegan { no: number; detik: string; visual: string; teksLayar: string; narasi: string; sfx?: string }
 interface Hasil { at: number; sumber: 'ig' | 'manual'; umurJam: number; tayang?: number; jangkauan?: number; suka?: number; komentar?: number; simpan?: number; bagikan?: number; ikuti?: number }
 interface Aset { path: string; nama: string }
@@ -15,7 +15,7 @@ interface Konten {
     storyboard?: Adegan[]; subtitle?: string[]; slide?: Array<{ no: number; judul: string; isi: string; visual: string }>;
     caption?: string; hashtag?: string[]; ajakan?: string; captionTiktok?: string; youtube?: { judul: string; deskripsi: string };
     promptVideo?: string; promptGambar?: string; rekam?: string; promptEdit?: string; promptSuara?: { teks: string; gaya: string; pengaturan: string }; musik?: string; sampul?: string;
-    status: Status; aset?: Aset | null; asetLain?: Aset[]; ig?: { tautan?: string; at: number } | null; hasil?: Hasil[]; evaluasi?: { at: number; nilai: 'bagus' | 'biasa' | 'kurang'; teks: string } | null; galat?: string;
+    status: Status; jam?: string; aset?: Aset | null; asetLain?: Aset[]; ig?: { tautan?: string; at: number } | null; hasil?: Hasil[]; evaluasi?: { at: number; nilai: 'bagus' | 'biasa' | 'kurang'; teks: string } | null; galat?: string;
 }
 interface Gaya { id: string; nama: string; jenis: 'real' | 'animasi'; deskripsi: string; contoh?: Aset | null; bawaan?: boolean }
 interface Profil { akun: string; topik: string; audiens: string; tujuan: string; gaya: string; bahasa: string; perMinggu: number; format: string[]; durasi: number; suara: string; catatan: string; gayaVideo: string }
@@ -33,13 +33,17 @@ type Aksi = (p: Promise<any>, ok?: string) => void;
 const LS = 'kantor:sosmed-tab';
 const FMT: Record<Format, { label: string; ico: string; pendek: string }> = { reel: { label: 'Reel', ico: '🎞️', pendek: 'R' }, feed: { label: 'Feed', ico: '🖼️', pendek: 'F' }, carousel: { label: 'Carousel', ico: '🗂️', pendek: 'C' }, story: { label: 'Story', ico: '⭕', pendek: 'S' } };
 const FORMAT_URUT: Format[] = ['reel', 'feed', 'carousel', 'story'];
-const LANGKAH: Array<{ s: Status[]; label: string }> = [{ s: ['rencana'], label: 'Ide' }, { s: ['naskah'], label: 'Naskah' }, { s: ['prompt'], label: 'Prompt siap' }, { s: ['aset', 'manual', 'mengunggah', 'gagal'], label: 'Berkas masuk' }, { s: ['terbit'], label: 'Terbit' }];
+const LANGKAH: Array<{ s: Status[]; label: string }> = [{ s: ['rencana'], label: 'Ide' }, { s: ['naskah'], label: 'Naskah' }, { s: ['prompt'], label: 'Prompt siap' }, { s: ['aset', 'gagal'], label: 'Berkas masuk' }, { s: ['terjadwal', 'mengunggah', 'manual'], label: 'Dijadwalkan' }, { s: ['terbit'], label: 'Terbit' }];
 const SIBUK: Record<string, string> = { analisa: 'Tara sedang menganalisa niche…', strategi: 'Tara menganalisa niche, lalu Maya menyusun strategi & jadwal…', rencana: 'Maya sedang mengisi kalender…', naskah: 'Lala menulis naskah, lalu Vino menyiapkan prompt…', harian: 'Tim menyiapkan konten hari ini & besok…', hasil: 'Mengambil angka hasil dari Instagram…', komentar: 'Mengambil komentar & menyiapkan draf balasan…', evaluasi: 'Maya sedang menganalisa hasil postingan…', pelajaran: 'Maya menarik pelajaran dari semua postingan…' };
 const HARI = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
 const HARI_PANJANG = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
 const tglId = (t: string, opt: Intl.DateTimeFormatOptions = { weekday: 'long', day: 'numeric', month: 'long' }) => new Date(`${t}T00:00:00Z`).toLocaleDateString('id-ID', { ...opt, timeZone: 'UTC' });
 const tambah = (t: string, n: number) => new Date(Date.parse(`${t}T00:00:00Z`) + n * 86400_000).toISOString().slice(0, 10);
 const angka = (n?: number) => (n == null ? '–' : n >= 10000 ? `${(n / 1000).toFixed(n >= 100000 ? 0 : 1)}rb` : n.toLocaleString('id-ID'));
+const jamK = (k: Konten, x: Data) => (k.jam || x.strategi?.jam || '19:00').padStart(5, '0');
+const waktuK = (k: Konten, x: Data) => Date.parse(`${k.tgl}T${jamK(k, x)}:00+07:00`);
+const kapan = (k: Konten, x: Data) => `${tglId(k.tgl, { weekday: 'short', day: 'numeric', month: 'short' })} · ${jamK(k, x)}`;
+const cocok = (f: File, k: Konten) => (f.type.startsWith('video/') ? k.format === 'reel' || k.format === 'story' || k.format === 'carousel' : k.format !== 'reel');
 const akhir = (k: Konten) => k.hasil?.slice().sort((a, b) => b.umurJam - a.umurJam)[0];
 
 function Salin({ teks, label = 'Salin' }: { teks: string; label?: string }) {
@@ -62,11 +66,12 @@ async function unggahBerkas(folder: string, f: File, onPct: (n: number) => void)
 export function SosmedPage() {
     const d = useApi<Data>('/api/kantor/sosmed', 60_000);
     const x = d.data;
+    const nAntre = x?.semua.filter((k) => k.tgl >= x.hari && ['prompt', 'aset', 'gagal'].includes(k.status)).length || 0;
     const nKom = x?.komentar.filter((c) => c.status === 'draf' || c.status === 'baru').length || 0;
     const TAB = useMemo(() => [
-        { k: 'hari', ico: '🎬', label: 'Hari ini' }, { k: 'kalender', ico: '🗓️', label: 'Kalender' }, { k: 'analisa', ico: '🔎', label: 'Analisa niche' }, { k: 'strategi', ico: '🧭', label: 'Strategi' },
+        { k: 'hari', ico: '🎬', label: 'Hari ini' }, { k: 'antre', ico: '📤', label: 'Antrean unggah', badge: nAntre || undefined }, { k: 'kalender', ico: '🗓️', label: 'Kalender' }, { k: 'analisa', ico: '🔎', label: 'Analisa niche' }, { k: 'strategi', ico: '🧭', label: 'Strategi' },
         { k: 'gaya', ico: '🎨', label: 'Gaya video' }, { k: 'kinerja', ico: '📈', label: 'Hasil posting' }, { k: 'komentar', ico: '💬', label: 'Komentar & DM', badge: nKom || undefined }, { k: 'akun', ico: '⚙️', label: 'Akun & tim' }
-    ], [nKom]);
+    ], [nKom, nAntre]);
     const [tab, setTabS] = useState(() => { try { return localStorage.getItem(LS) || 'hari'; } catch { return 'hari'; } });
     const setTab = (k: string) => { setTabS(k); try { localStorage.setItem(LS, k); } catch { /* */ } };
     useSubNav(TAB, tab, setTab);
@@ -87,6 +92,7 @@ export function SosmedPage() {
             {x.sibuk && <div className="hz-bukti ok"><span className="pk-jalan"><i /></span><span>{SIBUK[x.sibuk] || 'Tim sedang bekerja…'}</span></div>}
             {!x.siap && tab !== 'akun' && tab !== 'gaya' && <Mulai x={x} setTab={setTab} />}
             {tab === 'hari' && x.siap && <TabHari {...p} />}
+            {tab === 'antre' && x.siap && <TabAntre {...p} />}
             {tab === 'kalender' && x.siap && <TabKalender {...p} />}
             {tab === 'analisa' && x.siap && <TabAnalisa {...p} />}
             {tab === 'strategi' && x.siap && <TabStrategi {...p} />}
@@ -135,11 +141,77 @@ function TabHari({ x, jalankan, kartu, setTab }: P) {
         </section>
         <section className="sb-card">
             <div className="sd-h"><h3>Hari ini <small>{tglId(x.hari)} · unggah ±{x.strategi?.jam || '19:00'} WIB</small></h3><button className="btn small" disabled={!!x.sibuk} onClick={() => jalankan('harian')}>↻ Siapkan sekarang</button></div>
-            {perluAksi > 0 && <p className="sm-tugas">👉 {perluAksi} konten menunggu Bapak: salin prompt → buat videonya → unggah berkas → Setujui.</p>}
+            {perluAksi > 0 && <p className="sm-tugas">👉 {perluAksi} konten menunggu Bapak: salin prompt → buat videonya → unggah berkas → Setujui. Mau sekaligus banyak? <button className="btn small" onClick={() => setTab('antre')}>Buka Antrean unggah</button></p>}
             {!x.hariIni.length && <div className="fin-empty">Tidak ada jadwal unggah hari ini.</div>}
             {x.hariIni.map(kartu)}
         </section>
         {x.besok.length > 0 && <section className="sb-card"><div className="sd-h"><h3>Besok <small>disiapkan lebih awal supaya Bapak sempat produksi</small></h3></div>{x.besok.map(kartu)}</section>}
+    </>);
+}
+
+/** Antrean unggah: produksi banyak sekaligus → unggah semua berkas → setujui semua → terbit sesuai kalender. */
+function TabAntre({ x, aksi, kabar, setTab }: P) {
+    const daftar = x.semua.filter((k) => k.tgl >= x.hari && ['prompt', 'aset', 'gagal', 'terjadwal', 'mengunggah', 'manual'].includes(k.status)).sort((a, b) => waktuK(a, x) - waktuK(b, x));
+    const butuh = daftar.filter((k) => k.status === 'prompt' || ((k.status === 'gagal' || k.status === 'aset') && !k.aset));
+    const siap = daftar.filter((k) => (k.status === 'aset' || k.status === 'gagal') && k.aset);
+    const jadwal = daftar.filter((k) => ['terjadwal', 'mengunggah', 'manual'].includes(k.status));
+    const [pasang, setPasang] = useState<Array<{ f: File; id: string }>>([]);
+    const [jalan, setJalan] = useState<string | null>(null);
+    const [pilih, setPilih] = useState<Record<string, boolean>>({});
+    const ref = useRef<HTMLInputElement>(null);
+    const ambil = (files: File[]) => {
+        const sisa = [...butuh, ...siap.filter((k) => k.format === 'carousel')];
+        const dipakai = new Set<string>();
+        setPasang(files.map((f) => { const k = sisa.find((y) => !dipakai.has(y.id) && cocok(f, y)); if (k && k.format !== 'carousel') dipakai.add(k.id); return { f, id: k?.id || '' }; }));
+    };
+    const unggahSemua = async () => {
+        const per = new Map<string, File[]>(); for (const p of pasang) if (p.id) per.set(p.id, [...(per.get(p.id) || []), p.f]);
+        let i = 0, n = [...per.values()].reduce((a, b) => a + b.length, 0);
+        try {
+            for (const [id, files] of per) {
+                const { folder } = await apiPost<{ folder: string }>(`/api/kantor/sosmed/konten/${id}/folder`, {});
+                for (let j = 0; j < files.length; j++) { i++; setJalan(`${i}/${n}`); const r = await unggahBerkas(folder, files[j], (q) => setJalan(`${i}/${n} · ${q}%`)); await apiPost(`/api/kantor/sosmed/konten/${id}/aset`, { path: r.path, tambah: j > 0 }); }
+            }
+            setPasang([]); aksi(Promise.resolve(), `✓ ${n} berkas tersimpan di cloud VPS. Cek daftar "Siap disetujui", lalu tekan Setujui semua.`);
+        } catch (e: any) { kabar(String(e.message || e)); } finally { setJalan(null); }
+    };
+    const dipilih = siap.filter((k) => pilih[k.id] !== false);
+    const Baris = ({ k, kanan }: { k: Konten; kanan?: React.ReactNode }) => (
+        <div className={`sm-ab f-${k.format}`}><span className="sm-ab-w">{kapan(k, x)}</span><Fmt f={k.format} /><b>{k.judul}</b>{kanan}</div>
+    );
+    return (<>
+        <section className="sb-card">
+            <div className="sd-h"><h3>1 · Taruh banyak berkas sekaligus <small>{butuh.length} konten menunggu berkas</small></h3>
+                <button className="btn primary" disabled={!butuh.length || !!jalan} onClick={() => ref.current?.click()}>⬆️ Pilih berkas</button></div>
+            <p className="sb-note" style={{ marginTop: 0 }}>Buat beberapa video/gambar sekaligus, pilih semuanya di sini. Sistem mencocokkan otomatis ke jadwal terdekat sesuai jenisnya (video → reel/story, gambar → feed/carousel/story). Periksa pasangannya, lalu tekan Unggah semua.</p>
+            <input ref={ref} type="file" multiple hidden accept="video/mp4,video/quicktime,image/jpeg,image/png" onChange={(e) => { const f = Array.from<File>(e.target.files || []).slice(0, 30); if (f.length) ambil(f); e.target.value = ''; }} />
+            {pasang.length > 0 && (<>
+                <div className="sm-pasang">{pasang.map((p, i) => (
+                    <div key={i}><span className="sm-pasang-f">{p.f.type.startsWith('video/') ? '🎞️' : '🖼️'} {p.f.name}<small>{(p.f.size / 1048576).toFixed(1)} MB</small></span><span aria-hidden="true">→</span>
+                        <select value={p.id} onChange={(e) => setPasang(pasang.map((y, j) => (j === i ? { ...y, id: e.target.value } : y)))} aria-label={`Konten untuk ${p.f.name}`}>
+                            <option value="">— jangan diunggah —</option>
+                            {[...butuh, ...siap].filter((k) => cocok(p.f, k)).map((k) => <option key={k.id} value={k.id}>{kapan(k, x)} · {FMT[k.format].label} · {k.judul}</option>)}
+                        </select></div>
+                ))}</div>
+                <div className="sm-aksi"><button className="btn primary" disabled={!!jalan || !pasang.some((p) => p.id)} onClick={unggahSemua}>{jalan ? `Mengunggah ${jalan}…` : `Unggah semua (${pasang.filter((p) => p.id).length})`}</button><button className="btn small" disabled={!!jalan} onClick={() => setPasang([])}>Batal</button></div>
+                <p className="sb-note">Carousel: beberapa gambar boleh dipasangkan ke carousel yang sama; urutannya mengikuti urutan di sini.</p>
+            </>)}
+            {!pasang.length && butuh.length > 0 && <div className="sm-ablist">{butuh.map((k) => <Baris key={k.id} k={k} kanan={<em className="sm-ab-s">{k.status === 'prompt' ? 'prompt siap' : 'belum ada berkas'}</em>} />)}</div>}
+            {!butuh.length && <div className="fin-empty">Semua konten mendatang sudah punya berkas. {x.semua.some((k) => k.tgl >= x.hari && (k.status === 'rencana' || k.status === 'naskah')) ? 'Sebagian masih ide/naskah: buka Kalender untuk membuat promptnya.' : ''}</div>}
+        </section>
+        <section className="sb-card">
+            <div className="sd-h"><h3>2 · Siap disetujui <small>{siap.length}</small></h3>
+                <button className="btn primary" disabled={!dipilih.length} onClick={() => { if (confirm(`Setujui ${dipilih.length} konten? Masing-masing ${x.ig ? 'terbit otomatis' : 'diingatkan lewat Telegram'} pada tanggal & jamnya.`)) aksi(apiPost<{ dijadwalkan: number; masalah: string[] }>('/api/kantor/sosmed/setujui-semua', { ids: dipilih.map((k) => k.id) }).then((r) => { if (r.masalah.length) kabar(`${r.dijadwalkan} dijadwalkan. Belum bisa: ${r.masalah.join(' · ')}`); return r; }), `✓ ${dipilih.length} konten dijadwalkan.`); }}>✓ Setujui semua ({dipilih.length})</button></div>
+            {!siap.length && <div className="fin-empty">Belum ada konten yang berkasnya sudah masuk.</div>}
+            <div className="sm-ablist">{siap.map((k) => <label key={k.id} className="sm-ab-c"><input type="checkbox" checked={pilih[k.id] !== false} onChange={(e) => setPilih({ ...pilih, [k.id]: e.target.checked })} /><Baris k={k} kanan={<em className="sm-ab-s">📁 {k.aset?.nama}{k.asetLain?.length ? ` +${k.asetLain.length}` : ''}</em>} /></label>)}</div>
+            {siap.length > 0 && <p className="sb-note">Caption ikut terunggah apa adanya; periksa dulu di tab Caption pada kartunya bila perlu. Jam bisa diubah di kartu konten.</p>}
+        </section>
+        <section className="sb-card">
+            <div className="sd-h"><h3>3 · Terjadwal <small>{jadwal.length}</small></h3></div>
+            {!jadwal.length && <div className="fin-empty">Belum ada yang terjadwal.</div>}
+            <div className="sm-ablist">{jadwal.map((k) => <Baris key={k.id} k={k} kanan={k.status === 'mengunggah' ? <span className="pk-jalan"><i /> mengunggah…</span> : k.status === 'manual' ? <em className="sm-ab-s">unggah manual</em> : <button className="btn small" onClick={() => aksi(apiPost(`/api/kantor/sosmed/konten/${k.id}/batal`, {}), 'Jadwal dibatalkan.')}>Batalkan</button>} />)}</div>
+            <p className="sb-note">{x.ig ? 'Kantor mengunggah tepat pada jamnya (dicek tiap menit) dan mengabari Bapak lewat Telegram.' : 'Instagram belum tersambung: pada jamnya Bapak diingatkan lewat Telegram untuk mengunggah manual. Sambungkan Instagram di Akun & tim supaya terbit otomatis.'} <button className="btn small" onClick={() => setTab('kalender')}>Lihat kalender</button></p>
+        </section>
     </>);
 }
 
@@ -503,6 +575,7 @@ function Produksi({ k, x, aksi, kabar }: { k: Konten; x: Data; aksi: Aksi; kabar
         } catch (e: any) { kabar(String(e.message || e)); } finally { setNaik(null); }
     };
     const n = 1 + (k.asetLain?.length || 0);
+    const nanti = waktuK(k, x) > Date.now();
     let langkah = 1;
     return (<>
         <PilihGaya k={k} x={x} aksi={aksi} onGanti={() => setGayaBaru(true)} />
@@ -522,17 +595,31 @@ function Produksi({ k, x, aksi, kabar }: { k: Konten; x: Data; aksi: Aksi; kabar
             <section className="sm-blok utama">
                 <div className="sm-blok-h"><b>{langkah} · Taruh hasil & setujui</b></div>
                 {k.aset ? <p className="sm-aset">📁 {k.aset.nama}{banyak && n > 1 ? ` + ${n - 1} berkas lain` : ''} <small>tersimpan di Berkas → Sosmed</small></p> : <p className="sb-note" style={{ marginTop: 0 }}>Setelah {k.format === 'reel' ? 'video' : banyak ? 'semua slide' : k.format === 'story' ? 'gambar/video story' : 'gambar'} jadi, unggah di sini. Berkasnya tersimpan di cloud VPS Bapak.</p>}
-                <input ref={input} type="file" multiple={banyak} accept={k.format === 'reel' ? 'video/mp4,video/quicktime' : k.format === 'story' ? 'video/mp4,video/quicktime,image/jpeg,image/png' : banyak ? 'image/jpeg,image/png,video/mp4' : 'image/jpeg,image/png'} hidden onChange={(e) => { const f = Array.from(e.target.files || []).slice(0, 10); if (f.length) unggah(f); e.target.value = ''; }} />
+                <input ref={input} type="file" multiple={banyak} accept={k.format === 'reel' ? 'video/mp4,video/quicktime' : k.format === 'story' ? 'video/mp4,video/quicktime,image/jpeg,image/png' : banyak ? 'image/jpeg,image/png,video/mp4' : 'image/jpeg,image/png'} hidden onChange={(e) => { const f = Array.from<File>(e.target.files || []).slice(0, 10); if (f.length) unggah(f); e.target.value = ''; }} />
                 <div className="sm-aksi">
                     {k.status !== 'terbit' && k.status !== 'mengunggah' && <button className="btn" disabled={naik != null} onClick={() => input.current?.click()}>{naik != null ? `Mengunggah ${naik}…` : k.aset ? '↻ Ganti berkas' : banyak ? '⬆️ Unggah semua slide (urut)' : '⬆️ Unggah berkas'}</button>}
-                    {['aset', 'gagal', 'manual'].includes(k.status) && k.aset && <button className="btn primary" onClick={() => { if (confirm(x.ig ? `Unggah "${k.judul}" (${FMT[k.format].label}) ke Instagram sekarang, beserta captionnya?` : `Instagram belum tersambung. Tandai "${k.judul}" siap diunggah manual?`)) aksi(apiPost(url('setujui'), {}), x.ig ? 'Disetujui — sedang diunggah ke Instagram.' : 'Siap diunggah manual: salin caption di tab Caption.'); }}>✓ Setujui{x.ig ? ' & unggah' : ''}</button>}
+                    {['aset', 'gagal'].includes(k.status) && k.aset && (nanti
+                        ? <button className="btn primary" onClick={() => aksi(apiPost(url('setujui'), {}), `Disetujui — ${x.ig ? 'terbit otomatis' : 'Bapak diingatkan lewat Telegram'} ${kapan(k, x)} WIB.`)}>✓ Setujui · terbit {kapan(k, x)}</button>
+                        : <button className="btn primary" onClick={() => { if (confirm(x.ig ? `Unggah "${k.judul}" (${FMT[k.format].label}) ke Instagram sekarang, beserta captionnya?` : `Instagram belum tersambung. Tandai "${k.judul}" siap diunggah manual?`)) aksi(apiPost(url('setujui'), { sekarang: true }), x.ig ? 'Disetujui — sedang diunggah ke Instagram.' : 'Siap diunggah manual: salin caption di tab Caption.'); }}>✓ Setujui{x.ig ? ' & unggah sekarang' : ''}</button>)}
+                    {['aset', 'gagal'].includes(k.status) && k.aset && nanti && <button className="btn small" onClick={() => { if (confirm(`Unggah "${k.judul}" sekarang, tidak menunggu jadwal?`)) aksi(apiPost(url('setujui'), { sekarang: true }), 'Disetujui — diunggah sekarang.'); }}>Unggah sekarang</button>}
+                    {k.status === 'terjadwal' && <><span className="sm-terjadwal">⏰ Terjadwal {kapan(k, x)} WIB{x.ig ? '' : ' (pengingat)'}</span><button className="btn small" onClick={() => { if (confirm(`Unggah "${k.judul}" sekarang?`)) aksi(apiPost(url('setujui'), { sekarang: true }), 'Diunggah sekarang.'); }}>Unggah sekarang</button><button className="btn small" onClick={() => aksi(apiPost(url('batal'), {}), 'Jadwal dibatalkan.')}>Batalkan jadwal</button></>}
                     {k.status === 'mengunggah' && <span className="pk-jalan"><i /> sedang diunggah ke Instagram…</span>}
                     {k.status === 'terbit' && <span className="sm-terbit">✅ Terbit{k.ig?.tautan && <> · <a href={k.ig.tautan} target="_blank" rel="noreferrer">lihat di Instagram</a></>}</span>}
                 </div>
+                {k.status !== 'terbit' && k.status !== 'mengunggah' && <JamUnggah k={k} x={x} aksi={aksi} />}
                 {k.status === 'manual' && <TerbitManual k={k} aksi={aksi} />}
             </section>
         )}
     </>);
+}
+function JamUnggah({ k, x, aksi }: { k: Konten; x: Data; aksi: Aksi }) {
+    return (
+        <div className="sm-jamk">
+            <label>Tanggal<input type="date" value={k.tgl} min={x.hari} onChange={(e) => e.target.value && aksi(apiPost(`/api/kantor/sosmed/konten/${k.id}/ubah`, { tgl: e.target.value }), 'Tanggal diubah.')} /></label>
+            <label>Jam (WIB)<input type="time" value={jamK(k, x)} onChange={(e) => e.target.value && aksi(apiPost(`/api/kantor/sosmed/konten/${k.id}/ubah`, { jam: e.target.value }))} /></label>
+            {k.jam && <button className="btn small" onClick={() => aksi(apiPost(`/api/kantor/sosmed/konten/${k.id}/ubah`, { jam: '' }), `Kembali ke jam umum ${x.strategi?.jam || '19:00'}.`)}>Pakai jam umum</button>}
+        </div>
+    );
 }
 function TerbitManual({ k, aksi }: { k: Konten; aksi: Aksi }) {
     const [t, setT] = useState('');

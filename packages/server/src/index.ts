@@ -825,6 +825,48 @@ app.post('/api/kantor/sosmed/konten', requireToken, sm((req) => {
     sosmed.st.konten.push(k); sosmed.ubah(k.id, {});
     return { konten: k };
 }));
+/** Cek sebelum disetujui; dipakai juga untuk "Setujui semua". Alamat https publik diingat untuk unggahan terjadwal. */
+function periksaSiapUnggah(k: Konten, req?: express.Request) {
+    if (!k.aset) throw new Error(`"${k.judul}": belum ada berkas.`);
+    if (!['aset', 'gagal', 'manual', 'terjadwal'].includes(k.status)) throw new Error(`"${k.judul}": belum siap disetujui.`);
+    const semua = [k.aset, ...(k.format === 'carousel' ? k.asetLain || [] : [])];
+    if (semua.some((x) => !/\.(mp4|mov|m4v|jpe?g|png)$/i.test(x.path))) throw new Error(`"${k.judul}": jenis berkas tidak didukung Instagram (pakai .mp4/.mov atau .jpg/.png).`);
+    if (k.format === 'reel' && !/\.(mp4|mov|m4v)$/i.test(k.aset.path)) throw new Error(`"${k.judul}": reel harus berupa video (.mp4/.mov).`);
+    if (req) { const d = (process.env.KANTOR_PUBLIC_URL || `${String(req.headers['x-forwarded-proto'] || req.protocol).split(',')[0]}://${String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0]}`).replace(/\/+$/, ''); if (/^https:\/\//.test(d)) alamatPublik = d; }
+    if (kunciIg() && !/^https:\/\//.test(process.env.KANTOR_PUBLIC_URL || alamatPublik)) throw new Error('Alamat publik kantor harus https supaya Instagram bisa mengambil berkasnya (atur KANTOR_PUBLIC_URL di VPS).');
+}
+let alamatPublik = '';
+/** Mengunggah satu konten yang SUDAH disetujui Pak Rico. Tanpa sambungan Instagram: jadi paket manual + pengingat. */
+function unggahKonten(k: Konten) {
+    const kunci = kunciIg(), caption = sosmed.teksUnggah(k);
+    if (!kunci) {
+        k.status = 'manual'; k.diubah = Date.now(); sosmed.simpan();
+        kabariTelegram(`⏰ Waktunya unggah ${k.format}: ${k.judul}\nBerkas: menu Berkas → Sosmed. Caption ada di menu Konten → kartu konten → Caption.`).catch(() => undefined);
+        return;
+    }
+    const dasar = (process.env.KANTOR_PUBLIC_URL || alamatPublik).replace(/\/+$/, '');
+    if (!/^https:\/\//.test(dasar)) { k.status = 'gagal'; k.galat = 'Alamat publik https kantor belum diketahui (atur KANTOR_PUBLIC_URL di VPS).'; sosmed.simpan(); return; }
+    const semua = [k.aset!, ...(k.format === 'carousel' ? k.asetLain || [] : [])];
+    k.status = 'mengunggah'; k.galat = undefined; sosmed.simpan();
+    let url: string[];
+    try { url = semua.map((x) => dasar + berkas.tautan(x.path, false).url); } // tautan sementara 10 menit, hanya untuk berkas ini
+    catch (e: any) { k.status = 'gagal'; k.galat = `Berkas tidak ditemukan: ${String(e?.message || e).slice(0, 160)}`; sosmed.simpan(); return; }
+    papan.jalankan({ ai: roster().some((x) => x.id === ID_SOSMED.produksi) ? ID_SOSMED.produksi : 'sistem', nama: 'Vino (Admin unggah)', judul: `Mengunggah ${k.format} ke Instagram: ${k.judul}`, detail: 'Disetujui Pak Rico.', sumber: 'tugas' }, () => unggahIg(kunci, url, caption, k.format), (r) => r.tautan || 'Terbit.')
+        .then((r) => { k.status = 'terbit'; k.ig = { id: r.id, tautan: r.tautan, at: Date.now() }; k.diubah = Date.now(); sosmed.simpan(); kabariTelegram(`✅ Terbit di Instagram: ${k.judul}${r.tautan ? ` — ${r.tautan}` : ''}`).catch(() => undefined); })
+        .catch((e) => { k.status = 'gagal'; k.galat = String(e?.message || e).slice(0, 260); sosmed.simpan(); kabariTelegram(`⚠️ Gagal unggah "${k.judul}": ${k.galat}`).catch(() => undefined); });
+}
+// Antrean terjadwal: dicek tiap menit; satu per satu supaya tidak bertabrakan.
+setInterval(() => { const k = sosmed.jatuhTempo()[0]; if (k && !sosmed.st.konten.some((x) => x.status === 'mengunggah')) unggahKonten(k); }, 60_000);
+app.post('/api/kantor/sosmed/setujui-semua', requireToken, sm((req) => {
+    const ids: string[] = Array.isArray(req.body?.ids) ? req.body.ids.map(String) : [];
+    const daftar = ids.map((id) => sosmed.cari(id));
+    const masalah: string[] = [];
+    for (const k of daftar) { try { periksaSiapUnggah(k, req); } catch (e: any) { masalah.push(String(e?.message || e)); } }
+    const ok = daftar.filter((k) => !masalah.some((m) => m.startsWith(`"${k.judul}"`)));
+    for (const k of ok) { k.disetujui = Date.now(); k.galat = undefined; k.status = 'terjadwal'; k.diubah = Date.now(); }
+    sosmed.simpan();
+    return { dijadwalkan: ok.length, masalah };
+}));
 app.post('/api/kantor/sosmed/konten/:id/:aksi', requireToken, sm(async (req) => {
     const k = sosmed.cari(String(req.params.id)), a = String(req.params.aksi), b = req.body || {};
     if (a === 'ubah') return { konten: sosmed.ubah(k.id, b) };
@@ -836,27 +878,17 @@ app.post('/api/kantor/sosmed/konten/:id/:aksi', requireToken, sm(async (req) => 
     }
     if (a === 'folder') { const f = `Sosmed/${k.tgl} ${k.format} ${k.judul.replace(/[\\/:*?"<>|]+/g, ' ').slice(0, 50).trim()}`; try { berkas.buatFolder('', 'Sosmed'); } catch { /* sudah ada */ } try { berkas.buatFolder('Sosmed', f.slice(7)); } catch { /* sudah ada */ } return { folder: f }; }
     if (a === 'aset') { const p = String(b.path || ''); berkas.tautan(p, false); /* memastikan berkasnya ada & aman */ return { konten: sosmed.pasangAset(k.id, p, !!b.tambah) }; }
-    if (a === 'batal') { k.status = k.aset ? 'aset' : k.promptVideo || k.promptGambar || k.promptEdit ? 'prompt' : 'naskah'; k.galat = undefined; sosmed.simpan(); return { konten: k }; }
+    if (a === 'batal') { k.disetujui = undefined; k.status = k.aset ? 'aset' : k.promptVideo || k.promptGambar || k.promptEdit ? 'prompt' : 'naskah'; k.galat = undefined; sosmed.simpan(); return { konten: k }; }
     if (a === 'hasil') { const kk = sosmed.catatHasil(k.id, b, 'manual'); if (!sosmed.sibuk) latarSosmed('evaluasi', () => sosmedEvaluasi(kk)); return { konten: kk }; }
     if (a === 'evaluasi') { if (!k.hasil?.length) throw new Error('Belum ada angka hasil untuk dianalisa.'); return latarSosmed('evaluasi', () => sosmedEvaluasi(k)); }
     if (a === 'terbit-manual') { k.status = 'terbit'; k.ig = { at: Date.now(), tautan: /^https:\/\/(www\.)?instagram\.com\//.test(String(b.tautan || '')) ? String(b.tautan) : undefined }; k.diubah = Date.now(); sosmed.simpan(); return { konten: k }; }
     if (a === 'setujui') {
-        // Persetujuan Pak Rico = izin unggah untuk SATU konten ini saja.
-        if (!k.aset) throw new Error('Belum ada berkas untuk konten ini.');
-        const kunci = kunciIg();
-        const caption = sosmed.teksUnggah(k);
-        if (!kunci) { k.status = 'manual'; k.diubah = Date.now(); sosmed.simpan(); return { konten: k, manual: true, caption }; }
-        const semua = [k.aset, ...(k.format === 'carousel' ? k.asetLain || [] : [])];
-        if (semua.some((x) => !/\.(mp4|mov|m4v|jpe?g|png)$/i.test(x.path))) throw new Error('Jenis berkas tidak didukung Instagram (pakai .mp4/.mov atau .jpg/.png).');
-        if (k.format === 'reel' && !/\.(mp4|mov|m4v)$/i.test(k.aset.path)) throw new Error('Reel harus berupa video (.mp4/.mov).');
-        const dasar = (process.env.KANTOR_PUBLIC_URL || `${String(req.headers['x-forwarded-proto'] || req.protocol).split(',')[0]}://${String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0]}`).replace(/\/+$/, '');
-        if (!/^https:\/\//.test(dasar)) throw new Error('Alamat publik kantor harus https supaya Instagram bisa mengambil berkasnya (atur KANTOR_PUBLIC_URL di VPS).');
-        k.status = 'mengunggah'; k.galat = undefined; sosmed.simpan();
-        const url = semua.map((x) => dasar + berkas.tautan(x.path, false).url); // tautan sementara 10 menit, hanya untuk berkas ini
-        papan.jalankan({ ai: roster().some((x) => x.id === ID_SOSMED.produksi) ? ID_SOSMED.produksi : 'sistem', nama: 'Vino (Admin unggah)', judul: `Mengunggah ${k.format} ke Instagram: ${k.judul}`, detail: 'Disetujui Pak Rico.', sumber: 'tugas' }, () => unggahIg(kunci, url, caption, k.format), (r) => r.tautan || 'Terbit.')
-            .then((r) => { k.status = 'terbit'; k.ig = { id: r.id, tautan: r.tautan, at: Date.now() }; k.diubah = Date.now(); sosmed.simpan(); kabariTelegram(`✅ Terbit di Instagram: ${k.judul}${r.tautan ? ` — ${r.tautan}` : ''}`).catch(() => undefined); })
-            .catch((e) => { k.status = 'gagal'; k.galat = String(e?.message || e).slice(0, 260); sosmed.simpan(); });
-        return { konten: k };
+        // Persetujuan Pak Rico = izin unggah untuk SATU konten ini, pada tanggal & jamnya di kalender (atau sekarang bila diminta / waktunya sudah lewat).
+        periksaSiapUnggah(k, req);
+        k.disetujui = Date.now(); k.galat = undefined;
+        if (b.sekarang || sosmed.waktuUnggah(k) <= Date.now()) { unggahKonten(k); return { konten: k }; }
+        k.status = 'terjadwal'; k.diubah = Date.now(); sosmed.simpan();
+        return { konten: k, jadwal: sosmed.waktuUnggah(k) };
     }
     throw new Error('Aksi tidak dikenal.');
 }));
