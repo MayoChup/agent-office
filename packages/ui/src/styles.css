@@ -1425,3 +1425,84 @@ body.no-office #phaser-container { visibility: hidden; }
 .mt-tag.new { background: rgba(59, 130, 246, 0.15); color: #2563eb; }
 .mt-saldo { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 12px 0; font-size: 13.5px; }
 .mt-done { text-align: center; padding: 24px 8px; display: flex; flex-direction: column; gap: 12px; align-items: center; }
+
+/* ── Trading: pita tetap terlihat saat menggulir ─────────── */
+.sb-tape { position: sticky; top: 0; z-index: 6; box-shadow: 0 6px 14px rgba(0, 0, 0, 0.18); }
+
+/* ── Profil perusahaan ─────────────────────────────────── */
+.sd-prof p { margin: 0 0 8px; line-height: 1.6; font-size: 14px; }
+.sd-prof-meta { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+.sd-prof a.btn { text-decoration: none; }
+
+/* ── Preset guru ───────────────────────────────────────── */
+.pr-panel { display: flex; flex-direction: column; gap: 8px; }
+.pr-l { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin-top: 4px; }
+.pr-l small { text-transform: none; font-weight: 500; letter-spacing: 0; }
+.pr-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.pr-chips > button, .pr-chip { border: 1px solid var(--line-strong); border-radius: 999px; background: none; color: var(--text); font-size: 12.5px; }
+.pr-chips > button { padding: 6px 12px; cursor: pointer; }
+.pr-chip { display: inline-flex; align-items: center; overflow: hidden; }
+.pr-chip > button { background: none; border: none; color: inherit; cursor: pointer; padding: 6px 4px 6px 12px; font-size: 12.5px; }
+.pr-chip small { color: var(--muted); }
+.pr-chip .pr-i { width: 22px; height: 22px; margin: 0 4px 0 2px; padding: 0; border-radius: 50%; border: 1px solid var(--line-strong); font-size: 11px; font-weight: 700; font-style: italic; display: grid; place-items: center; }
+.pr-chips > button.on, .pr-chip.on { background: #16a34a; border-color: #16a34a; color: #fff; }
+.pr-chip.on small { color: rgba(255, 255, 255, 0.8); }
+.pr-chip.on .pr-i { border-color: rgba(255, 255, 255, 0.6); }
+.pr-info { margin-top: 8px; padding: 12px; border-radius: 12px; background: rgba(127, 127, 127, 0.08); font-size: 13px; line-height: 1.5; }
+.pr-info p { margin: 4px 0 8px; }
+.pr-info ul { margin: 4px 0 8px; padding-left: 18px; }
+.pr-info small { color: var(--muted); }
+.pr-rek { padding: 12px; border-radius: 14px; background: linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(16, 185, 129, 0.1)); border: 1px solid rgba(99, 102, 241, 0.25); display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.pr-rek-l { display: flex; flex-direction: column; gap: 2px; }
+.pr-rek p { margin: 0; color: var(--muted); line-height: 1.5; }
+.pr-rek .btn { align-self: flex-start; }
+.pr-cek { margin-top: 10px; padding: 12px; border-radius: 12px; border: 1px solid var(--line); }
+.pr-cek-h { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.pr-cek ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.pr-cek li.ok { color: #16a34a; } .pr-cek li.no { color: #ef4444; } .pr-cek li.na { color: var(--muted); }
+.pr-pct { font-size: 11.5px; font-weight: 700; padding: 2px 8px; border-radius: 99px; background: rgba(127, 127, 127, 0.15); white-space: nowrap; }
+.pr-pct.ok { background: rgba(34, 197, 94, 0.18); color: #16a34a; } .pr-pct.mid { background: rgba(245, 158, 11, 0.18); color: #d97706; } .pr-pct.no { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+.pr-semua { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px; margin-top: 8px; }
+.pr-semua button { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: none; color: var(--text); cursor: pointer; text-align: left; font-size: 13px; }
+.pr-semua small { color: var(--muted); }
+.sd-preset { margin: 8px 0 10px; }
+.pr-min { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border-radius: 12px; background: rgba(34, 197, 94, 0.08); border: 1px solid rgba(34, 197, 94, 0.25); font-size: 13px; margin-bottom: 10px; }
+.pr-td { white-space: nowrap; } .pr-td .pr-pct { margin-right: 4px; }
+
+/* ── Simulasi 10.000 jalur ─────────────────────────────── */
+.sim-cta { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.sim-cta div { display: flex; flex-direction: column; gap: 2px; }
+.sim-cta small { color: var(--muted); font-size: 12.5px; }
+.sim { background: linear-gradient(180deg, #0c1530, #0a1024) !important; color: #e2e8f0; border-color: #1e2a4a !important; }
+.sim .sb-note { color: #94a3b8; }
+.sim-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.sim-tag { background: #fff; color: #0f172a; font-weight: 800; padding: 6px 14px; border-radius: 12px; font-size: 14px; }
+.sim-n { font-size: 14px; color: #cbd5e1; } .sim-n b { font-size: 26px; color: #fff; margin-right: 4px; }
+.sim .icon-btn { color: #cbd5e1; }
+.sim-prof { margin-bottom: 10px; background: rgba(255, 255, 255, 0.06) !important; }
+.sim-prof button { color: #cbd5e1 !important; } .sim-prof button.on { background: #fff !important; color: #0f172a !important; }
+.sim-chart { position: relative; height: 300px; margin-right: 128px; border-radius: 10px; }
+.sim-chart svg { width: 100%; height: 100%; display: block; }
+.sim-lbl { position: absolute; right: -128px; transform: translateY(-50%); width: 118px; padding: 5px 10px; border-radius: 10px; display: flex; flex-direction: column; line-height: 1.15; }
+.sim-lbl small { font-size: 9.5px; font-weight: 800; letter-spacing: 0.08em; opacity: 0.85; }
+.sim-lbl b { font-size: 16px; }
+.sim-lbl.t { background: #22c55e; color: #fff; } .sim-lbl.m { background: #fff; color: #0f172a; } .sim-lbl.s { background: #ef4444; color: #fff; }
+.sim-axis { display: flex; align-items: center; gap: 10px; margin: 8px 128px 12px 0; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #93c5fd; }
+.sim-axis i { flex: 1; height: 1px; background: rgba(147, 197, 253, 0.35); }
+.sim-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
+.sim-card { text-align: left; padding: 12px; border-radius: 14px; border: 1px solid #1e2a4a; background: rgba(255, 255, 255, 0.04); color: #e2e8f0; cursor: pointer; display: flex; flex-direction: column; gap: 6px; }
+.sim-card.on { border-color: #60a5fa; background: rgba(96, 165, 250, 0.1); }
+.sim-card > small { color: #94a3b8; font-size: 11.5px; line-height: 1.4; }
+.sim-kv { display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; font-size: 12px; }
+.sim-kv em { font-style: normal; font-weight: 700; text-align: right; }
+.sim-kv .up { color: #4ade80; } .sim-kv .down { color: #f87171; }
+.sim-bar { display: flex; height: 7px; border-radius: 99px; overflow: hidden; background: rgba(255, 255, 255, 0.08); }
+.sim-bar .g { background: #22c55e; } .sim-bar .r { background: #ef4444; } .sim-bar .b { background: #38bdf8; }
+.sim-foot { display: flex; gap: 10px; flex-wrap: wrap; justify-content: space-between; margin: 12px 0 4px; }
+.sim-pill { padding: 6px 14px; border-radius: 99px; border: 1px solid #334155; font-size: 12.5px; font-weight: 700; color: #cbd5e1; }
+.sim-pill.blue { background: #22d3ee; color: #0f172a; border-color: #22d3ee; }
+@media (max-width: 767px) {
+  .sim-chart { margin-right: 92px; height: 240px; }
+  .sim-lbl { right: -92px; width: 86px; padding: 4px 8px; } .sim-lbl b { font-size: 13px; }
+  .sim-axis { margin-right: 92px; }
+}

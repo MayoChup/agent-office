@@ -18,6 +18,10 @@ import { Catatan } from './kantor/catatan';
 import { Berkas } from './kantor/berkas';
 import { AnggaranStore, bacaTransaksi } from './kantor/anggaran';
 import { bacaPdf, urai, cocokkan } from './kantor/mutasi';
+import { presetInfo, REKOMENDASI } from './kantor/preset';
+import { profil as nasdaqProfil, fundamentalNasdaq } from './kantor/nasdaq';
+import { simulasi, langkahDari } from './kantor/simulasi';
+import { cnbcChart } from './kantor/harga';
 import { telegramKirim } from './kantor/telegram';
 import { HermesBridge } from './kantor/hermes';
 import { slidesCli } from './kantor/slides';
@@ -45,7 +49,15 @@ const kuotaBerat = new KuotaBerat(config.dataDir, config.berat.model, config.ber
 // Mode uji: `node kantor-server.js --uji-pencatat` → tampilkan transaksi yang AKAN dicatat, tanpa menulis apa pun.
 const tradingDeskDir = process.env.TRADER_DESK || path.join(os.homedir(), 'trader-desk');
 const tradingArg = process.argv.indexOf('--trading');
-if (process.argv.includes('--cek-harga')) {
+if (process.argv.includes('--cek-fundamental')) {
+    // Diagnosa: node kantor-server.js --cek-fundamental AAPL
+    const sy = (process.argv[process.argv.indexOf('--cek-fundamental') + 1] || 'AAPL').toUpperCase();
+    (async () => {
+        try { const { _cek, ...f } = await fundamentalNasdaq(sy, null); console.log(`✅ Fundamental ${sy} (Nasdaq):`, JSON.stringify(f)); console.log('   baris terbaca:', JSON.stringify(_cek)); } catch (e: any) { console.log(`❌ Fundamental ${sy}: ${e?.message || e}`); }
+        try { const p = await nasdaqProfil(sy); console.log(`✅ Profil: ${p.nama} · ${p.situs} · ${p.deskripsi.slice(0, 120)}…`); } catch (e: any) { console.log(`❌ Profil: ${e?.message || e}`); }
+        process.exit(0);
+    })();
+} else if (process.argv.includes('--cek-harga')) {
     const i = process.argv.indexOf('--cek-harga');
     cekHargaCli((process.argv[i + 1] || 'AAPL').toUpperCase()).then(() => process.exit(0));
 } else if (tradingArg >= 0) {
@@ -384,7 +396,8 @@ app.post('/api/kantor/chat/:id', requireToken, (req, res) => {
 
 // ── Penyaring saham (fundamental SEC + teknikal) ─────────────────────
 const screener = new Screener(config.dataDir, () => { const st = tradingDesk.load(); return Array.from(new Set([...st.positions.map((p) => p.symbol), ...st.watchlist])); }, tradingDeskDir);
-app.get('/api/kantor/screener', requireToken, (req, res) => { res.json({ ok: true, ...screener.data(Number(req.query.h) || 20) }); });
+const qH = (req: express.Request) => [Math.max(1, Math.min(120, Number(req.query.h) || 20)), String(req.query.m || ''), String(req.query.pt || ''), String(req.query.pf || '')] as const;
+app.get('/api/kantor/screener', requireToken, (req, res) => { res.json({ ok: true, ...screener.data(...qH(req)) }); });
 app.get('/api/kantor/candle/:s', requireToken, async (req, res) => {
     try { res.json({ ok: true, ...(await ambilCandle(String(req.params.s), String(req.query.r || '6B'))) }); }
     catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
@@ -401,9 +414,63 @@ app.post('/api/kantor/watchlist-folder', requireToken, (req, res) => {
 });
 app.get('/api/kantor/peta-berita', requireToken, (_req, res) => { res.json({ ok: true, ...screener.petaBerita() }); });
 app.get('/api/kantor/saham-detail/:s', requireToken, (req, res) => {
-    const d = screener.detail(String(req.params.s).toUpperCase(), Math.max(1, Math.min(120, Number(req.query.h) || 20)));
+    const d = screener.detail(String(req.params.s).toUpperCase(), ...qH(req));
     if (!d) { res.status(404).json({ ok: false, error: 'Belum ada di data penyaring' }); return; }
     res.json({ ok: true, ...d });
+});
+app.get('/api/kantor/preset', requireToken, (_req, res) => { res.json({ ok: true, preset: presetInfo(), rekomendasi: REKOMENDASI }); });
+// Profil perusahaan (Nasdaq) + ringkasan singkat berbahasa Indonesia (AI gratis), disimpan 30 hari.
+const profilDir = path.join(config.dataDir, 'profil'); fs.mkdirSync(profilDir, { recursive: true });
+app.get('/api/kantor/profil/:s', requireToken, async (req, res) => {
+    const s = String(req.params.s).toUpperCase().replace(/[^A-Z0-9.\-^]/g, '').slice(0, 12);
+    const file = path.join(profilDir, `${s.replace(/\^/g, '_')}.json`);
+    try {
+        try { const c = JSON.parse(fs.readFileSync(file, 'utf8')); if (Date.now() - c.at < 30 * 86400_000) { res.json({ ok: true, ...c }); return; } } catch { /* belum ada */ }
+        const p = await nasdaqProfil(s);
+        let ringkas = '';
+        const llm = OfficeRoom.sharedLlm();
+        if (llm && p.deskripsi) {
+            const out = await llm.complete('Ringkas profil perusahaan berikut dalam 2–3 kalimat bahasa Indonesia yang mudah dipahami awam: apa bisnisnya, produk/sumber pendapatan utamanya, dan posisinya di pasar. Tanpa pembuka, tanpa poin-poin.', p.deskripsi.slice(0, 3000), 300, 2).catch(() => null);
+            ringkas = String(out || '').trim().slice(0, 700);
+        }
+        if (!ringkas) ringkas = p.deskripsi.split(/(?<=\.)\s+/).slice(0, 2).join(' ').slice(0, 500);
+        const out = { ...p, ringkas, at: Date.now() };
+        fs.writeFileSync(file, JSON.stringify(out));
+        res.json({ ok: true, ...out });
+    } catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
+});
+// Simulasi 10.000 jalur (bootstrap dari pergerakan historis saham itu sendiri).
+const simCache = new Map<string, { at: number; v: any }>();
+app.get('/api/kantor/simulasi/:s', requireToken, async (req, res) => {
+    const s = String(req.params.s).toUpperCase().slice(0, 12);
+    const [H, mode] = qH(req);
+    const kunci = `${s}|${H}|${mode}`;
+    const c = simCache.get(kunci);
+    if (c && Date.now() - c.at < 20 * 60_000) { res.json({ ok: true, ...c.v }); return; }
+    try {
+        const b = screener.hargaTerakhir(s);
+        let out: any;
+        if (H === 1) {
+            // Scalping / day trading: pakai batang menit (CNBC 5 hari) — simulasi dari sekarang sampai bursa tutup.
+            const r = await cnbcChart(s, '5D');
+            const q0 = r.indicators.quote[0];
+            const ts: number[] = r.timestamp;
+            const step = ts.length > 2 ? Math.round(Math.min(...ts.slice(1).map((t, i) => t - ts[i]).filter((x) => x > 0)) / 60) : 5;
+            const hari = new Map<string, number>(); for (const t of ts) { const k = new Date((t - 4 * 3600) * 1000).toISOString().slice(0, 10); hari.set(k, (hari.get(k) || 0) + 1); }
+            const perSesi = Math.max(...hari.values());
+            const langkah = langkahDari(q0.high, q0.low, q0.close).filter((x) => Math.abs(x.c - 1) < 0.08);
+            const harga = Number(q0.close[q0.close.length - 1]) || b?.harga || 0;
+            out = { ...simulasi(harga, langkah, Math.min(perSesi, 400), { profil: ['konservatif', 'moderat', 'agresif'], satuan: 'batang' }), menitPerBatang: step, sumber: 'CNBC (menit)' };
+        } else {
+            const seri = screener.seriHarian(s);
+            if (!seri || !b) throw new Error('Data harga harian belum ada. Tekan ↻ di Trading dulu.');
+            out = { ...simulasi(b.harga, langkahDari(seri.h, seri.l, seri.c), H, { profil: ['konservatif', 'moderat', 'agresif'], satuan: 'hari' }), sumber: 'harga harian 1 tahun' };
+        }
+        out.horizon = H; out.mode = mode;
+        simCache.set(kunci, { at: Date.now(), v: out });
+        if (simCache.size > 100) simCache.delete(simCache.keys().next().value as string);
+        res.json({ ok: true, ...out });
+    } catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
 });
 app.get('/api/kantor/screener/:s', requireToken, (req, res) => { res.json({ ok: true, spark: screener.spark(String(req.params.s).toUpperCase()) }); });
 app.post('/api/kantor/screener/perbarui', requireToken, (req, res) => {

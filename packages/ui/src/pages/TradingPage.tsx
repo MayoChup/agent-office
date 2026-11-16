@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useSubNav } from '../kantor/subnav';
-import { Horison, HorisonBar, nilaiH } from './trading/Horison';
+import { Horison, HorisonBar, nilaiH, paramH, MODE_LAMA } from './trading/Horison';
+import { usePreset, PresetPilih, PresetRekomendasi } from './trading/Preset';
 import { useApi, TradingData } from '../kantor/api';
 import { apiPost } from '../kantor/connection';
 import { useKantor, statusOf } from '../kantor/store';
@@ -48,10 +49,25 @@ export function TradingPage() {
     const [saham, setSaham] = useState<string | null>(null);
     const [faktor, setFaktor] = useState<FaktorKey>(() => { try { return (localStorage.getItem('kantor:faktor') as FaktorKey) || 'semua'; } catch { return 'semua'; } });
     const setF = (f: FaktorKey) => { setFaktor(f); try { localStorage.setItem('kantor:faktor', f); } catch { /* */ } };
-    const [horison, setHorisonS] = useState<Horison>(() => { try { const v = JSON.parse(localStorage.getItem('kantor:horison') || ''); if (v?.mode === 'tanggal' && !(v.tanggal > new Date().toISOString().slice(0, 10))) return { mode: 'harian' }; return v?.mode ? v : { mode: 'harian' }; } catch { return { mode: 'harian' }; } });
+    const [horison, setHorisonS] = useState<Horison>(() => { try { const v = JSON.parse(localStorage.getItem('kantor:horison') || ''); if (v?.mode === 'tanggal' && !(v.tanggal > new Date().toISOString().slice(0, 10))) return { mode: 'swingpendek' }; if (v?.mode && MODE_LAMA[v.mode]) return { mode: MODE_LAMA[v.mode] }; return v?.mode ? v : { mode: 'swingpendek' }; } catch { return { mode: 'swingpendek' }; } });
     const setHorison = (h: Horison) => { setHorisonS(h); try { localStorage.setItem('kantor:horison', JSON.stringify(h)); } catch { /* */ } };
     const H = nilaiH(horison);
-    const sc = useApi<ScreenerData>(`/api/kantor/screener?h=${H}`, 600_000);
+    const [preset, setPresetS] = useState<{ t: string; f: string }>(() => { try { return JSON.parse(localStorage.getItem('kantor:preset') || '') || { t: '', f: '' }; } catch { return { t: '', f: '' }; } });
+    const setPreset = (x: { t: string; f: string }) => { setPresetS(x); try { localStorage.setItem('kantor:preset', JSON.stringify(x)); } catch { /* */ } };
+    const pd = usePreset();
+    const modeAktif = horison.mode === 'tanggal' ? (H <= 1 ? 'daytrade' : H <= 5 ? 'swingpendek' : H <= 20 ? 'swing' : H <= 60 ? 'posisi' : 'investasi') : horison.mode;
+    const qApi = `${paramH(horison)}${preset.t ? `&pt=${preset.t}` : ''}${preset.f ? `&pf=${preset.f}` : ''}`;
+    const sc = useApi<ScreenerData>(`/api/kantor/screener?${qApi}`, 600_000);
+    const presetPanel = (
+        <section className="sb-card pr-panel">
+            <PresetRekomendasi mode={modeAktif} data={pd.data} pakai={(t, f) => setPreset({ t, f })} />
+            <div className="pr-l">📈 Preset teknikal</div>
+            <PresetPilih jenis="teknikal" aktif={preset.t} setAktif={(t) => setPreset({ ...preset, t })} mode={modeAktif} data={pd.data} />
+            <div className="pr-l">🏛️ Preset fundamental</div>
+            <PresetPilih jenis="fundamental" aktif={preset.f} setAktif={(f) => setPreset({ ...preset, f })} mode={modeAktif} data={pd.data} />
+            <p className="sb-note">Preset aktif ikut menentukan skor teknikal/fundamental semua saham: makin banyak kriteria yang lolos, makin tinggi skornya (tidak harus lolos semua).</p>
+        </section>
+    );
     React.useEffect(() => { if (!sc.data?.sibuk) return; const t = setInterval(() => sc.reload(), 8000); return () => clearInterval(t); }, [sc.data?.sibuk]);
     const setTab = (t: Tab) => { setSaham(null); setTabState(t); try { localStorage.setItem(LS_TAB, t); } catch { /* */ } document.querySelector('.pg')?.scrollTo({ top: 0 }); };
     // Menu bawah HP: yang paling sering dipakai di depan, sisanya masuk "Lainnya".
@@ -84,7 +100,7 @@ export function TradingPage() {
                 <span className="sb-nav-sp" />
                 {sc.data?.sibuk ? <span className="sb-busy">⏳ {sc.data.progres}</span> : <button className="sb-refresh" onClick={() => { perbarui(); reload(); }} title="Ambil data terbaru">↻</button>}
             </nav>
-            {saham && <><HorisonBar h={horison} setH={setHorison} /><SahamDetail key={`${saham}-${H}`} simbol={saham} H={H} onBack={() => setSaham(null)} /></>}
+            {saham && <><HorisonBar h={horison} setH={setHorison} /><SahamDetail key={`${saham}-${qApi}`} simbol={saham} H={H} q={qApi} preset={preset} setPreset={setPreset} mode={modeAktif} pd={pd.data} onBack={() => setSaham(null)} /></>}
             {!saham && ['pasar', 'pilihan', 'panas', 'watchlist'].includes(tab) && !sc.data && <div className="fin-empty">{sc.error ? `Gagal memuat: ${sc.error}` : 'Memuat data pasar…'}</div>}
             {!saham && ['pasar', 'pilihan', 'panas'].includes(tab) && sc.data && sc.data.baris.length === 0 && (
                 <div className="sb-card sb-kosong">
@@ -108,7 +124,7 @@ export function TradingPage() {
             {!saham && tab === 'berita' && <PetaBerita onOpen={buka} />}
             {!saham && tab === 'watchlist' && sc.data && <WatchlistView data={sc.data} faktor={faktor} onOpen={buka} />}
             {!saham && tab === 'investigasi' && <InvestigasiView />}
-            {!saham && tab === 'penyaring' && <ScreenerView onOpen={buka} />}
+            {!saham && tab === 'penyaring' && <><HorisonBar h={horison} setH={setHorison} bobot={(sc.data as any)?.bobot} />{presetPanel}<ScreenerView onOpen={buka} q={qApi} presetAktif={preset} pd={pd.data} /></>}
             {!saham && tab === 'posisi' && error && <div className="error">Gagal memuat: {error}</div>}
             {!saham && tab === 'posisi' && data && (
                 <>

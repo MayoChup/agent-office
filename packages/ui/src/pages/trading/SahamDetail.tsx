@@ -4,11 +4,18 @@ import { useApi } from '../../kantor/api';
 import type { FolderData } from './WatchlistView';
 import { CandleChart } from '../../components/CandleChart';
 import { Baris, FAKTOR, FaktorKey, Label, kelas, usd, persen, kap, skorBar } from './types';
+import { PresetPilih, PresetCek, PresetData, PresetEval } from './Preset';
+import { Simulasi } from './Simulasi';
 
 interface FaktorFull { skor: number; label: Label; alasan: string[] }
-interface Detail { baris: Baris; skor: Record<FaktorKey, FaktorFull | null>; berita: { n: number; judul: Array<{ t: string; s: number; tgl: string; url: string }> } | null; orang: { net: number; beli: number; jual: number; n: number } | null }
+interface Profil { nama: string; ringkas: string; deskripsi: string; situs: string; sektor: string; industri: string; alamat: string }
+interface Detail { preset?: PresetEval[]; baris: Baris; skor: Record<FaktorKey, FaktorFull | null>; berita: { n: number; judul: Array<{ t: string; s: number; tgl: string; url: string }> } | null; orang: { net: number; beli: number; jual: number; n: number } | null }
 
-export function SahamDetail({ simbol, onBack, H = 20 }: { simbol: string; onBack: () => void; H?: number }) {
+export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPreset, mode = 'swing', pd }: { simbol: string; onBack: () => void; H?: number; q?: string; preset?: { t: string; f: string }; setPreset?: (x: { t: string; f: string }) => void; mode?: string; pd?: PresetData | null }) {
+    const [prof, setProf] = useState<Profil | null>(null);
+    const [profErr, setProfErr] = useState('');
+    const [sim, setSim] = useState(false);
+    useEffect(() => { let a = true; setProf(null); apiGet<Profil>(`/api/kantor/profil/${encodeURIComponent(simbol)}`).then((r) => a && setProf(r)).catch((e) => a && setProfErr(String(e.message || e))); return () => { a = false; }; }, [simbol]);
     const [d, setD] = useState<Detail | null>(null);
     const [err, setErr] = useState('');
     const [msg, setMsg] = useState('');
@@ -18,7 +25,7 @@ export function SahamDetail({ simbol, onBack, H = 20 }: { simbol: string; onBack
     useEffect(() => {
         let alive = true;
         setD(null); setErr('');
-        apiGet<Detail>(`/api/kantor/saham-detail/${encodeURIComponent(simbol)}?h=${H}`)
+        apiGet<Detail>(`/api/kantor/saham-detail/${encodeURIComponent(simbol)}?${q}`)
             .catch(() => apiGet<Detail>(`/api/kantor/saham/${encodeURIComponent(simbol)}`).then((r) => ({ ...r, berita: null, orang: null })))
             .then((r) => alive && setD(r)).catch((e) => alive && setErr(String(e.message || e)));
         return () => { alive = false; };
@@ -50,7 +57,27 @@ export function SahamDetail({ simbol, onBack, H = 20 }: { simbol: string; onBack
                 )}
             </section>
 
+            <section className="sb-card sd-prof">
+                <div className="sd-h"><h3>Tentang {prof?.nama || b.nama}</h3></div>
+                {prof ? (<>
+                    <p>{prof.ringkas || prof.deskripsi.slice(0, 400)}</p>
+                    <div className="sd-prof-meta">{[prof.sektor, prof.industri, prof.alamat].filter(Boolean).join(' · ')}</div>
+                    <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+                        {prof.situs && <a className="btn" href={prof.situs} target="_blank" rel="noreferrer">🌐 Situs resmi perusahaan</a>}
+                        <a className="btn" href={`https://www.nasdaq.com/market-activity/stocks/${b.s.toLowerCase().replace('-', '.')}`} target="_blank" rel="noreferrer">📄 Profil di Nasdaq</a>
+                        <a className="btn" href={`https://www.google.com/finance/quote/${b.s.replace('-', '.')}`} target="_blank" rel="noreferrer">🔎 Google Finance</a>
+                    </div>
+                </>) : <p className="sb-note">{profErr ? `Profil belum bisa diambil (${profErr}).` : 'Memuat profil perusahaan…'}</p>}
+            </section>
+
             <section className="sb-card cc-card"><CandleChart simbol={b.s} /></section>
+
+            {sim ? <Simulasi simbol={b.s} q={q} onTutup={() => setSim(false)} /> : (
+                <section className="sb-card sim-cta">
+                    <div><b>🎲 Simulasi 10.000 jalur</b><small>Berapa kali harga menyentuh harga masuk, target, atau stop — untuk profil Konservatif, Moderat & Agresif.</small></div>
+                    <button className="btn primary" onClick={() => setSim(true)}>Jalankan simulasi</button>
+                </section>
+            )}
 
             {pr && (
                 <section className="sb-card sd-proj">
@@ -91,6 +118,23 @@ export function SahamDetail({ simbol, onBack, H = 20 }: { simbol: string; onBack
                                 <b className="mono">{s ? skorBar(s.skor) : '–'}</b>
                             </div>
                             <p className="sb-note">{info.info}</p>
+                            {(tab === 'teknikal' || tab === 'fundamental') && pd && setPreset && preset && (() => {
+                                const k = tab as 'teknikal' | 'fundamental';
+                                const aktif = k === 'teknikal' ? preset.t : preset.f;
+                                const evs = (d.preset || []).filter((e) => e.jenis === k);
+                                const evA = evs.find((e) => e.id === aktif);
+                                return (
+                                    <div className="sd-preset">
+                                        <div className="pr-l">Preset guru {k} <small>(⭐ = direkomendasikan untuk rencana posisi ini)</small></div>
+                                        <PresetPilih jenis={k} aktif={aktif} setAktif={(id) => setPreset(k === 'teknikal' ? { ...preset, t: id } : { ...preset, f: id })} mode={mode} data={pd} />
+                                        {evA ? <PresetCek ev={evA} p={pd.preset.find((x) => x.id === evA.id)!} /> : (
+                                            <div className="pr-semua">{evs.map((e) => { const p = pd.preset.find((x) => x.id === e.id)!; return (
+                                                <button key={e.id} onClick={() => setPreset(k === 'teknikal' ? { ...preset, t: e.id } : { ...preset, f: e.id })}><span>{p.guru} <small>{p.nama}</small></span><b className={`pr-pct ${e.persen == null ? '' : e.persen >= 75 ? 'ok' : e.persen >= 50 ? 'mid' : 'no'}`}>{e.persen == null ? 'data kurang' : `${e.lolos}/${e.dinilai}`}</b></button>
+                                            ); })}</div>
+                                        )}
+                                    </div>
+                                );
+                            })()}
                             <ul className="sd-alasan">{(s?.alasan || ['Data untuk faktor ini belum tersedia.']).map((a, i) => <li key={i} className={a.startsWith('+') ? 'pos' : a.startsWith('−') ? 'neg' : ''}>{a.replace(/^[+−]\s*/, '')}</li>)}</ul>
                             {tab === 'berita' && d.berita && d.berita.judul.length > 0 && (
                                 <div className="sd-news">{d.berita.judul.map((j, i) => (
@@ -110,7 +154,9 @@ export function SahamDetail({ simbol, onBack, H = 20 }: { simbol: string; onBack
                                     <div><small>ROE</small><b>{f.roe ?? '–'}%</b></div><div><small>ROA</small><b>{f.roa ?? '–'}%</b></div>
                                     <div><small>PER</small><b>{f.per ?? '–'}×</b></div><div><small>PBV</small><b>{f.pbv ?? '–'}×</b></div>
                                     <div><small>DER</small><b>{f.der ?? '–'}×</b></div><div><small>Margin laba</small><b>{f.npm ?? '–'}%</b></div>
-                                    <div><small>Tumbuh pendapatan</small><b>{f.revGrowth ?? '–'}%</b></div><div><small>Kapitalisasi</small><b>{kap(f.mcap)}</b></div>
+                                    <div><small>Tumbuh pendapatan</small><b>{f.revGrowth ?? '–'}%</b></div><div><small>Kapitalisasi</small><b>{kap(b.mcap ?? f.mcap)}</b></div>
+                                    <div><small>P/S</small><b>{(f as any).ps ?? '–'}×</b></div><div><small>Current ratio</small><b>{(f as any).cr ?? '–'}×</b></div>
+                                    <div><small>Laba tumbuh/th (3 th)</small><b>{(f as any).epsCagr3 ?? '–'}%</b></div><div><small>Arus kas bebas</small><b>{(f as any).fcf != null ? `$${((f as any).fcf / 1000).toFixed(1)} M` : '–'}</b></div>
                                 </div>
                             )}
                         </div>

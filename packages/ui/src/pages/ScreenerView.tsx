@@ -1,3 +1,4 @@
+import type { PresetData } from './trading/Preset';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useApi } from '../kantor/api';
 import { apiGet, apiPost } from '../kantor/connection';
@@ -24,20 +25,20 @@ const ANGKA: Array<{ k: NumKey; label: string; arah: 'min' | 'max'; satuan: stri
 ];
 type SigKey = 'goldenCross' | 'deathCross' | 'doubleTop' | 'doubleBottom' | 'breakout52' | 'dekat52Low' | 'rsiOversold' | 'rsiOverbought' | 'macdBullish' | 'macdBearish' | 'diAtasMa200' | 'volumeSpike' | 'trenNaik' | 'trenTurun';
 const SINYAL: Array<{ k: SigKey; label: string; baik: boolean | null; info: string }> = [
-    { k: 'goldenCross', label: 'Golden cross', baik: true, info: 'MA50 memotong ke atas MA200 dalam 10 hari terakhir — tanda awal tren naik jangka menengah.' },
-    { k: 'deathCross', label: 'Death cross', baik: false, info: 'MA50 memotong ke bawah MA200 dalam 10 hari terakhir.' },
-    { k: 'doubleBottom', label: 'Double bottom', baik: true, info: 'Dua lembah setara (pola "W") — potensi berbalik naik. Terkonfirmasi kalau harga tembus garis leher.' },
-    { k: 'doubleTop', label: 'Double top', baik: false, info: 'Dua puncak setara (pola "M") — potensi berbalik turun.' },
+    { k: 'goldenCross', label: 'Golden cross', baik: true, info: '(Grafik harian) MA50 memotong ke atas MA200 dalam 10 hari terakhir — tanda awal tren naik jangka menengah.' },
+    { k: 'deathCross', label: 'Death cross', baik: false, info: '(Grafik harian) MA50 memotong ke bawah MA200 dalam 10 hari terakhir.' },
+    { k: 'doubleBottom', label: 'Double bottom', baik: true, info: '(Grafik harian, 6 bulan terakhir) Dua lembah setara berjarak ≥10 hari (pola "W") — potensi berbalik naik. Terkonfirmasi kalau harga tembus garis leher.' },
+    { k: 'doubleTop', label: 'Double top', baik: false, info: '(Grafik harian, 6 bulan terakhir) Dua puncak setara berjarak ≥10 hari (pola "M") — potensi berbalik turun. Terkonfirmasi kalau harga jebol garis leher.' },
     { k: 'breakout52', label: 'Tembus tertinggi 52 mgg', baik: true, info: 'Harga penutupan tertinggi dalam 1 tahun.' },
     { k: 'dekat52Low', label: 'Dekat terendah 52 mgg', baik: null, info: 'Dalam 3% dari harga terendah setahun.' },
-    { k: 'rsiOversold', label: 'RSI < 30', baik: null, info: 'Jenuh jual — sudah turun banyak dalam waktu singkat.' },
-    { k: 'rsiOverbought', label: 'RSI > 70', baik: null, info: 'Jenuh beli — sudah naik banyak dalam waktu singkat.' },
-    { k: 'macdBullish', label: 'MACD naik', baik: true, info: 'Garis MACD memotong ke atas garis sinyal (5 hari terakhir).' },
-    { k: 'macdBearish', label: 'MACD turun', baik: false, info: 'Garis MACD memotong ke bawah garis sinyal (5 hari terakhir).' },
-    { k: 'diAtasMa200', label: 'Di atas MA200', baik: true, info: 'Harga di atas rata-rata 200 hari — tren besar naik.' },
+    { k: 'rsiOversold', label: 'RSI < 30', baik: null, info: '(RSI-14, grafik harian) Jenuh jual — sudah turun banyak dalam waktu singkat.' },
+    { k: 'rsiOverbought', label: 'RSI > 70', baik: null, info: '(RSI-14, grafik harian) Jenuh beli — sudah naik banyak dalam waktu singkat.' },
+    { k: 'macdBullish', label: 'MACD naik', baik: true, info: '(MACD 12/26/9, grafik harian) Garis MACD memotong ke atas garis sinyal dalam 5 hari terakhir.' },
+    { k: 'macdBearish', label: 'MACD turun', baik: false, info: '(MACD 12/26/9, grafik harian) Garis MACD memotong ke bawah garis sinyal dalam 5 hari terakhir.' },
+    { k: 'diAtasMa200', label: 'Di atas MA200', baik: true, info: '(Grafik harian) Harga di atas rata-rata 200 hari — tren besar naik.' },
     { k: 'volumeSpike', label: 'Volume 2×', baik: null, info: 'Volume hari ini 2× rata-rata 20 hari.' },
-    { k: 'trenNaik', label: 'Tren naik rapi', baik: true, info: 'Harga > MA50 > MA200 dan MA50 menanjak.' },
-    { k: 'trenTurun', label: 'Tren turun', baik: false, info: 'Harga < MA50 < MA200 dan MA50 menurun.' }
+    { k: 'trenNaik', label: 'Tren naik rapi', baik: true, info: '(Grafik harian, ±10 bulan) Harga > MA50 > MA200 dan MA50 menanjak.' },
+    { k: 'trenTurun', label: 'Tren turun', baik: false, info: '(Grafik harian, ±10 bulan) Harga < MA50 < MA200 dan MA50 menurun.' }
 ];
 const PRESET: Array<{ nama: string; num: Partial<Record<NumKey, string>>; sig: SigKey[] }> = [
     { nama: 'Murah & berkualitas', num: { roe: '15', pbv: '3', der: '1.5' }, sig: [] },
@@ -60,8 +61,11 @@ const fmt = (v: number | null | undefined, sat = '') => (v == null ? '–' : `${
 const pct = (v: number) => <span className={v >= 0 ? 'up' : 'down'}>{v >= 0 ? '+' : '−'}{Math.abs(v).toFixed(1).replace('.', ',')}%</span>;
 const sejak = (at: number) => (at ? new Date(at).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }) : 'belum');
 
-export function ScreenerView({ onOpen }: { onOpen: (s: string) => void }) {
-    const { data, error, reload } = useApi<Data>('/api/kantor/screener', 0);
+export function ScreenerView({ onOpen, q: qApi = '', presetAktif, pd }: { onOpen: (s: string) => void; q?: string; presetAktif?: { t: string; f: string }; pd?: PresetData | null }) {
+    const { data, error, reload } = useApi<Data>(`/api/kantor/screener${qApi ? `?${qApi}` : ''}`, 0);
+    const [minPreset, setMinPreset] = useState(75);
+    const adaPreset = !!(presetAktif?.t || presetAktif?.f);
+    const pctPreset = (b: Baris) => { const xs = [(b as any).preset?.teknikal?.persen, (b as any).preset?.fundamental?.persen].filter((x) => x != null) as number[]; return xs.length ? Math.min(...xs) : null; };
     const simpanan = (() => { try { return JSON.parse(localStorage.getItem(LS) || '{}'); } catch { return {}; } })();
     const [num, setNum] = useState<Partial<Record<NumKey, string>>>(simpanan.num || {});
     const [sig, setSig] = useState<SigKey[]>(simpanan.sig || []);
@@ -94,8 +98,10 @@ export function ScreenerView({ onOpen }: { onOpen: (s: string) => void }) {
                 if (v == null) return false;
                 if (a.arah === 'min' ? v < lim : v > lim || v < 0) return false;
             }
+            if (adaPreset) { const pp = pctPreset(b); if (pp == null || pp < minPreset) return false; }
             return sig.every((k) => cocokSinyal(b, k));
         });
+        if (adaPreset) return out.sort((a, b) => (pctPreset(b) ?? -1) - (pctPreset(a) ?? -1) || b.chg1d - a.chg1d);
         const val = (b: Baris): number | null => {
             const v = urut in (b.f || { roe: 0, roa: 0, pbv: 0, per: 0, der: 0, npm: 0, revGrowth: 0, mcap: 0 }) && !(urut in b) ? (b.f as any)?.[urut] : (b as any)[urut];
             return typeof v === 'number' && Number.isFinite(v) ? v : null;
@@ -108,7 +114,7 @@ export function ScreenerView({ onOpen }: { onOpen: (s: string) => void }) {
             if (asc && (x < 0 || y < 0)) return x < 0 ? (y < 0 ? 0 : 1) : -1; // PBV/PER negatif (rugi) di belakang
             return asc ? x - y : y - x;
         });
-    }, [data, num, sig, sektor, urut, q]);
+    }, [data, num, sig, sektor, urut, q, minPreset, adaPreset]);
 
     const perbarui = async (jenis: string) => {
         setMsg('');
@@ -133,7 +139,7 @@ export function ScreenerView({ onOpen }: { onOpen: (s: string) => void }) {
                     {aktif > 0 && <button className="chip" style={{ ['--c' as any]: '#94a3b8' }} onClick={() => { setNum({}); setSig([]); setSektor(''); }}>✕ Hapus filter ({aktif})</button>}
                 </div>
 
-                <div className="scr-sub">Fundamental <small>dari laporan resmi SEC</small></div>
+                <div className="scr-sub">Fundamental <small>laporan keuangan tahunan (Nasdaq / SEC)</small></div>
                 <div className="scr-nums">
                     {ANGKA.map((a) => (
                         <label key={a.k} className="scr-num">
@@ -167,6 +173,12 @@ export function ScreenerView({ onOpen }: { onOpen: (s: string) => void }) {
                 </div>
             </section>
 
+            {adaPreset && (
+                <div className="pr-min">
+                    <span>Preset aktif: <b>{[presetAktif?.t, presetAktif?.f].filter(Boolean).map((id) => { const p = pd?.preset.find((x) => x.id === id); return p ? `${p.guru} (${p.nama})` : id; }).join(' + ')}</b> — tampilkan yang lolos minimal</span>
+                    <div className="sb-seg">{[50, 75, 100].map((m) => <button key={m} className={minPreset === m ? 'on' : ''} onClick={() => setMinPreset(m)}>{m}%</button>)}</div>
+                </div>
+            )}
             {error && <div className="error">Gagal memuat: {error}</div>}
             {data && (
                 <div className="scr-meta">
@@ -181,11 +193,12 @@ export function ScreenerView({ onOpen }: { onOpen: (s: string) => void }) {
             {hasil.length > 0 && (
                 <div className="scr-table-wrap">
                     <table className="scr-table">
-                        <thead><tr><th>Saham</th><th>Harga</th><th>1H</th><th>1B</th><th>ROE</th><th>PBV</th><th>PER</th><th>Sinyal</th></tr></thead>
+                        <thead><tr><th>Saham</th>{adaPreset && <th>Preset</th>}<th>Harga</th><th>1H</th><th>1B</th><th>ROE</th><th>PBV</th><th>PER</th><th>Sinyal</th></tr></thead>
                         <tbody>
                             {hasil.slice(0, batas).map((b) => (
                                 <tr key={b.s} onClick={() => onOpen(b.s)}>
                                     <td><b>{b.s}</b><small>{b.nama}</small></td>
+                                    {adaPreset && <td className="pr-td">{['teknikal', 'fundamental'].map((k) => { const x = (b as any).preset?.[k]; return x ? <span key={k} className={`pr-pct ${x.persen == null ? '' : x.persen >= 75 ? 'ok' : x.persen >= 50 ? 'mid' : 'no'}`}>{k === 'teknikal' ? '📈' : '🏛️'} {x.persen == null ? '?' : `${x.lolos}/${x.dinilai}`}</span> : null; })}</td>}
                                     <td>${fmt(b.harga)}</td>
                                     <td>{pct(b.chg1d)}</td>
                                     <td>{pct(b.chg1m)}</td>
@@ -208,7 +221,7 @@ export function ScreenerView({ onOpen }: { onOpen: (s: string) => void }) {
                     {cari && <div style={{ marginTop: 6 }}>{cari}</div>}
                 </div>
             )}
-            <p className="fin-note">Data gratis: harga Yahoo Finance (tertunda), fundamental laporan tahunan SEC. Untuk riset, bukan saran beli/jual.</p>
+            <p className="fin-note">Data gratis: harga CNBC/Nasdaq/Yahoo (tertunda), fundamental laporan tahunan dari Nasdaq (cadangan SEC). Untuk riset, bukan saran beli/jual.</p>
         </>
     );
 }

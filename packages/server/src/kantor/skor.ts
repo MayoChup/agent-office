@@ -106,23 +106,23 @@ export function skorTeknikal(b: any, H = 20, pr: Proyeksi | null = null): Faktor
     const add = add0;
     const tren = (v: number, why: string) => add0(v * wTren, why);
     const osc = (v: number, why: string) => add0(v * wOsc, why);
-    if (s.tren === 'naik') tren(0.3, 'tren naik rapi (harga > MA50 > MA200)'); else if (s.tren === 'turun') tren(-0.3, 'tren turun (harga < MA50 < MA200)');
-    if (s.diAtasMa200) tren(0.12, 'di atas MA200'); else if (b.ma200) tren(-0.12, 'di bawah MA200');
-    if (s.goldenCross != null && (panjang || segar(s.goldenCross))) tren(0.25, `golden cross ${s.goldenCross} hari lalu`);
-    if (s.deathCross != null && (panjang || segar(s.deathCross))) tren(-0.25, `death cross ${s.deathCross} hari lalu`);
-    if (s.macdBullish != null && segar(s.macdBullish)) add(0.12 * wSilang, 'MACD memotong naik'); if (s.macdBearish != null && segar(s.macdBearish)) add(-0.12 * wSilang, 'MACD memotong turun');
-    if (s.doubleBottom) add((s.doubleBottom === 'terkonfirmasi' ? 0.3 : 0.15) * (kilat ? 0.6 : 1), `double bottom ${s.doubleBottom}`);
-    if (s.doubleTop) add((s.doubleTop === 'terkonfirmasi' ? -0.3 : -0.15) * (kilat ? 0.6 : 1), `double top ${s.doubleTop}`);
+    if (s.tren === 'naik') tren(0.3, 'tren naik rapi (harga > MA50 > MA200 · grafik harian, ±10 bulan)'); else if (s.tren === 'turun') tren(-0.3, 'tren turun (harga < MA50 < MA200 · grafik harian, ±10 bulan)');
+    if (s.diAtasMa200) tren(0.12, 'di atas MA200 (rata-rata 200 hari bursa)'); else if (b.ma200) tren(-0.12, 'di bawah MA200 (rata-rata 200 hari bursa)');
+    if (s.goldenCross != null && (panjang || segar(s.goldenCross))) tren(0.25, `golden cross ${s.goldenCross} hari lalu (MA50 memotong MA200 · grafik harian)`);
+    if (s.deathCross != null && (panjang || segar(s.deathCross))) tren(-0.25, `death cross ${s.deathCross} hari lalu (MA50 memotong MA200 · grafik harian)`);
+    if (s.macdBullish != null && segar(s.macdBullish)) add(0.12 * wSilang, `MACD memotong naik ${s.macdBullish} hari lalu (MACD 12/26/9 · grafik harian)`); if (s.macdBearish != null && segar(s.macdBearish)) add(-0.12 * wSilang, `MACD memotong turun ${s.macdBearish} hari lalu (MACD 12/26/9 · grafik harian)`);
+    if (s.doubleBottom) add((s.doubleBottom === 'terkonfirmasi' ? 0.3 : 0.15) * (kilat ? 0.6 : 1), `double bottom ${s.doubleBottom} (grafik harian · 2 lembah berjarak ≥10 hari dalam 6 bulan terakhir${s.doubleBottom === 'terkonfirmasi' ? ', harga sudah tembus garis leher' : ', belum tembus garis leher'})`);
+    if (s.doubleTop) add((s.doubleTop === 'terkonfirmasi' ? -0.3 : -0.15) * (kilat ? 0.6 : 1), `double top ${s.doubleTop} (grafik harian · 2 puncak berjarak ≥10 hari dalam 6 bulan terakhir${s.doubleTop === 'terkonfirmasi' ? ', harga sudah jebol garis leher' : ', belum jebol garis leher'})`);
     if (swing && b.x?.mom) {
-        if (b.x.mom.w1 < -7) osc(0.12, `turun ${Math.abs(b.x.mom.w1)}% seminggu (rawan memantul)`);
-        else if (b.x.mom.w1 > 10) osc(-0.1, `naik ${b.x.mom.w1}% seminggu (rawan ambil untung)`);
-        if (b.volX >= 2) add(b.chg1d >= 0 ? 0.15 : -0.15, `volume ${b.volX}× rata-rata, harga ${b.chg1d >= 0 ? 'naik' : 'turun'}`);
+        if (b.x.mom.w1 < -7) osc(0.12, `turun ${Math.abs(b.x.mom.w1)}% dalam 5 hari bursa (rawan memantul)`);
+        else if (b.x.mom.w1 > 10) osc(-0.1, `naik ${b.x.mom.w1}% dalam 5 hari bursa (rawan ambil untung)`);
+        if (b.volX >= 2) add(b.chg1d >= 0 ? 0.15 : -0.15, `volume ${b.volX}× rata-rata, harga ${b.chg1d >= 0 ? 'naik' : 'turun'} (hari terakhir vs rata-rata 20 hari)`);
     }
     if (pr) add(((pr.peluangNaik - 50) / 50) * (kilat ? 0.35 : swing ? 0.3 : 0.2), `secara historis ${pr.peluangNaik}% periode ${H} hari berakhir naik`);
-    if (s.breakout52) add(0.18, 'tembus tertinggi 52 minggu');
-    if (s.dekat52Low) add(-0.08, 'dekat terendah 52 minggu');
-    if (b.rsi != null && b.rsi < 30) osc(0.1, `RSI ${b.rsi} jenuh jual (peluang memantul)`);
-    if (b.rsi != null && b.rsi > 75) osc(-0.12, `RSI ${b.rsi} jenuh beli`);
+    if (s.breakout52) add(0.18, 'tembus tertinggi 52 minggu (grafik harian, 1 tahun)');
+    if (s.dekat52Low) add(-0.08, 'dekat terendah 52 minggu (grafik harian, 1 tahun)');
+    if (b.rsi != null && b.rsi < 30) osc(0.1, `RSI ${b.rsi} jenuh jual, peluang memantul (RSI-14 · grafik harian)`);
+    if (b.rsi != null && b.rsi > 75) osc(-0.12, `RSI ${b.rsi} jenuh beli (RSI-14 · grafik harian)`);
     if (!kilat) { if (b.chg1m > 8) tren(0.08, `naik ${b.chg1m}% sebulan`); else if (b.chg1m < -8) tren(-0.08, `turun ${Math.abs(b.chg1m)}% sebulan`); }
     const sk = clamp(x);
     return { skor: +sk.toFixed(2), label: label(sk), alasan: a };
@@ -170,19 +170,21 @@ export function skorWhales(b: any, x: Ekstra | undefined, orang: Orang | undefin
 }
 
 /** Bobot faktor per horison: makin pendek, fundamental makin tidak relevan; berita & teknikal makin penting. */
-export function bobot(H: number): Record<string, number> {
+export function bobot(H: number, mode = ''): Record<string, number> {
+    if (mode === 'scalping') return { teknikal: 0.65, fundamental: 0, berita: 0.25, whales: 0.1 };
     if (H <= 2) return { teknikal: 0.55, fundamental: 0, berita: 0.3, whales: 0.15 };
     if (H <= 5) return { teknikal: 0.5, fundamental: 0.05, berita: 0.25, whales: 0.2 };
     if (H <= 20) return { teknikal: 0.4, fundamental: 0.2, berita: 0.15, whales: 0.25 };
-    return { teknikal: 0.3, fundamental: 0.4, berita: 0.1, whales: 0.2 };
+    if (H <= 60) return { teknikal: 0.3, fundamental: 0.4, berita: 0.1, whales: 0.2 };
+    return { teknikal: 0.2, fundamental: 0.55, berita: 0.05, whales: 0.2 };
 }
-export function gabung(f: Record<string, Faktor | null>, H = 20): Faktor {
-    const W = bobot(H);
+export function gabung(f: Record<string, Faktor | null>, H = 20, mode = ''): Faktor {
+    const W = bobot(H, mode);
     let s = 0, w = 0;
     for (const k of Object.keys(W)) if (f[k]) { s += f[k]!.skor * W[k]; w += W[k]; }
     const sk = w ? clamp(s / w) : 0;
     const ada = Object.keys(W).filter((k) => f[k] && W[k] > 0).length;
-    return { skor: +sk.toFixed(2), label: label(sk), alasan: [`gabungan ${ada} faktor untuk posisi ≤${H} hari bursa (bobot: ${Object.entries(W).filter(([, v]) => v > 0).map(([k, v]) => `${k} ${Math.round(v * 100)}%`).join(', ')})`] };
+    return { skor: +sk.toFixed(2), label: label(sk), alasan: [`gabungan ${ada} faktor untuk ${mode === 'scalping' ? 'scalping (hari ini)' : H === 1 ? 'day trading (hari ini)' : `posisi ≤${H} hari bursa`} (bobot: ${Object.entries(W).filter(([, v]) => v > 0).map(([k, v]) => `${k} ${Math.round(v * 100)}%`).join(', ')})`] };
 }
 
 /* ── Sentimen berita (kamus kata, tanpa AI) ───────────────────── */
