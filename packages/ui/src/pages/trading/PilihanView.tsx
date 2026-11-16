@@ -1,3 +1,4 @@
+import { Bintang } from './Bintang';
 import React, { useMemo, useState } from 'react';
 import { Baris, FaktorKey, FAKTOR, LABELS, Label, ScreenerData, kelas, usd, persen, skorBar } from './types';
 import { Sparkline, Mom } from './Sparkline';
@@ -113,7 +114,7 @@ export function Kartu({ b, faktor, onOpen }: { b: Baris; faktor: FaktorKey; onOp
         <article className="sb-cardx" onClick={() => onOpen(b.s)}>
             <header>
                 <div><b className="mono">{b.s}</b><small>{b.nama}</small></div>
-                {sk && <span className={`lb ${kelas(sk.label)}`}>{sk.label.toUpperCase()}</span>}
+                <div className="kc-r">{sk && <span className={`lb ${kelas(sk.label)}`}>{sk.label.toUpperCase()}</span>}<Bintang s={b.s} /></div>
             </header>
             <div className="sb-price">
                 <div><small>Penutupan terakhir</small><b className="mono">{usd(b.harga)}</b><em className={`mono ${b.chg1d >= 0 ? 'up' : 'down'}`}>{persen(b.chg1d)}</em></div>
@@ -151,7 +152,7 @@ function BarisKecil({ b, faktor, onOpen }: { b: Baris; faktor: FaktorKey; onOpen
     const best = pr?.target.find((t) => t.nama === pr.terbaik);
     return (
         <div className="sb-row" onClick={() => onOpen(b.s)}>
-            <div className="c1"><b className="mono">{b.s}</b><small>{b.nama}</small></div>
+            <div className="c1 c1-b"><Bintang s={b.s} /><div><b className="mono">{b.s}</b><small>{b.nama}</small></div></div>
             <div className="c2 mono">{usd(b.harga)} <em className={b.chg1d >= 0 ? 'up' : 'down'}>{persen(b.chg1d)}</em></div>
             <div className="c3">{b.x && <Sparkline data={b.x.spark} w={90} h={28} />}</div>
             <div className="c4 mono">{best ? <>→ {usd(best.harga)} <small>({best.peluang}%)</small></> : '–'}</div>

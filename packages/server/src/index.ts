@@ -21,6 +21,7 @@ import { bacaPdf, urai, cocokkan } from './kantor/mutasi';
 import { presetInfo, REKOMENDASI } from './kantor/preset';
 import { profil as nasdaqProfil, fundamentalNasdaq } from './kantor/nasdaq';
 import { simulasi, langkahDari } from './kantor/simulasi';
+import { konteksTrading } from './kantor/konteksTrading';
 import { ujiMundur, rekomendasiUji, fileUji, statusPreset, StatusUji, saranDariUji, fileSaran, namaH } from './kantor/ujimundur';
 import { cnbcChart } from './kantor/harga';
 import { telegramKirim } from './kantor/telegram';
@@ -465,6 +466,29 @@ app.get('/api/kantor/ujimundur/saran', requireToken, (_req, res) => {
 });
 app.post('/api/kantor/ujimundur/jalankan', requireToken, (_req, res) => {
     try { jalankanUji('manual'); res.json({ ok: true, status: statusUji }); } catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
+});
+// ── Chat konsultasi Trading: AI menjawab HANYA dari data halaman Trading ──
+const RE_TRADING = /trad|saham|invest|analis|pasar|market|stock|portofolio|bursa/i;
+const anggotaTrading = () => { const r = roster(); const c = r.filter((a) => RE_TRADING.test(`${a.id} ${a.peran} ${a.deskripsi}`)); return (c.length ? c : r).map((a) => ({ id: a.id, nama: a.nama, peran: a.peran })); };
+const ATURAN_TRADING = [
+    `[Konsultasi di halaman Trading aplikasi Kantor Virtual dengan ${config.ownerName}.]`,
+    'ATURAN KETAT:',
+    '1. Jawab HANYA dari blok DATA di bawah (skor, alasan, fundamental, berita, uji mundur, preset, watchlist/posisi). Jangan memakai ingatan, pengetahuan umum tentang perusahaan, internet, alat, atau skill apa pun.',
+    '2. Kalau jawabannya tidak ada di DATA, katakan terus terang "datanya tidak ada di halaman Trading" dan sebutkan data apa yang ada. Jangan menebak atau mengarang angka.',
+    '3. Sebut angka & sumber bagiannya (mis. "skor teknikal NVDA Beli (0,32)", "uji mundur 60 hari: Momentum +0,77%"). Kalau skor teknikal horison ini belum terbukti, ingatkan.',
+    '4. Jangan menyuruh membeli/menjual dengan pasti; jelaskan apa kata data & risikonya. Kantor tidak terhubung ke broker. Akhiri saran keputusan dengan "Bukan saran keuangan."'
+].join('\n');
+app.get('/api/kantor/trading-chat/anggota', requireToken, (_req, res) => { res.json({ ok: true, anggota: anggotaTrading() }); });
+app.get('/api/kantor/trading-chat/:ai', requireToken, (req, res) => { res.json({ ok: true, ...percakapan.thread(`trading-${String(req.params.ai)}`) }); });
+app.post('/api/kantor/trading-chat/:ai', requireToken, (req, res) => {
+    try {
+        const ai = String(req.params.ai), teks = String(req.body?.teks || '');
+        if (!anggotaTrading().some((a) => a.id === ai)) throw new Error('AI ini bukan anggota tim trading.');
+        const [H, mode, pt, pf] = qH(req);
+        const st = tradingDesk.load();
+        const data = konteksTrading({ screener, dataDir: config.dataDir, H, mode, pt, pf, saham: String(req.query.s || '').toUpperCase() || undefined, teks, watch: st.watchlist, posisi: st.positions });
+        res.json({ ok: true, pesan: percakapan.kirimDenganData(`trading-${ai}`, ai, teks, data, ATURAN_TRADING) });
+    } catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
 });
 // Profil perusahaan (Nasdaq) + ringkasan singkat berbahasa Indonesia (AI gratis), disimpan 30 hari.
 const profilDir = path.join(config.dataDir, 'profil'); fs.mkdirSync(profilDir, { recursive: true });

@@ -1564,3 +1564,49 @@ body.no-office #phaser-container { visibility: hidden; }
 .su-ai summary { cursor: pointer; font-size: 12.5px; color: var(--muted); }
 .su-ai p, .su-ai-box p { margin: 6px 0 0; font-size: 13px; line-height: 1.6; }
 .su-ai-box { margin-top: 8px; padding: 10px 12px; border-radius: 10px; background: rgba(148, 163, 184, 0.1); font-size: 13px; }
+/* Tombol bintang watchlist */
+.bintang { flex: none; display: inline-grid; place-items: center; width: 32px; height: 32px; margin: -4px -4px -4px 0; padding: 0; border: none; border-radius: 50%; background: transparent; color: var(--muted); cursor: pointer; transition: background 0.15s, color 0.15s, transform 0.15s; }
+.bintang svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linejoin: round; }
+.bintang:hover { background: rgba(245, 158, 11, 0.12); color: #f59e0b; }
+.bintang:focus-visible { outline: 2px solid #f59e0b; outline-offset: 1px; }
+.bintang.on { color: #f59e0b; }
+.bintang.on svg { fill: currentColor; }
+.bintang.pop { animation: bintang-pop 0.45s ease; }
+.bintang.besar { width: 40px; height: 40px; margin: 0; }
+.bintang.besar svg { width: 26px; height: 26px; }
+@keyframes bintang-pop { 0% { transform: scale(1); } 40% { transform: scale(1.35); } 100% { transform: scale(1); } }
+.kc-r { display: flex; align-items: center; gap: 6px; }
+.c1-b { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.c1-b > div { min-width: 0; }
+.sd-tick-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sd-folder { border: 1px solid var(--line); background: transparent; color: var(--muted); border-radius: 999px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
+.sd-folder:hover { color: var(--text); }
+.sd-tick-row .wl-menu-wrap { position: relative; }
+.sd-tick-row .wl-menu { top: calc(100% + 6px); bottom: auto; }
+/* Chat konsultasi trading (mengambang) */
+.tc-fab { position: fixed; right: 22px; bottom: 22px; z-index: 60; display: inline-flex; align-items: center; gap: 8px; padding: 12px 18px 12px 14px; border: none; border-radius: 999px; background: #15803d; color: #fff; font-size: 14px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25); cursor: pointer; }
+.tc-fab span { font-size: 18px; }
+.tc-fab:hover { background: #166534; }
+.tc-fab i { font-style: normal; min-width: 20px; height: 20px; border-radius: 10px; background: #ef4444; font-size: 11.5px; font-weight: 700; display: grid; place-items: center; padding: 0 5px; }
+.tc-panel { position: fixed; right: 22px; bottom: 22px; z-index: 61; width: min(400px, calc(100vw - 32px)); height: min(620px, calc(100vh - 110px)); display: flex; flex-direction: column; background: var(--panel-solid); border: 1px solid var(--line-strong); border-radius: 18px; box-shadow: 0 16px 48px rgba(0, 0, 0, 0.3); overflow: hidden; }
+.tc-h { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.tc-h > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tc-h select { font: inherit; font-weight: 700; font-size: 15px; border: none; background: transparent; color: var(--text); padding: 0; max-width: 100%; cursor: pointer; }
+.tc-h small { color: var(--muted); font-size: 11.5px; }
+.tc-x { border: none; background: transparent; color: var(--muted); font-size: 16px; width: 34px; height: 34px; border-radius: 50%; cursor: pointer; }
+.tc-x:hover { background: rgba(148, 163, 184, 0.15); color: var(--text); }
+.tc-konteks { padding: 6px 14px; font-size: 11.5px; color: var(--muted); background: rgba(148, 163, 184, 0.08); border-bottom: 1px solid var(--line); }
+.tc-isi { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+.tc-kosong { display: flex; flex-direction: column; gap: 8px; font-size: 13px; color: var(--muted); line-height: 1.5; }
+.tc-kosong p { margin: 0 0 4px; }
+.tc-kosong button { text-align: left; border: 1px solid var(--line-strong); background: transparent; color: var(--text); border-radius: 12px; padding: 8px 12px; font-size: 13px; cursor: pointer; }
+.tc-kosong button:hover { border-color: #15803d; }
+.tc-err { margin: 0 12px 6px; }
+.tc-form { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line); align-items: flex-end; }
+.tc-form textarea { flex: 1; resize: none; font: inherit; font-size: 14px; border: 1px solid var(--line-strong); border-radius: 12px; padding: 9px 12px; background: transparent; color: var(--text); max-height: 120px; }
+@media (max-width: 767px) {
+  .tc-fab { right: 14px; bottom: 92px; padding: 12px; }
+  .tc-fab b { display: none; }
+  .tc-panel { right: 0; left: 0; bottom: 0; top: 0; width: 100%; height: 100%; border-radius: 0; }
+  .tc-form { padding-bottom: max(10px, env(safe-area-inset-bottom)); }
+}

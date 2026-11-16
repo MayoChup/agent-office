@@ -10,6 +10,7 @@ const IKON = ['📁', '⭐', '💰', '🚀', '🏦', '🤖', '⚡', '🛢️', '
 
 export function WatchlistView({ data, faktor, onOpen }: { data: ScreenerData; faktor: FaktorKey; onOpen: (s: string) => void }) {
     const fd = useApi<FolderData>('/api/kantor/watchlist-folder', 0);
+    React.useEffect(() => { const f = () => fd.reload(); window.addEventListener('kantor:watchlist', f); return () => window.removeEventListener('kantor:watchlist', f); }, []);
     const [aktif, setAktif] = useState<string>('utama');
     const [baru, setBaru] = useState<{ nama: string; ikon: string } | null>(null);
     const [tambah, setTambah] = useState('');

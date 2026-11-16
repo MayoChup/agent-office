@@ -113,6 +113,16 @@ export class Percakapan {
         return msg;
     }
 
+    /** Chat konsultasi dengan data terlampir (mis. halaman Trading): thread terpisah, jawaban HANYA dari data. */
+    kirimDenganData(thread: string, aiId: string, teks: string, data: string, aturan: string): Pesan {
+        if (!this.roster().some((a) => a.id === aiId)) throw new Error('AI tidak ditemukan.');
+        const t = teks.trim().slice(0, 2000);
+        if (!t) throw new Error('Pesan kosong.');
+        const msg = this.tambah(thread, { dari: 'owner', nama: this.ownerName, teks: t, at: Date.now() });
+        this.balas(thread, aiId, { data, aturan }).catch((e) => console.warn('[Chat data]', e?.message || e));
+        return msg;
+    }
+
     /** Anggota yang di-@sebut (atau @semua = para kepala). Kosong = Joni yang menentukan. */
     disebut(teks: string): string[] {
         const roster = this.roster();
@@ -165,7 +175,7 @@ export class Percakapan {
     }
 
     /** Minta satu AI membalas di thread tertentu. */
-    balas(thread: string, aiId: string, opts: { instruksi?: string; berat?: boolean } = {}): Promise<void> {
+    balas(thread: string, aiId: string, opts: { instruksi?: string; berat?: boolean; data?: string; aturan?: string } = {}): Promise<void> {
         const prev = this.antrean.get(aiId) || Promise.resolve();
         const next = prev.then(() => this.balasSekarang(thread, aiId, opts)).catch(() => undefined);
         this.antrean.set(aiId, next);
@@ -190,12 +200,17 @@ export class Percakapan {
         }
     }
 
-    private async balasSekarang(thread: string, aiId: string, opts: { instruksi?: string; berat?: boolean }) {
+    private async balasSekarang(thread: string, aiId: string, opts: { instruksi?: string; berat?: boolean; data?: string; aturan?: string }) {
         const ai = this.roster().find((a) => a.id === aiId);
         if (!ai) return;
         const grup = thread === 'grup';
         const berat = Boolean(opts.berat && this.kuota?.ambil());
-        const prompt = [
+        const prompt = opts.data ? [
+            opts.aturan || '',
+            '', '=== DATA (satu-satunya sumber yang boleh dipakai) ===', opts.data, '=== AKHIR DATA ===', '',
+            'Riwayat chat konsultasi ini:', this.riwayat(thread), '',
+            `Balas pesan terakhir ${this.ownerName} sebagai ${ai.nama} (${ai.peran}) dalam Bahasa Indonesia, singkat & jelas.`
+        ].join('\n') : [
             grup
                 ? `[Grup chat "Grup Kantor" di aplikasi Kantor Virtual. Anggota: ${this.roster().map((a) => `${a.nama} (${a.peran})`).join(', ')}. Semua membaca; kamu diminta menjawab.]`
                 : `[Chat pribadi dengan ${this.ownerName} di aplikasi Kantor Virtual (bukan Telegram).]`,

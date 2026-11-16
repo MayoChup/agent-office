@@ -14,6 +14,7 @@ import { PasarView } from './trading/PasarView';
 import { PilihanView } from './trading/PilihanView';
 import { SahamDetail } from './trading/SahamDetail';
 import { SaranUji } from './trading/SaranUji';
+import { TradingChat } from './trading/TradingChat';
 import { PetaPanas } from './trading/PetaPanas';
 import { PetaBerita } from './trading/PetaBerita';
 import { WatchlistView } from './trading/WatchlistView';
@@ -236,6 +237,7 @@ export function TradingPage() {
                 </>
             )}
             </div>
+            <TradingChat q={qApi} saham={saham} mode={modeAktif} />
         </div>
     );
 }

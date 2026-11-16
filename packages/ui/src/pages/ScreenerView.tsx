@@ -1,4 +1,5 @@
 import type { PresetData } from './trading/Preset';
+import { Bintang } from './trading/Bintang';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useApi } from '../kantor/api';
 import { apiGet, apiPost } from '../kantor/connection';
@@ -198,7 +199,7 @@ export function ScreenerView({ onOpen, q: qApi = '', presetAktif, pd, sumber }: 
                         <tbody>
                             {hasil.slice(0, batas).map((b) => (
                                 <tr key={b.s} onClick={() => onOpen(b.s)}>
-                                    <td><b>{b.s}</b><small>{b.nama}</small></td>
+                                    <td><div className="c1-b"><Bintang s={b.s} /><div><b>{b.s}</b><small>{b.nama}</small></div></div></td>
                                     {adaPreset && <td className="pr-td">{['teknikal', 'fundamental'].map((k) => { const x = (b as any).preset?.[k]; return x ? <span key={k} className={`pr-pct ${x.persen == null ? '' : x.persen >= 75 ? 'ok' : x.persen >= 50 ? 'mid' : 'no'}`}>{k === 'teknikal' ? '📈' : '🏛️'} {x.persen == null ? '?' : `${x.lolos}/${x.dinilai}`}</span> : null; })}</td>}
                                     <td>${fmt(b.harga)}</td>
                                     <td>{pct(b.chg1d)}</td>
