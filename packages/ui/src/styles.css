@@ -2031,3 +2031,6 @@ body.no-office #phaser-container { visibility: hidden; }
 .sm-cek > small { width: 100%; margin: 0; }
 .sm-cek label { flex-direction: row; align-items: center; color: var(--text); font-size: 13px; }
 @media (max-width: 640px) { .sm-ide { grid-template-columns: 1fr 1fr; } .sm-ide input:first-child { grid-column: 1 / -1; } .sm-dua, .sm-suara, .sm-form { grid-template-columns: 1fr; } .sm-langkah span { font-size: 9.5px; } .sm-niche b { font-size: 19px; } }
+.sm .sd-h { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.sm .sd-h h3 { margin: 0; }
+.sm-niche { margin-top: 4px; }
