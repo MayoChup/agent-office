@@ -66,7 +66,7 @@ export function Simulasi({ simbol, q, onTutup }: { simbol: string; q: string; on
         <section className="sb-card sim">
             <div className="sim-h">
                 <span className="sim-tag">{K ? '🔮' : '📊'} {simbol}</span>
-                <div className="sim-n">{K ? <><b>Kronos</b> · {d!.simulasi} jalur prediksi</> : <><b>10.000</b> simulasi acak</>}</div>
+                <div className="sim-n">{!d ? <><b>Prediksi</b> sedang dihitung…</> : K ? <><b>Kronos</b> · {d.simulasi} jalur prediksi</> : <><b>10.000</b> simulasi acak</>}</div>
                 <button className="icon-btn" onClick={onTutup} aria-label="Tutup">✕</button>
             </div>
             {!d && !err && <div className="fin-empty">Menghitung prediksi… (Kronos di CPU VPS bisa butuh ½–2 menit untuk saham yang baru pertama dibuka)</div>}

@@ -107,8 +107,8 @@ export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPre
 
             {sim ? <Simulasi simbol={b.s} q={q.replace(/&p[tf]=[^&]*/g, '')} onTutup={() => setSim(false)} /> : (
                 <section className="sb-card sim-cta">
-                    <div><b>🎲 Simulasi 10.000 jalur</b><small>Berapa kali harga menyentuh harga masuk, target, atau stop — untuk profil Konservatif, Moderat & Agresif.</small></div>
-                    <button className="btn primary" onClick={() => setSim(true)}>Jalankan simulasi</button>
+                    <div><b>🔮 Prediksi Kronos</b><small>Model AI candlestick memperkirakan jalur harga ke depan: peluang naik, perkiraan tengah, serta peluang kena target/stop untuk profil Konservatif, Moderat & Agresif.</small></div>
+                    <button className="btn primary" onClick={() => setSim(true)}>Lihat prediksi</button>
                 </section>
             )}
 
