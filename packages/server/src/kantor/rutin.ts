@@ -35,6 +35,7 @@ export interface DepsRutin {
     berat: () => { model: string; perHari: number; terpakai: number };
 }
 
+const NAMA_CADANG: Record<string, string> = { default: 'Joni', hr: 'Hana', kurator: 'Kirana', keuangan: 'Uang', 'keuangan-budget': 'Bima', 'keuangan-proyeksi': 'Prita', 'keuangan-penasihat': 'Laras', eca: 'Eca', 'eca-sheets': 'Sasa', 'eca-docs': 'Dodi', 'eca-slides': 'Putri', sekretaris: 'Sekar', trading: 'Dito', 'trading-berita': 'Nina', 'trading-fundamental': 'Raka', 'trading-smartmoney': 'Sari', sosmed: 'Maya', 'sosmed-riset': 'Tara', 'sosmed-penulis': 'Lala', 'sosmed-produksi': 'Vino', 'sosmed-komunitas': 'Dea' };
 /** Peta gotong royong: tiap fitur dikerjakan bersama beberapa AI. kunci = potongan judul di Papan kerja (kosong = pekerjaan apa pun dari AI itu). */
 export const GOTONG: Array<{ fitur: string; ikon: string; ai: string; tugas: string; jadwal: string; kunci: string }> = [
     { fitur: 'Beranda', ikon: '🏠', ai: 'default', tugas: 'Ringkasan pagi dari berita hari ini (Telegram)', jadwal: 'Tiap hari 07.15', kunci: 'Ringkasan pagi' },
@@ -266,7 +267,7 @@ export function pasangRutin(d: DepsRutin) {
         const baris = GOTONG.map((g) => {
             const k = g.kunci.toLowerCase();
             const hit = items.filter((x) => x.ai === g.ai && (!k || x.judul.toLowerCase().includes(k))).sort((a, b) => (b.selesai || b.dibuat) - (a.selesai || a.dibuat))[0];
-            return { ...g, nama: nama(g.ai, g.ai), profil: ada.has(g.ai), terakhir: hit ? { at: hit.selesai || hit.dibuat, status: hit.status, judul: hit.judul } : null };
+            return { ...g, nama: nama(g.ai, NAMA_CADANG[g.ai] || g.ai), profil: ada.has(g.ai), terakhir: hit ? { at: hit.selesai || hit.dibuat, status: hit.status, judul: hit.judul } : null };
         });
         const tanpa = d.roster().filter((a) => !GOTONG.some((g) => g.ai === a.id)).map((a) => a.nama);
         return { baris, tanpaRutin: tanpa };
