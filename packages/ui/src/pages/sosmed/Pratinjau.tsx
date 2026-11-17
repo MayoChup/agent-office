@@ -8,7 +8,7 @@ import React from 'react';
 export interface ItemPilih { id: string; nama: string; ket: string; diSkill?: boolean; cocok?: string }
 
 /* ── Adegan dasar: ruangan, jendela, tanaman, orang, mug merah ── */
-function Ruangan({ merah = true }: { merah?: boolean }) {
+function Ruangan({ merah = true, orang = true }: { merah?: boolean; orang?: boolean }) {
     return (
         <svg viewBox="0 0 160 100" className="pv-scene" aria-hidden="true">
             <defs>
@@ -25,12 +25,12 @@ function Ruangan({ merah = true }: { merah?: boolean }) {
             <rect x="0" y="76" width="160" height="3" fill="#94694a" />
             <path d="M128 76 q-4 -18 2 -30 q6 12 2 30 Z M134 76 q4 -22 14 -26 q-4 16 -8 26 Z M124 76 q-10 -12 -6 -24 q8 10 10 24 Z" fill="#4f8a3c" />
             <rect x="124" y="70" width="20" height="10" rx="2" fill="#a86b45" />
-            <path d="M66 100 q0 -26 22 -28 q22 2 22 28 Z" fill="#3b5f8f" />
+            {orang && <g><path d="M66 100 q0 -26 22 -28 q22 2 22 28 Z" fill="#3b5f8f" />
             <rect x="83" y="62" width="10" height="11" fill="#c98c66" />
             <ellipse cx="88" cy="50" rx="13" ry="15" fill="url(#pv-kulit)" />
             <path d="M75 47 q1 -15 13 -15 q13 0 13 15 q-3 -8 -13 -8 q-10 0 -13 8 Z" fill="#2b2119" />
             <circle cx="83" cy="51" r="1.3" fill="#2b2119" /><circle cx="93" cy="51" r="1.3" fill="#2b2119" />
-            <path d="M84 58 q4 3 8 0" stroke="#8a4a35" strokeWidth="1.2" fill="none" />
+            <path d="M84 58 q4 3 8 0" stroke="#8a4a35" strokeWidth="1.2" fill="none" /></g>}
             {merah && <g><rect x="42" y="66" width="10" height="11" rx="1.5" fill="#d42c2c" /><path d="M52 69 q5 0 5 3.5 q0 3.5 -5 3.5" stroke="#d42c2c" strokeWidth="1.6" fill="none" /></g>}
         </svg>
     );
@@ -156,7 +156,7 @@ const EFEK: Record<string, (latar: React.ReactNode) => React.ReactNode> = {
     'glass-type': (L) => <>{L}<Orang /><span className="pv-kaca-teks">AI</span></>
 };
 export function PratinjauEfek({ id }: { id: string }) {
-    const L = <div className="pv-latar"><Ruangan merah={false} /></div>;
+    const L = <div className="pv-latar"><Ruangan merah={false} orang={false} /></div>;
     const f = EFEK[id];
     return <div className="pv-efek" aria-hidden="true">{f ? f(L) : <>{L}<Orang /></>}</div>;
 }

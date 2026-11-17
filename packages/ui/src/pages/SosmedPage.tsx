@@ -204,6 +204,7 @@ function ProgresSetup({ x }: { x: Data }) {
 function TabProfil({ x, jalankan }: P) {
     const pk = x.paketProfil, [arahan, setArahan] = useState('');
     const nama = x.platformInfo[x.platform]?.nama || '';
+    const batasBio = ({ tiktok: 80, instagram: 150, facebook: 255, youtube: 1000 } as Record<string, number>)[x.platform] || 150;
     return (
         <section className="sb-card sm-profil">
             <div className="sd-h"><h3>Profil & bio {nama} <small>{pk ? `oleh Maya · ${new Date(pk.at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}` : 'belum dibuat'}</small></h3>
@@ -212,7 +213,7 @@ function TabProfil({ x, jalankan }: P) {
             {!pk && <div className="fin-empty">Maya akan membuat nama tampilan, username, 3 versi bio, isi link bio, highlight, arahan foto profil, dan 3 postingan pertama.</div>}
             {pk && (<>
                 <div className="sm-pk-grid">
-                    <div><h4>Bio <small>pilih satu</small></h4>{pk.bio.map((b, i) => <div key={i} className="sm-blok sm-bio"><div className="sm-blok-h"><b>Versi {i + 1}</b><Salin teks={b.teks} label="Salin bio" /></div><p className="sm-p">{b.teks}</p><small className="sb-note">{b.alasan} · {b.teks.length} karakter</small></div>)}</div>
+                    <div><h4>Bio <small>pilih satu</small></h4>{pk.bio.map((b, i) => <div key={i} className="sm-blok sm-bio"><div className="sm-blok-h"><b>Versi {i + 1}</b><Salin teks={b.teks} label="Salin bio" /></div><p className="sm-p">{b.teks}</p><small className="sb-note">{b.alasan} · <span className={b.teks.length > batasBio ? 'sm-lebih' : ''}>{b.teks.length}/{batasBio} karakter{b.teks.length > batasBio ? ' — terlalu panjang, pangkas dulu' : ''}</span></small></div>)}</div>
                     <div>
                         <h4>Nama tampilan</h4><ul className="sm-pk-l">{pk.namaTampilan.map((n) => <li key={n}><span>{n}</span><Salin teks={n} /></li>)}</ul>
                         <h4>Username <small>cek ketersediaannya dulu</small></h4><ul className="sm-pk-l">{pk.username.map((n) => <li key={n}><span className="mono">@{n}</span><Salin teks={n} /></li>)}</ul>
