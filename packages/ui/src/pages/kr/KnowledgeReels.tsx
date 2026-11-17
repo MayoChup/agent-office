@@ -146,11 +146,9 @@ function Habis({ ctx, kosong, segmen, st, muatUlang }: { ctx: Ctx; kosong: boole
 /* ── Satu postingan ── */
 function Pos({ p, ctx, ganti, diModal }: { p: KPost; ctx: Ctx; ganti: (p: KPost) => void; diModal?: boolean }) {
     const [buka, setBuka] = useState<'' | 'catatan' | 'simpan'>('');
-    const [lengkap, setLengkap] = useState(false);
     const tema = ctx.tema[p.kat];
-    const tt = ctx.hp && !diModal;
-    const baca = async () => {
-        const ya = !p.baca; ganti({ ...p, baca: ya });
+    const baca = async (paksa?: boolean) => {
+        const ya = paksa ?? !p.baca; if (ya === !!p.baca) return; ganti({ ...p, baca: ya });
         try {
             await apiPost('/api/kantor/kr/baca', { id: p.id, ya });
             if (ya) ctx.pesan('Ditandai sudah baca — tidak muncul lagi saat feed dimuat ulang.', () => { ganti({ ...p, baca: false }); apiPost('/api/kantor/kr/baca', { id: p.id, ya: false }).catch(() => undefined); });
@@ -168,7 +166,7 @@ function Pos({ p, ctx, ganti, diModal }: { p: KPost; ctx: Ctx; ganti: (p: KPost)
     );
     const aksi = (
         <div className="kr-aksi">
-            <button className={`kr-baca ${p.baca ? 'on' : ''}`} onClick={baca} aria-pressed={!!p.baca} title={p.baca ? 'Batalkan sudah baca' : 'Tandai sudah baca'}>
+            <button className={`kr-baca ${p.baca ? 'on' : ''}`} onClick={() => baca()} aria-pressed={!!p.baca} title={p.baca ? 'Batalkan sudah baca' : 'Tandai sudah baca'}>
                 <span className="kr-ico">✓</span><span className="kr-lbl">Sudah baca</span>
             </button>
             <button className={buka === 'catatan' ? 'on' : ''} onClick={() => setBuka(buka === 'catatan' ? '' : 'catatan')} title="Catatan saya">
@@ -180,7 +178,7 @@ function Pos({ p, ctx, ganti, diModal }: { p: KPost; ctx: Ctx; ganti: (p: KPost)
         </div>
     );
     const keterangan = (
-        <div className={`kr-ket ${lengkap ? 'lengkap' : ''}`}>
+        <div className="kr-ket">
             <p><button className="kr-akun" onClick={() => ctx.bukaTema(p.kat)}>{tema?.nama}</button> {p.judul}{p.sub ? ` — ${p.sub}` : ''}</p>
             {!!p.dampak?.length && <p className="kr-kode">{p.dampak.map((d) => <span key={d.kode} className={`a-${d.arah}`}>${d.kode}</span>)}</p>}
             {!!p.sumber.length && (
@@ -191,26 +189,16 @@ function Pos({ p, ctx, ganti, diModal }: { p: KPost; ctx: Ctx; ganti: (p: KPost)
                     ))}
                 </div>
             )}
-            {tt && !lengkap && (p.sumber.length > 0 || (p.sub || '').length > 60) && <button className="kr-lagi" onClick={() => setLengkap(true)}>selengkapnya</button>}
             {!!p.catatan?.length && buka !== 'catatan' && <button className="kr-lagi" onClick={() => setBuka('catatan')}>Lihat {p.catatan.length} catatan saya</button>}
             <small className="kr-tgl">{tglId(p.tgl)}</small>
         </div>
     );
     const panel = buka === 'catatan' ? <PanelCatatan p={p} ctx={ctx} ganti={ganti} tutup={() => setBuka('')} /> : buka === 'simpan' ? <PanelSimpan p={p} ctx={ctx} ganti={ganti} tutup={() => setBuka('')} /> : null;
 
-    if (tt) return (
-        <article className={`kr-pos tt ${p.baca ? 'dibaca' : ''}`} data-id={p.id}>
-            <div className={`kr-tt-latar p-${p.desain.p}`} />
-            <div className="kr-tt-kartu"><Carousel p={p} ctx={ctx} ganti={ganti} /></div>
-            <div className="kr-tt-bawah">{kepala}{keterangan}</div>
-            <div className="kr-tt-rel">{aksi}</div>
-            {panel && <div className="kr-lembar-bawah" onClick={(e) => { if (e.target === e.currentTarget) setBuka(''); }}><div>{panel}</div></div>}
-        </article>
-    );
     return (
         <article className="kr-pos ig" data-id={p.id}>
             {kepala}
-            <Carousel p={p} ctx={ctx} ganti={ganti} />
+            <Carousel p={p} ctx={ctx} ganti={ganti} ketukDua={() => baca(true)} />
             {aksi}
             {panel}
             {keterangan}
@@ -219,15 +207,24 @@ function Pos({ p, ctx, ganti, diModal }: { p: KPost; ctx: Ctx; ganti: (p: KPost)
 }
 
 /* ── Carousel: geser (HP) atau tombol panah (laptop) ── */
-function Carousel({ p, ctx, ganti }: { p: KPost; ctx: Ctx; ganti: (p: KPost) => void }) {
+function Carousel({ p, ctx, ganti, ketukDua }: { p: KPost; ctx: Ctx; ganti: (p: KPost) => void; ketukDua?: () => void }) {
     const lembar = useMemo(() => lembarDari(p), [p]);
+    // Ketuk dua kali di gambar = "sudah baca" (hanya menandai, tidak membatalkan — sama seperti like di Instagram).
+    const [efek, setEfek] = useState(0);
+    const tapTerakhir = useRef(0);
+    const ketuk = (e: React.PointerEvent) => {
+        if ((e.target as HTMLElement).closest('button, a, input, textarea, select, label')) return;
+        const t = Date.now();
+        if (t - tapTerakhir.current < 320) { tapTerakhir.current = 0; setEfek(t); ketukDua?.(); } else tapTerakhir.current = t;
+    };
     const [i, setI] = useState(0);
     const rel = useRef<HTMLDivElement>(null);
     const ke = (n: number) => { const el = rel.current; if (!el) return; const x = Math.max(0, Math.min(lembar.length - 1, n)); el.scrollTo({ left: x * el.clientWidth, behavior: 'smooth' }); };
     const onScroll = () => { const el = rel.current; if (el) setI(Math.round(el.scrollLeft / Math.max(1, el.clientWidth))); };
     const kunci = (e: React.KeyboardEvent) => { if (e.key === 'ArrowRight') { e.preventDefault(); ke(i + 1); } if (e.key === 'ArrowLeft') { e.preventDefault(); ke(i - 1); } };
     return (
-        <div className="kr-car" tabIndex={0} onKeyDown={kunci} aria-roledescription="carousel" aria-label={p.judul}>
+        <div className="kr-car" tabIndex={0} onKeyDown={kunci} onPointerUp={ketuk} aria-roledescription="carousel" aria-label={`${p.judul}. Ketuk dua kali untuk menandai sudah baca.`}>
+            {efek > 0 && <span key={efek} className="kr-ketuk" aria-hidden="true">✓</span>}
             <div className="kr-rel" ref={rel} onScroll={onScroll}>
                 {lembar.map((l, n) => (
                     <div className="kr-sel" key={n} aria-hidden={n !== i}>

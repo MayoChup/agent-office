@@ -2802,47 +2802,17 @@ body.no-office #phaser-container { visibility: hidden; }
 .kr-modal-isi .kr-pos.ig { border-bottom: none; margin-bottom: 4px; }
 .kr-modal-x { position: absolute; top: 12px; right: 16px; border: none; background: none; color: #fff; font-size: 30px; cursor: pointer; line-height: 1; z-index: 2; }
 
-/* ── Kulit TikTok (HP): satu postingan satu layar, geser ke atas ── */
-.kr-hp { background: #101216; color: #f2f1ec; border-color: transparent; }
+/* ── HP: tetap feed Instagram (geser ke bawah biasa), gambar selebar layar ── */
+.kr-hp { border-radius: 14px; }
 .kr-hp .kr-feed-wrap { height: 100%; }
-.kr-hp .kr-tabs { position: absolute; top: 0; left: 0; right: 0; z-index: 10; border: none; padding: 10px 12px 14px; justify-content: flex-start; gap: 16px; background: linear-gradient(rgba(16, 18, 22, 0.75), transparent); }
-.kr-hp .kr-tabs button { border: none; background: none; padding: 4px 0; border-radius: 0; color: rgba(242, 241, 236, 0.62); font-size: 15px; font-weight: 700; border-bottom: 2px solid transparent; }
-.kr-hp .kr-tabs button.on { color: #f8f7f2; border-bottom-color: #f8f7f2; }
-.kr-hp .kr-feed { padding: 0; height: 100%; scroll-snap-type: y mandatory; overscroll-behavior-y: contain; }
-.kr-hp .kr-sibuk { position: absolute; top: 46px; left: 12px; right: 12px; z-index: 9; width: auto; background: rgba(255, 255, 255, 0.1); color: #e4e3dd; }
-.kr-pos.tt { position: relative; height: 100%; scroll-snap-align: start; scroll-snap-stop: always; overflow: hidden; container-type: size; }
-.kr-tt-latar { position: absolute; inset: 0; background: radial-gradient(circle at 50% 32%, color-mix(in srgb, var(--k-a1) 70%, transparent), transparent 62%), radial-gradient(circle at 80% 90%, color-mix(in srgb, var(--k-a3) 40%, transparent), transparent 60%); opacity: 0.42; }
-.kr-tt-kartu { position: absolute; top: 50px; left: 50%; transform: translateX(-50%); width: min(calc(100cqw - 24px), calc((100cqh - 270px) * 0.8)); }
-.kr-hp .kr-pos.tt .kr-panah, .kr-hp .kr-pos.tt .krs-geser { display: none; }
-.kr-tt-kartu .kr-car { border-radius: 12px; box-shadow: 0 12px 36px rgba(0, 0, 0, 0.4); }
-.kr-tt-bawah { position: absolute; left: 14px; right: 78px; bottom: 12px; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5); }
-.kr-tt-bawah .kr-kepala { padding-bottom: 6px; }
-.kr-tt-bawah .kr-akun, .kr-hp .kr-ket .kr-akun { color: #f8f7f2; }
-.kr-tt-bawah .kr-kepala-t small { color: rgba(242, 241, 236, 0.7); }
-.kr-tt-bawah .kr-ava > span { background: #1d2026; border-color: #1d2026; }
-.kr-tt-bawah .kr-ket { font-size: 13.5px; max-height: 3.2em; overflow: hidden; }
-.kr-tt-bawah .kr-ket.lengkap { max-height: calc(100cqh - 100cqw * 1.25 - 40px); min-height: 0; overflow-y: auto; }
-.kr-tt-bawah .kr-ket p { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.kr-tt-bawah .kr-ket.lengkap p { display: block; }
-.kr-tt-bawah .kr-ket:not(.lengkap) .kr-sumber, .kr-tt-bawah .kr-ket:not(.lengkap) .kr-kode, .kr-tt-bawah .kr-ket:not(.lengkap) .kr-tgl { display: none; }
-.kr-tt-bawah .kr-ket:not(.lengkap) { max-height: none; }
-.kr-hp .kr-sumber a { color: #b8d3ff; } .kr-hp .kr-sumber small, .kr-hp .kr-sumber b, .kr-hp .kr-lagi { color: rgba(242, 241, 236, 0.72); }
-.kr-hp .kr-kode span { background: rgba(255, 255, 255, 0.12); }
-.kr-tt-rel { position: absolute; right: 8px; bottom: 14px; }
-.kr-tt-rel .kr-aksi { flex-direction: column; gap: 10px; padding: 0; }
-.kr-tt-rel .kr-aksi button { flex-direction: column; gap: 3px; color: #f8f7f2; padding: 0; width: 64px; font-size: 10.5px; white-space: nowrap; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6); }
-.kr-tt-rel .kr-aksi button:hover { background: none; }
-.kr-tt-rel .kr-aksi .kr-ico { width: 44px; height: 44px; border-radius: 50%; background: rgba(255, 255, 255, 0.14); display: grid; place-items: center; font-size: 21px; }
-.kr-tt-rel .kr-aksi .kr-baca .kr-ico { width: 44px; height: 44px; border: 2px solid rgba(255, 255, 255, 0.8); color: #f8f7f2; font-size: 18px; }
-.kr-tt-rel .kr-aksi .kr-baca .kr-lbl, .kr-tt-rel .kr-aksi .kr-baca.on .kr-lbl { color: #f8f7f2; }
-.kr-tt-rel .kr-aksi .kr-baca.on .kr-ico { background: #3f9d6a; border-color: #3f9d6a; }
-.kr-tt-rel .kr-aksi .kr-simpan { margin-left: 0; }
-.kr-lembar-bawah { position: absolute; inset: 0; z-index: 20; background: rgba(0, 0, 0, 0.45); }
-.kr-lembar-bawah > div { position: absolute; left: 0; right: 0; bottom: 0; max-height: 78%; overflow-y: auto; background: var(--panel-solid); color: var(--text); border-radius: 18px 18px 0 0; padding: 6px 12px 16px; animation: sheet 0.2s ease-out; }
-.kr-lembar-bawah .kr-panel { border: none; background: none; padding: 6px 2px; }
-.kr-hp .kr-habis { height: 100%; scroll-snap-align: start; margin: 0; border-radius: 0; background: none; display: flex; flex-direction: column; justify-content: center; color: #f2f1ec; box-sizing: border-box; }
-.kr-hp .kr-habis p { color: rgba(242, 241, 236, 0.7); }
-.kr-hp .kr-akhir { color: rgba(242, 241, 236, 0.7); }
+.kr-hp .kr-tabs { justify-content: flex-start; padding: 10px 12px; }
+.kr-hp .kr-feed { padding: 10px 0 30px; }
+.kr-hp .kr-pos.ig { width: 100%; margin-bottom: 14px; padding-bottom: 12px; }
+.kr-hp .kr-pos.ig .kr-kepala, .kr-hp .kr-pos.ig .kr-aksi, .kr-hp .kr-pos.ig .kr-ket, .kr-hp .kr-pos.ig .kr-panel { margin-left: 12px; margin-right: 12px; }
+.kr-hp .kr-pos.ig .kr-car { border-radius: 0; }
+.kr-hp .kr-panah, .kr-hp .krs-geser { display: none; }
+.kr-hp .kr-aksi .kr-lbl { font-size: 12px; }
+.kr-hp .kr-sibuk, .kr-hp .kr-habis { width: auto; margin-left: 12px; margin-right: 12px; }
 .kr-hp .kr-hal { color: var(--text); background: var(--panel-solid); height: 100%; padding: 16px 12px 40px; }
 .kr-hp:not(.kr-v-feed) { background: var(--panel-solid); color: var(--text); }
 .kr-hp .kr-profil { gap: 18px; padding: 4px 4px 16px; } .kr-hp .kr-ava.besar { width: 84px; height: 84px; } .kr-hp .kr-ava.besar > span { font-size: 38px; }
@@ -2897,3 +2867,9 @@ body.no-office #phaser-container { visibility: hidden; }
 .gr-st { font-size: 11.5px; color: var(--muted); text-align: right; } .gr-st.selesai { color: var(--good); } .gr-st.gagal { color: var(--bad); }
 .gr-aksi { display: flex; flex-wrap: wrap; gap: 6px; }
 @media (max-width: 767px) { .gr-baris { grid-template-columns: 1fr auto; } .gr-baris > span { grid-column: 1 / -1; } }
+
+/* Ketuk dua kali = sudah baca (seperti like di Instagram) */
+.kr-car { touch-action: manipulation; }
+.kr-ketuk { position: absolute; left: 50%; top: 50%; z-index: 6; width: 92px; height: 92px; margin: -46px 0 0 -46px; border-radius: 50%; background: #3f9d6a; color: #fff; font-size: 52px; font-weight: 800; display: grid; place-items: center; pointer-events: none; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.25); animation: kr-ketuk 0.9s ease-out forwards; }
+@keyframes kr-ketuk { 0% { transform: scale(0.3); opacity: 0; } 18% { transform: scale(1.12); opacity: 1; } 32% { transform: scale(0.95); } 70% { transform: scale(1); opacity: 1; } 100% { transform: scale(1.05); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .kr-ketuk { animation: kr-ketuk-diam 0.9s forwards; } @keyframes kr-ketuk-diam { 0%, 70% { opacity: 1; } 100% { opacity: 0; } } }
