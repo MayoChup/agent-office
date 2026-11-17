@@ -32,6 +32,7 @@ import ATUR_SOSMED from './kantor/skrip/atur-sosmed.sh';
 import { pasangSosmed } from './kantor/sosmedRute';
 import { pasangKr } from './kantor/krRute';
 import { pasangRutin } from './kantor/rutin';
+import { gantiNamaPenasihat } from './kantor/migrasi';
 import ATUR_KURATOR from './kantor/skrip/atur-kurator.sh';
 import { execFile as jalankanBerkas } from 'child_process';
 import { Hr, statistik, kunciMinggu, ambilUsulanJson, ID_HR, ID_JONI, StatAi } from './kantor/hr';
@@ -46,6 +47,8 @@ import { spawn } from 'child_process';
 import os from 'os';
 
 const config = loadConfig();
+// Dua AI bernama Hana → penasihat keuangan jadi Laras (HR tetap Hana).
+gantiNamaPenasihat(config.hermesHome, process.env.KANTOR_CONFIG || path.join(process.env.KANTOR_ROOT || process.cwd(), 'kantor.config.json'), config.agents as any);
 
 // Daftar AI (nama & peran) dari profil Hermes + nama tampilan di kantor.config.json.
 const hermesProfiles = new HermesBridge(config.hermesHome, config.kanbanDbPath, config.hermesBin);
@@ -675,14 +678,14 @@ app.post('/api/kantor/hr/usulan/:id', requireToken, async (req, res) => {
 });
 
 // ── Divisi Social Media (banyak akun & platform): lihat kantor/sosmedRute.ts ──
-pasangSosmed({
+const sosmedTim = pasangSosmed({
     app, requireToken, dataDir: config.dataDir, hermesHome: config.hermesHome, skillDir: path.join(__dirname, 'hermes-skills'),
     roster, resetRoster: () => { rosterCache.at = 0; }, papan, percakapan, llm: () => OfficeRoom.sharedLlm() as any,
     berkas, kabari: kabariTelegram, idJoni: ID_JONI, namaJoni, aturSosmed: ATUR_SOSMED, jalankanBerkas
 });
 
 // ── Knowledge Reels (Kirana + tim, gotong royong): lihat kantor/krRute.ts ──
-pasangKr({
+const knowledgeReels = pasangKr({
     app, requireToken, dataDir: config.dataDir, hermesHome: config.hermesHome, roster, resetRoster: () => { rosterCache.at = 0; }, papan, percakapan,
     llm: () => OfficeRoom.sharedLlm() as any, catatan: { tulis: (rel, isi) => catatan.tulis(rel, isi) },
     saham: () => { const st = tradingDesk.load(); return { simbol: screener.daftarSimbol(), watchlist: Array.from(new Set([...st.positions.map((p) => p.symbol), ...st.watchlist])), detail: (s) => screener.detail(s) }; },
@@ -692,7 +695,14 @@ pasangKr({
 // ── Rutin tambahan (keuangan mingguan) + pengatur model hemat token yang ditata HR: lihat kantor/rutin.ts ──
 pasangRutin({
     app, requireToken, dataDir: config.dataDir, hermesHome: config.hermesHome, roster, papan, percakapan, llm: () => OfficeRoom.sharedLlm() as any,
-    transaksi: async () => (await pencatat.report()).transaksi, batas: () => anggaran.get().batas || {}, kabari: kabariTelegram, idHr: ID_HR
+    transaksi: async () => (await pencatat.report()).transaksi, batas: () => anggaran.get().batas || {}, kabari: kabariTelegram, idHr: ID_HR,
+    catatan: { tulis: (rel, isi) => catatan.tulis(rel, isi) },
+    saham: () => { const st = tradingDesk.load(); return { watchlist: Array.from(new Set([...st.positions.map((p) => p.symbol), ...st.watchlist])), detail: (s) => screener.detail(s) }; },
+    agenda: (h) => kalender.agenda(h), berkas: { root: berkas.root, kuota: berkas.kuota },
+    kr: () => ({ post: knowledgeReels.st.post, catatan: knowledgeReels.st.catatan, judulPost: (id) => knowledgeReels.st.post.find((p) => p.id === id)?.judul || '' }),
+    sosmed: () => sosmedTim.semua().map((c) => ({ id: c.a.id, nama: c.a.nama, platform: c.a.platform, niche: c.s.st.strategi?.niche || c.s.st.profil.topik || '' })),
+    sosmedIde: (t) => sosmedTim.setIdeBerita(t),
+    berat: () => ({ model: config.berat.model, perHari: config.berat.perHari, terpakai: kuotaBerat.terpakai() })
 });
 
 // ── Chat konsultasi Trading: AI menjawab HANYA dari data halaman Trading ──

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Bentuk / perbarui SEMUA tim kantor sekaligus (aman dijalankan berulang):
 #   Kepala   : Joni si Kepala
-#   Keuangan : Uang si Bendahara + Bima si Budgeting, Prita si Proyeksi, Hana si Penasihat
+#   Keuangan : Uang si Bendahara + Bima si Budgeting, Prita si Proyeksi, Laras si Penasihat
 #   Editor   : Eca si Editor + Sasa si Spreadsheet, Dodi si Docs, Putri si Presentasi
 #   Sekretaris: Sekar si Sekretaris (Google Calendar)
 #   Trading  : Dito si Trader + Nina si Berita, Raka si Analis, Sari si Smart Money
@@ -105,11 +105,11 @@ Bandingkan pengeluaran per kategori dengan anggaran Pak Rico, beri peringatan bi
     member keuangan-proyeksi keuangan Prita Proyeksi "Proyeksi: memperkirakan pengeluaran & sisa uang sampai akhir bulan dan 3 bulan ke depan." \
 "Tugasmu: proyeksi. $KEU
 Hitung dari rata-rata harian/mingguan; selalu sebutkan dasar hitungannya dan rentang (optimis-pesimis)."
-    member keuangan-penasihat keuangan Hana Penasihat "Penasihat: memberi saran konkret apa yang sebaiknya dilakukan dengan keuangan Pak Rico." \
+    member keuangan-penasihat keuangan Laras Penasihat "Penasihat: memberi saran konkret apa yang sebaiknya dilakukan dengan keuangan Pak Rico." \
 "Tugasmu: saran. $KEU
 Beri 3 saran konkret dan terukur (mis. \"kurangi Makan & Minum Rp300 rb/bulan\"), urut dari dampak terbesar. Bukan nasihat investasi."
     for id in keuangan keuangan-budget keuangan-proyeksi keuangan-penasihat; do google "$P/$id"; done
-    echo "✅ Keuangan: Uang si Bendahara, Bima si Budgeting, Prita si Proyeksi, Hana si Penasihat"
+    echo "✅ Keuangan: Uang si Bendahara, Bima si Budgeting, Prita si Proyeksi, Laras si Penasihat"
 fi
 
 # ── Editor (Eca) ───────────────────────────────────────────────────────
@@ -155,7 +155,7 @@ set("default","Joni","Kepala","Kepala Kantor");
 set("keuangan","Uang","Bendahara","Kepala Keuangan");
 set("keuangan-budget","Bima","Budgeting","Anggaran bulanan");
 set("keuangan-proyeksi","Prita","Proyeksi","Proyeksi keuangan");
-set("keuangan-penasihat","Hana","Penasihat","Saran keuangan");
+set("keuangan-penasihat","Laras","Penasihat","Saran keuangan");
 set("eca","Eca","Editor","Kepala Editor");
 set("eca-sheets","Sasa","Spreadsheet","Google Sheets");
 set("eca-docs","Dodi","Docs","Google Docs");
@@ -186,7 +186,7 @@ Penerima TIDAK bisa membaca obrolanmu dengan Pak Rico, jadi --body wajib berisi:
 | Uang | Bendahara, kepala Keuangan | keuangan | rekap & laporan keuangan |
 | Bima | Budgeting | keuangan-budget | anggaran per kategori, peringatan batas |
 | Prita | Proyeksi | keuangan-proyeksi | perkiraan pengeluaran & sisa uang |
-| Hana | Penasihat | keuangan-penasihat | saran keuangan konkret |
+| Laras | Penasihat | keuangan-penasihat | saran keuangan konkret |
 | Eca | Editor, kepala Editor | eca | dokumen umum, membagi tugas editor |
 | Sasa | Spreadsheet | eca-sheets | Google Sheets |
 | Dodi | Docs | eca-docs | Google Docs (surat, laporan, notulen) |

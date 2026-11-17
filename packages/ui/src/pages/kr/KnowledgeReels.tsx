@@ -109,7 +109,6 @@ function Feed({ ctx, segmen, setSegmen, st }: { ctx: Ctx; segmen: string; setSeg
         return () => { io.disconnect(); clearInterval(kirim); timer.forEach(clearTimeout); if (antre.size) apiPost('/api/kantor/kr/lihat', { ids: [...antre] }).catch(() => undefined); };
     }, [aktif, list.length]);
     const ganti = (p: KPost) => setList((l) => l.map((x) => (x.id === p.id ? p : x)));
-    const lanjut = (id: string) => { if (!ctx.hp || !wadah.current) return; const el = wadah.current.querySelector(`[data-id="${id}"]`)?.nextElementSibling as HTMLElement | null; if (el) el.scrollIntoView({ behavior: 'smooth' }); };
     const segmenList = st?.segmen || [['semua', 'All']];
 
     return (
@@ -119,7 +118,7 @@ function Feed({ ctx, segmen, setSegmen, st }: { ctx: Ctx; segmen: string; setSeg
             </div>
             <div className="kr-feed" ref={wadah}>
                 {st?.sibuk && <div className="kr-sibuk">✍️ Redaksi sedang menyiapkan postingan{st.progres ? ` · ${st.progres}` : ''}</div>}
-                {list.map((p) => <Pos key={p.id} p={p} ctx={ctx} ganti={ganti} lanjut={() => lanjut(p.id)} />)}
+                {list.map((p) => <Pos key={p.id} p={p} ctx={ctx} ganti={ganti} />)}
                 <div ref={ujung} />
                 {muat && <div className="kr-akhir">Memuat…</div>}
                 {galat && <div className="kr-akhir">⚠️ {galat} <button className="btn" onClick={() => ambil(true)}>Coba lagi</button></div>}
@@ -145,7 +144,7 @@ function Habis({ ctx, kosong, segmen, st, muatUlang }: { ctx: Ctx; kosong: boole
 }
 
 /* ── Satu postingan ── */
-function Pos({ p, ctx, ganti, lanjut, diModal }: { p: KPost; ctx: Ctx; ganti: (p: KPost) => void; lanjut?: () => void; diModal?: boolean }) {
+function Pos({ p, ctx, ganti, diModal }: { p: KPost; ctx: Ctx; ganti: (p: KPost) => void; diModal?: boolean }) {
     const [buka, setBuka] = useState<'' | 'catatan' | 'simpan'>('');
     const [lengkap, setLengkap] = useState(false);
     const tema = ctx.tema[p.kat];
@@ -154,7 +153,7 @@ function Pos({ p, ctx, ganti, lanjut, diModal }: { p: KPost; ctx: Ctx; ganti: (p
         const ya = !p.baca; ganti({ ...p, baca: ya });
         try {
             await apiPost('/api/kantor/kr/baca', { id: p.id, ya });
-            if (ya) { ctx.pesan('Ditandai sudah baca — tidak muncul lagi di feed.', () => { ganti({ ...p, baca: false }); apiPost('/api/kantor/kr/baca', { id: p.id, ya: false }).catch(() => undefined); }); if (tt) setTimeout(() => lanjut?.(), 450); }
+            if (ya) ctx.pesan('Ditandai sudah baca — tidak muncul lagi saat feed dimuat ulang.', () => { ganti({ ...p, baca: false }); apiPost('/api/kantor/kr/baca', { id: p.id, ya: false }).catch(() => undefined); });
             ctx.muatStatus();
         } catch (e: any) { ganti(p); ctx.pesan(String(e?.message || e)); }
     };
@@ -206,12 +205,6 @@ function Pos({ p, ctx, ganti, lanjut, diModal }: { p: KPost; ctx: Ctx; ganti: (p
             <div className="kr-tt-bawah">{kepala}{keterangan}</div>
             <div className="kr-tt-rel">{aksi}</div>
             {panel && <div className="kr-lembar-bawah" onClick={(e) => { if (e.target === e.currentTarget) setBuka(''); }}><div>{panel}</div></div>}
-        </article>
-    );
-    if (p.baca && !diModal) return (
-        <article className="kr-pos ig ringkas" data-id={p.id}>
-            <span>✓ Sudah dibaca: <b>{p.judul}</b></span>
-            <button onClick={baca}>Batalkan</button>
         </article>
     );
     return (

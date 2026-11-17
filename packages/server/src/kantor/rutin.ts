@@ -4,6 +4,12 @@
  *                     Yang dikirim ke AI hanya TOTAL per kategori — tanpa nama pihak, keterangan, atau nomor rekening.
  *  - Senin 10.00 WIB  Hana (HR) menata ulang model AI tiap anggota berdasarkan beban kerja (hanya opsi gratis).
  *  - Tiap jam         AI baru otomatis dibagi ke opsi model gratis supaya kuota tersebar.
+ *  - Jumat 16.00      Sekar menulis "Ringkasan minggu ini" ke Catatan (kerja tim, catatan Bapak, agenda minggu depan).
+ *  - Sabtu 09.00      Trading mingguan: Raka (fundamental watchlist) + Sari (smart money) → Dito (rencana) → Dodi (laporan di Catatan).
+ *  - Minggu 10.00     Eca: laporan penyimpanan Berkas (hanya angka; nama berkas tidak dikirim ke AI).
+ *  - Minggu 19.00     Nina: ide konten dari berita minggu ini untuk tiap akun sosmed → masuk ke bahan ide tim Konten.
+ *  - Tanggal 1        Sasa: rekap pengeluaran bulan lalu vs bulan sebelumnya.
+ * Peta "siapa menyumbang apa" di tiap fitur: GOTONG (ditampilkan di Papan kerja → Gotong royong).
  */
 import fs from 'fs';
 import path from 'path';
@@ -19,7 +25,57 @@ export interface DepsRutin {
     transaksi: () => Promise<Array<{ d: string; jenis: string; n: number; kat: string; status?: string }>>;
     batas: () => Record<string, number>;
     kabari: (t: string) => Promise<any>; idHr: string;
+    catatan: { tulis: (rel: string, isi: string) => Promise<any> };
+    saham: () => { watchlist: string[]; detail: (s: string) => any };
+    agenda: (hari: number) => Promise<Array<{ judul: string; mulai: string; seharian: boolean; tempat: string }>>;
+    berkas: { root: string; kuota: number };
+    kr: () => { post: Array<{ kat: string; judul: string; sub?: string; dibuat: number }>; catatan: Array<{ postId: string; teks: string; at: number }>; judulPost: (id: string) => string };
+    sosmed: () => Array<{ id: string; nama: string; platform: string; niche: string }>;
+    sosmedIde: (teks: string) => void;
+    berat: () => { model: string; perHari: number; terpakai: number };
 }
+
+/** Peta gotong royong: tiap fitur dikerjakan bersama beberapa AI. kunci = potongan judul di Papan kerja (kosong = pekerjaan apa pun dari AI itu). */
+export const GOTONG: Array<{ fitur: string; ikon: string; ai: string; tugas: string; jadwal: string; kunci: string }> = [
+    { fitur: 'Beranda', ikon: '🏠', ai: 'default', tugas: 'Ringkasan pagi dari berita hari ini (Telegram)', jadwal: 'Tiap hari 07.15', kunci: 'Ringkasan pagi' },
+    { fitur: 'Kantor', ikon: '🏢', ai: 'default', tugas: 'Usulan tugas untuk anggota yang menganggur', jadwal: 'Senin', kunci: 'usulan tugas' },
+    { fitur: 'Kantor', ikon: '🏢', ai: 'hr', tugas: 'Review kinerja tim', jadwal: 'Tiap 2 minggu', kunci: 'Review kinerja' },
+    { fitur: 'Kantor', ikon: '🏢', ai: 'hr', tugas: 'Menata model AI (hemat token)', jadwal: 'Senin 10.00', kunci: 'Menata model' },
+    { fitur: 'Knowledge Reels', ikon: '🧠', ai: 'kurator', tugas: 'Berita Indonesia & dunia', jadwal: '05.00, 12.00, 18.00', kunci: 'Knowledge Reels' },
+    { fitur: 'Knowledge Reels', ikon: '🧠', ai: 'trading-berita', tugas: 'Politik, finance & dampak saham', jadwal: '05.00, 12.00, 18.00', kunci: 'Knowledge Reels' },
+    { fitur: 'Knowledge Reels', ikon: '🧠', ai: 'trading-fundamental', tugas: '"Tahukah kamu" saham watchlist', jadwal: 'Tiap hari 05.00', kunci: 'Knowledge Reels' },
+    { fitur: 'Knowledge Reels', ikon: '🧠', ai: 'trading-smartmoney', tugas: 'Edukasi smart money', jadwal: 'Rabu', kunci: 'Knowledge Reels' },
+    { fitur: 'Knowledge Reels', ikon: '🧠', ai: 'sosmed-riset', tugas: 'Fun fact', jadwal: 'Tiap hari', kunci: 'Knowledge Reels' },
+    { fitur: 'Knowledge Reels', ikon: '🧠', ai: 'eca-docs', tugas: 'Intisari buku', jadwal: 'Tiap hari', kunci: 'Knowledge Reels' },
+    { fitur: 'Knowledge Reels', ikon: '🧠', ai: 'sosmed-penulis', tugas: 'Tips & trik', jadwal: 'Hari ganjil', kunci: 'Knowledge Reels' },
+    { fitur: 'Knowledge Reels', ikon: '🧠', ai: 'sosmed-komunitas', tugas: 'Tips & trik', jadwal: 'Hari genap', kunci: 'Knowledge Reels' },
+    { fitur: 'Knowledge Reels', ikon: '🧠', ai: 'keuangan-penasihat', tugas: 'Tips keuangan pribadi', jadwal: 'Senin', kunci: 'Knowledge Reels' },
+    { fitur: 'Knowledge Reels', ikon: '🧠', ai: 'eca-sheets', tugas: 'Brain game logika', jadwal: 'Tiap hari', kunci: 'Knowledge Reels' },
+    { fitur: 'Knowledge Reels', ikon: '🧠', ai: 'sosmed-produksi', tugas: 'Brain game imajinasi', jadwal: 'Tiap hari', kunci: 'Knowledge Reels' },
+    { fitur: 'Knowledge Reels', ikon: '🧠', ai: 'eca-slides', tugas: 'Menata desain carousel', jadwal: 'Tiap hari', kunci: 'Knowledge Reels' },
+    { fitur: 'Knowledge Reels', ikon: '🧠', ai: 'eca', tugas: 'Memeriksa mutu', jadwal: 'Tiap edisi', kunci: 'Knowledge Reels' },
+    { fitur: 'Knowledge Reels', ikon: '🧠', ai: 'sosmed', tugas: 'Rencana topik mingguan', jadwal: 'Senin', kunci: 'Knowledge Reels' },
+    { fitur: 'Keuangan', ikon: '💰', ai: 'keuangan', tugas: 'Merangkum laporan mingguan untuk Bapak', jadwal: 'Senin 08.00', kunci: 'laporan keuangan mingguan' },
+    { fitur: 'Keuangan', ikon: '💰', ai: 'keuangan-budget', tugas: 'Cek anggaran per kategori', jadwal: 'Senin 08.00', kunci: 'Cek anggaran' },
+    { fitur: 'Keuangan', ikon: '💰', ai: 'keuangan-proyeksi', tugas: 'Proyeksi akhir bulan', jadwal: 'Senin 08.00', kunci: 'Proyeksi akhir bulan' },
+    { fitur: 'Keuangan', ikon: '💰', ai: 'keuangan-penasihat', tugas: '3 saran keuangan konkret', jadwal: 'Senin 08.00', kunci: 'Saran keuangan' },
+    { fitur: 'Keuangan', ikon: '💰', ai: 'eca-sheets', tugas: 'Rekap bulan lalu vs sebelumnya', jadwal: 'Tanggal 1', kunci: 'Rekap pengeluaran' },
+    { fitur: 'Trading', ikon: '📈', ai: 'trading', tugas: 'Rencana trading minggu depan', jadwal: 'Sabtu 09.00', kunci: 'Rencana trading' },
+    { fitur: 'Trading', ikon: '📈', ai: 'trading-berita', tugas: 'Memetakan berita dunia ke saham', jadwal: 'Tiap hari', kunci: 'berita terkait' },
+    { fitur: 'Trading', ikon: '📈', ai: 'trading-fundamental', tugas: 'Tinjauan fundamental watchlist', jadwal: 'Sabtu 09.00', kunci: 'Tinjauan fundamental' },
+    { fitur: 'Trading', ikon: '📈', ai: 'trading-smartmoney', tugas: 'Tinjauan smart money watchlist', jadwal: 'Sabtu 09.00', kunci: 'Tinjauan smart money' },
+    { fitur: 'Trading', ikon: '📈', ai: 'eca-docs', tugas: 'Laporan trading mingguan di Catatan', jadwal: 'Sabtu 09.00', kunci: 'Laporan trading' },
+    { fitur: 'Konten', ikon: '🎬', ai: 'sosmed', tugas: 'Strategi, kalender & evaluasi', jadwal: 'Tiap hari', kunci: '' },
+    { fitur: 'Konten', ikon: '🎬', ai: 'sosmed-riset', tugas: 'Analisa niche & tren', jadwal: 'Tiap 2 minggu', kunci: 'Analisa' },
+    { fitur: 'Konten', ikon: '🎬', ai: 'sosmed-penulis', tugas: 'Sketsa & naskah', jadwal: 'Tiap hari', kunci: '' },
+    { fitur: 'Konten', ikon: '🎬', ai: 'sosmed-produksi', tugas: 'Prompt video & suara', jadwal: 'Tiap hari', kunci: '' },
+    { fitur: 'Konten', ikon: '🎬', ai: 'sosmed-komunitas', tugas: 'Draf balasan komentar', jadwal: 'Tiap hari', kunci: '' },
+    { fitur: 'Konten', ikon: '🎬', ai: 'trading-berita', tugas: 'Ide konten dari berita minggu ini', jadwal: 'Minggu 19.00', kunci: 'Ide konten dari berita' },
+    { fitur: 'Catatan', ikon: '📓', ai: 'sekretaris', tugas: 'Ringkasan minggu ini', jadwal: 'Jumat 16.00', kunci: 'Ringkasan minggu' },
+    { fitur: 'Catatan', ikon: '📓', ai: 'eca-docs', tugas: 'Laporan trading mingguan', jadwal: 'Sabtu 09.00', kunci: 'Laporan trading' },
+    { fitur: 'Jadwal', ikon: '📅', ai: 'sekretaris', tugas: 'Agenda pagi & janji temu', jadwal: 'Tiap hari', kunci: '' },
+    { fitur: 'Berkas', ikon: '☁️', ai: 'eca', tugas: 'Laporan penyimpanan & saran merapikan', jadwal: 'Minggu 10.00', kunci: 'Laporan penyimpanan' }
+];
 const hariWib = () => new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
 const rp = (n: number) => `Rp${Math.round(n).toLocaleString('id-ID')}`;
 
@@ -85,7 +141,9 @@ export function pasangRutin(d: DepsRutin) {
             const cek = await kerja('keuangan-budget', bima, 'Cek anggaran mingguan', `Kamu ${bima}, pengawas anggaran. Dari DATA, sebut kategori yang sudah/hampir melewati anggaran (≥ 80%) dan yang aman, lalu beri 3 saran hemat yang konkret untuk minggu ini. Angka HANYA dari DATA. Maksimal 8 baris, Bahasa Indonesia.\n\n${dasar}`).catch(() => '');
             const proy = await kerja('keuangan-proyeksi', prita, 'Proyeksi akhir bulan', `Kamu ${prita}, analis proyeksi. Dari DATA, perkirakan total pengeluaran tiap kategori di akhir bulan dengan laju harian sejauh ini (total ÷ ${tgl} × ${jmlHari}); tandai yang diproyeksikan melewati anggaran. Tunjukkan hitungannya singkat. Maksimal 8 baris.\n\n${dasar}`).catch(() => '');
             const total = Object.values(bln).reduce((s, v) => s + v, 0);
-            const teks = [`💰 **Laporan keuangan mingguan** (${sebab})`, `Pengeluaran bulan ini ${rp(total)} · pemasukan ${rp(masukBln)} · hari ke-${tgl}/${jmlHari}.`, '', `**${bima} — cek anggaran**`, cek.trim() || '(tidak ada jawaban)', '', `**${prita} — proyeksi akhir bulan**`, proy.trim() || '(tidak ada jawaban)'].join('\n');
+            const laras = nama('keuangan-penasihat', 'Laras');
+            const saran = await kerja('keuangan-penasihat', laras, 'Saran keuangan mingguan', `Kamu ${laras}, penasihat keuangan. Dari DATA dan catatan rekanmu di bawah, beri 3 saran konkret & terukur untuk minggu ini (mis. "kurangi Makan & Minum Rp300 rb"), urut dari dampak terbesar. Bukan nasihat investasi. Maksimal 6 baris.\n\n${dasar}\n\nCatatan ${bima}:\n${cek.slice(0, 1200)}\n\nCatatan ${prita}:\n${proy.slice(0, 1200)}`).catch(() => '');
+            const teks = [`💰 **Laporan keuangan mingguan** (${sebab})`, `Pengeluaran bulan ini ${rp(total)} · pemasukan ${rp(masukBln)} · hari ke-${tgl}/${jmlHari}.`, '', `**${bima} — cek anggaran**`, cek.trim() || '(tidak ada jawaban)', '', `**${prita} — proyeksi akhir bulan**`, proy.trim() || '(tidak ada jawaban)', '', `**${laras} — saran minggu ini**`, saran.trim() || '(tidak ada jawaban)'].join('\n');
             percakapan.pesan('keuangan', 'keuangan', uang, teks);
             papan.catat({ ai: 'keuangan', nama: uang, judul: 'Merangkum laporan keuangan mingguan untuk Pak Rico', sumber: 'tugas', status: 'selesai' });
             d.kabari(`💰 ${uang}: laporan keuangan mingguan siap — pengeluaran bulan ini ${rp(total)}. Buka Chat ${uang}.`).catch(() => undefined);
@@ -93,24 +151,128 @@ export function pasangRutin(d: DepsRutin) {
         } finally { sibukUang = false; }
     }
 
+    /* ── Rekap bulanan (Sasa) ── */
+    async function rekapBulanan() {
+        const tx = (await d.transaksi()).filter((t) => t.status !== 'Dihapus' && t.jenis === 'Keluar');
+        const bulanKe = (n: number) => { const t = new Date(Date.now() + 7 * 3600_000); t.setUTCDate(1); t.setUTCMonth(t.getUTCMonth() - n); return t.toISOString().slice(0, 7); };
+        const b1 = bulanKe(1), b2 = bulanKe(2);
+        const jml = (b: string) => { const m: Record<string, number> = {}; for (const t of tx) if (t.d.startsWith(b)) m[t.kat || 'Lainnya'] = (m[t.kat || 'Lainnya'] || 0) + Math.abs(t.n); return m; };
+        const x1 = jml(b1), x2 = jml(b2); const kat = [...new Set([...Object.keys(x1), ...Object.keys(x2)])].sort((a, b) => (x1[b] || 0) - (x1[a] || 0));
+        if (!kat.length) return;
+        const tabel = ['| Kategori | ' + b2 + ' | ' + b1 + ' | Selisih |', '|---|---:|---:|---:|', ...kat.map((k) => `| ${k} | ${rp(x2[k] || 0)} | ${rp(x1[k] || 0)} | ${(x1[k] || 0) >= (x2[k] || 0) ? '+' : '−'}${rp(Math.abs((x1[k] || 0) - (x2[k] || 0)))} |`)].join('\n');
+        const sasa = nama('eca-sheets', 'Sasa');
+        const ulas = await kerja('eca-sheets', sasa, `Rekap pengeluaran ${b1}`, `Kamu ${sasa}. Dari TABEL total pengeluaran per kategori ini, tulis 3 temuan singkat (kategori yang naik/turun paling besar, dan polanya). Angka HANYA dari tabel. Maksimal 5 baris.\n\n${tabel}`).catch(() => '');
+        percakapan.pesan('keuangan', 'eca-sheets', sasa, `📊 **Rekap pengeluaran ${b1} vs ${b2}**\n\n${tabel}\n\n${ulas.trim()}`);
+    }
+
+    /* ── Trading mingguan (Raka, Sari → Dito → Dodi) ── */
+    async function tradingMingguan(sebab: string) {
+        const s = d.saham(); const wl = s.watchlist.slice(0, 15);
+        if (!wl.length) return { lewati: 'watchlist kosong' };
+        const baris = wl.map((sym) => { const det = s.detail(sym); const b = det?.baris; if (!b) return ''; const f = b.f || {};
+            return `${sym} (${b.nama || '-'}, ${b.sektor || '-'}): harga ${b.harga}, 1b ${b.chg1m}%, 3b ${b.chg3m}%, 1t ${b.chg1y}%, RSI ${b.rsi ?? '-'}, PER ${f.per ?? '-'}, PBV ${f.pbv ?? '-'}, ROE ${f.roe ?? '-'}%, DER ${f.der ?? '-'}, tumbuh pendapatan ${f.revGrowth ?? '-'}%`; }).filter(Boolean).join('\n');
+        const orang = wl.map((sym) => { const o = s.detail(sym)?.orang; return o ? `${sym}: ${JSON.stringify(o).slice(0, 300)}` : ''; }).filter(Boolean).join('\n');
+        const raka = nama('trading-fundamental', 'Raka'), sari = nama('trading-smartmoney', 'Sari'), dito = nama('trading', 'Dito'), dodi = nama('eca-docs', 'Dodi');
+        const fund = await kerja('trading-fundamental', raka, 'Tinjauan fundamental watchlist', `Kamu ${raka}, analis fundamental. Dari DATA watchlist berikut, kelompokkan saham: fundamental kuat / biasa / perlu waspada, masing-masing dengan alasan satu kalimat berdasar angka. Angka HANYA dari DATA. Jangan menyuruh beli/jual. Maksimal 12 baris.\n\nDATA:\n${baris}`).catch(() => '');
+        const sm = await kerja('trading-smartmoney', sari, 'Tinjauan smart money watchlist', `Kamu ${sari}, analis smart money. Dari DATA transaksi orang dalam (Form 4) berikut, sebut saham yang orang dalamnya banyak membeli/menjual dan artinya. Kalau DATA kosong, katakan "tidak ada transaksi orang dalam yang tercatat minggu ini". Jangan mengarang. Maksimal 8 baris.\n\nDATA:\n${orang || '(kosong)'}`).catch(() => '');
+        const rencana = await kerja('trading', dito, 'Rencana trading minggu depan', `Kamu ${dito}, kepala trading. Dari tinjauan ${raka} dan ${sari} di bawah, tulis rencana pemantauan minggu depan: 3–5 saham yang perlu diperhatikan, apa pemicunya, dan risiko utamanya. Kantor tidak terhubung ke broker. Akhiri dengan "Bukan saran keuangan." Maksimal 10 baris.\n\n${raka}:\n${fund.slice(0, 2500)}\n\n${sari}:\n${sm.slice(0, 1500)}`).catch(() => '');
+        const tgl = hariWib();
+        const isi = await kerja('eca-docs', dodi, 'Laporan trading mingguan', `Kamu ${dodi}. Susun laporan Markdown rapi berjudul "# Laporan trading mingguan ${tgl}" dari tiga bagian di bawah (pertahankan isi & angka, rapikan bahasa, beri subjudul ## per bagian, poin-poin). Keluarkan Markdown saja.\n\n[Fundamental — ${raka}]\n${fund}\n\n[Smart money — ${sari}]\n${sm}\n\n[Rencana — ${dito}]\n${rencana}`).catch(() => '');
+        const md = (isi.trim().startsWith('#') ? isi.trim() : `# Laporan trading mingguan ${tgl}\n\n## Fundamental (${raka})\n${fund}\n\n## Smart money (${sari})\n${sm}\n\n## Rencana (${dito})\n${rencana}`) + '\n\n_Bukan saran keuangan._\n';
+        const rel = `Laporan/Trading mingguan ${tgl}.md`;
+        await d.catatan.tulis(rel, md).catch((e) => console.warn('[Rutin] tulis laporan trading:', e?.message || e));
+        percakapan.pesan('trading', 'trading', dito, `📈 **Rencana minggu depan** (${sebab})\n${rencana.trim() || '(tidak ada jawaban)'}\n\nLaporan lengkap dari ${dodi}: Catatan › ${rel}`);
+        return { ok: true };
+    }
+
+    /* ── Ringkasan minggu (Sekar) ── */
+    async function ringkasanMinggu() {
+        const seminggu = Date.now() - 7 * 86400_000;
+        const kerjaMinggu = papan.daftar().filter((k) => k.status === 'selesai' && (k.selesai || k.dibuat) >= seminggu);
+        const per = new Map<string, { nama: string; n: number; contoh: string[] }>();
+        for (const k of kerjaMinggu) { const e = per.get(k.ai) || { nama: k.nama.replace(/ · .*/, ''), n: 0, contoh: [] }; e.n++; if (e.contoh.length < 2) e.contoh.push(k.judul.slice(0, 80)); per.set(k.ai, e); }
+        const kr = d.kr(); const cat = kr.catatan.filter((c) => c.at >= seminggu);
+        const agenda = await d.agenda(7).catch(() => []);
+        const bahan = [`KERJA TIM (7 hari, ${kerjaMinggu.length} selesai):`, ...[...per.values()].sort((a, b) => b.n - a.n).map((e) => `- ${e.nama}: ${e.n} (mis. ${e.contoh.join('; ')})`),
+            '', `CATATAN BAPAK DI KNOWLEDGE REELS (${cat.length}):`, ...cat.slice(-10).map((c) => `- [${kr.judulPost(c.postId)}] ${c.teks.slice(0, 200)}`),
+            '', 'AGENDA 7 HARI KE DEPAN:', ...(agenda.length ? agenda.slice(0, 15).map((a) => `- ${a.mulai.slice(0, 16).replace('T', ' ')} ${a.judul}${a.tempat ? ` @ ${a.tempat}` : ''}`) : ['- (kosong)'])].join('\n');
+        const sekar = nama('sekretaris', 'Sekar'), tgl = hariWib();
+        const isi = await kerja('sekretaris', sekar, 'Ringkasan minggu ini', `Kamu ${sekar}, sekretaris Pak Rico. Tulis catatan Markdown "# Ringkasan minggu ${tgl}" dari BAHAN: ## Yang dikerjakan tim (poin), ## Catatan Bapak minggu ini (rangkum, jangan diubah maknanya), ## Agenda minggu depan, ## Yang perlu Bapak putuskan (kalau ada). Hanya dari BAHAN. Keluarkan Markdown saja.\n\nBAHAN:\n${bahan}`).catch(() => '');
+        const md = isi.trim().startsWith('#') ? isi.trim() : `# Ringkasan minggu ${tgl}\n\n${bahan}`;
+        const rel = `Laporan/Ringkasan minggu ${tgl}.md`;
+        await d.catatan.tulis(rel, md + '\n');
+        d.kabari(`📓 ${sekar}: ringkasan minggu ini sudah ada di Catatan › ${rel}`).catch(() => undefined);
+    }
+
+    /* ── Ide konten dari berita (Nina → tim Konten) ── */
+    async function ideKonten() {
+        const akun = d.sosmed().filter((a) => a.niche); if (!akun.length) return;
+        const seminggu = Date.now() - 7 * 86400_000;
+        const berita = d.kr().post.filter((p) => ['lokal', 'global', 'politik', 'bisnis'].includes(p.kat) && p.dibuat >= seminggu).slice(-40);
+        if (berita.length < 3) return;
+        const nina = nama('trading-berita', 'Nina');
+        const out = await kerja('trading-berita', nina, 'Ide konten dari berita minggu ini', `Kamu ${nina}, pembaca berita kantor. Dari JUDUL BERITA minggu ini, pilih yang bisa dijadikan konten untuk tiap akun sosmed sesuai nichenya (2–3 ide per akun, satu kalimat: sudut pandang + kenapa relevan untuk penonton). Lewati akun yang tidak cocok dengan berita mana pun. Jangan mengarang fakta di luar judul.\n\nAKUN:\n${akun.map((a) => `- ${a.nama} (${a.platform}): ${a.niche}`).join('\n')}\n\nJUDUL BERITA:\n${berita.map((b) => `- ${b.judul}${b.sub ? ` — ${b.sub}` : ''}`).join('\n')}`).catch(() => '');
+        if (!out.trim()) return;
+        d.sosmedIde(out.trim().slice(0, 2500));
+        percakapan.pesan('sosmed', 'trading-berita', nina, `📰 **Ide konten dari berita minggu ini**\n${out.trim()}`);
+    }
+
+    /* ── Laporan penyimpanan Berkas (Eca) — nama berkas tidak dikirim ke AI ── */
+    async function laporanBerkas() {
+        const semua: Array<{ rel: string; size: number; mtime: number; ext: string }> = [];
+        const jalan = (dir: string) => { let es: fs.Dirent[] = []; try { es = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+            for (const e of es) { if (e.name.startsWith('.')) continue; const p = path.join(dir, e.name); if (e.isDirectory()) jalan(p); else { try { const st = fs.statSync(p); semua.push({ rel: path.relative(d.berkas.root, p), size: st.size, mtime: st.mtimeMs, ext: (path.extname(e.name).slice(1) || 'lain').toLowerCase() }); } catch { /* */ } } } };
+        jalan(d.berkas.root);
+        const total = semua.reduce((s, f) => s + f.size, 0), gb = (n: number) => `${(n / 1e9).toFixed(2)} GB`, mb = (n: number) => `${(n / 1e6).toFixed(1)} MB`;
+        const perJenis = new Map<string, { n: number; size: number }>(); for (const f of semua) { const e = perJenis.get(f.ext) || { n: 0, size: 0 }; e.n++; e.size += f.size; perJenis.set(f.ext, e); }
+        const lama = semua.filter((f) => Date.now() - f.mtime > 180 * 86400_000);
+        const kembar = new Map<string, number>(); for (const f of semua) { const k = `${path.basename(f.rel)}|${f.size}`; kembar.set(k, (kembar.get(k) || 0) + 1); }
+        const nKembar = [...kembar.values()].filter((n) => n > 1).reduce((s, n) => s + n - 1, 0);
+        const statistik = [`Terpakai ${gb(total)} dari ${gb(d.berkas.kuota)} (${Math.round((total / d.berkas.kuota) * 100)}%), ${semua.length} berkas.`, `Per jenis: ${[...perJenis.entries()].sort((a, b) => b[1].size - a[1].size).slice(0, 8).map(([k, v]) => `${k} ${v.n} berkas ${mb(v.size)}`).join(', ')}.`, `Tidak dibuka > 6 bulan: ${lama.length} berkas (${mb(lama.reduce((s, f) => s + f.size, 0))}).`, `Kemungkinan duplikat: ${nKembar} berkas.`].join('\n');
+        const eca = nama('eca', 'Eca');
+        const saran = await kerja('eca', eca, 'Laporan penyimpanan Berkas', `Kamu ${eca}. Dari STATISTIK penyimpanan cloud pribadi Pak Rico ini, beri 3 saran singkat untuk merapikan/menghemat ruang. Jangan menyuruh menghapus apa pun tanpa dicek Pak Rico. Maksimal 5 baris.\n\nSTATISTIK:\n${statistik}`).catch(() => '');
+        const besar = semua.sort((a, b) => b.size - a.size).slice(0, 5).map((f) => `- ${f.rel} (${mb(f.size)})`).join('\n');
+        percakapan.pesan('eca', 'eca', eca, `☁️ **Laporan penyimpanan Berkas**\n${statistik}\n\nBerkas terbesar:\n${besar || '- (kosong)'}\n\n${saran.trim()}\n\n_Tidak ada berkas yang dihapus otomatis._`);
+    }
+
     const fileTanda = path.join(d.dataDir, 'rutin.json');
     let tandai: Record<string, string> = {}; try { tandai = JSON.parse(fs.readFileSync(fileTanda, 'utf8')); } catch { /* baru */ }
     const tandaiSimpan = (t: Record<string, string>) => { tandai = t; try { fs.writeFileSync(fileTanda, JSON.stringify(t)); } catch { /* */ } };
     setInterval(() => {
         const w = new Date(Date.now() + 7 * 3600_000), jam = w.getUTCHours(), hari = hariWib();
-        if (w.getUTCDay() !== 1) return;
-        if (jam >= 8 && tandai.uang !== hari) { tandaiSimpan({ ...tandai, uang: hari }); keuanganMingguan('Senin').catch((e) => console.warn('[Rutin] keuangan:', e?.message || e)); }
-        if (jam >= 10 && tandai.model !== hari) { tandaiSimpan({ ...tandai, model: hari }); reviewModel('Senin').catch((e) => console.warn('[Rutin] model:', e?.message || e)); }
+        const sekali = (kunci: string, fn: () => Promise<any>) => { if (tandai[kunci] === hari) return; tandaiSimpan({ ...tandai, [kunci]: hari }); fn().catch((e) => console.warn(`[Rutin] ${kunci}:`, e?.message || e)); };
+        const dow = w.getUTCDay(), mnt = jam * 60 + w.getUTCMinutes();
+        if (w.getUTCDate() === 1 && jam >= 9) sekali('rekapBulan', rekapBulanan);
+        if (dow === 1 && jam >= 8) sekali('uang', () => keuanganMingguan('Senin'));
+        if (dow === 1 && jam >= 10) sekali('model', () => reviewModel('Senin'));
+        if (dow === 5 && mnt >= 16 * 60) sekali('ringkasMinggu', ringkasanMinggu);
+        if (dow === 6 && jam >= 9) sekali('trading', () => tradingMingguan('Sabtu'));
+        if (dow === 0 && jam >= 10) sekali('berkas', laporanBerkas);
+        if (dow === 0 && jam >= 19) sekali('ideKonten', ideKonten);
     }, 900_000);
 
     const r = (fn: (req: any) => any): any => async (req: any, res: any) => { try { res.json({ ok: true, ...(await fn(req)) }); } catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); } };
-    app.get('/api/kantor/model', requireToken, r(() => ({ ...router.tampil(tim()), sibuk: sibukModel })));
+    app.get('/api/kantor/model', requireToken, r(() => ({ ...router.tampil(tim()), sibuk: sibukModel, berat: d.berat() })));
     app.post('/api/kantor/model/atur', requireToken, r((req) => {
         const ai = String(req.body?.ai || ''); if (!tim().some((a) => a.id === ai)) throw new Error('AI tidak ditemukan.');
         if (req.body?.lepas) { router.lepasKunci(ai); return {}; }
         return { atur: router.setAtur(ai, String(req.body?.opsi || ''), 'rico', 'Dipilih Pak Rico', req.body?.kunci !== false) };
     }));
     app.post('/api/kantor/model/review', requireToken, r(() => { if (sibukModel) throw new Error('Review model sedang berjalan.'); reviewModel('diminta Pak Rico').catch((e) => console.warn('[Rutin] model:', e?.message || e)); return { sibuk: true }; }));
+    app.get('/api/kantor/gotong', requireToken, r(() => {
+        const bulanIni = papan.bulanIni(); const lalu = new Date(Date.now() + 7 * 3600_000 - 31 * 86400_000).toISOString().slice(0, 7);
+        const items = [...papan.daftar(bulanIni), ...(lalu !== bulanIni ? papan.daftar(lalu) : [])];
+        const ada = new Set(d.roster().map((a) => a.id));
+        const baris = GOTONG.map((g) => {
+            const k = g.kunci.toLowerCase();
+            const hit = items.filter((x) => x.ai === g.ai && (!k || x.judul.toLowerCase().includes(k))).sort((a, b) => (b.selesai || b.dibuat) - (a.selesai || a.dibuat))[0];
+            return { ...g, nama: nama(g.ai, g.ai), profil: ada.has(g.ai), terakhir: hit ? { at: hit.selesai || hit.dibuat, status: hit.status, judul: hit.judul } : null };
+        });
+        const tanpa = d.roster().filter((a) => !GOTONG.some((g) => g.ai === a.id)).map((a) => a.nama);
+        return { baris, tanpaRutin: tanpa };
+    }));
+    const JALAN: Record<string, () => Promise<any>> = { trading: () => tradingMingguan('diminta Pak Rico'), ringkasMinggu: ringkasanMinggu, berkas: laporanBerkas, ideKonten, rekapBulan: rekapBulanan };
+    app.post('/api/kantor/rutin/jalankan', requireToken, r((req) => { const f = JALAN[String(req.body?.jenis || '')]; if (!f) throw new Error('Jenis tidak dikenal.'); f().catch((e) => console.warn('[Rutin]', e?.message || e)); return { sibuk: true }; }));
     app.post('/api/kantor/keuangan/mingguan', requireToken, r(() => { keuanganMingguan('diminta Pak Rico').catch((e) => console.warn('[Rutin] keuangan:', e?.message || e)); return { sibuk: true }; }));
     return router;
 }

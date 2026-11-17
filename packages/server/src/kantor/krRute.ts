@@ -2,7 +2,7 @@
  * Knowledge Reels — rute & redaksi harian (gotong royong).
  *   05:00 WIB  edisi pagi: semua kategori (berita, saham, fun fact, buku, tips, brain games) → Putri menata desain → Eca memeriksa.
  *   12:00/18:00 tambahan berita (lokal, dunia, bisnis) supaya feed selalu segar.
- *   Senin      Maya menyusun rencana topik mingguan; Hana (penasihat) menyumbang tips keuangan; Sari menyumbang edukasi smart money.
+ *   Senin      Maya menyusun rencana topik mingguan; Laras menyumbang tips keuangan; Sari menyumbang edukasi smart money.
  *   07:15      Joni membuat ringkasan pagi dari berita hari ini (dikirim ke Telegram Pak Rico).
  * Komentar = catatan pribadi Pak Rico → juga ditulis ke Catatan (folder "Knowledge Reels/").
  */
@@ -25,7 +25,7 @@ export const TIM_KR: Record<string, { nama: string; peran: string }> = {
     'eca-docs': { nama: 'Dodi', peran: 'Intisari buku' },
     'sosmed-penulis': { nama: 'Lala', peran: 'Tips & trik (hari ganjil)' },
     'sosmed-komunitas': { nama: 'Dea', peran: 'Tips & trik (hari genap)' },
-    'keuangan-penasihat': { nama: 'Hana (penasihat)', peran: 'Tips keuangan pribadi (mingguan)' },
+    'keuangan-penasihat': { nama: 'Laras', peran: 'Tips keuangan pribadi (mingguan)' },
     'eca-sheets': { nama: 'Sasa', peran: 'Brain game logika' },
     'sosmed-produksi': { nama: 'Vino', peran: 'Brain game imajinasi' },
     'eca-slides': { nama: 'Putri', peran: 'Penata desain carousel' },
@@ -124,7 +124,7 @@ export function pasangKr(d: DepsKr) {
         return total;
     }
 
-    /* ── Konten evergreen: fun fact (Tara), buku (Dodi), tips (Lala/Dea/Hana), smart money (Sari) ── */
+    /* ── Konten evergreen: fun fact (Tara), buku (Dodi), tips (Lala/Dea/Laras), smart money (Sari) ── */
     const cariWiki = (q: string): Sumber => ({ judul: `Wikipedia: ${q}`, url: `https://id.wikipedia.org/w/index.php?search=${encodeURIComponent(q)}`, penerbit: 'Wikipedia (pencarian)' });
     async function evergreen(kat: Kat, ai: string, n: number, arahan: string, sumberDari: (x: any) => Sumber[]) {
         const prompt = [arahan, 'Hanya fakta yang sudah mapan dan bisa diperiksa; kalau ragu, jangan dipakai. Jangan mengarang angka, kutipan, atau tautan.', FORMAT_POST.replace('"penutup":"satu kalimat penutup/kesimpulan"', '"penutup":"satu kalimat penutup","rujukan":"nama topik/artikel/buku untuk dicek"'), topikMinggu(kat), lama(kat)].join('\n');
@@ -216,7 +216,7 @@ export function pasangKr(d: DepsKr) {
                 if (ini('saham')) { await coba('Raka: Edukasi saham', () => eduSaham(2)); if (!hanya && hari === 3) await coba('Sari: Edukasi smart money', smartMoney); }
                 if (ini('funfact')) await coba('Tara: Fun fact', funfact);
                 if (ini('buku')) await coba('Dodi: Intisari buku', buku);
-                if (ini('tips')) { await coba(ganjil ? 'Lala: Tips & trik' : 'Dea: Tips & trik', () => tips(ganjil ? 'sosmed-penulis' : 'sosmed-komunitas')); if (!hanya && hari === 1) await coba('Hana: Tips keuangan', tipsUang); }
+                if (ini('tips')) { await coba(ganjil ? 'Lala: Tips & trik' : 'Dea: Tips & trik', () => tips(ganjil ? 'sosmed-penulis' : 'sosmed-komunitas')); if (!hanya && hari === 1) await coba('Laras: Tips keuangan', tipsUang); }
                 if (ini('game')) { await coba('Brain games harian', async () => gameHarian()); await coba('Sasa: Brain game logika', () => gameAi('logika')); await coba('Vino: Brain game imajinasi', () => gameAi('imajinasi')); }
             } else {
                 await coba('Kirana: Berita Indonesia (tambahan)', () => berita('lokal', 2));

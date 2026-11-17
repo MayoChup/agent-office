@@ -31,7 +31,7 @@ export function PapanPanel({ onClose }: { onClose: () => void }) {
     const [sumber, setSumber] = useState('');
     const [kolomHp, setKolomHp] = useState<'todo' | 'proses' | 'selesai'>('selesai');
     const [buka, setBuka] = useState<string | null>(null);
-    const [tampil, setTampil] = useState<'papan' | 'kinerja' | 'model'>('papan');
+    const [tampil, setTampil] = useState<'papan' | 'kinerja' | 'model' | 'gotong'>('papan');
     const hr = useApi<HrData>('/api/kantor/hr', 15000);
     const [pesan, setPesan] = useState('');
     const tunggu = (hr.data?.usulan || []).filter((u) => u.status === 'menunggu');
@@ -104,13 +104,14 @@ export function PapanPanel({ onClose }: { onClose: () => void }) {
             )}
             {d.error && <div className="error">{d.error}</div>}
             <div className="pk-mode">
-                <div className="sb-seg"><button className={tampil === 'papan' ? 'on' : ''} onClick={() => setTampil('papan')}>Papan</button><button className={tampil === 'kinerja' ? 'on' : ''} onClick={() => setTampil('kinerja')}>Kinerja & HR</button><button className={tampil === 'model' ? 'on' : ''} onClick={() => setTampil('model')}>Model AI</button></div>
+                <div className="sb-seg"><button className={tampil === 'papan' ? 'on' : ''} onClick={() => setTampil('papan')}>Papan</button><button className={tampil === 'kinerja' ? 'on' : ''} onClick={() => setTampil('kinerja')}>Kinerja & HR</button><button className={tampil === 'model' ? 'on' : ''} onClick={() => setTampil('model')}>Model AI</button><button className={tampil === 'gotong' ? 'on' : ''} onClick={() => setTampil('gotong')}>Gotong royong</button></div>
                 {tunggu.length > 0 && <span className="pk-tunggu">🔔 {tunggu.length} usulan tugas menunggu persetujuan Bapak</span>}
             </div>
             {pesan && <div className="fin-alert">{pesan}</div>}
             {tunggu.length > 0 && <Persetujuan list={tunggu} onSelesai={(m) => { setPesan(m); hr.reload(); d.reload(); setTimeout(() => setPesan(''), 6000); }} />}
             {tampil === 'kinerja' && hr.data && <Kinerja h={hr.data} onJalan={(jenis) => jenis === 'muat' ? (setPesan('✓ Hana (HR Officer) ditambahkan. Muncul di kantor dalam ±1 menit.'), void setTimeout(() => hr.reload(), 1500)) : apiPost('/api/kantor/hr/jalankan', { jenis }).then(() => { setPesan(jenis === 'cek' ? 'Cek mingguan dijalankan — Joni akan mengirim hasilnya ke chat pribadi Bapak.' : 'Review HR dijalankan — hasilnya muncul di Grup Kantor & di sini.'); setTimeout(() => hr.reload(), 4000); }).catch((e) => setPesan(String(e.message || e)))} />}
             {tampil === 'model' && <ModelAi />}
+            {tampil === 'gotong' && <GotongRoyong />}
             {tampil === 'papan' && <>
             <div className="pk-tab">{KOLOM.map((c) => <button key={c.k} className={kolomHp === c.k ? 'on' : ''} onClick={() => setKolomHp(c.k)}>{c.label} <b>{per[c.k].length}</b></button>)}</div>
             <div className="pk-grid">
@@ -198,6 +199,7 @@ interface ModelData {
     opsi: Array<{ id: string; label: string; model: string; biaya: 'gratis' | 'berbayar'; batasHari: number; alat: boolean; ket: string; ada: boolean; hariIni: Hit; minggu: Hit }>;
     anggota: Array<{ id: string; nama: string; peran: string; atur: { opsi: string; oleh: 'awal' | 'hr' | 'rico'; alasan: string; at: number; kunci: boolean }; hariIni: number; minggu: Hit }>;
     review: { at: number; teks: string; ubah: Array<{ ai: string; dari: string; ke: string; alasan: string }> } | null; sibuk: boolean;
+    berat?: { model: string; perHari: number; terpakai: number };
 }
 const OLEH: Record<string, string> = { awal: 'pembagian awal', hr: 'diatur HR', rico: 'dipilih Bapak' };
 /** Model AI tiap anggota + pemakaian kuota hari ini. HR menata ulang tiap Senin (hanya opsi gratis); Bapak bisa mengunci pilihan. */
@@ -227,6 +229,14 @@ function ModelAi() {
                             </div>
                         );
                     })}
+                    {m.data.berat && (
+                        <div className="md-o">
+                            <div className="md-o-h"><b>Model tugas berat</b><span className="md-biaya berbayar">berbayar</span></div>
+                            <small>{m.data.berat.model}</small>
+                            <div className="md-bar"><i style={{ width: `${Math.min(100, Math.round((m.data.berat.terpakai / Math.max(1, m.data.berat.perHari)) * 100))}%`, background: 'var(--warn)' }} /></div>
+                            <small>{m.data.berat.terpakai} / {m.data.berat.perHari} hari ini · hanya untuk tugas yang Joni tandai berat, tidak pernah dipakai otomatis untuk tugas rutin.</small>
+                        </div>
+                    )}
                 </div>
             </section>
             <section className="pk-kotak">
@@ -248,6 +258,49 @@ function ModelAi() {
                 <div className="pk-kh2"><b>Penataan oleh HR</b><small>Tiap Senin 10.00 WIB Hana memindahkan anggota antar opsi gratis sesuai beban kerja. Opsi berbayar hanya bisa dipilih Bapak.</small></div>
                 {m.data.review ? <div className="md-review"><p>{m.data.review.teks || 'Pembagian sudah seimbang.'}</p>{m.data.review.ubah.map((u, i) => <small key={i}>{m.data!.anggota.find((x) => x.id === u.ai)?.nama || u.ai}: {u.dari} → {u.ke} ({u.alasan})</small>)}<small>{new Date(m.data.review.at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}</small></div> : <div className="fin-empty">Belum pernah ditata.</div>}
                 <button className="btn" disabled={m.data.sibuk} onClick={review}>{m.data.sibuk ? 'Hana sedang menata…' : 'Minta Hana menata sekarang'}</button>
+            </section>
+        </div>
+    );
+}
+
+interface GotongData { baris: Array<{ fitur: string; ikon: string; ai: string; nama: string; tugas: string; jadwal: string; profil: boolean; terakhir: { at: number; status: string; judul: string } | null }>; tanpaRutin: string[] }
+/** Peta gotong royong: tiap fitur dikerjakan bersama beberapa AI, lengkap dengan kapan terakhir dikerjakan. */
+function GotongRoyong() {
+    const g = useApi<GotongData>('/api/kantor/gotong', 60_000);
+    const [pesan, setPesan] = useState('');
+    const jalankan = async (jenis: string, label: string) => { try { await apiPost('/api/kantor/rutin/jalankan', { jenis }); setPesan(`${label} mulai dikerjakan — lihat tab Papan kerja.`); } catch (e: any) { setPesan(String(e.message || e)); } };
+    if (!g.data) return <div className="fin-empty">{g.error || 'Memuat…'}</div>;
+    const per = new Map<string, GotongData['baris']>(); for (const b of g.data.baris) per.set(b.fitur, [...(per.get(b.fitur) || []), b]);
+    const kapan = (t: number) => { const h = Math.floor((Date.now() - t) / 86400_000); return h <= 0 ? 'hari ini' : h === 1 ? 'kemarin' : `${h} hari lalu`; };
+    return (
+        <div className="md-wrap">
+            {pesan && <div className="fin-alert">{pesan}</div>}
+            <div className="pk-kh2"><b>Siapa menyumbang di tiap fitur</b><small>Setiap fitur dikerjakan bersama lintas divisi. "Belum pernah" berarti jadwalnya belum tiba sejak fitur ini dipasang.</small></div>
+            {[...per.entries()].map(([f, rows]) => (
+                <section key={f} className="pk-kotak">
+                    <div className="pk-kh2"><b>{rows[0].ikon} {f}</b><small>{new Set(rows.map((r) => r.ai)).size} AI</small></div>
+                    <div className="md-tabel">
+                        {rows.map((r, i) => (
+                            <div key={i} className="gr-baris">
+                                <div className="md-siapa"><b>{r.nama}</b><small>{r.profil ? r.ai : `${r.ai} · otak cadangan`}</small></div>
+                                <span>{r.tugas}</span>
+                                <small className="md-oleh">{r.jadwal}</small>
+                                <small className={`gr-st ${r.terakhir?.status || 'belum'}`}>{r.terakhir ? `${r.terakhir.status === 'gagal' ? '⚠️ gagal' : r.terakhir.status === 'selesai' ? '✓' : '…'} ${kapan(r.terakhir.at)}` : 'belum pernah'}</small>
+                            </div>
+                        ))}
+                    </div>
+                </section>
+            ))}
+            {!!g.data.tanpaRutin.length && <div className="fin-alert">Belum punya tugas rutin: {g.data.tanpaRutin.join(', ')}</div>}
+            <section className="pk-kotak">
+                <div className="pk-kh2"><b>Jalankan sekarang</b><small>Untuk mencoba tanpa menunggu jadwal.</small></div>
+                <div className="gr-aksi">
+                    <button className="btn" onClick={() => jalankan('trading', 'Trading mingguan')}>Trading mingguan</button>
+                    <button className="btn" onClick={() => jalankan('ringkasMinggu', 'Ringkasan minggu')}>Ringkasan minggu</button>
+                    <button className="btn" onClick={() => jalankan('ideKonten', 'Ide konten dari berita')}>Ide konten dari berita</button>
+                    <button className="btn" onClick={() => jalankan('berkas', 'Laporan Berkas')}>Laporan Berkas</button>
+                    <button className="btn" onClick={() => jalankan('rekapBulan', 'Rekap bulanan')}>Rekap bulanan</button>
+                </div>
             </section>
         </div>
     );
