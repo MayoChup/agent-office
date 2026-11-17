@@ -170,7 +170,7 @@ function Pos({ p, ctx, ganti, lanjut, diModal }: { p: KPost; ctx: Ctx; ganti: (p
     const aksi = (
         <div className="kr-aksi">
             <button className={`kr-baca ${p.baca ? 'on' : ''}`} onClick={baca} aria-pressed={!!p.baca} title={p.baca ? 'Batalkan sudah baca' : 'Tandai sudah baca'}>
-                <span className="kr-ico">{p.baca ? '✓' : '○'}</span><span className="kr-lbl">{p.baca ? 'Sudah baca' : 'Sudah baca?'}</span>
+                <span className="kr-ico">✓</span><span className="kr-lbl">Sudah baca</span>
             </button>
             <button className={buka === 'catatan' ? 'on' : ''} onClick={() => setBuka(buka === 'catatan' ? '' : 'catatan')} title="Catatan saya">
                 <span className="kr-ico">✎</span><span className="kr-lbl">{p.catatan?.length ? `${p.catatan.length} catatan` : 'Catatan'}</span>

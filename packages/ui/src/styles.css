@@ -2536,7 +2536,7 @@ body.no-office #phaser-container { visibility: hidden; }
 .krs-poin li::before { content: ''; position: absolute; left: 0; top: 0.62em; width: 2cqw; height: 2cqw; border-radius: 50%; background: var(--k-a3); }
 .krs-penutup { margin: 0; font-size: 6.4cqw; line-height: 1.25; font-weight: 700; text-wrap: balance; }
 .krs-catatan { font-size: 3.2cqw; opacity: 0.7; }
-.krs-geser { position: absolute; bottom: -6cqw; right: 0; font-size: 3.2cqw; font-weight: 600; opacity: 0.65; }
+.krs-geser { position: absolute; bottom: -7cqw; left: 0; font-size: 3.2cqw; font-weight: 600; opacity: 0.65; }
 .krs-geser::after { content: ' ›'; }
 .krs-hal { position: absolute; top: 3.6cqw; right: 3.6cqw; z-index: 3; font-size: 3cqw; font-weight: 600; color: #f4f4f0; background: rgba(28, 28, 30, 0.55); padding: 0.8cqw 2.3cqw; border-radius: 99px; }
 .krs-dampak { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2.4cqw; }
@@ -2607,8 +2607,7 @@ body.no-office #phaser-container { visibility: hidden; }
 /* 7. Kertas titik + kotak */
 .t-grid { background: var(--k-paper) radial-gradient(circle, color-mix(in srgb, var(--k-ink) 22%, transparent) 0.38cqw, transparent 0.45cqw) 0 0 / 5.5cqw 5.5cqw; }
 .t-grid .d1, .t-grid .d2, .t-grid .d3 { display: none; }
-.t-grid .krs-judul, .t-grid .krs-h { background: linear-gradient(transparent 62%, color-mix(in srgb, var(--k-a2) 80%, transparent) 62% 92%, transparent 92%); display: inline; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
-.t-grid .krs-h { align-self: flex-start; }
+.t-grid .krs-judul, .t-grid .krs-h { text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--k-a2) 85%, transparent); text-decoration-thickness: 0.32em; text-underline-offset: -0.18em; text-decoration-skip-ink: none; }
 .t-grid .krs-poin li { padding: 2cqw 2.6cqw; background: var(--k-paper); border: 0.45cqw solid var(--k-ink); border-radius: 1.6cqw; box-shadow: 1cqw 1cqw 0 var(--k-a1); }
 .t-grid .krs-poin li::before { display: none; }
 .t-grid .krs-poin { gap: 2.8cqw; }
@@ -2682,7 +2681,7 @@ body.no-office #phaser-container { visibility: hidden; }
 .kr-car:focus-visible { box-shadow: 0 0 0 3px var(--accent); }
 .kr-rel { display: flex; width: 100%; height: 100%; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; }
 .kr-rel::-webkit-scrollbar { display: none; }
-.kr-sel { flex: 0 0 100%; height: 100%; scroll-snap-align: start; scroll-snap-stop: always; }
+.kr-sel { flex: 0 0 100%; height: 100%; scroll-snap-align: start; scroll-snap-stop: always; container-type: inline-size; }
 .kr-panah { position: absolute; top: 50%; transform: translateY(-50%); z-index: 4; width: 30px; height: 30px; border-radius: 50%; border: none; background: rgba(250, 250, 247, 0.9); color: #26262a; font-size: 20px; line-height: 1; cursor: pointer; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18); display: grid; place-items: center; padding: 0 0 2px; }
 .kr-panah.kiri { left: 10px; } .kr-panah.kanan { right: 10px; }
 .kr-titik { position: absolute; left: 0; right: 0; bottom: 10px; z-index: 4; display: flex; justify-content: center; gap: 4px; pointer-events: none; }
@@ -2788,7 +2787,7 @@ body.no-office #phaser-container { visibility: hidden; }
 .kr-saring small { opacity: 0.7; margin-left: 2px; }
 .kr-folder-aksi { display: flex; gap: 12px; margin: -6px 0 10px; } .kr-folder-aksi button { border: none; background: none; color: var(--muted); font-size: 12px; cursor: pointer; padding: 0; text-decoration: underline; }
 .kr-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
-.kr-sampul { position: relative; display: block; width: 100%; aspect-ratio: 4 / 5; padding: 0; border: none; cursor: pointer; overflow: hidden; background: #ddd; }
+.kr-sampul { position: relative; display: block; width: 100%; aspect-ratio: 4 / 5; padding: 0; border: none; cursor: pointer; overflow: hidden; background: #ddd; container-type: inline-size; }
 .kr-sampul:hover::after { content: ''; position: absolute; inset: 0; background: rgba(0, 0, 0, 0.12); }
 .kr-sampul:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
 .kr-sampul-tanda { position: absolute; top: 6px; right: 6px; z-index: 3; width: 22px; height: 22px; border-radius: 50%; background: rgba(28, 28, 30, 0.6); color: #fff; font-size: 12px; display: grid; place-items: center; }
@@ -2813,7 +2812,8 @@ body.no-office #phaser-container { visibility: hidden; }
 .kr-hp .kr-sibuk { position: absolute; top: 46px; left: 12px; right: 12px; z-index: 9; width: auto; background: rgba(255, 255, 255, 0.1); color: #e4e3dd; }
 .kr-pos.tt { position: relative; height: 100%; scroll-snap-align: start; scroll-snap-stop: always; overflow: hidden; container-type: size; }
 .kr-tt-latar { position: absolute; inset: 0; background: radial-gradient(circle at 50% 32%, color-mix(in srgb, var(--k-a1) 70%, transparent), transparent 62%), radial-gradient(circle at 80% 90%, color-mix(in srgb, var(--k-a3) 40%, transparent), transparent 60%); opacity: 0.42; }
-.kr-tt-kartu { position: absolute; top: 50px; left: 50%; transform: translateX(-50%); width: min(calc(100cqw - 24px), calc((100cqh - 240px) * 0.8)); }
+.kr-tt-kartu { position: absolute; top: 50px; left: 50%; transform: translateX(-50%); width: min(calc(100cqw - 24px), calc((100cqh - 270px) * 0.8)); }
+.kr-hp .kr-pos.tt .kr-panah { display: none; }
 .kr-tt-kartu .kr-car { border-radius: 12px; box-shadow: 0 12px 36px rgba(0, 0, 0, 0.4); }
 .kr-tt-bawah { position: absolute; left: 14px; right: 78px; bottom: 12px; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5); }
 .kr-tt-bawah .kr-kepala { padding-bottom: 6px; }
@@ -2830,7 +2830,7 @@ body.no-office #phaser-container { visibility: hidden; }
 .kr-hp .kr-kode span { background: rgba(255, 255, 255, 0.12); }
 .kr-tt-rel { position: absolute; right: 8px; bottom: 14px; }
 .kr-tt-rel .kr-aksi { flex-direction: column; gap: 10px; padding: 0; }
-.kr-tt-rel .kr-aksi button { flex-direction: column; gap: 3px; color: #f8f7f2; padding: 0; width: 60px; font-size: 11px; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6); }
+.kr-tt-rel .kr-aksi button { flex-direction: column; gap: 3px; color: #f8f7f2; padding: 0; width: 64px; font-size: 10.5px; white-space: nowrap; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6); }
 .kr-tt-rel .kr-aksi button:hover { background: none; }
 .kr-tt-rel .kr-aksi .kr-ico { width: 44px; height: 44px; border-radius: 50%; background: rgba(255, 255, 255, 0.14); display: grid; place-items: center; font-size: 21px; }
 .kr-tt-rel .kr-aksi .kr-baca .kr-ico { width: 44px; height: 44px; border: 2px solid rgba(255, 255, 255, 0.8); color: #f8f7f2; font-size: 18px; }
