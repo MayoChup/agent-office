@@ -143,7 +143,7 @@ export function SosmedPage() {
             {x.sibuk && <div className="hz-bukti ok"><span className="pk-jalan"><i /></span><span>{SIBUK[x.sibuk] || 'Tim sedang bekerja…'}</span></div>}
             {x.setup && (!x.setup.selesai || Date.now() - x.setup.at < 86400_000) && <ProgresSetup x={x} />}
             {(kuis || (!x.strategi && !x.starter && !x.setup)) && tab !== 'akun' ? <Starter key={x.akunAktif} platform={x.platformInfo[x.platform]} formatPlatform={x.platformInfo[x.platform]?.format || []} labelFormat={x.platformInfo[x.platform]?.label || {}}
-                gaya={x.gaya} katalog={x.katalog} sibuk={!!x.sibuk} gambarGaya={gambarGaya} batal={x.strategi || x.starter ? () => setKuis(false) : undefined}
+                gaya={x.gaya.map((g) => ({ ...g, ket: g.deskripsi }))} katalog={x.katalog} sibuk={!!x.sibuk} gambarGaya={gambarGaya} batal={x.strategi || x.starter ? () => setKuis(false) : undefined}
                 kirim={(jw: JawabanStarter) => { aksi(post('/api/kantor/sosmed/starter', { jawaban: jw }), 'Brief diterima. Tim mulai bekerja — progresnya terlihat di atas.'); setKuis(false); }} />
             : !x.siap && tab !== 'akun' && tab !== 'gaya' && <Mulai x={x} setTab={setTab} />}
             {tab === 'hari' && x.siap && <TabHari {...p} />}
