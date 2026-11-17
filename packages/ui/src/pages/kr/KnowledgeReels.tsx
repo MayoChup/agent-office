@@ -151,7 +151,7 @@ function Pos({ p, ctx, ganti, diModal }: { p: KPost; ctx: Ctx; ganti: (p: KPost)
         const ya = paksa ?? !p.baca; if (ya === !!p.baca) return; ganti({ ...p, baca: ya });
         try {
             await apiPost('/api/kantor/kr/baca', { id: p.id, ya });
-            if (ya) ctx.pesan('Ditandai sudah baca — tidak muncul lagi saat feed dimuat ulang.', () => { ganti({ ...p, baca: false }); apiPost('/api/kantor/kr/baca', { id: p.id, ya: false }).catch(() => undefined); });
+            if (ya && !paksa) ctx.pesan('Ditandai sudah baca — tidak muncul lagi saat feed dimuat ulang.', () => { ganti({ ...p, baca: false }); apiPost('/api/kantor/kr/baca', { id: p.id, ya: false }).catch(() => undefined); });
             ctx.muatStatus();
         } catch (e: any) { ganti(p); ctx.pesan(String(e?.message || e)); }
     };

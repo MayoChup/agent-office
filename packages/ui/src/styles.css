@@ -2803,7 +2803,9 @@ body.no-office #phaser-container { visibility: hidden; }
 .kr-modal-x { position: absolute; top: 12px; right: 16px; border: none; background: none; color: #fff; font-size: 30px; cursor: pointer; line-height: 1; z-index: 2; }
 
 /* ── HP: tetap feed Instagram (geser ke bawah biasa), gambar selebar layar ── */
-.kr-hp { border-radius: 14px; }
+.kr-hp { grid-template-columns: minmax(0, 1fr); border-radius: 0; border: none; }
+.kr-feed-wrap, .kr-hal { min-width: 0; }
+@media (max-width: 767px) { .page.page-kr { left: 0; right: 0; border-radius: 0; } }
 .kr-hp .kr-feed-wrap { height: 100%; }
 .kr-hp .kr-tabs { justify-content: flex-start; padding: 10px 12px; }
 .kr-hp .kr-feed { padding: 10px 0 30px; }
