@@ -2336,10 +2336,10 @@ body.no-office #phaser-container { visibility: hidden; }
 .pv-efek > *:not(span):not(.pv-orang), .pv-efek [class^='pv-a-'] { position: absolute; inset: 0; }
 .pv-efek > span { position: absolute; }
 .pv-latar { position: absolute; inset: 0; } .pv-latar svg { width: 100%; height: 100%; object-fit: cover; } .pv-latar .pv-scene { width: 300%; margin-left: -100%; height: 100%; }
-.pv-orang { position: absolute !important; left: 15%; bottom: 0; width: 70%; height: auto !important; inset: auto auto 0 15% !important; z-index: 2; }
+.pv-orang { position: absolute !important; width: 100%; height: auto !important; inset: auto auto 0 0 !important; z-index: 2; }
 .pv-polos { background: linear-gradient(160deg, #233050, #101626); } .pv-gelap { background: #0d0d0d; }
 .pv-k { position: absolute; font: 900 13px system-ui; color: #fff; text-shadow: 0 2px 6px rgba(0,0,0,.6); z-index: 3; }
-.pv-besar { position: absolute; top: 22%; left: 0; right: 0; text-align: center; font: 900 30px system-ui; color: #fff; letter-spacing: -.04em; }
+.pv-besar { position: absolute; top: 36%; left: 0; right: 0; text-align: center; font: 900 30px system-ui; color: #fff; letter-spacing: -.04em; }
 .pv-belakang { z-index: 1 !important; }
 .pv-jendela { position: absolute !important; inset: 12% 14% auto 14% !important; height: 28%; border-radius: 5px; background: #fff; padding: 6% 6% 0; display: flex; flex-direction: column; gap: 4px; z-index: 1; }
 .pv-jendela i { display: block; height: 4px; border-radius: 2px; background: #c9d4e8; } .pv-jendela i:first-child { width: 50%; background: #5b8def; }
@@ -2359,7 +2359,7 @@ body.no-office #phaser-container { visibility: hidden; }
 .pv-stiker { filter: drop-shadow(2px 0 0 #fff) drop-shadow(-2px 0 0 #fff) drop-shadow(0 2px 0 #fff) drop-shadow(0 -2px 0 #fff); }
 .pv-tulis { position: absolute; top: 12%; left: 10%; font: italic 900 16px Georgia, serif; color: #fff; z-index: 3; }
 .pv-label { position: absolute; top: 30%; right: 4%; font: 800 8px system-ui; background: #ffd23f; color: #111; padding: 2px 4px; border-radius: 3px; z-index: 4; }
-.pv-kiri { left: -10% !important; inset: auto auto 0 -12% !important; } .pv-kanan { inset: auto auto 0 42% !important; }
+.pv-kiri { width: 75% !important; inset: auto auto 0 -14% !important; } .pv-kanan { width: 75% !important; inset: auto auto 0 40% !important; }
 .pv-panah { position: absolute; top: 30%; right: 4%; font: 800 8px system-ui; color: #111; background: #fff; padding: 2px 4px; border-radius: 3px; z-index: 4; }
 .pv-pecah i { position: absolute; width: 50%; height: 33.4%; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.6); z-index: 4; }
 .pv-pecah i:nth-child(1) { left: 0; top: 0; } .pv-pecah i:nth-child(2) { left: 50%; top: 0; } .pv-pecah i:nth-child(3) { left: 0; top: 33.3%; } .pv-pecah i:nth-child(4) { left: 50%; top: 33.3%; } .pv-pecah i:nth-child(5) { left: 0; top: 66.6%; } .pv-pecah i:nth-child(6) { left: 50%; top: 66.6%; }
@@ -2373,7 +2373,7 @@ body.no-office #phaser-container { visibility: hidden; }
 .pv-kertas i:nth-child(1) { top: 8%; left: 6%; transform: rotate(-6deg); } .pv-kertas i:nth-child(2) { top: 6%; left: 40%; transform: rotate(4deg); } .pv-kertas i:nth-child(3) { top: 10%; right: 6%; transform: rotate(-3deg); } .pv-kertas i:nth-child(4) { top: 26%; left: 14%; transform: rotate(5deg); } .pv-kertas i:nth-child(5) { top: 24%; right: 12%; transform: rotate(-5deg); } .pv-kertas i:nth-child(6) { top: 38%; left: 4%; transform: rotate(3deg); }
 .pv-uiw i { position: absolute; border-radius: 6px; background: #fff; z-index: 1; } .pv-uiw i:nth-child(1) { inset: 6% 6% auto 6%; height: 16%; } .pv-uiw i:nth-child(2) { top: 26%; left: 4%; width: 26%; height: 30%; background: #5b8def; } .pv-uiw i:nth-child(3) { top: 26%; right: 4%; width: 26%; height: 30%; background: #ffcb47; } .pv-uiw i:nth-child(4) { bottom: 4%; right: 6%; width: 30%; height: 10%; background: #5ad1c5; z-index: 3; }
 .pv-bingkai { position: absolute; inset: 22% 10% 14% 10% !important; overflow: hidden; border: 3px solid #fff; border-radius: 4px; }
-.pv-keluar { z-index: 4; inset: auto auto 14% 15% !important; }
+.pv-keluar { z-index: 4; width: 80% !important; inset: auto auto 14% 10% !important; }
 .pv-hp { position: absolute; inset: 8% 16% !important; border-radius: 12px; border: 4px solid #111; overflow: hidden; background: #000; }
 .pv-hp > div { position: absolute; inset: 0; }
 .pv-cek { position: absolute !important; inset: 12% 6% auto 6% !important; display: flex; flex-direction: column; gap: 3px; z-index: 3; }
