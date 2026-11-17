@@ -211,7 +211,7 @@ function ModelAi() {
     const tok = (h: Hit) => Math.round((h.masuk + h.keluar) / 4);
     const ribu = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)} rb` : String(n));
     return (
-        <div className="pk-kinerja">
+        <div className="md-wrap">
             {pesan && <div className="fin-alert">{pesan}</div>}
             <section className="pk-kotak">
                 <div className="pk-kh2"><b>Kuota model hari ini</b><small>Tugas teks dikerjakan Gemini/Groq (gratis) supaya kuota OpenRouter untuk chat & alat tidak habis. Penuh → otomatis pindah ke opsi gratis lain.</small></div>
@@ -234,7 +234,7 @@ function ModelAi() {
                 <div className="md-tabel">
                     {m.data.anggota.map((a) => (
                         <div key={a.id} className="md-baris">
-                            <div className="pk-siapa"><b>{a.nama}</b><small>{a.peran || a.id}</small></div>
+                            <div className="md-siapa"><b>{a.nama}</b><small>{a.peran || a.id}</small></div>
                             <select value={a.atur.opsi} onChange={(e) => atur(a.id, e.target.value)} aria-label={`Model untuk ${a.nama}`}>
                                 {m.data!.opsi.filter((o) => o.ada || o.id === a.atur.opsi).map((o) => <option key={o.id} value={o.id}>{o.label}{o.biaya === 'berbayar' ? ' (berbayar)' : ''}</option>)}
                             </select>
