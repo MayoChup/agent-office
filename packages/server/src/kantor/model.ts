@@ -58,7 +58,8 @@ export class ModelRouter {
         let i = 0, ubah = false;
         for (const id of ids) {
             const a = this.st.atur[id];
-            if (a && this.cari(a.opsi)?.ada) continue;
+            // Yang dulu terpaksa ke Hermes karena kunci Gemini/Groq belum ada → dibagi ulang begitu kuncinya tersedia.
+            if (a && this.cari(a.opsi)?.ada && !(a.oleh === 'awal' && a.opsi === 'hermes' && langsung.length)) continue;
             if (a && a.kunci) continue;
             const pilih = langsung.length ? langsung[i++ % langsung.length].id : 'hermes';
             this.st.atur[id] = { opsi: pilih, oleh: 'awal', alasan: 'Pembagian awal supaya kuota tersebar.', at: Date.now(), kunci: false };
