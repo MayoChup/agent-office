@@ -31,7 +31,7 @@ export function PapanPanel({ onClose }: { onClose: () => void }) {
     const [sumber, setSumber] = useState('');
     const [kolomHp, setKolomHp] = useState<'todo' | 'proses' | 'selesai'>('selesai');
     const [buka, setBuka] = useState<string | null>(null);
-    const [tampil, setTampil] = useState<'papan' | 'kinerja'>('papan');
+    const [tampil, setTampil] = useState<'papan' | 'kinerja' | 'model'>('papan');
     const hr = useApi<HrData>('/api/kantor/hr', 15000);
     const [pesan, setPesan] = useState('');
     const tunggu = (hr.data?.usulan || []).filter((u) => u.status === 'menunggu');
@@ -104,12 +104,13 @@ export function PapanPanel({ onClose }: { onClose: () => void }) {
             )}
             {d.error && <div className="error">{d.error}</div>}
             <div className="pk-mode">
-                <div className="sb-seg"><button className={tampil === 'papan' ? 'on' : ''} onClick={() => setTampil('papan')}>Papan</button><button className={tampil === 'kinerja' ? 'on' : ''} onClick={() => setTampil('kinerja')}>Kinerja & HR</button></div>
+                <div className="sb-seg"><button className={tampil === 'papan' ? 'on' : ''} onClick={() => setTampil('papan')}>Papan</button><button className={tampil === 'kinerja' ? 'on' : ''} onClick={() => setTampil('kinerja')}>Kinerja & HR</button><button className={tampil === 'model' ? 'on' : ''} onClick={() => setTampil('model')}>Model AI</button></div>
                 {tunggu.length > 0 && <span className="pk-tunggu">🔔 {tunggu.length} usulan tugas menunggu persetujuan Bapak</span>}
             </div>
             {pesan && <div className="fin-alert">{pesan}</div>}
             {tunggu.length > 0 && <Persetujuan list={tunggu} onSelesai={(m) => { setPesan(m); hr.reload(); d.reload(); setTimeout(() => setPesan(''), 6000); }} />}
             {tampil === 'kinerja' && hr.data && <Kinerja h={hr.data} onJalan={(jenis) => jenis === 'muat' ? (setPesan('✓ Hana (HR Officer) ditambahkan. Muncul di kantor dalam ±1 menit.'), void setTimeout(() => hr.reload(), 1500)) : apiPost('/api/kantor/hr/jalankan', { jenis }).then(() => { setPesan(jenis === 'cek' ? 'Cek mingguan dijalankan — Joni akan mengirim hasilnya ke chat pribadi Bapak.' : 'Review HR dijalankan — hasilnya muncul di Grup Kantor & di sini.'); setTimeout(() => hr.reload(), 4000); }).catch((e) => setPesan(String(e.message || e)))} />}
+            {tampil === 'model' && <ModelAi />}
             {tampil === 'papan' && <>
             <div className="pk-tab">{KOLOM.map((c) => <button key={c.k} className={kolomHp === c.k ? 'on' : ''} onClick={() => setKolomHp(c.k)}>{c.label} <b>{per[c.k].length}</b></button>)}</div>
             <div className="pk-grid">
@@ -187,6 +188,66 @@ function Kinerja({ h, onJalan }: { h: HrData; onJalan: (jenis: 'review' | 'cek' 
                     <button className="btn small" disabled={!!h.sibuk} onClick={() => onJalan('review')}>{h.sibuk === 'review' ? 'Sedang direview…' : 'Jalankan review sekarang'}</button>
                     <button className="btn small" disabled={!!h.sibuk} onClick={() => onJalan('cek')}>{h.sibuk === 'cek' ? 'Sedang dicek…' : 'Cek siapa menganggur'}</button>
                 </div>
+            </section>
+        </div>
+    );
+}
+
+interface Hit { n: number; masuk: number; keluar: number; gagal: number }
+interface ModelData {
+    opsi: Array<{ id: string; label: string; model: string; biaya: 'gratis' | 'berbayar'; batasHari: number; alat: boolean; ket: string; ada: boolean; hariIni: Hit; minggu: Hit }>;
+    anggota: Array<{ id: string; nama: string; peran: string; atur: { opsi: string; oleh: 'awal' | 'hr' | 'rico'; alasan: string; at: number; kunci: boolean }; hariIni: number; minggu: Hit }>;
+    review: { at: number; teks: string; ubah: Array<{ ai: string; dari: string; ke: string; alasan: string }> } | null; sibuk: boolean;
+}
+const OLEH: Record<string, string> = { awal: 'pembagian awal', hr: 'diatur HR', rico: 'dipilih Bapak' };
+/** Model AI tiap anggota + pemakaian kuota hari ini. HR menata ulang tiap Senin (hanya opsi gratis); Bapak bisa mengunci pilihan. */
+function ModelAi() {
+    const m = useApi<ModelData>('/api/kantor/model', 30_000);
+    const [pesan, setPesan] = useState('');
+    const atur = async (ai: string, opsi: string) => { try { await apiPost('/api/kantor/model/atur', { ai, opsi }); setPesan('Tersimpan & dikunci — HR tidak akan mengubahnya.'); m.reload(); } catch (e: any) { setPesan(String(e.message || e)); } };
+    const lepas = async (ai: string) => { try { await apiPost('/api/kantor/model/atur', { ai, lepas: true }); m.reload(); } catch (e: any) { setPesan(String(e.message || e)); } };
+    const review = async () => { try { await apiPost('/api/kantor/model/review', {}); setPesan('Hana sedang menata ulang model — hasilnya muncul di Grup Kantor & di sini.'); setTimeout(() => m.reload(), 8000); } catch (e: any) { setPesan(String(e.message || e)); } };
+    if (!m.data) return <div className="fin-empty">{m.error || 'Memuat…'}</div>;
+    const tok = (h: Hit) => Math.round((h.masuk + h.keluar) / 4);
+    const ribu = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)} rb` : String(n));
+    return (
+        <div className="pk-kinerja">
+            {pesan && <div className="fin-alert">{pesan}</div>}
+            <section className="pk-kotak">
+                <div className="pk-kh2"><b>Kuota model hari ini</b><small>Tugas teks dikerjakan Gemini/Groq (gratis) supaya kuota OpenRouter untuk chat & alat tidak habis. Penuh → otomatis pindah ke opsi gratis lain.</small></div>
+                <div className="md-opsi">
+                    {m.data.opsi.map((o) => {
+                        const pct = Math.min(100, Math.round((o.hariIni.n / o.batasHari) * 100));
+                        return (
+                            <div key={o.id} className={`md-o ${o.ada ? '' : 'mati'}`}>
+                                <div className="md-o-h"><b>{o.label}</b><span className={`md-biaya ${o.biaya}`}>{o.biaya}</span></div>
+                                <small>{o.ada ? o.model : 'Kunci API belum ada di server'}</small>
+                                <div className="md-bar"><i style={{ width: `${pct}%`, background: pct > 85 ? 'var(--bad)' : pct > 60 ? 'var(--warn)' : 'var(--good)' }} /></div>
+                                <small>{o.hariIni.n} / {o.batasHari} panggilan hari ini · 7 hari: {o.minggu.n} (~{ribu(tok(o.minggu))} token){o.minggu.gagal ? ` · ${o.minggu.gagal} gagal` : ''}</small>
+                            </div>
+                        );
+                    })}
+                </div>
+            </section>
+            <section className="pk-kotak">
+                <div className="pk-kh2"><b>Model tiap anggota</b><small>Ingatan & SOUL tiap AI tersimpan di VPS dan selalu dibawa, apa pun modelnya. Chat dan tugas yang butuh alat tetap lewat Hermes.</small></div>
+                <div className="md-tabel">
+                    {m.data.anggota.map((a) => (
+                        <div key={a.id} className="md-baris">
+                            <div className="pk-siapa"><b>{a.nama}</b><small>{a.peran || a.id}</small></div>
+                            <select value={a.atur.opsi} onChange={(e) => atur(a.id, e.target.value)} aria-label={`Model untuk ${a.nama}`}>
+                                {m.data!.opsi.filter((o) => o.ada || o.id === a.atur.opsi).map((o) => <option key={o.id} value={o.id}>{o.label}{o.biaya === 'berbayar' ? ' (berbayar)' : ''}</option>)}
+                            </select>
+                            <small className="md-oleh">{a.atur.kunci ? <>🔒 dipilih Bapak · <button onClick={() => lepas(a.id)}>serahkan ke HR</button></> : OLEH[a.atur.oleh]}{a.atur.alasan && !a.atur.kunci ? ` — ${a.atur.alasan}` : ''}</small>
+                            <small className="md-pakai">{a.hariIni} hari ini · {a.minggu.n} / 7 hari</small>
+                        </div>
+                    ))}
+                </div>
+            </section>
+            <section className="pk-kotak">
+                <div className="pk-kh2"><b>Penataan oleh HR</b><small>Tiap Senin 10.00 WIB Hana memindahkan anggota antar opsi gratis sesuai beban kerja. Opsi berbayar hanya bisa dipilih Bapak.</small></div>
+                {m.data.review ? <div className="md-review"><p>{m.data.review.teks || 'Pembagian sudah seimbang.'}</p>{m.data.review.ubah.map((u, i) => <small key={i}>{m.data!.anggota.find((x) => x.id === u.ai)?.nama || u.ai}: {u.dari} → {u.ke} ({u.alasan})</small>)}<small>{new Date(m.data.review.at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}</small></div> : <div className="fin-empty">Belum pernah ditata.</div>}
+                <button className="btn" disabled={m.data.sibuk} onClick={review}>{m.data.sibuk ? 'Hana sedang menata…' : 'Minta Hana menata sekarang'}</button>
             </section>
         </div>
     );

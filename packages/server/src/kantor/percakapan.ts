@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { execFile } from 'child_process';
 import { extractJson } from './freeLlm';
+import type { ModelRouter } from './model';
 
 /**
  * Chat ala WhatsApp dengan AI Hermes yang ASLI (pakai SOUL, ingatan, dan skill masing-masing).
@@ -17,6 +18,8 @@ type Llm = { complete(system: string, user: string, maxTokens?: number, attempts
 const MAX_SIMPAN = 300;
 const RIWAYAT_PROMPT = 14;
 const BATAS_WAKTU = 6 * 60_000;
+/** Prompt yang menyuruh memakai skill / web harus tetap lewat Hermes (punya alat). */
+const BUTUH_ALAT = /pakai skill|buka web|cari di web|\/ig-[a-z]|\/reels-cepat|\/video-edit/i;
 
 /** Batas harian pemakaian model berbayar ("berat") supaya tagihan tidak kebablasan. */
 export class KuotaBerat {
@@ -136,14 +139,35 @@ export class Percakapan {
      * Beri pekerjaan langsung ke satu AI (lewat Hermes, antre per AI) tanpa menulis ke chat.
      * Tercatat di papan kerja atas nama AI itu. Mengembalikan teks hasilnya.
      */
-    tugas(aiId: string, judul: string, prompt: string, detail?: string, sumber: 'tugas' | 'trading' = 'tugas'): Promise<string> {
+    tugas(aiId: string, judul: string, prompt: string, detail?: string, sumber: 'tugas' | 'trading' = 'tugas', alat = false): Promise<string> {
         const ai = this.roster().find((a) => a.id === aiId);
         if (!ai) return Promise.reject(new Error(`AI "${aiId}" tidak ada di kantor.`));
         const kerja = this.papan?.catat({ ai: aiId, nama: ai.nama, judul, detail, sumber, status: 'todo' });
         const prev = this.antrean.get(aiId) || Promise.resolve();
-        const hasil = prev.then(() => this.jalankanAi(`kerja-${aiId}`, aiId, prompt, false, kerja));
+        const hasil = prev.then(() => this.jalankanTugas(aiId, ai.nama, prompt, kerja, alat || BUTUH_ALAT.test(prompt)));
         this.antrean.set(aiId, hasil.then(() => undefined, () => undefined));
         return hasil;
+    }
+    /** Pengatur model (hemat token): tugas teks tanpa alat dicoba dulu di model langsung (Gemini/Groq), lalu Hermes. */
+    router?: ModelRouter;
+    private langsungJalan = 0;
+    private async jalankanTugas(aiId: string, nama: string, prompt: string, kerja: string | undefined, alat: boolean): Promise<string> {
+        const r = this.router;
+        if (r && !alat) {
+            for (const o of r.rute(aiId)) {
+                if (o.cara === 'hermes') break;
+                while (this.langsungJalan >= 4) await new Promise((res) => setTimeout(res, 800));
+                this.langsungJalan++; this.papan?.ubah(kerja, 'proses');
+                try {
+                    const out = bersihkan(await r.langsung(o, aiId, nama, prompt));
+                    r.catat(aiId, o.id, prompt.length, out.length, true);
+                    this.papan?.ubah(kerja, 'selesai', `[${o.label}] ${out}`);
+                    return out;
+                } catch (e: any) { r.catat(aiId, o.id, prompt.length, 0, false); console.warn(`[Model] ${aiId} via ${o.id} gagal:`, e?.message || e); }
+                finally { this.langsungJalan--; }
+            }
+        }
+        return this.jalankanAi(`kerja-${aiId}`, aiId, prompt, false, kerja);
     }
     /** Pesan dari AI/sistem ke sebuah thread tanpa memicu balasan (mis. laporan HR, permintaan persetujuan Joni). */
     pesan(thread: string, dari: string, nama: string, teks: string): Pesan {
@@ -230,9 +254,11 @@ export class Percakapan {
         this.papan?.ubah(idK, 'proses');
         try {
             const out = await hermesSekali(this.run, this.hermesBin, aiId, prompt, berat ? this.kuota?.model : undefined);
+            this.router?.catat(aiId, berat ? 'berat' : 'hermes', prompt.length, out.length, true);
             this.papan?.ubah(idK, 'selesai', out);
             return out;
         } catch (e: any) {
+            this.router?.catat(aiId, berat ? 'berat' : 'hermes', prompt.length, 0, false);
             this.papan?.ubah(idK, 'gagal', String(e?.message || e));
             throw e;
         } finally {

@@ -31,6 +31,7 @@ import ATUR_HR from './kantor/skrip/atur-hr.sh';
 import ATUR_SOSMED from './kantor/skrip/atur-sosmed.sh';
 import { pasangSosmed } from './kantor/sosmedRute';
 import { pasangKr } from './kantor/krRute';
+import { pasangRutin } from './kantor/rutin';
 import ATUR_KURATOR from './kantor/skrip/atur-kurator.sh';
 import { execFile as jalankanBerkas } from 'child_process';
 import { Hr, statistik, kunciMinggu, ambilUsulanJson, ID_HR, ID_JONI, StatAi } from './kantor/hr';
@@ -686,6 +687,12 @@ pasangKr({
     llm: () => OfficeRoom.sharedLlm() as any, catatan: { tulis: (rel, isi) => catatan.tulis(rel, isi) },
     saham: () => { const st = tradingDesk.load(); return { simbol: screener.daftarSimbol(), watchlist: Array.from(new Set([...st.positions.map((p) => p.symbol), ...st.watchlist])), detail: (s) => screener.detail(s) }; },
     kabari: kabariTelegram, aturKurator: ATUR_KURATOR, jalankanBerkas
+});
+
+// ── Rutin tambahan (keuangan mingguan) + pengatur model hemat token yang ditata HR: lihat kantor/rutin.ts ──
+pasangRutin({
+    app, requireToken, dataDir: config.dataDir, hermesHome: config.hermesHome, roster, papan, percakapan, llm: () => OfficeRoom.sharedLlm() as any,
+    transaksi: async () => (await pencatat.report()).transaksi, batas: () => anggaran.get().batas || {}, kabari: kabariTelegram, idHr: ID_HR
 });
 
 // ── Chat konsultasi Trading: AI menjawab HANYA dari data halaman Trading ──

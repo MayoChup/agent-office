@@ -2874,3 +2874,20 @@ body.no-office #phaser-container { visibility: hidden; }
   .cat.layar-kr .cat-kr { display: flex !important; }
   .cat-kr-item { grid-template-columns: 84px minmax(0, 1fr); gap: 10px; }
 }
+
+/* Papan kerja → Model AI */
+.md-opsi { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.md-o { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 12px; background: var(--sb-soft); border: 1px solid var(--line); }
+.md-o.mati { opacity: 0.55; }
+.md-o-h { display: flex; justify-content: space-between; gap: 8px; align-items: center; } .md-o-h b { font-size: 13px; }
+.md-o small { color: var(--muted); font-size: 11.5px; overflow-wrap: anywhere; }
+.md-biaya { font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: 99px; background: var(--lb-b-bg); color: var(--lb-b-fg); }
+.md-biaya.berbayar { background: var(--lb-t-bg); color: var(--lb-t-fg); }
+.md-bar { height: 6px; border-radius: 99px; background: var(--line); overflow: hidden; } .md-bar i { display: block; height: 100%; border-radius: 99px; }
+.md-tabel { display: flex; flex-direction: column; gap: 6px; }
+.md-baris { display: grid; grid-template-columns: minmax(130px, 1fr) minmax(170px, 220px) minmax(0, 1.4fr) auto; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 10px; background: var(--sb-soft); }
+.md-baris select { font: inherit; font-size: 12.5px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--panel-solid); color: var(--text); }
+.md-oleh, .md-pakai { color: var(--muted); font-size: 11.5px; } .md-pakai { white-space: nowrap; }
+.md-oleh button { border: none; background: none; color: var(--accent); padding: 0; font-size: 11.5px; cursor: pointer; text-decoration: underline; }
+.md-review { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; } .md-review p { margin: 0; font-size: 13px; } .md-review small { color: var(--muted); font-size: 12px; }
+@media (max-width: 767px) { .md-baris { grid-template-columns: 1fr; gap: 4px; } }
