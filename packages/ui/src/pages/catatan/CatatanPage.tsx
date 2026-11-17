@@ -252,7 +252,7 @@ function Editor({ path, cariFile, bukaHal, onBack, onBerubah, onHapus }: { path:
     );
 }
 
-interface ItemKr { id: string; postId: string; teks: string; at: number; berkas?: string; post: (Pick<KPost, 'id' | 'kat' | 'judul' | 'desain' | 'slide' | 'tgl'> & { tema: KTema }) | null }
+interface ItemKr { id: string; postId: string; teks: string; at: number; berkas?: string; dari?: string; nama?: string; status?: string; post: (Pick<KPost, 'id' | 'kat' | 'judul' | 'desain' | 'slide' | 'tgl'> & { tema: KTema }) | null }
 /** Catatan yang Bapak tulis di postingan Knowledge Reels, dengan sampul postingannya. Klik → kembali ke postingan itu. */
 function CatatanKr({ kembali }: { kembali: () => void }) {
     const r = useApi<{ catatan: ItemKr[] }>('/api/kantor/kr/catatan', 60_000);
@@ -262,7 +262,7 @@ function CatatanKr({ kembali }: { kembali: () => void }) {
     const buka = (id: string) => eventBus.dispatchEvent(new CustomEvent('open-kr', { detail: { id } }));
     return (
         <section className="cat-kr">
-            <div className="cat-h"><button className="cat-back" onClick={kembali}>‹</button><b>🧠 Catatan dari Knowledge Reels</b></div>
+            <div className="cat-h"><button className="cat-back" onClick={kembali}>‹</button><b>🧠 Komentar di Knowledge Reels</b></div>
             <p className="cat-kr-ket">Semua catatan yang Bapak tulis di postingan Knowledge Reels. Tekan sampul untuk membuka postingannya lagi. Salinannya juga ada di buku “Knowledge Reels”.</p>
             <div className="sb-search cat-search"><span>⌕</span><input placeholder="Cari catatan" value={q} onChange={(e) => setQ(e.target.value)} /></div>
             {r.error && <div className="fin-empty">⚠️ {r.error}</div>}
@@ -276,7 +276,7 @@ function CatatanKr({ kembali }: { kembali: () => void }) {
                             <div>
                                 <button className="cat-kr-j" onClick={() => buka(pid)}>{p.judul}</button>
                                 <small>{p.tema.ikon} {p.tema.nama}</small>
-                                {cs.map((c) => <p key={c.id}>{c.teks}<small>{waktu(c.at)}</small></p>)}
+                                {cs.filter((c) => c.status !== 'menunggu').map((c) => <p key={c.id} className={c.dari && c.dari !== 'rico' ? 'ai' : ''}>{c.dari && c.dari !== 'rico' ? <b>{c.nama}: </b> : null}{c.teks}<small>{waktu(c.at)}</small></p>)}
                             </div>
                         </div>
                     );

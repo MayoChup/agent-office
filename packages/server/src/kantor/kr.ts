@@ -32,7 +32,8 @@ export interface Post {
     id: string; kat: Kat; judul: string; sub?: string; slide: Slide[]; penutup?: string; sumber: Sumber[]; dampak?: Dampak[]; game?: Game;
     desain: { t: string; p: string }; oleh: Array<{ id: string; nama: string; peran: string }>; dibuat: number; tgl: string; kunci: string;
 }
-export interface CatatanKr { id: string; postId: string; teks: string; at: number; berkas?: string }
+/** Komentar di postingan. dari = 'rico' (Pak Rico) atau id AI redaksi yang membalas; induk = komentar yang dibalas. */
+export interface CatatanKr { id: string; postId: string; teks: string; at: number; berkas?: string; dari?: string; nama?: string; induk?: string; status?: 'menunggu' | 'gagal' }
 export interface Folder { id: string; nama: string; post: string[]; dibuat: number }
 interface St {
     post: Post[]; dilihat: Record<string, number>; baca: Record<string, number>; catatan: CatatanKr[]; folder: Folder[];
@@ -235,8 +236,20 @@ export class KnowledgeReels {
         return { benar, jawaban: p.game.jawaban, penjelasan: p.game.penjelasan };
     }
     skorGame() { const v = Object.values(this.st.jawab).filter((x) => x.benar !== null); return { main: v.length, benar: v.filter((x) => x.benar).length }; }
-    tambahCatatan(postId: string, isi: string) { this.cari(postId); const c: CatatanKr = { id: gid(), postId, teks: isi.trim().slice(0, 3000), at: Date.now() }; if (!c.teks) throw new Error('Catatan kosong.'); this.st.catatan.push(c); this.simpan(); return c; }
-    hapusCatatan(id: string) { const c = this.st.catatan.find((x) => x.id === id); this.st.catatan = this.st.catatan.filter((x) => x.id !== id); this.simpan(); return c; }
+    tambahCatatan(postId: string, isi: string, opsi: { dari?: string; nama?: string; induk?: string; status?: CatatanKr['status'] } = {}) {
+        this.cari(postId);
+        const induk = opsi.induk && this.st.catatan.some((x) => x.id === opsi.induk && x.postId === postId) ? opsi.induk : undefined;
+        const c: CatatanKr = { id: gid(), postId, teks: isi.trim().slice(0, 4000), at: Date.now(), dari: opsi.dari || 'rico', nama: opsi.nama, induk, status: opsi.status };
+        if (!c.teks && !c.status) throw new Error('Komentar kosong.'); this.st.catatan.push(c); this.simpan(); return c;
+    }
+    ubahCatatan(id: string, teks: string, status?: CatatanKr['status']) { const c = this.st.catatan.find((x) => x.id === id); if (!c) return; c.teks = teks.trim().slice(0, 4000); c.status = status; c.at = Date.now(); this.simpan(); return c; }
+    /** Hapus komentar beserta balasan-balasannya. */
+    hapusCatatan(id: string) {
+        const c = this.st.catatan.find((x) => x.id === id); if (!c) return;
+        const buang = new Set([id]); let tambah = true;
+        while (tambah) { tambah = false; for (const x of this.st.catatan) if (x.induk && buang.has(x.induk) && !buang.has(x.id)) { buang.add(x.id); tambah = true; } }
+        this.st.catatan = this.st.catatan.filter((x) => !buang.has(x.id)); this.simpan(); return c;
+    }
     buatFolder(nama: string) { const n = nama.trim().slice(0, 40); if (!n) throw new Error('Nama folder kosong.'); if (this.st.folder.length >= 50) throw new Error('Maksimal 50 folder.'); const f: Folder = { id: gid(), nama: n, post: [], dibuat: Date.now() }; this.st.folder.push(f); this.simpan(); return f; }
     ubahFolder(id: string, nama: string) { const f = this.st.folder.find((x) => x.id === id); if (!f) throw new Error('Folder tidak ditemukan.'); f.nama = nama.trim().slice(0, 40) || f.nama; this.simpan(); return f; }
     hapusFolder(id: string) { if (id === 'umum') throw new Error('Folder utama tidak bisa dihapus.'); this.st.folder = this.st.folder.filter((x) => x.id !== id); this.simpan(); }

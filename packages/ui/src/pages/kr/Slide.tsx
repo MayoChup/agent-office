@@ -5,7 +5,7 @@ export interface KSumber { judul: string; url?: string; penerbit?: string; tgl?:
 export interface KDampak { kode: string; bursa: 'US' | 'IDX'; arah: 'naik' | 'turun' | 'campur'; alasan: string }
 export interface KSlide { judul?: string; poin?: string[]; teks?: string }
 export interface KGame { jenis: string; soal: string; pilihan?: string[]; jawaban?: number; penjelasan?: string; urutan?: string[]; tampilDetik?: number; acak?: string }
-export interface KCatatan { id: string; postId: string; teks: string; at: number; berkas?: string }
+export interface KCatatan { id: string; postId: string; teks: string; at: number; berkas?: string; dari?: string; nama?: string; induk?: string; status?: 'menunggu' | 'gagal' }
 export interface KPost {
     id: string; kat: string; judul: string; sub?: string; slide: KSlide[]; penutup?: string; sumber: KSumber[]; dampak?: KDampak[]; game?: KGame;
     desain: { t: string; p: string }; oleh: Array<{ id: string; nama: string; peran: string }>; dibuat: number; tgl: string;

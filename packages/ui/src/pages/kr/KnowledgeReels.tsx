@@ -9,6 +9,7 @@ import { LembarKr, SampulKr, lembarDari, type KPost, type KTema, type KCatatan }
 interface Status {
     per: Record<string, { total: number; baru: number }>; folder: Array<{ id: string; nama: string; n: number; sampul: string | null }>;
     hariIni: number; dibaca: number; skor: { main: number; benar: number }; tema: Record<string, KTema>; segmen: Array<[string, string]>;
+    tag?: Array<{ id: string; nama: string; tag: string; peran: string }>;
     sibuk: string; progres: string; log: Array<{ at: number; teks: string }>; siap: boolean; tim: Array<{ id: string; nama: string; peran: string; ada: boolean }>;
 }
 type View = { v: 'feed' } | { v: 'tema'; kat?: string } | { v: 'simpan'; folder: string };
@@ -53,7 +54,7 @@ export function KnowledgeReelsPage() {
     }, []);
 
     const bukaTema = (kat: string) => { setModal(null); setView({ v: 'tema', kat }); };
-    const ctx: Ctx = { tema, hp, bukaTema, pesan: pesan.tampil, folder: st.data?.folder || [], muatStatus: () => st.reload(), bukaPost: setModal };
+    const ctx: Ctx = { tag: st.data?.tag || [], tema, hp, bukaTema, pesan: pesan.tampil, folder: st.data?.folder || [], muatStatus: () => st.reload(), bukaPost: setModal };
 
     return (
         <div className={`kr ${hp ? 'kr-hp' : 'kr-dt'} kr-v-${view.v}`}>
@@ -67,7 +68,7 @@ export function KnowledgeReelsPage() {
         </div>
     );
 }
-interface Ctx { tema: Record<string, KTema>; hp: boolean; bukaTema: (k: string) => void; pesan: (t: string, batal?: () => void) => void; folder: Status['folder']; muatStatus: () => void; bukaPost: (id: string) => void }
+interface Ctx { tag: NonNullable<Status['tag']>; tema: Record<string, KTema>; hp: boolean; bukaTema: (k: string) => void; pesan: (t: string, batal?: () => void) => void; folder: Status['folder']; muatStatus: () => void; bukaPost: (id: string) => void }
 
 /* ── Feed (All + segmen) ── */
 function Feed({ ctx, segmen, setSegmen, st }: { ctx: Ctx; segmen: string; setSegmen: (s: string) => void; st: Status | null }) {
@@ -169,8 +170,8 @@ function Pos({ p, ctx, ganti, diModal }: { p: KPost; ctx: Ctx; ganti: (p: KPost)
             <button className={`kr-baca ${p.baca ? 'on' : ''}`} onClick={() => baca()} aria-pressed={!!p.baca} title={p.baca ? 'Batalkan sudah baca' : 'Tandai sudah baca'}>
                 <span className="kr-ico">✓</span><span className="kr-lbl">Sudah baca</span>
             </button>
-            <button className={buka === 'catatan' ? 'on' : ''} onClick={() => setBuka(buka === 'catatan' ? '' : 'catatan')} title="Catatan saya">
-                <span className="kr-ico">✎</span><span className="kr-lbl">{p.catatan?.length ? `${p.catatan.length} catatan` : 'Catatan'}</span>
+            <button className={buka === 'catatan' ? 'on' : ''} onClick={() => setBuka(buka === 'catatan' ? '' : 'catatan')} title="Komentar">
+                <span className="kr-ico">💬</span><span className="kr-lbl">{p.catatan?.length ? `${p.catatan.length} komentar` : 'Komentar'}</span>
             </button>
             <button className={`kr-simpan ${p.folder?.length ? 'on' : ''}`} onClick={() => setBuka(buka === 'simpan' ? '' : 'simpan')} title="Simpan ke folder">
                 <span className="kr-ico">{p.folder?.length ? '★' : '☆'}</span><span className="kr-lbl">{p.folder?.length ? 'Tersimpan' : 'Simpan'}</span>
@@ -189,7 +190,7 @@ function Pos({ p, ctx, ganti, diModal }: { p: KPost; ctx: Ctx; ganti: (p: KPost)
                     ))}
                 </div>
             )}
-            {!!p.catatan?.length && buka !== 'catatan' && <button className="kr-lagi" onClick={() => setBuka('catatan')}>Lihat {p.catatan.length} catatan saya</button>}
+            {!!p.catatan?.length && buka !== 'catatan' && <button className="kr-lagi" onClick={() => setBuka('catatan')}>Lihat semua {p.catatan.length} komentar</button>}
             <small className="kr-tgl">{tglId(p.tgl)}</small>
         </div>
     );
@@ -317,29 +318,77 @@ function GameBebas({ selesai, kirim, umpan, awal }: { selesai: boolean; kirim: (
 }
 
 /* ── Catatan (komentar pribadi) & simpan ke folder ── */
+/* Kolom komentar ala Instagram. Tag @nama anggota redaksi → dia membalas (bisa mencari info terbaru di web). */
 function PanelCatatan({ p, ctx, ganti, tutup }: { p: KPost; ctx: Ctx; ganti: (p: KPost) => void; tutup: () => void }) {
     const [t, setT] = useState(''); const [kirim, setKirim] = useState(false);
+    const [balas, setBalas] = useState<KCatatan | null>(null);
+    const masuk = useRef<HTMLTextAreaElement>(null);
+    const semua = p.catatan || [];
+    const menunggu = semua.some((c) => c.status === 'menunggu');
+    // Selama ada AI yang sedang membalas, ambil ulang postingan tiap 4 detik.
+    useEffect(() => {
+        if (!menunggu) return;
+        const iv = setInterval(() => { apiGet<{ post: KPost }>(`/api/kantor/kr/post/${p.id}`).then((r) => ganti({ ...p, catatan: r.post.catatan })).catch(() => undefined); }, 4000);
+        return () => clearInterval(iv);
+    }, [menunggu, p.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    // Saran @tag saat mengetik "@…"
+    const m = /@([a-z0-9]*)$/i.exec(t);
+    const saran = m ? ctx.tag.filter((x) => x.tag.startsWith(m[1].toLowerCase())).slice(0, 8) : [];
+    const pilihTag = (tag: string) => { setT((v) => v.replace(/@([a-z0-9]*)$/i, `@${tag} `)); masuk.current?.focus(); };
     const tambah = async () => {
         if (!t.trim()) return; setKirim(true);
         try {
-            const r = await apiPost<{ catatan: KCatatan; vault: string }>('/api/kantor/kr/catatan', { postId: p.id, teks: t });
-            ganti({ ...p, catatan: [...(p.catatan || []), r.catatan] }); setT('');
-            ctx.pesan(r.vault ? 'Catatan tersimpan — juga ada di Catatan › Knowledge Reels.' : 'Catatan tersimpan.');
+            const r = await apiPost<{ catatan: KCatatan; menunggu: KCatatan[]; vault: string }>('/api/kantor/kr/catatan', { postId: p.id, teks: t, induk: balas?.id });
+            ganti({ ...p, catatan: [...semua, r.catatan, ...(r.menunggu || [])] }); setT(''); setBalas(null);
+            if (r.menunggu?.length) ctx.pesan(`${r.menunggu.map((x) => x.nama).join(' & ')} sedang menyiapkan jawaban…`);
         } catch (e: any) { ctx.pesan(String(e?.message || e)); }
         setKirim(false);
     };
-    const hapus = async (c: KCatatan) => { try { await apiPost(`/api/kantor/kr/catatan/${c.id}/hapus`, {}); ganti({ ...p, catatan: (p.catatan || []).filter((x) => x.id !== c.id) }); } catch (e: any) { ctx.pesan(String(e?.message || e)); } };
-    return (
-        <div className="kr-panel">
-            <div className="kr-panel-h"><b>Catatan saya</b><small>Hanya untuk Bapak · ikut tersimpan di halaman Catatan</small><button onClick={tutup} aria-label="Tutup">×</button></div>
-            {(p.catatan || []).map((c) => (
-                <div key={c.id} className="kr-cat"><p>{c.teks}</p><small>{jamId(c.at)}</small><button onClick={() => hapus(c)}>Hapus</button></div>
-            ))}
-            <div className="kr-cat-tulis">
-                <textarea value={t} onChange={(e) => setT(e.target.value)} placeholder="Tulis catatan tentang postingan ini…" rows={2} maxLength={3000}
-                    onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) tambah(); }} />
-                <button className="btn primary" disabled={kirim || !t.trim()} onClick={tambah}>Simpan catatan</button>
+    const hapus = async (c: KCatatan) => {
+        try {
+            await apiPost(`/api/kantor/kr/catatan/${c.id}/hapus`, {});
+            const buang = new Set([c.id]); let ada = true; while (ada) { ada = false; for (const x of semua) if (x.induk && buang.has(x.induk) && !buang.has(x.id)) { buang.add(x.id); ada = true; } }
+            ganti({ ...p, catatan: semua.filter((x) => !buang.has(x.id)) });
+        } catch (e: any) { ctx.pesan(String(e?.message || e)); }
+    };
+    const mulaiBalas = (c: KCatatan) => { setBalas(c); if (c.dari && c.dari !== 'rico') { const tg = ctx.tag.find((x) => x.id === c.dari)?.tag; if (tg && !t.includes(`@${tg}`)) setT(`@${tg} `); } masuk.current?.focus(); };
+    const teksTag = (s: string) => s.split(/(@[a-z0-9]+)/gi).map((bag, i) => (/^@[a-z0-9]+$/i.test(bag) && ctx.tag.some((x) => `@${x.tag}` === bag.toLowerCase()) ? <b key={i} className="kr-tag">{bag}</b> : <React.Fragment key={i}>{bag}</React.Fragment>));
+    const akar = semua.filter((c) => !c.induk || !semua.some((x) => x.id === c.induk));
+    const anak = (id: string) => semua.filter((c) => c.induk === id);
+    const kom = (c: KCatatan, kecil?: boolean) => {
+        const ai = c.dari && c.dari !== 'rico';
+        return (
+            <div key={c.id} className={`kr-kom ${kecil ? 'balasan' : ''}`}>
+                <span className={`kr-kom-ava ${ai ? 'ai' : ''}`}>{ai ? (c.nama || '?').slice(0, 1) : 'R'}</span>
+                <div className="kr-kom-isi">
+                    <p><b>{ai ? c.nama : 'Pak Rico'}</b> {c.status === 'menunggu' ? <em className="kr-ketik">sedang mencari & mengetik<span>…</span></em> : teksTag(c.teks)}</p>
+                    {c.status !== 'menunggu' && (
+                        <div className="kr-kom-meta"><small>{jamId(c.at)}</small><button onClick={() => mulaiBalas(c)}>Balas</button><button onClick={() => hapus(c)}>Hapus</button>{c.status === 'gagal' && <small className="gagal">gagal</small>}</div>
+                    )}
+                </div>
             </div>
+        );
+    };
+    return (
+        <div className="kr-panel kr-komentar">
+            <div className="kr-panel-h"><b>Komentar</b><small>Tag @nama tim redaksi untuk bertanya · tersimpan juga di Catatan</small><button onClick={tutup} aria-label="Tutup">×</button></div>
+            {!semua.length && <p className="kr-kom-kosong">Belum ada komentar. Tulis catatan Bapak, atau tanya tim, misalnya “@{ctx.tag.find((x) => x.id === p.oleh[0]?.id)?.tag || 'kirana'} kelanjutannya bagaimana?”</p>}
+            {akar.map((c) => (
+                <div key={c.id}>
+                    {kom(c)}
+                    {anak(c.id).map((x) => kom(x, true))}
+                </div>
+            ))}
+            {!!saran.length && (
+                <div className="kr-saran-tag">{saran.map((x) => <button key={x.id} onClick={() => pilihTag(x.tag)}><b>@{x.tag}</b><small>{x.peran}</small></button>)}</div>
+            )}
+            {balas && <div className="kr-balas-ke">Membalas {balas.dari && balas.dari !== 'rico' ? balas.nama : 'komentar Bapak'} <button onClick={() => setBalas(null)}>batal</button></div>}
+            <div className="kr-cat-tulis baris">
+                <textarea ref={masuk} value={t} onChange={(e) => setT(e.target.value)} placeholder="Tambahkan komentar… (ketik @ untuk tag tim)" rows={1} maxLength={3000}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !saran.length) { e.preventDefault(); tambah(); } }} />
+                <button className="kr-kirim" disabled={kirim || !t.trim()} onClick={tambah}>Kirim</button>
+            </div>
+            {!!ctx.tag.length && !t && <div className="kr-tag-cepat">{ctx.tag.filter((x) => p.oleh.some((o) => o.id === x.id)).concat(ctx.tag.filter((x) => x.id === 'kurator' && !p.oleh.some((o) => o.id === 'kurator'))).slice(0, 4).map((x) => <button key={x.id} onClick={() => { setT(`@${x.tag} `); masuk.current?.focus(); }}>@{x.tag}</button>)}</div>}
         </div>
     );
 }

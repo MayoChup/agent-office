@@ -2875,3 +2875,31 @@ body.no-office #phaser-container { visibility: hidden; }
 .kr-ketuk { position: absolute; left: 50%; top: 50%; z-index: 6; width: 92px; height: 92px; margin: -46px 0 0 -46px; border-radius: 50%; background: #3f9d6a; color: #fff; font-size: 52px; font-weight: 800; display: grid; place-items: center; pointer-events: none; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.25); animation: kr-ketuk 0.9s ease-out forwards; }
 @keyframes kr-ketuk { 0% { transform: scale(0.3); opacity: 0; } 18% { transform: scale(1.12); opacity: 1; } 32% { transform: scale(0.95); } 70% { transform: scale(1); opacity: 1; } 100% { transform: scale(1.05); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .kr-ketuk { animation: kr-ketuk-diam 0.9s forwards; } @keyframes kr-ketuk-diam { 0%, 70% { opacity: 1; } 100% { opacity: 0; } } }
+
+/* Knowledge Reels → kolom komentar ala Instagram + tag AI */
+.kr-komentar { gap: 10px; }
+.kr-kom { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 10px; align-items: start; }
+.kr-kom.balasan { margin-left: 42px; grid-template-columns: 26px minmax(0, 1fr); }
+.kr-kom-ava { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 13px; background: var(--line-strong); color: var(--text); }
+.kr-kom.balasan .kr-kom-ava { width: 26px; height: 26px; font-size: 11.5px; }
+.kr-kom-ava.ai { background: conic-gradient(from 200deg, #eea98c, #df9ba8, #a99cd6, #80b2da, #93b18f, #eea98c); color: #26262a; }
+.kr-kom-isi p { margin: 0; font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.kr-kom-isi p > b:first-child { margin-right: 4px; }
+.kr-tag { color: var(--accent); font-weight: 600; }
+.kr-kom-meta { display: flex; gap: 12px; align-items: center; margin-top: 2px; }
+.kr-kom-meta small { color: var(--faint); font-size: 11px; } .kr-kom-meta small.gagal { color: var(--bad); }
+.kr-kom-meta button { border: none; background: none; padding: 0; color: var(--muted); font-size: 11.5px; font-weight: 600; cursor: pointer; }
+.kr-ketik { color: var(--muted); font-style: italic; } .kr-ketik span { animation: kr-kedip 1.2s infinite; }
+@keyframes kr-kedip { 50% { opacity: 0.2; } }
+.kr-kom-kosong { margin: 0; color: var(--muted); font-size: 13px; }
+.kr-saran-tag { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--panel-solid); }
+.kr-saran-tag button { display: flex; gap: 10px; align-items: baseline; border: none; background: none; color: var(--text); text-align: left; padding: 8px 10px; cursor: pointer; font-size: 13px; }
+.kr-saran-tag button:hover { background: var(--sb-soft); } .kr-saran-tag small { color: var(--muted); font-size: 11.5px; }
+.kr-balas-ke { font-size: 12px; color: var(--muted); } .kr-balas-ke button { border: none; background: none; color: var(--accent); cursor: pointer; font-size: 12px; }
+.kr-komentar .kr-cat-tulis.baris { align-items: center; border-top: 1px solid var(--line); padding-top: 8px; }
+.kr-komentar .kr-cat-tulis textarea { resize: none; border-radius: 20px; padding: 8px 14px; }
+.kr-kirim { border: none; background: none; color: var(--accent); font-weight: 700; font-size: 13.5px; cursor: pointer; padding: 6px 4px; }
+.kr-kirim:disabled { opacity: 0.4; cursor: default; }
+.kr-tag-cepat { display: flex; gap: 6px; flex-wrap: wrap; }
+.kr-tag-cepat button { border: 1px solid var(--line-strong); background: none; color: var(--muted); border-radius: 99px; padding: 3px 10px; font-size: 12px; cursor: pointer; }
+.cat-kr-item p.ai { margin-left: 18px; background: color-mix(in srgb, var(--accent) 7%, var(--panel-solid)); }
