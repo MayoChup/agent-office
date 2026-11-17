@@ -127,6 +127,8 @@ export class Berkas {
         }
     }
 
+    /** Hapus PERMANEN (tanpa tempat sampah). Hanya dipakai aturan otomatis yang disetujui Pak Rico: video sosmed yang sudah terbit. */
+    hapusPermanen(rel: string) { const abs = this.aman(rel); if (abs === this.root || !fs.existsSync(abs) || fs.statSync(abs).isDirectory()) return false; fs.rmSync(abs, { force: true }); this.pakaiCache = null; return true; }
     /** Lokasi berkas di disk (untuk diunggah langsung dari VPS, mis. ke YouTube/TikTok). Tetap lewat pemeriksaan path aman. */
     lokasi(rel: string) { const abs = this.aman(rel); if (!fs.existsSync(abs) || fs.statSync(abs).isDirectory()) throw new Error('Berkas tidak ditemukan'); return abs; }
     /** Tautan sekali pakai (10 menit) untuk unduh/pratinjau tanpa header login. */

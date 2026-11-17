@@ -227,9 +227,37 @@ export function pasangSosmed(d: DepsSosmed) {
         k.status = 'mengunggah'; k.galat = undefined; s.simpan();
         papan.jalankan({ ai: d.roster().some((x) => x.id === ID_SOSMED.produksi) ? ID_SOSMED.produksi : 'sistem', nama: 'Vino (Admin unggah)', judul: `Mengunggah ${P.NAMA_FORMAT_P(a.platform, k.format)} ke ${label(a)}: ${k.judul}`, detail: 'Disetujui Pak Rico.', sumber: 'tugas' },
             () => P.unggah(sb, { url, file, caption, format: k.format, judul: k.youtube?.judul || k.hook || k.judul, tag: k.hashtag || [] }), (r) => r.tautan || 'Terbit.')
-            .then((r) => { k.status = 'terbit'; k.ig = { id: r.id, tautan: r.tautan, at: Date.now() }; k.diubah = Date.now(); s.simpan(); d.kabari(`✅ Terbit di ${label(a)}: ${k.judul}${r.tautan ? ` — ${r.tautan}` : ''}${r.privat ? ' (PRIVAT: aplikasi TikTok belum lolos audit)' : ''}`).catch(() => undefined); })
+            .then((r) => { k.status = 'terbit'; k.ig = { id: r.id, tautan: r.tautan, at: Date.now() }; k.diubah = Date.now(); s.simpan(); try { rapikanVideo(); } catch { /* tidak fatal */ } d.kabari(`✅ Terbit di ${label(a)}: ${k.judul}${r.tautan ? ` — ${r.tautan}` : ''}${r.privat ? ' (PRIVAT: aplikasi TikTok belum lolos audit)' : ''}`).catch(() => undefined); })
             .catch((e) => { k.status = 'gagal'; k.galat = String(e?.message || e).slice(0, 260); s.simpan(); d.kabari(`⚠️ Gagal unggah ke ${nama} "${k.judul}": ${k.galat}`).catch(() => undefined); });
     }
+    /**
+     * Supaya penyimpanan VPS tidak penuh: kalau video konten (semua akun) lebih dari MAKS_VIDEO,
+     * video TERLAMA (menurut waktu unggah ke kantor) yang kontennya SUDAH TERBIT dihapus permanen dari VPS.
+     * Video yang belum terbit tidak pernah dihapus. Aturan ini diminta Pak Rico (17 Nov 2026).
+     */
+    const MAKS_VIDEO = Math.max(3, Math.round(+(process.env.KANTOR_SOSMED_MAKS_VIDEO || 10)) || 10);
+    const videoRe = /\.(mp4|mov|m4v|webm)$/i;
+    function rapikanVideo() {
+        const semuaVideo: Array<{ c: Ctx; k: Konten; x: NonNullable<Konten['aset']> }> = [];
+        for (const c of semua()) for (const k of c.s.st.konten) for (const x of [k.aset, ...(k.asetLain || [])]) if (x && !x.dihapus && videoRe.test(x.path)) semuaVideo.push({ c, k, x });
+        let lebih = semuaVideo.length - MAKS_VIDEO; if (lebih <= 0) return [];
+        const calon = semuaVideo.filter((v) => v.k.status === 'terbit').sort((p1, p2) => (p1.x.at || 0) - (p2.x.at || 0));
+        const dihapus: string[] = [], disentuh = new Set<Sosmed>();
+        for (const v of calon) {
+            if (lebih <= 0) break;
+            try { berkas.hapusPermanen(v.x.path); } catch (e: any) { console.warn('[Sosmed] hapus video:', e?.message || e); continue; }
+            v.x.dihapus = Date.now(); disentuh.add(v.c.s); dihapus.push(`${v.x.nama} (${label(v.c.a)})`); lebih--;
+        }
+        for (const s2 of disentuh) s2.simpan();
+        if (dihapus.length) {
+            console.log(`[Sosmed] ${dihapus.length} video terbit dihapus dari VPS (batas ${MAKS_VIDEO}).`);
+            papan.catat({ ai: 'sistem', nama: 'Sistem kantor', judul: `Merapikan penyimpanan: ${dihapus.length} video yang sudah terbit dihapus (batas ${MAKS_VIDEO} video)`, detail: dihapus.join(', ').slice(0, 600), sumber: 'sistem', status: 'selesai' });
+        }
+        return dihapus;
+    }
+    rapikanVideo();
+    setInterval(() => { try { rapikanVideo(); } catch (e: any) { console.warn('[Sosmed] rapikan:', e?.message || e); } }, 3600_000);
+
     // Antrean terjadwal semua akun: dicek tiap menit, satu unggahan per akun sekaligus.
     setInterval(() => { for (const c of semua()) { const k = c.s.jatuhTempo()[0]; if (k && !c.s.st.konten.some((x) => x.status === 'mengunggah')) unggahKonten(c, k); } }, 60_000);
 
@@ -434,11 +462,11 @@ export function pasangSosmed(d: DepsSosmed) {
             try { berkas.buatFolder(dasar, nama); } catch { /* sudah ada */ }
             return { folder: `${dasar}/${nama}` };
         }
-        if (aksi === 'aset') { const p = String(b.path || ''); berkas.tautan(p, false); /* memastikan berkasnya ada & aman */ return { konten: s.pasangAset(k.id, p, !!b.tambah) }; }
+        if (aksi === 'aset') { const p = String(b.path || ''); berkas.tautan(p, false); /* memastikan berkasnya ada & aman */ const kk = s.pasangAset(k.id, p, !!b.tambah); const hapus = rapikanVideo(); return { konten: kk, dihapus: hapus }; }
         if (aksi === 'batal') { k.disetujui = undefined; k.status = k.aset ? 'aset' : k.promptVideo || k.promptGambar || k.promptEdit ? 'prompt' : 'naskah'; k.galat = undefined; s.simpan(); return { konten: k }; }
         if (aksi === 'hasil') { const kk = s.catatHasil(k.id, b, 'manual'); if (!s.sibuk) latar(c, 'evaluasi', () => evaluasi(c, kk)); return { konten: kk }; }
         if (aksi === 'evaluasi') { if (!k.hasil?.length) throw new Error('Belum ada angka hasil untuk dianalisa.'); return latar(c, 'evaluasi', () => evaluasi(c, k)); }
-        if (aksi === 'terbit-manual') { k.status = 'terbit'; k.ig = { at: Date.now(), tautan: /^https:\/\//.test(String(b.tautan || '')) ? String(b.tautan).slice(0, 300) : undefined }; k.diubah = Date.now(); s.simpan(); return { konten: k }; }
+        if (aksi === 'terbit-manual') { k.status = 'terbit'; k.ig = { at: Date.now(), tautan: /^https:\/\//.test(String(b.tautan || '')) ? String(b.tautan).slice(0, 300) : undefined }; k.diubah = Date.now(); s.simpan(); rapikanVideo(); return { konten: k }; }
         if (aksi === 'setujui') {
             // Persetujuan Pak Rico = izin unggah untuk SATU konten ini, pada tanggal & jamnya di kalender (atau sekarang bila diminta / waktunya sudah lewat).
             periksaSiapUnggah(c, k, req);

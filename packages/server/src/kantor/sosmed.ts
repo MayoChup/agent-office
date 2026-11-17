@@ -40,7 +40,7 @@ export interface Varian {
 export interface Slide { no: number; judul: string; isi: string; visual: string }
 export interface Sudut { sudut: string; hook: string; scroll: number; relevansi: number; skor: number }
 export interface Gaya { id: string; nama: string; jenis: 'real' | 'animasi'; deskripsi: string; contoh?: { path: string; nama: string } | null; bawaan?: boolean }
-export interface Aset { path: string; nama: string; at: number }
+export interface Aset { path: string; nama: string; at: number; /** waktu berkas dihapus otomatis dari VPS (sudah terbit) */ dihapus?: number }
 export interface Hasil { at: number; sumber: 'ig' | 'manual'; umurJam: number; tayang?: number; jangkauan?: number; suka?: number; komentar?: number; simpan?: number; bagikan?: number; ikuti?: number }
 export type StatusKonten = 'rencana' | 'sketsa' | 'naskah' | 'prompt' | 'aset' | 'terjadwal' | 'mengunggah' | 'terbit' | 'manual' | 'gagal';
 export interface Konten {
