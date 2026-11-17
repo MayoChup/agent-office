@@ -3,6 +3,8 @@ import { useApi } from '../../kantor/api';
 import { apiGet, apiPost } from '../../kantor/connection';
 import { Markdown } from './Markdown';
 import { Gambar } from './Gambar';
+import { eventBus } from '../../events';
+import { SampulKr, type KPost, type KTema } from '../kr/Slide';
 
 interface Simpul { nama: string; path: string; folder: boolean; mtime: number; size?: number; anak?: Simpul[] }
 interface Pohon { pohon: Simpul; sinkron: { pushAt: number; error: string } }
@@ -18,7 +20,7 @@ export function CatatanPage() {
     const [buku, setBuku] = useState<string>(() => { try { return localStorage.getItem('kantor:cat-buku') || ''; } catch { return ''; } });
     const [bagian, setBagian] = useState<string>('');
     const [hal, setHal] = useState<string>(() => { try { return localStorage.getItem('kantor:cat-hal') || ''; } catch { return ''; } });
-    const [layar, setLayar] = useState<'buku' | 'halaman' | 'editor'>(() => (hal ? 'editor' : 'buku'));
+    const [layar, setLayar] = useState<'buku' | 'halaman' | 'editor' | 'kr'>(() => (hal ? 'editor' : 'buku'));
     const [q, setQ] = useState('');
     const [hasil, setHasil] = useState<Array<{ path: string; cuplikan: string }> | null>(null);
     useEffect(() => { try { localStorage.setItem('kantor:cat-buku', buku); localStorage.setItem('kantor:cat-hal', hal); } catch { /* */ } }, [buku, hal]);
@@ -80,6 +82,7 @@ export function CatatanPage() {
                         {hasil.map((h) => <button key={h.path} onClick={() => { bukaHal(h.path); setQ(''); }}><b>{judul(h.path.split('/').pop()!)}</b><small>{h.path.split('/').slice(0, -1).join(' › ')}</small>{h.cuplikan && <em>…{h.cuplikan}…</em>}</button>)}
                     </div>
                 )}
+                {!hasil && <button className={`cat-kr-btn ${layar === 'kr' ? 'on' : ''}`} onClick={() => setLayar('kr')}><span>🧠</span><b>Dari Knowledge Reels</b><small>Catatan di postingan</small></button>}
                 {!hasil && bukuList.map((b, i) => (
                     <div key={b.path} className="cat-book">
                         <button className={`cat-book-btn ${buku === b.path ? 'on' : ''}`} onClick={() => { setBuku(b.path); setBagian(''); setLayar('halaman'); }}>
@@ -98,6 +101,7 @@ export function CatatanPage() {
                 {ph.data?.sinkron && <div className="cat-sync">{ph.data.sinkron.error ? `⚠️ ${ph.data.sinkron.error}` : ph.data.sinkron.pushAt ? `☁️ Tersinkron ke Obsidian ${waktu(ph.data.sinkron.pushAt)}` : '☁️ Tersinkron otomatis ke Obsidian'}</div>}
             </aside>
 
+            {layar === 'kr' && <CatatanKr kembali={() => setLayar('buku')} />}
             <section className="cat-hal">
                 <div className="cat-h">
                     <button className="cat-back" onClick={() => setLayar('buku')}>‹</button>
@@ -245,5 +249,39 @@ function Editor({ path, cariFile, bukaHal, onBack, onBerubah, onHapus }: { path:
                 }} />
             )}
         </div>
+    );
+}
+
+interface ItemKr { id: string; postId: string; teks: string; at: number; berkas?: string; post: (Pick<KPost, 'id' | 'kat' | 'judul' | 'desain' | 'slide' | 'tgl'> & { tema: KTema }) | null }
+/** Catatan yang Bapak tulis di postingan Knowledge Reels, dengan sampul postingannya. Klik → kembali ke postingan itu. */
+function CatatanKr({ kembali }: { kembali: () => void }) {
+    const r = useApi<{ catatan: ItemKr[] }>('/api/kantor/kr/catatan', 60_000);
+    const [q, setQ] = useState('');
+    const list = (r.data?.catatan || []).filter((c) => !q.trim() || `${c.teks} ${c.post?.judul}`.toLowerCase().includes(q.toLowerCase()));
+    const per = new Map<string, ItemKr[]>(); for (const c of list) per.set(c.postId, [...(per.get(c.postId) || []), c]);
+    const buka = (id: string) => eventBus.dispatchEvent(new CustomEvent('open-kr', { detail: { id } }));
+    return (
+        <section className="cat-kr">
+            <div className="cat-h"><button className="cat-back" onClick={kembali}>‹</button><b>🧠 Catatan dari Knowledge Reels</b></div>
+            <p className="cat-kr-ket">Semua catatan yang Bapak tulis di postingan Knowledge Reels. Tekan sampul untuk membuka postingannya lagi. Salinannya juga ada di buku “Knowledge Reels”.</p>
+            <div className="sb-search cat-search"><span>⌕</span><input placeholder="Cari catatan" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+            {r.error && <div className="fin-empty">⚠️ {r.error}</div>}
+            {r.data && !per.size && <div className="fin-empty">Belum ada catatan. Tekan ✎ Catatan di postingan Knowledge Reels untuk menulis.</div>}
+            <div className="cat-kr-list">
+                {[...per.entries()].map(([pid, cs]) => {
+                    const p = cs[0].post!;
+                    return (
+                        <div key={pid} className="cat-kr-item">
+                            <SampulKr p={{ ...p, sumber: [], oleh: [], dibuat: 0 } as KPost} tema={p.tema} onClick={() => buka(pid)} />
+                            <div>
+                                <button className="cat-kr-j" onClick={() => buka(pid)}>{p.judul}</button>
+                                <small>{p.tema.ikon} {p.tema.nama}</small>
+                                {cs.map((c) => <p key={c.id}>{c.teks}<small>{waktu(c.at)}</small></p>)}
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        </section>
     );
 }

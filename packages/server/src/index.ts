@@ -30,6 +30,8 @@ import { BeritaTerkait } from './kantor/beritaTerkait';
 import ATUR_HR from './kantor/skrip/atur-hr.sh';
 import ATUR_SOSMED from './kantor/skrip/atur-sosmed.sh';
 import { pasangSosmed } from './kantor/sosmedRute';
+import { pasangKr } from './kantor/krRute';
+import ATUR_KURATOR from './kantor/skrip/atur-kurator.sh';
 import { execFile as jalankanBerkas } from 'child_process';
 import { Hr, statistik, kunciMinggu, ambilUsulanJson, ID_HR, ID_JONI, StatAi } from './kantor/hr';
 import { ujiMundur, rekomendasiUji, fileUji, statusPreset, StatusUji, saranDariUji, fileSaran, namaH } from './kantor/ujimundur';
@@ -676,6 +678,14 @@ pasangSosmed({
     app, requireToken, dataDir: config.dataDir, hermesHome: config.hermesHome, skillDir: path.join(__dirname, 'hermes-skills'),
     roster, resetRoster: () => { rosterCache.at = 0; }, papan, percakapan, llm: () => OfficeRoom.sharedLlm() as any,
     berkas, kabari: kabariTelegram, idJoni: ID_JONI, namaJoni, aturSosmed: ATUR_SOSMED, jalankanBerkas
+});
+
+// ── Knowledge Reels (Kirana + tim, gotong royong): lihat kantor/krRute.ts ──
+pasangKr({
+    app, requireToken, dataDir: config.dataDir, hermesHome: config.hermesHome, roster, resetRoster: () => { rosterCache.at = 0; }, papan, percakapan,
+    llm: () => OfficeRoom.sharedLlm() as any, catatan: { tulis: (rel, isi) => catatan.tulis(rel, isi) },
+    saham: () => { const st = tradingDesk.load(); return { simbol: screener.daftarSimbol(), watchlist: Array.from(new Set([...st.positions.map((p) => p.symbol), ...st.watchlist])), detail: (s) => screener.detail(s) }; },
+    kabari: kabariTelegram, aturKurator: ATUR_KURATOR, jalankanBerkas
 });
 
 // ── Chat konsultasi Trading: AI menjawab HANYA dari data halaman Trading ──

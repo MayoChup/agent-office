@@ -19,11 +19,12 @@ import { HomePage } from './pages/HomePage';
 import { TradingPage } from './pages/TradingPage';
 import { SchedulePage } from './pages/SchedulePage';
 import { SosmedPage } from './pages/SosmedPage';
+import { KnowledgeReelsPage } from './pages/kr/KnowledgeReels';
 import { AktifCtx } from './kantor/aktif';
 
 const LS_PAGE = 'kantor:page';
 const MAKS_HIDUP = 4; // halaman yang tetap hidup di belakang layar (paling lama tidak dibuka ditutup otomatis)
-const PAGES: PageKey[] = ['home', 'kantor', 'keuangan', 'trading', 'sosmed', 'tugas', 'jadwal', 'obrolan', 'catatan', 'berkas'];
+const PAGES: PageKey[] = ['home', 'kantor', 'keuangan', 'trading', 'sosmed', 'tugas', 'jadwal', 'obrolan', 'catatan', 'berkas', 'kr'];
 
 function initialPage(): PageKey {
     const h = location.hash.replace('#', '') as PageKey;
@@ -77,10 +78,14 @@ export function App() {
             setPage('obrolan');
         };
         const onAgent = (e: Event) => setAgentId((e as CustomEvent).detail?.id ?? null);
+        // Dari Catatan → buka postingan Knowledge Reels (halaman KR membaca id ini saat terpasang / lewat event yang sama).
+        const onKr = (e: Event) => { try { sessionStorage.setItem('kantor:kr-buka', String((e as CustomEvent).detail?.id || '')); } catch { /* */ } setPanel(null); setPage('kr'); };
+        eventBus.addEventListener('open-kr', onKr);
         eventBus.addEventListener('open-division', onDivision);
         eventBus.addEventListener('open-chat', onChat);
         eventBus.addEventListener('agent-select', onAgent);
         return () => {
+            eventBus.removeEventListener('open-kr', onKr);
             eventBus.removeEventListener('open-division', onDivision);
             eventBus.removeEventListener('open-chat', onChat);
             eventBus.removeEventListener('agent-select', onAgent);
@@ -112,6 +117,7 @@ export function App() {
                         {k === 'jadwal' && <SchedulePage />}
                         {k === 'catatan' && <CatatanPage />}
                         {k === 'berkas' && <BerkasPage />}
+                        {k === 'kr' && <KnowledgeReelsPage />}
                         {k === 'tugas' && <TasksPanel onClose={back} />}
                         {k === 'obrolan' && <ChatPage key={`chat-${prefillKe}`} prefill={prefill} />}
                     </AktifCtx.Provider>
