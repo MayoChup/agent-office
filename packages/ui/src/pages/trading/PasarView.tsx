@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Baris, FaktorKey, FAKTOR, ScreenerData, kelas, usd, persen, kap, vol, kapOf } from './types';
 import { Sparkline } from './Sparkline';
 
+import { Ikon } from '../../components/Ikon';
 type Grup = 'Semua' | 'Beli' | 'Tahan' | 'Jual';
 const KOLOM: Array<{ k: string; label: string; num?: boolean }> = [
     { k: 's', label: 'Perusahaan' }, { k: 'sektor', label: 'Sektor' }, { k: 'harga', label: 'Harga', num: true }, { k: 'chg1d', label: 'Perubahan', num: true },
@@ -48,12 +49,12 @@ export function PasarView({ data, faktor, setFaktor, onOpen }: { data: ScreenerD
 
             <section className="sb-card sb-table-card">
                 <div className="sb-tools">
-                    <div className="sb-search"><span>⌕</span><input placeholder="Cari ticker atau nama" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+                    <div className="sb-search"><span><Ikon e="⌕" /></span><input placeholder="Cari ticker atau nama" value={q} onChange={(e) => setQ(e.target.value)} /></div>
                     <div className="sb-seg">{(['Semua', 'Beli', 'Tahan', 'Jual'] as Grup[]).map((g) => <button key={g} className={grup === g ? 'on' : ''} onClick={() => setGrup(g)}>{g} <small>{hitung(g)}</small></button>)}</div>
                 </div>
                 <div className="sb-faktor">
                     <span>Sinyal berdasarkan</span>
-                    {FAKTOR.map((f) => <button key={f.k} title={f.info} className={faktor === f.k ? 'on' : ''} onClick={() => setFaktor(f.k)}>{f.ico} {f.label}</button>)}
+                    {FAKTOR.map((f) => <button key={f.k} title={f.info} className={faktor === f.k ? 'on' : ''} onClick={() => setFaktor(f.k)}><Ikon e={f.ico} /> {f.label}</button>)}
                 </div>
                 <div className="sb-chips">
                     <button className={!sektor ? 'on' : ''} onClick={() => setSektor('')}>Semua <small>{data.baris.length}</small></button>

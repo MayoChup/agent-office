@@ -8,7 +8,7 @@ export function temaSekarang(): Tema {
 }
 export function setTema(t: Tema) {
     document.documentElement.setAttribute('data-theme', t);
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', t === 'light' ? '#f5f4ef' : '#0b1020');
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', t === 'light' ? '#f5f7fa' : '#0b0d14');
     try { localStorage.setItem(KEY, t); } catch { /* */ }
     window.dispatchEvent(new CustomEvent('tema', { detail: t }));
 }

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Baris, ScreenerData, usd, kapOf } from './types';
 
+import { Ikon } from '../../components/Ikon';
 type Periode = '1H' | '1M' | '1B' | '3B' | '1T';
 const PERIODE: Array<{ k: Periode; label: string }> = [{ k: '1H', label: 'Harian' }, { k: '1M', label: 'Mingguan' }, { k: '1B', label: 'Bulanan' }, { k: '3B', label: '3 bulan' }, { k: '1T', label: '1 tahun' }];
 const nilai = (b: Baris, p: Periode) => (p === '1H' ? b.chg1d : p === '1M' ? (b.x?.mom.w1 ?? 0) : p === '1B' ? b.chg1m : p === '3B' ? b.chg3m : b.chg1y);
@@ -105,7 +106,7 @@ export function PetaPanas({ data, onOpen, watch }: { data: ScreenerData; onOpen:
                 )}
                 <div className="sb-seg"><button className={lingkup === 'semua' ? 'on' : ''} onClick={() => setLingkup('semua')}>Semua</button><button className={lingkup === 'watch' ? 'on' : ''} onClick={() => setLingkup('watch')}>Watchlist</button></div>
             </div>
-            {ukuran === 'kap' && !adaKap && <div className="hint">Data kapitalisasi belum ada (diambil bersama ↻ data pasar), jadi sementara semua kotak sama besar.</div>}
+            {ukuran === 'kap' && !adaKap && <div className="hint">Data kapitalisasi belum ada (diambil bersama <Ikon e="↻" /> data pasar), jadi sementara semua kotak sama besar.</div>}
             {!baris.length && <div className="sb-card fin-empty">Tidak ada saham untuk filter ini.</div>}
             <div className="hm-legend mono">{[-1, -0.66, -0.33, 0, 0.33, 0.66, 1].map((t) => <span key={t} style={{ background: warna(t * max, max) }}>{t > 0 ? '+' : t < 0 ? '−' : ''}{Math.abs(Math.round(t * max))}%</span>)}</div>
             <div className="hm" ref={box} style={{ height: dim.h }} onMouseLeave={() => setHover(null)}>

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { apiBlob } from '../../kantor/connection';
 
+import { Ikon } from '../../components/Ikon';
 /** Gambar dari vault (butuh login) → URL blob. */
 export function GambarVault({ path, alt, onClick }: { path: string; alt?: string; onClick?: () => void }) {
     const [url, setUrl] = useState('');
@@ -10,7 +11,7 @@ export function GambarVault({ path, alt, onClick }: { path: string; alt?: string
         apiBlob(`/api/kantor/catatan/berkas?p=${encodeURIComponent(path)}&t=${Date.now()}`).then((b) => { if (alive) { u = URL.createObjectURL(b); setUrl(u); } }).catch(() => alive && setErr(true));
         return () => { alive = false; if (u) URL.revokeObjectURL(u); };
     }, [path]);
-    if (err) return <span className="md-imgerr">🖼️ {path.split('/').pop()} tidak ditemukan</span>;
+    if (err) return <span className="md-imgerr"><Ikon e="🖼" /> {path.split('/').pop()} tidak ditemukan</span>;
     return url ? <img className={`md-img ${onClick ? 'can' : ''}`} src={url} alt={alt || ''} onClick={onClick} title={onClick ? 'Ketuk untuk mengedit gambar' : undefined} /> : <span className="md-imgload">memuat gambar…</span>;
 }
 

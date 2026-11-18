@@ -4,6 +4,7 @@ import { fullName } from '../kantor/store';
 import { getRoom } from '../kantor/connection';
 import { Panel } from './Panel';
 
+import { Ikon } from './Ikon';
 const STATUS: Record<string, { icon: string; label: string; color: string }> = {
     in_progress: { icon: '🔄', label: 'Dikerjakan', color: '#fbbf24' },
     blocked: { icon: '⚠️', label: 'Tertahan', color: '#f87171' },
@@ -36,7 +37,7 @@ export function TasksPanel({ onClose }: { onClose: () => void }) {
 
     return (
         <Panel
-            title="📋 Papan Tugas"
+            title="Papan Tugas"
             sub="Kerja nyata, dikerjakan divisi di Hermes"
             onClose={onClose}
             footer={
@@ -64,13 +65,13 @@ export function TasksPanel({ onClose }: { onClose: () => void }) {
                 const auto = t.created_by.startsWith('kantor:') && t.created_by !== 'kantor:pemilik';
                 return (
                     <div key={t.id} className="task" style={{ ['--c' as any]: st.color }}>
-                        <div>{st.icon}</div>
+                        <div><Ikon e={st.icon} /></div>
                         <div style={{ minWidth: 0, flex: 1 }}>
                             <div className="task-title">{t.title}</div>
                             <div className="task-meta">
                                 <span className="chip" style={{ ['--c' as any]: st.color }}>{st.label}</span>
                                 <span>→ {t.assigned_to || 'belum ditugaskan'}</span>
-                                {auto && <span className="tag">🤖 usulan otomatis</span>}
+                                {auto && <span className="tag"><Ikon e="🤖" /> usulan otomatis</span>}
                             </div>
                         </div>
                     </div>

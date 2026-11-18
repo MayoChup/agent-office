@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { apiGet } from '../kantor/connection';
 import { Tx, BANKS, KAT_COLORS, compute, monthsAvailable, monthLabel, dateLabel, rp, rpShort, delta, todayWib } from '../kantor/finance';
 
+import { Ikon } from './Ikon';
 interface Report { transaksi: Tx[]; sheetUrl: string; pencatat: { lastRun: number; lastError: string | null; interval: number }; updatedAt: number }
 
 const LS_TAB = 'kantor:fin-tab';
@@ -103,11 +104,11 @@ export function FinancePage({ onClose }: { onClose?: () => void }) {
             <div className="fin-head">
                 <div className="fin-title">
                     <div>
-                        <h2>💰 Keuangan</h2>
+                        <h2><Ikon e="💰" /> Keuangan</h2>
                         <p>{data ? `Diperbarui ${new Date(data.updatedAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} · dicatat otomatis dari email bank` : 'Memuat…'}</p>
                     </div>
                     <div className="row" style={{ gap: 6 }}>
-                        <button className="icon-btn" title="Ambil transaksi terbaru" onClick={() => load(true)} disabled={loading}>{loading ? '…' : '↻'}</button>
+                        <button className="icon-btn" title="Ambil transaksi terbaru" onClick={() => load(true)} disabled={loading}>{loading ? '…' : <Ikon e="↻" />}</button>
                         {onClose && <button className="icon-btn" onClick={onClose} title="Tutup">✕</button>}
                     </div>
                 </div>
@@ -134,7 +135,7 @@ export function FinancePage({ onClose }: { onClose?: () => void }) {
 
                 {r && tab === 'ringkasan' && (
                     <>
-                        {r.perluCek.length > 0 && <div className="fin-alert">⚠️ {r.perluCek.length} transaksi perlu dicek di Google Sheets.</div>}
+                        {r.perluCek.length > 0 && <div className="fin-alert"><Ikon e="⚠" /> {r.perluCek.length} transaksi perlu dicek di Google Sheets.</div>}
                         <div className="fin-kpis">
                             <div className="fin-kpi" style={{ ['--c' as any]: '#f43f5e' }}><span>Pengeluaran</span><b>{rp(r.keluar)}</b><Delta v={delta(r.keluar, r.prevKeluar)} goodWhenUp={false} /></div>
                             <div className="fin-kpi" style={{ ['--c' as any]: '#22c55e' }}><span>Pemasukan</span><b>{rp(r.masuk)}</b><Delta v={delta(r.masuk, r.prevMasuk)} goodWhenUp /></div>
@@ -155,7 +156,7 @@ export function FinancePage({ onClose }: { onClose?: () => void }) {
                         <section className="fin-card"><h3>Harian <small>{monthLabel(ym)}</small></h3><DailyChart days={r.daily} /></section>
                         <div className="fin-two">
                             <section className="fin-card"><h3>Per bank</h3><Bars items={r.perBank} color={() => '#0ea5e9'} /></section>
-                            <section className="fin-card"><h3>Pola hari</h3><Bars items={r.hari} color={() => '#a78bfa'} /></section>
+                            <section className="fin-card"><h3>Pola hari</h3><Bars items={r.hari} color={() => '#4d8dff'} /></section>
                         </div>
                         <section className="fin-card">
                             <h3>5 pengeluaran terbesar</h3>

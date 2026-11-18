@@ -5,6 +5,7 @@ import { eventBus } from '../events';
 import { Avatar } from './Avatar';
 import { Panel } from './Panel';
 
+import { Ikon } from './Ikon';
 const HEAD_COLOR = '#818cf8';
 
 function StatusChip({ action }: { action: string }) {
@@ -31,14 +32,14 @@ function MemberRow({ a, isHead, color }: { a: AgentView; isHead: boolean; color:
                     <StatusChip action={a.action} />
                 </div>
                 <div className="member-role">{a.role}</div>
-                {a.currentTask && <div className="member-task">💼 {a.currentTask}</div>}
-                {!a.currentTask && a.thought && <div className="member-task" style={{ fontStyle: 'italic' }}>💭 {a.thought}</div>}
+                {a.currentTask && <div className="member-task"><Ikon e="💼" /> {a.currentTask}</div>}
+                {!a.currentTask && a.thought && <div className="member-task" style={{ fontStyle: 'italic' }}><Ikon e="💭" /> {a.thought}</div>}
                 <div className="member-actions">
                     <button className="btn small" onClick={() => {
                         eventBus.dispatchEvent(new CustomEvent('focus-agent', { detail: { id: a.id } }));
                         eventBus.dispatchEvent(new CustomEvent('agent-select', { detail: { id: a.id } }));
-                    }}>📍 Lihat di kantor</button>
-                    <button className="btn small" onClick={() => greet(a.name)}>💬 Sapa</button>
+                    }}><Ikon e="📍" /> Lihat di kantor</button>
+                    <button className="btn small" onClick={() => greet(a.name)}><Ikon e="💬" /> Sapa</button>
                 </div>
             </div>
         </div>
@@ -63,7 +64,7 @@ function DivisionDetail({ division, members, tasks, onBack }: {
             <button className="back" onClick={onBack}>← Kembali ke bagan</button>
             <div className="hero" style={{ ['--c' as any]: division.color }}>
                 <div className="hero-title">
-                    <div className="div-icon" style={{ ['--c' as any]: division.color, width: 44, height: 44, fontSize: 22 }}>{division.icon}</div>
+                    <div className="div-icon" style={{ ['--c' as any]: division.color, width: 44, height: 44, fontSize: 22 }}><Ikon e={division.icon} /></div>
                     <div>
                         <h3>{division.name}</h3>
                         <p>{members.length} orang · {working ? `${working} sedang bekerja` : 'semua santai'}</p>
@@ -75,7 +76,7 @@ function DivisionDetail({ division, members, tasks, onBack }: {
                     <div className="stat"><b>{done}</b><span>Selesai (3 hr)</span></div>
                 </div>
                 <div className="row" style={{ marginTop: 12 }}>
-                    <button className="btn small" onClick={() => focusDivision(division.id)}>📍 Lihat ruangannya</button>
+                    <button className="btn small" onClick={() => focusDivision(division.id)}><Ikon e="📍" /> Lihat ruangannya</button>
                 </div>
             </div>
 
@@ -87,10 +88,10 @@ function DivisionDetail({ division, members, tasks, onBack }: {
             {tasks.length === 0 && <div className="empty">Belum ada tugas untuk divisi ini.</div>}
             {tasks.slice(0, 8).map((t) => (
                 <div key={t.id} className="task" style={{ ['--c' as any]: division.color }}>
-                    <div>{taskIcon(t.status)}</div>
+                    <div><Ikon e={taskIcon(t.status)} /></div>
                     <div style={{ minWidth: 0 }}>
                         <div className="task-title">{t.title}</div>
-                        <div className="task-meta"><span>→ {t.assigned_to}</span>{t.created_by.startsWith('kantor:') && t.created_by !== 'kantor:pemilik' && <span className="tag">🤖 usulan otomatis</span>}</div>
+                        <div className="task-meta"><span>→ {t.assigned_to}</span>{t.created_by.startsWith('kantor:') && t.created_by !== 'kantor:pemilik' && <span className="tag"><Ikon e="🤖" /> usulan otomatis</span>}</div>
                     </div>
                 </div>
             ))}
@@ -132,7 +133,7 @@ export function OrgPanel({ selected, onSelect, onClose }: {
 
     return (
         <Panel
-            title="🧭 Bagan Organisasi"
+            title="Bagan Organisasi"
             sub={detail ? 'Detail divisi' : `${divisions.length} divisi · ${agents.length} orang`}
             onClose={onClose}
         >
@@ -141,7 +142,7 @@ export function OrgPanel({ selected, onSelect, onClose }: {
             ) : (
                 <div className="org">
                     <div className="org-node owner">
-                        <div className="div-icon" style={{ ['--c' as any]: '#f59e0b' }}>👤</div>
+                        <div className="div-icon" style={{ ['--c' as any]: '#f59e0b' }}><Ikon e="👤" /></div>
                         <div>
                             <div style={{ fontWeight: 700 }}>{owner}</div>
                             <div style={{ fontSize: 11, color: 'var(--muted)' }}>Pemilik · perintah lewat Telegram & kantor ini</div>
@@ -149,7 +150,7 @@ export function OrgPanel({ selected, onSelect, onClose }: {
                     </div>
                     <div className="org-line" />
                     <div className="org-node head" onClick={() => onSelect('default')}>
-                        {head ? <Avatar skin={head.skin} size={40} /> : <div className="div-icon">👑</div>}
+                        {head ? <Avatar skin={head.skin} size={40} /> : <div className="div-icon"><Ikon e="👑" /></div>}
                         <div style={{ flex: 1 }}>
                             <div style={{ fontWeight: 700 }} className="who">{head?.name || 'Joni'}{head?.title && <small className="who-role">{head.title}</small>}</div>
                             <div style={{ fontSize: 11, color: 'var(--muted)' }}>Kepala Kantor · membagi tugas</div>
@@ -167,10 +168,10 @@ export function OrgPanel({ selected, onSelect, onClose }: {
                                     const blocked = members.filter((m) => m.action === 'blocked').length;
                                     return (
                                         <div key={d.id} className="div-card" style={{ ['--c' as any]: d.color }} onClick={() => { onSelect(d.id); focusDivision(d.id); }}>
-                                            <div className="div-icon" style={{ ['--c' as any]: d.color }}>{d.icon}</div>
+                                            <div className="div-icon" style={{ ['--c' as any]: d.color }}><Ikon e={d.icon} /></div>
                                             <div className="div-name">{d.name}</div>
                                             <div className="div-meta">
-                                                {members.length} orang · {blocked ? `⚠️ ${blocked} tertahan` : working ? `💻 ${working} bekerja` : 'santai'}
+                                                {members.length} orang · {blocked ? <><Ikon e="⚠" /> {`${blocked} tertahan`}</> : working ? <><Ikon e="💻" /> {`${working} bekerja`}</> : 'santai'}
                                             </div>
                                             <div className="avatars">
                                                 {members.slice(0, 5).map((m) => <Avatar key={m.id} skin={m.skin} size={26} title={fullName(m)} />)}

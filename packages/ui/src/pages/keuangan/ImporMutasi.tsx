@@ -2,6 +2,7 @@ import React, { useMemo, useRef, useState } from 'react';
 import { apiPost, serverBase, tokenLogin } from '../../kantor/connection';
 import { rp, tglPendek, ikon } from './util';
 
+import { Ikon } from '../../components/Ikon';
 interface MTx { idx: number; id: string; tanggal: string; jenis: 'Masuk' | 'Keluar'; nominal: number; saldo: number | null; ket: string; pihak: string; kategori: string; yakin: boolean; status: 'baru' | 'cocok'; cocok: { id: string; d: string; pihak: string } | null }
 interface Lebih { id: string; d: string; jenis: string; n: number; pihak: string; ket: string }
 interface Hasil { periode: { dari: string; sampai: string }; saldoAwal: number | null; saldoAkhir: number | null; transaksi: MTx[]; lebih: Lebih[]; halaman: number; peringatan: string[] }
@@ -60,14 +61,14 @@ export function ImporMutasi({ akun: daftarAkun, onClose, onSelesai }: { akun: st
     return (
         <div className="k-sheet" onClick={onClose}>
             <div className="k-sheet-in mt" onClick={(e) => e.stopPropagation()}>
-                <div className="k-sheet-h"><b>📥 Impor mutasi rekening (PDF)</b><button onClick={onClose}>✕</button></div>
+                <div className="k-sheet-h"><b><Ikon e="📥" /> Impor mutasi rekening (PDF)</b><button onClick={onClose}>✕</button></div>
                 {!h && (
                     <>
                         <p className="hint">Unduh e-statement / mutasi dari m-banking atau internet banking (PDF asli, bukan foto). PDF dibaca di server kantor sendiri — <b>tidak dikirim ke AI</b> dan tidak disimpan.</p>
                         <small className="mt-l">Rekening</small>
-                        <div className="k-akun">{daftarAkun.filter((a) => a !== 'Cash').map((a) => <button key={a} className={akun === a ? 'on' : ''} onClick={() => setAkun(a)}>🏦 {a}</button>)}</div>
+                        <div className="k-akun">{daftarAkun.filter((a) => a !== 'Cash').map((a) => <button key={a} className={akun === a ? 'on' : ''} onClick={() => setAkun(a)}><Ikon e="🏦" /> {a}</button>)}</div>
                         <small className="mt-l">Berkas PDF</small>
-                        <button className="mt-file" onClick={() => inp.current?.click()}>{file ? `📄 ${file.name} (${Math.round(file.size / 1024)} KB)` : 'Pilih PDF mutasi…'}</button>
+                        <button className="mt-file" onClick={() => inp.current?.click()}>{file ? <><Ikon e="📄" /> {`${file.name} (${Math.round(file.size / 1024)} KB)`}</> : 'Pilih PDF mutasi…'}</button>
                         <input ref={inp} type="file" accept="application/pdf,.pdf" hidden onChange={(e) => { setFile(e.target.files?.[0] || null); setErr(''); setPerluSandi(false); }} />
                         {(perluSandi || sandi) && (<>
                             <small className="mt-l">Kata sandi PDF</small>
@@ -88,8 +89,8 @@ export function ImporMutasi({ akun: daftarAkun, onClose, onSelesai }: { akun: st
                             <div><small>Baru</small><b className="in">{ringkas.baru}</b></div>
                             {h.saldoAkhir != null && <div><small>Saldo akhir</small><b className="mono">{rp(h.saldoAkhir)}</b></div>}
                         </div>
-                        {h.peringatan.map((p, i) => <div key={i} className="error">⚠️ {p}</div>)}
-                        {ringkas.ragu > 0 && <div className="hint">❓ {ringkas.ragu} transaksi arahnya (masuk/keluar) ditebak — cek tanda ❓.</div>}
+                        {h.peringatan.map((p, i) => <div key={i} className="error"><Ikon e="⚠" /> {p}</div>)}
+                        {ringkas.ragu > 0 && <div className="hint"><Ikon e="❓" /> {ringkas.ragu} transaksi arahnya (masuk/keluar) ditebak — cek tanda <Ikon e="❓" />.</div>}
                         <div className="mt-bar">
                             <b>Transaksi di mutasi</b>
                             <button className="k-link" onClick={() => setPilih(Object.fromEntries(tx.map((t) => [t.id, t.status === 'baru'])))}>Pilih yang baru</button>
@@ -100,7 +101,7 @@ export function ImporMutasi({ akun: daftarAkun, onClose, onSelesai }: { akun: st
                                 <label key={t.id} className={`mt-row ${t.status}`}>
                                     <input type="checkbox" checked={!!pilih[t.id]} onChange={(e) => setPilih({ ...pilih, [t.id]: e.target.checked })} />
                                     <div className="mt-main">
-                                        <div className="mt-top"><b>{t.pihak || '(tanpa nama)'}</b><b className={`mono ${t.jenis === 'Masuk' ? 'in' : 'out'}`}>{t.jenis === 'Masuk' ? '+' : '−'}{rp(t.nominal)}{!t.yakin && ' ❓'}</b></div>
+                                        <div className="mt-top"><b>{t.pihak || '(tanpa nama)'}</b><b className={`mono ${t.jenis === 'Masuk' ? 'in' : 'out'}`}>{t.jenis === 'Masuk' ? '+' : '−'}{rp(t.nominal)}{!t.yakin && <Ikon e="❓" />}</b></div>
                                         <small>{tglPendek(t.tanggal)} · {t.ket}</small>
                                         <div className="mt-bot">
                                             {t.status === 'cocok' ? <span className="mt-tag ok">✓ sudah tercatat{t.cocok ? ` (${tglPendek(t.cocok.d)}${t.cocok.pihak ? `, ${t.cocok.pihak}` : ''})` : ''}</span> : <span className="mt-tag new">baru</span>}

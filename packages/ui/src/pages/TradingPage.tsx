@@ -24,9 +24,10 @@ import { PetaBerita } from './trading/PetaBerita';
 import { WatchlistView } from './trading/WatchlistView';
 import { FaktorKey, ScreenerData } from './trading/types';
 
+import { Ikon } from '../components/Ikon';
 const LS_TAB = 'kantor:trading-tab';
 
-const LAPORAN_NAMA: Record<string, string> = { berita: '📰 Nina · Berita', fundamental: '📊 Raka · Analis', smartmoney: '🐋 Sari · Smart Money' };
+const LAPORAN_NAMA: Record<string, string> = { berita: 'Nina · Berita', fundamental: 'Raka · Analis', smartmoney: 'Sari · Smart Money' };
 
 function Range({ stop, entry, target, price }: { stop: number; entry: number; target: number; price: number | null }) {
     const lo = Math.min(stop, price ?? stop), hi = Math.max(target, price ?? target);
@@ -39,7 +40,7 @@ function Range({ stop, entry, target, price }: { stop: number; entry: number; ta
                 <span className="tr-mark entry" style={{ left: pct(entry) }} />
                 {price !== null && <span className="tr-mark now" style={{ left: pct(price) }}><i>${price.toFixed(2)}</i></span>}
             </div>
-            <div className="tr-range-labels"><span>🔴 ${stop}</span><span>masuk ${entry}</span><span>🟢 ${target}</span></div>
+            <div className="tr-range-labels"><span><Ikon e="🔴" /> ${stop}</span><span>masuk ${entry}</span><span><Ikon e="🟢" /> ${target}</span></div>
         </div>
     );
 }
@@ -95,9 +96,9 @@ export function TradingPage() {
     const presetPanel = (
         <section className="sb-card pr-panel">
             <PresetRekomendasi mode={modeAktif} data={pd.data} pakai={(t, f) => setPreset({ t, f })} />
-            <div className="pr-l">📈 Preset teknikal</div>
+            <div className="pr-l"><Ikon e="📈" /> Preset teknikal</div>
             <PresetPilih jenis="teknikal" aktif={preset.t} setAktif={(t) => setPreset({ ...preset, t })} mode={modeAktif} data={pd.data} />
-            <div className="pr-l">🏛️ Preset fundamental</div>
+            <div className="pr-l"><Ikon e="🏛" /> Preset fundamental</div>
             <PresetPilih jenis="fundamental" aktif={preset.f} setAktif={(f) => setPreset({ ...preset, f })} mode={modeAktif} data={pd.data} />
             <p className="sb-note">Preset aktif ikut menentukan skor teknikal/fundamental semua saham: makin banyak kriteria yang lolos, makin tinggi skornya (tidak harus lolos semua).</p>
         </section>
@@ -115,7 +116,7 @@ export function TradingPage() {
     return (
         <div className={`pg pg-trading ${tampilSegar ? 'pg-segar' : ''}`} ref={pgRef}>
             <div style={{ minHeight: kunciTinggi || undefined }}>
-            {tampilSegar && <div className="pg-segar-pill">⏳ Menghitung ulang sinyal…</div>}
+            {tampilSegar && <div className="pg-segar-pill"><Ikon e="⏳" /> Menghitung ulang sinyal…</div>}
             {sc.data && sc.data.pasar.tape.length > 0 && (() => {
                 const isi = [...sc.data.pasar.tape, ...sc.data.baris.filter((b) => (data?.watchlist || []).includes(b.s)).map((b) => ({ s: b.s, nama: b.s, harga: b.harga, chg: b.chg1d }))];
                 const item = (t: typeof isi[number], k: string) => (
@@ -133,31 +134,31 @@ export function TradingPage() {
                 {TABS.map((t) => <button key={t.k} className={tab === t.k && !saham ? 'on' : ''} onClick={() => setTab(t.k)}>{t.label}</button>)}
                 <span className="sb-nav-judul">{TABS.find((t) => t.k === tab)?.label}</span>
                 <span className="sb-nav-sp" />
-                {sc.data?.sibuk ? <span className="sb-busy">⏳ {sc.data.progres}</span> : <button className="sb-refresh" onClick={() => { perbarui(); reload(); }} title="Ambil data terbaru">↻</button>}
+                {sc.data?.sibuk ? <span className="sb-busy"><Ikon e="⏳" /> {sc.data.progres}</span> : <button className="sb-refresh" onClick={() => { perbarui(); reload(); }} title="Ambil data terbaru"><Ikon e="↻" /></button>}
             </nav>
             {saham && <><HorisonBar h={horison} setH={setHorison} bobot={infoDetail?.bobot} bukti={infoDetail?.bukti ?? (sc.data as any)?.teknikalBukti} /><SahamDetail key={saham} onInfo={setInfoDetail} onMemuat={setDetailMemuat} simbol={saham} H={H} q={qApi} preset={preset} setPreset={setPreset} mode={modeAktif} pd={pd.data} onBack={() => setSaham(null)} /></>}
             {!saham && ['pasar', 'pilihan', 'panas', 'watchlist'].includes(tab) && !sc.data && <div className="fin-empty">{sc.error ? `Gagal memuat: ${sc.error}` : 'Memuat data pasar…'}</div>}
             {!saham && ['pasar', 'pilihan', 'panas'].includes(tab) && sc.data && sc.data.baris.length === 0 && (
                 <div className="sb-card sb-kosong">
                     {sc.data.sibuk ? (<>
-                        <b>⏳ Sedang mengambil data pasar…</b>
+                        <b><Ikon e="⏳" /> Sedang mengambil data pasar…</b>
                         <p>{sc.data.progres || 'menyiapkan'} — biasanya 5–10 menit untuk ±500 saham. Halaman ini terisi sendiri, tidak perlu dimuat ulang.</p>
                         <div className="sb-prog"><i style={{ width: `${(() => { const m = /(\d+)\/(\d+)/.exec(sc.data.progres || ''); return m ? Math.round((+m[1] / +m[2]) * 100) : 5; })()}%` }} /></div>
                     </>) : (<>
                         <b>Data pasar belum ada</b>
                         <p>Ambil harga ±500 saham S&P 500 + watchlist (5–10 menit). Setelah itu otomatis diperbarui tiap bursa AS tutup.</p>
-                        <button className="btn primary" onClick={() => { perbarui(); reload(); }}>↻ Ambil data sekarang</button>
+                        <button className="btn primary" onClick={() => { perbarui(); reload(); }}><Ikon e="↻" /> Ambil data sekarang</button>
                     </>)}
-                    {sc.data.galat && !sc.data.sibuk && <div className="error">⚠️ {sc.data.galat}</div>}
+                    {sc.data.galat && !sc.data.sibuk && <div className="error"><Ikon e="⚠" /> {sc.data.galat}</div>}
                 </div>
             )}
-            {!saham && sc.data && sc.data.baris.length > 0 && sc.data.galat && !sc.data.sibuk && <div className="error" style={{ margin: '0 0 12px' }}>⚠️ {sc.data.galat}</div>}
+            {!saham && sc.data && sc.data.baris.length > 0 && sc.data.galat && !sc.data.sibuk && <div className="error" style={{ margin: '0 0 12px' }}><Ikon e="⚠" /> {sc.data.galat}</div>}
             {!saham && (tab === 'pilihan' || tab === 'pasar' || tab === 'watchlist') && sc.data && sc.data.baris.length > 0 && <HorisonBar h={horison} setH={setHorison} bobot={(sc.data as any).bobot} bukti={(sc.data as any).teknikalBukti} />}
             {!saham && tab === 'pasar' && sc.data && sc.data.baris.length > 0 && <PasarView data={sc.data} faktor={faktor} setFaktor={setF} onOpen={buka} />}
             {!saham && (tab === 'pilihan' || tab === 'penyaring') && <SaranUji mode={modeAktif} presetAktif={preset.t} pakaiPreset={(t) => setPreset({ ...preset, t })} />}
             {!saham && tab === 'pilihan' && sc.data && sc.data.baris.length > 0 && (
                 <details className="pr-lipat" open={!!(preset.t || preset.f) || undefined}>
-                    <summary>🎓 Preset guru{preset.t || preset.f ? `: ${[preset.t, preset.f].filter(Boolean).map((id) => pd.data?.preset.find((x) => x.id === id)?.guru || id).join(' + ')}` : ' (opsional)'} <small>— ketuk untuk memilih</small></summary>
+                    <summary><Ikon e="🎓" /> Preset guru{preset.t || preset.f ? `: ${[preset.t, preset.f].filter(Boolean).map((id) => pd.data?.preset.find((x) => x.id === id)?.guru || id).join(' + ')}` : ' (opsional)'} <small>— ketuk untuk memilih</small></summary>
                     {presetPanel}
                 </details>
             )}
@@ -181,7 +182,7 @@ export function TradingPage() {
                         {data.plans.map((p) => (
                             <div key={p.id} className="fin-tx">
                                 <div className="tr-id">#{p.id}</div>
-                                <div className="fin-tx-main"><b>{p.symbol} · masuk ±${p.entry}</b><span>🟢 ${p.target} · 🔴 ${p.stop} · {p.shares} lembar (≈${p.dollars}) · {p.trend}</span></div>
+                                <div className="fin-tx-main"><b>{p.symbol} · masuk ±${p.entry}</b><span><Ikon e="🟢" /> ${p.target} · <Ikon e="🔴" /> ${p.stop} · {p.shares} lembar (≈${p.dollars}) · {p.trend}</span></div>
                             </div>
                         ))}
                     </section>

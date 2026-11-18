@@ -1,0 +1,375 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   TAMPILAN 2026-11 · "Meja kerja malam, tinta & kobalt"
+   Disusun dengan skill unslop (Damir Sokolovsky, @heydamir, CC BY 4.0).
+
+   Produk   : kantor pribadi Pak Rico, tim AI yang bekerja untuknya (trading, keuangan, konten, catatan)
+   Karakter : tenang, tajam, terjaga semalaman
+   Dunia    : meja trading di malam hari: tinta biru-hitam, layar, angka
+   Momen    : kartu ringkasan Beranda dan grafik/angka trading (di situ warnanya)
+   Ciri     : titik "hidup" kecil untuk AI yang sedang bekerja
+
+   Aturan lapisan ini:
+   • satu tangga netral (tinta), tiga peran teks, satu aksen kobalt
+   • tanpa gradasi warna, glow, bayangan berwarna, huruf kapital berjarak
+   • radius bertingkat: kontrol 8–10, kartu 14, panel 16
+   • semua jarak di kelipatan 4
+   ══════════════════════════════════════════════════════════════════════════ */
+
+:root:root {
+  --font: 'Geist', 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'Geist Mono', 'JetBrains Mono', ui-monospace, Menlo, monospace;
+
+  /* Tangga netral "tinta" — gelap */
+  --kanvas: #07080d;          /* bilah samping & atas */
+  --bg: #0b0d14;              /* latar halaman */
+  --panel-solid: #11141c;     /* kartu */
+  --panel-2: #11141c;
+  --panel: #11141c;
+  --naik: #1a1e28;            /* baris aktif, input, tombol sekunder */
+  --naik-2: #232836;
+  --line: rgba(238, 240, 245, 0.08);
+  --line-strong: rgba(238, 240, 245, 0.14);
+  --text: #eef0f5;
+  --muted: #a3a9b8;
+  --faint: #7a8296;
+
+  /* Aksen kobalt: dipakai jarang */
+  --accent: #6ea2ff;          /* aksen sebagai teks/garis */
+  --aksen-isi: #2f6bf0;       /* aksen sebagai isi tombol (teks putih ≥ 4.5:1) */
+  --aksen-isi-hover: #3d78f5;
+  --aksen-lembut: rgba(110, 162, 255, 0.12);
+  --aksen-garis: rgba(110, 162, 255, 0.36);
+  --accent-2: var(--accent);
+
+  --good: #4cc38a; --up: #4cc38a;
+  --bad: #e5484d;  --down: #e5484d;
+  --warn: #e2a53a; --flat: #7a8296;
+
+  --sb-card: var(--panel-solid); --sb-soft: var(--naik); --sb-ink: var(--text);
+  --grad: var(--aksen-isi); --grad-lembut: var(--aksen-lembut); --grad-teks: none;
+  --latar: var(--bg);
+  --cincin: 0 0 0 2px var(--bg), 0 0 0 4px var(--aksen-garis);
+  --shadow: none;
+  --angkat: 0 16px 48px rgba(0, 0, 0, 0.5);
+  --sorot-atas: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --r-kontrol: 10px; --r-kartu: 14px; --r-panel: 16px; --radius: 14px;
+  --kurva: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --lb-bk-bg: #1f7a52; --lb-bk-fg: #fff; --lb-b-bg: rgba(76, 195, 138, 0.14); --lb-b-fg: #7fd8ab;
+  --lb-t-bg: rgba(226, 165, 58, 0.14); --lb-t-fg: #ecc27a; --lb-j-bg: rgba(229, 72, 77, 0.14); --lb-j-fg: #f19396; --lb-jk-bg: #b9373b; --lb-jk-fg: #fff;
+  color-scheme: dark;
+}
+:root:root[data-theme="light"] {
+  --kanvas: #fbfcfd;
+  --bg: #f5f7fa;
+  --panel-solid: #ffffff; --panel-2: #ffffff; --panel: #ffffff;
+  --naik: #eceff4; --naik-2: #e2e6ee;
+  --line: rgba(17, 24, 39, 0.08);
+  --line-strong: rgba(17, 24, 39, 0.14);
+  --text: #111827; --muted: #4b5565; --faint: #6b7487;
+  --accent: #1d4ed8; --aksen-isi: #2563eb; --aksen-isi-hover: #1d4ed8;
+  --aksen-lembut: rgba(37, 99, 235, 0.08); --aksen-garis: rgba(37, 99, 235, 0.32);
+  --good: #16a34a; --up: #16a34a; --bad: #dc2626; --down: #dc2626; --warn: #b45309; --flat: #6b7487;
+  --angkat: 0 8px 24px rgba(17, 24, 39, 0.08);
+  --sorot-atas: none;
+  --lb-bk-bg: #15803d; --lb-bk-fg: #fff; --lb-b-bg: #e3f6ea; --lb-b-fg: #166534;
+  --lb-t-bg: #fdf3dc; --lb-t-fg: #8a4b0b; --lb-j-bg: #fde7e7; --lb-j-fg: #b42318; --lb-jk-bg: #b42318;
+  color-scheme: light;
+}
+
+/* ── Dasar ─────────────────────────────────────────────── */
+:root:root body, :root:root html { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; letter-spacing: 0; font-feature-settings: normal; }
+:root:root ::selection { background: var(--aksen-lembut); color: var(--text); }
+:root:root :focus-visible { outline: 2px solid var(--aksen-garis); outline-offset: 2px; box-shadow: none; }
+:root:root ::-webkit-scrollbar { width: 10px; height: 10px; }
+:root:root ::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
+:root:root ::-webkit-scrollbar-track { background: transparent; }
+:root:root .mono, :root:root .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+:root:root b, :root:root strong { font-weight: 600; }
+:root:root em, :root:root i:not([class]) { font-style: normal; }
+:root:root h1, :root:root h2, :root:root h3, :root:root h4 { font-weight: 500; letter-spacing: 0; }
+:root:root h1 > .ikon, :root:root h2 > .ikon, :root:root h3 > .ikon, :root:root h4 > .ikon,
+:root:root .sd-h h3 > .ikon, :root:root .home-card-head .ikon { display: none; }
+:root:root .up { color: var(--up); } :root:root .down { color: var(--down); }
+
+/* Ikon garis satu set */
+.ikon { display: inline-block; flex: none; vertical-align: -3px; color: currentColor; }
+.ikon-teks { font-size: 1em; line-height: 1; }
+.ikon-titik { display: inline-block; width: 8px; height: 8px; border-radius: 50%; vertical-align: 1px; flex: none; }
+
+/* ── Kerangka aplikasi: menempel ke tepi, tidak melayang ─── */
+:root:root .topbar {
+  top: 0; left: 0; right: 0; height: 56px; border-radius: 0; padding: 0 16px 0 16px; gap: 12px;
+  background: var(--kanvas); border: none; border-bottom: 1px solid var(--line); box-shadow: none; backdrop-filter: none;
+}
+:root:root .brand { gap: 12px; }
+:root:root .brand-logo, :root:root[data-theme="light"] .brand-logo {
+  width: 28px; height: 28px; border-radius: 8px; background: var(--aksen-isi); color: #fff; box-shadow: none; font-size: 16px;
+}
+:root:root .brand-logo .ikon { width: 16px; height: 16px; vertical-align: 0; }
+:root:root .brand-name, :root:root[data-theme="light"] .brand-name { font-family: var(--font); font-size: 15px; font-weight: 600; letter-spacing: 0; color: var(--text); }
+:root:root .brand-sub { font-size: 12px; color: var(--faint); }
+:root:root .clock { background: none; border: none; padding: 0 8px; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+:root:root .pill, :root:root[data-theme="light"] .pill { background: none; border: 1px solid var(--line); border-radius: 8px; padding: 4px 10px; height: 32px; font-size: 12px; font-weight: 500; color: var(--muted); }
+:root:root .dot { box-shadow: none; width: 6px; height: 6px; }
+:root:root .quota { min-width: 112px; padding: 4px 8px; border-radius: 8px; }
+:root:root .quota-row { font-size: 11px; color: var(--muted); align-items: center; }
+:root:root .quota-row .ikon { width: 14px; height: 14px; }
+:root:root .bar { height: 3px; background: var(--line); }
+:root:root .icon-btn, :root:root[data-theme="light"] .icon-btn { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--line); background: none; color: var(--muted); transition: background-color 0.14s var(--kurva), color 0.14s var(--kurva); }
+:root:root .icon-btn:hover { background: var(--naik); color: var(--text); }
+:root:root .icon-btn:active { transform: scale(0.97); }
+
+@media (min-width: 768px) {
+  :root:root .sidebar, :root:root[data-theme="light"] .sidebar {
+    top: 56px; left: 0; bottom: 0; width: 248px; padding: 12px; gap: 2px; border-radius: 0;
+    background: var(--kanvas); border: none; border-right: 1px solid var(--line); box-shadow: none; backdrop-filter: none;
+  }
+  :root:root .sidebar.kecil { width: 64px; }
+  :root:root .sidebar .sb-item, :root:root .sb-item {
+    min-height: 36px; padding: 0 8px; gap: 10px; border-radius: 8px; border: 1px solid transparent; color: var(--muted);
+    transition: background-color 0.14s var(--kurva), color 0.14s var(--kurva);
+  }
+  :root:root .sb-item:hover { background: var(--naik); color: var(--text); }
+  :root:root .sidebar .sb-item.on, :root:root[data-theme="light"] .sidebar .sb-item.on, :root:root[data-theme="light"] .sb-item.on {
+    background: var(--naik); border-color: var(--line); box-shadow: var(--sorot-atas); color: var(--text);
+  }
+  :root:root .sidebar .sb-item.on::before { content: ''; position: absolute; left: -12px; top: 8px; bottom: 8px; width: 2px; border-radius: 0 2px 2px 0; background: var(--accent); }
+  :root:root .sidebar .sb-ico, :root:root .sb-ico, :root:root .sidebar .sb-item.on .sb-ico {
+    width: 20px; height: 20px; border-radius: 0; background: none; box-shadow: none; color: inherit; font-size: 16px;
+  }
+  :root:root .sb-item.on .sb-ico { color: var(--accent); }
+  :root:root .sb-ico .ikon { width: 18px; height: 18px; vertical-align: 0; }
+  :root:root .sidebar .sb-t b, :root:root .sb-t b { font-size: 14px; font-weight: 500; color: inherit; letter-spacing: 0; }
+  :root:root .sidebar .sb-t small, :root:root .sb-t small { display: none; }
+  :root:root .sb-anak { padding-left: 30px; min-height: 32px; }
+  :root:root .sb-anak .sb-ico { width: 16px; height: 16px; }
+  :root:root .sb-badge { min-width: 20px; height: 20px; border-radius: 6px; background: var(--naik-2); color: var(--text); font-family: var(--mono); font-size: 11px; font-weight: 500; }
+  :root:root .sb-hidup { position: absolute; left: auto; right: 10px; top: 50%; width: 6px; height: 6px; margin-top: -3px; border-radius: 50%; background: var(--accent); box-shadow: none; }
+  :root:root .page, :root:root .fin:not(.panel) { top: 56px; left: 248px; right: 0; bottom: 0; border-radius: 0; }
+  :root:root body.menu-kecil .page, :root:root body.menu-kecil .fin:not(.panel) { left: 64px; }
+}
+
+/* Halaman */
+:root:root .page, :root:root[data-theme="light"] .page { background: var(--bg); animation: masuk 0.32s var(--kurva); }
+@keyframes masuk { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { :root:root .page { animation: none; } }
+:root:root .pg, :root:root .home { max-width: 1280px; padding: 24px 32px 48px; gap: 16px; }
+:root:root .pg.pg-trading { max-width: 1360px; }
+:root:root .page > .fin, :root:root .page > .panel { max-width: 1280px; border-radius: 0; background: transparent; border: none; }
+:root:root .pg-head { padding: 0 0 8px; align-items: flex-end; }
+:root:root .pg-head h2, :root:root .pg-head h1 { font-size: 28px; font-weight: 500; letter-spacing: -0.01em; line-height: 1.15; }
+:root:root .pg-head p { font-size: 14px; color: var(--muted); margin-top: 4px; line-height: 20px; max-width: 68ch; }
+
+/* ── Kartu ─────────────────────────────────────────────── */
+:root:root .sb-card, :root:root .fin-card, :root:root .home-card, :root:root .hz,
+:root:root[data-theme="light"] .sb-card, :root:root[data-theme="light"] .fin-card, :root:root[data-theme="light"] .home-card {
+  background: var(--panel-solid); border: 1px solid var(--line); border-radius: var(--r-kartu); box-shadow: none; padding: 20px;
+}
+:root:root[data-theme="light"] .sb-card, :root:root[data-theme="light"] .fin-card, :root:root[data-theme="light"] .home-card { box-shadow: 0 1px 2px rgba(17, 24, 39, 0.04); }
+:root:root .sd-h h3, :root:root .fin-card h3, :root:root .sb-card > h3, :root:root .sb-card h3 { font-size: 16px; font-weight: 500; letter-spacing: 0; line-height: 24px; }
+:root:root .sd-h h3 small { font-size: 13px; font-weight: 400; color: var(--muted); }
+:root:root .sb-card h4, :root:root .fin-card h4 { font-size: 14px; font-weight: 500; color: var(--text); letter-spacing: 0; }
+
+/* Teks penjelas: satu gaya, rata kiri, nyaman dibaca */
+:root:root .sb-note, :root:root .fin-note, :root:root .hint, :root:root .ket, :root:root .catatan, :root:root .hs-catatan {
+  font-size: 13px; line-height: 20px; color: var(--muted); max-width: 72ch; text-align: left; font-style: normal; letter-spacing: 0;
+}
+:root:root small { letter-spacing: 0; }
+:root:root .fin-empty, :root:root .kosong, :root:root .empty {
+  font-size: 14px; line-height: 20px; color: var(--muted); text-align: center; padding: 32px 16px; max-width: 48ch; margin-left: auto; margin-right: auto;
+}
+
+/* Peringatan & galat: tenang, tetap terbaca */
+:root:root .error, :root:root[data-theme="light"] .error {
+  font-size: 13px; line-height: 20px; color: var(--text); background: color-mix(in srgb, var(--bad) 8%, var(--panel-solid)); border: 1px solid color-mix(in srgb, var(--bad) 28%, transparent); border-left: 2px solid var(--bad); border-radius: 8px; padding: 8px 12px;
+}
+:root:root .fin-alert, :root:root .wa-note, :root:root[data-theme="light"] .fin-alert, :root:root[data-theme="light"] .wa-note {
+  font-size: 13px; line-height: 20px; color: var(--text); background: color-mix(in srgb, var(--warn) 8%, var(--panel-solid)); border: 1px solid color-mix(in srgb, var(--warn) 26%, transparent); border-left: 2px solid var(--warn); border-radius: 8px; padding: 8px 12px; text-align: left;
+}
+:root:root .banner { background: var(--panel-solid); border: 1px solid var(--line-strong); color: var(--text); border-radius: 8px; top: 68px; }
+
+/* ── Tombol & kontrol ──────────────────────────────────── */
+:root:root .btn, :root:root[data-theme="light"] .btn {
+  height: 36px; padding: 0 14px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  border-radius: var(--r-kontrol); border: 1px solid var(--line-strong); background: var(--naik); color: var(--text);
+  font-size: 13px; font-weight: 500; letter-spacing: 0; box-shadow: var(--sorot-atas); filter: none;
+  transition: background-color 0.14s var(--kurva), border-color 0.14s var(--kurva), color 0.14s var(--kurva), transform 0.12s var(--kurva);
+}
+:root:root[data-theme="light"] .btn { background: #fff; box-shadow: 0 1px 2px rgba(17, 24, 39, 0.05); }
+:root:root .btn:hover { background: var(--naik-2); border-color: var(--line-strong); filter: none; }
+:root:root[data-theme="light"] .btn:hover { background: var(--naik); }
+:root:root .btn:active { transform: scale(0.98); }
+:root:root .btn.small { height: 32px; padding: 0 12px; font-size: 13px; border-radius: 8px; }
+:root:root .btn.primary, :root:root[data-theme="light"] .btn.primary {
+  background: var(--aksen-isi); border-color: transparent; color: #fff; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14); filter: none;
+}
+:root:root .btn.primary:hover { background: var(--aksen-isi-hover); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14); filter: none; }
+:root:root .btn:disabled { opacity: 0.45; filter: none; transform: none; }
+:root:root .btn .ikon { width: 16px; height: 16px; vertical-align: 0; }
+:root:root input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]), :root:root select, :root:root textarea {
+  border-radius: var(--r-kontrol); font-family: var(--font); letter-spacing: 0;
+}
+:root:root .input, :root:root .select, :root:root .textarea, :root:root[data-theme="light"] .input, :root:root[data-theme="light"] .select, :root:root[data-theme="light"] .textarea {
+  background: var(--naik); border: 1px solid var(--line); color: var(--text); font-size: 14px; min-height: 36px;
+}
+:root:root[data-theme="light"] .input, :root:root[data-theme="light"] .select, :root:root[data-theme="light"] .textarea { background: #fff; border-color: var(--line-strong); }
+:root:root input:focus, :root:root select:focus, :root:root textarea:focus { outline: none; border-color: var(--aksen-garis) !important; box-shadow: 0 0 0 3px var(--aksen-lembut); }
+:root:root input::placeholder, :root:root textarea::placeholder { color: var(--faint); }
+
+/* Segmen & tab */
+:root:root .sb-seg, :root:root[data-theme="light"] .sb-seg { border-radius: 10px; padding: 2px; gap: 2px; background: var(--naik); border: 1px solid var(--line); }
+:root:root .sb-seg button { border-radius: 8px; padding: 0 12px; height: 28px; font-size: 13px; font-weight: 500; color: var(--muted); }
+:root:root .sb-seg button.on, :root:root[data-theme="light"] .sb-seg button.on { background: var(--panel-solid); color: var(--text); box-shadow: var(--sorot-atas), 0 0 0 1px var(--line); }
+:root:root .tabs, :root:root[data-theme="light"] .tabs { background: var(--naik); border-radius: 10px; padding: 2px; }
+:root:root .tab { border-radius: 8px; font-weight: 500; }
+:root:root .tab.active, :root:root[data-theme="light"] .tab.active { background: var(--panel-solid); box-shadow: 0 0 0 1px var(--line); color: var(--text); }
+:root:root .sb-nav { gap: 4px; border-bottom: 1px solid var(--line); padding: 0; }
+:root:root .sb-nav button { font-size: 14px; font-weight: 500; color: var(--muted); padding: 12px 8px 11px; border-bottom-width: 2px; }
+:root:root .sb-nav button:hover { color: var(--text); }
+:root:root .sb-nav button.on { color: var(--text); border-bottom-color: var(--accent); }
+:root:root .chip, :root:root[data-theme="light"] .chip { border-radius: 6px; font-weight: 500; }
+
+/* Pita indeks: diam, tidak bergerak terus */
+:root:root .sb-tape, :root:root[data-theme="light"] .sb-tape { background: var(--panel-solid); border: 1px solid var(--line); border-radius: 10px; }
+:root:root .sb-tape button { color: var(--text); font-size: 12px; }
+:root:root .sb-tape b { font-weight: 500; }
+
+/* ── Beranda: satu momen kaya warna ─────────────────────── */
+:root:root .home-hello, :root:root[data-theme="light"] .home-hello {
+  padding: 28px 32px; border-radius: var(--r-panel); color: #eef3ff; box-shadow: none;
+  background: linear-gradient(180deg, #13244d 0%, #0e1a3a 100%); border: 1px solid rgba(110, 162, 255, 0.22);
+}
+:root:root .home-hello::before, :root:root .home-hello::after { display: none; }
+:root:root .home-hello h1 { font-size: 32px; font-weight: 500; letter-spacing: -0.015em; line-height: 1.15; margin: 0 0 8px; color: #fff; }
+:root:root .home-hello h1 .ikon { display: none; }
+:root:root .home-hello p { font-size: 14px; color: rgba(225, 233, 255, 0.72); margin: 0; }
+:root:root .home-grid { gap: 16px; }
+:root:root .home-card { padding: 20px; }
+:root:root .home-card::before { display: none; }
+:root:root .home-card-head { font-size: 15px; font-weight: 500; padding-bottom: 12px; letter-spacing: 0; color: var(--text); }
+:root:root .home-more { background: none; color: var(--muted); font-size: 13px; font-weight: 500; padding: 0; border-radius: 0; }
+:root:root .home-card-head:hover .home-more { background: none; color: var(--accent); }
+
+/* ── Tabel & baris ─────────────────────────────────────── */
+:root:root table { font-variant-numeric: tabular-nums; }
+:root:root th { font-weight: 500; color: var(--muted); font-size: 12px; letter-spacing: 0; text-transform: none; }
+:root:root .um-t th, :root:root .scr-table th { background: transparent; border-bottom: 1px solid var(--line); }
+:root:root .um-t td, :root:root .scr-table td { border-bottom: 1px solid var(--line); }
+
+/* ── Chat ala WA, dengan palet kantor ──────────────────── */
+:root:root .wa, :root:root[data-theme="light"] .wa { background: var(--panel-solid); border: 1px solid var(--line); border-radius: var(--r-panel); }
+:root:root[data-theme="light"] .wa-thread { background: var(--bg); }
+:root:root .wa-item.active, :root:root[data-theme="light"] .wa-item.active { background: var(--naik); }
+:root:root .wa-bubble.me, :root:root[data-theme="light"] .wa-bubble.me { background: var(--aksen-isi); color: #fff; }
+:root:root .wa-bubble.them { background: var(--naik); color: var(--text); }
+:root:root[data-theme="light"] .wa-bubble.them { background: #fff; box-shadow: 0 0 0 1px var(--line); }
+:root:root .wa-item-sub em, :root:root .wa-head-main em, :root:root .wa-item-top span.unread, :root:root[data-theme="light"] .wa-item-sub em, :root:root[data-theme="light"] .wa-head-main em { color: var(--accent); }
+:root:root .msg.me, :root:root[data-theme="light"] .msg.me { background: var(--aksen-isi); color: #fff; }
+
+/* Panel samping (kantor 2D) & lembar */
+:root:root .panel, :root:root[data-theme="light"] .panel { background: var(--panel-solid); border: 1px solid var(--line); border-radius: var(--r-panel); box-shadow: var(--angkat); backdrop-filter: none; }
+:root:root .toast, :root:root .agent-card, :root:root[data-theme="light"] .toast, :root:root[data-theme="light"] .agent-card { background: var(--panel-solid); border: 1px solid var(--line-strong); border-radius: 12px; box-shadow: var(--angkat); }
+
+/* Tombol melayang (FAB, "Tanya trading") jadi tombol biasa yang rapi */
+:root:root .fab, :root:root .tc-fab, :root:root [class*="-fab"] { background: var(--aksen-isi); color: #fff; box-shadow: var(--angkat); border: none; }
+
+:root:root .dock-btn .ico .ikon { width: 20px; height: 20px; vertical-align: 0; }
+:root:root .dock-btn.active { background: var(--naik); border-color: var(--line); color: var(--text); }
+:root:root .laci-ico .ikon { width: 18px; height: 18px; vertical-align: 0; }
+
+/* ── HP ─────────────────────────────────────────────────── */
+@media (max-width: 767px) {
+  :root:root .topbar { top: 0; left: 0; right: 0; height: 56px; padding: 0 12px; padding-top: env(safe-area-inset-top); }
+  :root:root .page, :root:root .fin:not(.panel) { top: 56px; left: 0; right: 0; bottom: 64px; border-radius: 0; }
+  :root:root body.tanpa-subnav .page { bottom: 0; }
+  :root:root .pg, :root:root .home { padding: 16px 16px 32px; gap: 12px; }
+  :root:root .dock, :root:root[data-theme="light"] .dock {
+    left: 0; right: 0; bottom: 0; border-radius: 0; padding: 4px 8px; padding-bottom: max(4px, env(safe-area-inset-bottom));
+    background: var(--kanvas); border: none; border-top: 1px solid var(--line); box-shadow: none; backdrop-filter: none;
+  }
+  :root:root .dock-btn { height: 52px; border-radius: 8px; gap: 4px; font-size: 11px; font-weight: 500; color: var(--faint); border: none; }
+  :root:root .dock-btn .ico .ikon { width: 20px; height: 20px; vertical-align: 0; }
+  :root:root .dock-btn.active, :root:root[data-theme="light"] .dock-btn.active { background: none; border: none; color: var(--accent); }
+  :root:root .home-hello { padding: 20px; }
+  :root:root .home-hello h1 { font-size: 24px; }
+  :root:root .pg-head h2, :root:root .pg-head h1 { font-size: 22px; }
+  :root:root .sb-card, :root:root .fin-card, :root:root .home-card { padding: 16px; }
+}
+
+/* Beranda: angka di dalam kartu sorotan */
+:root:root .home-hello { display: flex; flex-direction: column; gap: 24px; }
+:root:root .home-hello-t p { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.home-live { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #6ea2ff; }
+.home-angka { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; margin: 0; border-top: 1px solid rgba(110, 162, 255, 0.18); padding-top: 20px; }
+.home-angka > div { display: flex; flex-direction: column; gap: 8px; padding: 0 20px; border-left: 1px solid rgba(110, 162, 255, 0.14); min-width: 0; }
+.home-angka > div:first-child { padding-left: 0; border-left: none; }
+.home-angka dt { font-size: 13px; color: rgba(225, 233, 255, 0.64); }
+.home-angka dd { margin: 0; font-size: 28px; line-height: 1; font-weight: 500; color: #fff; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-angka dd.up { color: #7fd8ab; } .home-angka dd.down { color: #f19396; }
+@media (max-width: 767px) { .home-angka { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 20px; } .home-angka > div:nth-child(3) { padding-left: 0; border-left: none; } .home-angka dd { font-size: 22px; } }
+:root:root .home-div-name { color: var(--muted) !important; font-weight: 500; font-size: 13px; }
+:root:root .home-div-name .ikon { display: none; }
+:root:root .home-big b { font-weight: 500; font-variant-numeric: tabular-nums; }
+:root:root .home-big span, :root:root .home-sub, :root:root .home-empty { color: var(--muted); font-size: 13px; }
+:root:root .home-agent, :root:root[data-theme="light"] .home-agent { background: var(--naik); border: 1px solid var(--line); border-radius: 10px; }
+:root:root .home-row { border-color: var(--line); }
+:root:root .home-time { font-family: var(--mono); font-weight: 500; color: var(--accent); }
+
+/* ── Netralkan gradasi & glow lama di bingkai ─────────── */
+:root:root { --k-blue: var(--aksen-isi); --k-blue-2: var(--aksen-isi); --k-bar: var(--accent); --k-in: var(--up); --k-out: var(--down); }
+:root:root .dock-btn.active, :root:root .laci-btn.on { background: var(--naik); border-color: var(--line); color: var(--text); }
+:root:root .org-node.owner, :root:root .org-node.head { background: var(--naik); border-color: var(--line-strong); }
+:root:root .hero { background: var(--panel-solid); border: 1px solid var(--line); }
+:root:root .login-wrap, :root:root[data-theme="light"] .login-wrap { background: var(--bg); }
+:root:root .login, :root:root[data-theme="light"] .login { background: var(--panel-solid); border: 1px solid var(--line); border-radius: var(--r-panel); box-shadow: none; }
+:root:root .fin-col-bar, :root:root .home-spark > div { background: var(--naik-2); opacity: 1; }
+:root:root .fin-col-bar.bad, :root:root .home-spark > div.bad { background: var(--down); }
+:root:root .home-spark > div:last-child { background: var(--accent); }
+:root:root .inv-hero, :root:root[data-theme="light"] .inv-hero { background: var(--panel-solid); border: 1px solid var(--line); }
+:root:root .pr-rek { background: var(--aksen-lembut); border-color: var(--aksen-garis); }
+:root:root .su.ok, :root:root .su.warn { background: var(--sb-card); }
+:root:root .pk-kolom.k-todo, :root:root .pk-kolom.k-proses, :root:root .pk-kolom.k-selesai { background: var(--naik); border-top-color: var(--line-strong); }
+:root:root .pk-kolom.k-proses { border-top-color: var(--warn); } :root:root .pk-kolom.k-selesai { border-top-color: var(--up); }
+:root:root .pk-usul { background: var(--panel-solid); }
+:root:root .pk-baris.ngg { background: color-mix(in srgb, var(--bad) 6%, transparent); }
+:root:root:not([data-theme="light"]) .wa-thread { background: var(--bg); }
+:root:root:not([data-theme="light"]) .wa-ava, :root:root .wa-ava { background: var(--naik); }
+:root:root .wa-send, :root:root .k-fab { background: var(--aksen-isi); color: #fff; box-shadow: none; }
+
+/* Keuangan & Portofolio: kartu utama sama dengan sorotan Beranda */
+:root:root .k-head, :root:root[data-theme="light"] .k-head, :root:root .porto-hero, :root:root[data-theme="light"] .porto-hero {
+  background: linear-gradient(180deg, #13244d 0%, #0e1a3a 100%); border: 1px solid rgba(110, 162, 255, 0.22); border-radius: var(--r-panel); box-shadow: none; color: #eef3ff; padding: 24px;
+}
+:root:root .k-head::before, :root:root .k-head::after, :root:root .porto-hero::before, :root:root .porto-hero::after { display: none; }
+:root:root .porto-hero .ph-grid > div { background: rgba(255, 255, 255, 0.05); backdrop-filter: none; border: 1px solid rgba(110, 162, 255, 0.14); }
+:root:root .k-per { background: rgba(255, 255, 255, 0.06); border-radius: 10px; padding: 2px; }
+:root:root .k-per button { border-radius: 8px; background: transparent; }
+:root:root .k-per button:hover:not(:disabled) { background: rgba(255, 255, 255, 0.1); }
+:root:root .k-pill { background: rgba(255, 255, 255, 0.08); color: #eef3ff; border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 8px; font-weight: 500; }
+:root:root .k-saldo small { letter-spacing: 0; font-size: 13px; opacity: 1; color: rgba(225, 233, 255, 0.64); }
+:root:root .k-saldo b { font-size: 36px; font-weight: 500; letter-spacing: -0.015em; font-variant-numeric: tabular-nums; }
+:root:root .k-io > div { background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(110, 162, 255, 0.14); border-radius: 10px; }
+:root:root .k-io i.in, :root:root .k-io i.out { background: rgba(255, 255, 255, 0.08); color: #fff; width: 28px; height: 28px; }
+:root:root .k-io i.in { color: #7fd8ab; } :root:root .k-io i.out { color: #f19396; }
+:root:root .k-tabs { gap: 4px; padding: 2px; background: var(--naik); border: 1px solid var(--line); border-radius: 10px; width: fit-content; max-width: 100%; }
+:root:root .k-tabs button { border-radius: 8px; border: none; background: none; height: 32px; padding: 0 12px; font-size: 13px; font-weight: 500; color: var(--muted); }
+:root:root .k-tabs button.on { background: var(--panel-solid); color: var(--text); box-shadow: 0 0 0 1px var(--line); }
+:root:root .k-tabs button .ikon { width: 16px; height: 16px; }
+
+/* Pita indeks & simulasi */
+:root:root .sb-tape { background: var(--panel-solid); border-color: var(--line); box-shadow: none; }
+:root:root .sim { background: var(--panel-solid) !important; color: var(--text); border-color: var(--line) !important; }
+
+/* Tab halaman Konten & sejenisnya: garis bawah, bukan blok warna */
+:root:root .sm-tabs { padding: 0; gap: 4px; border-radius: 0; background: none; border: none; border-bottom: 1px solid var(--line); }
+:root:root .sm-tabs button { flex: none; border-radius: 0; padding: 0 8px; height: 44px; font-size: 14px; font-weight: 500; color: var(--muted); border-bottom: 2px solid transparent; background: none !important; box-shadow: none !important; }
+:root:root .sm-tabs button:hover { color: var(--text); }
+:root:root .sm-tabs button.on { color: var(--text); border-bottom-color: var(--accent); }
+:root:root .sm-tabs button .ikon { display: none; }
+:root:root .sm-tabs button em { font-style: normal; font-family: var(--mono); font-size: 11px; color: var(--muted); background: var(--naik); border-radius: 4px; padding: 0 4px; }
+@media (max-width: 767px) {
+  :root:root .quota { display: none; }
+  :root:root .brand { min-width: 0; flex: 1; }
+  :root:root .dock .dock-btn.active, :root:root[data-theme="light"] .dock .dock-btn.active { background: none; border: none; color: var(--accent); box-shadow: none; }
+}

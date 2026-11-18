@@ -6,6 +6,7 @@ import { useAktif } from '../../kantor/aktif';
 import { eventBus } from '../../events';
 import { LembarKr, SampulKr, lembarDari, type KPost, type KTema, type KCatatan } from './Slide';
 
+import { Ikon } from '../../components/Ikon';
 interface Status {
     per: Record<string, { total: number; baru: number }>; folder: Array<{ id: string; nama: string; n: number; sampul: string | null }>;
     hariIni: number; dibaca: number; skor: { main: number; benar: number }; tema: Record<string, KTema>; segmen: Array<[string, string]>;
@@ -118,11 +119,11 @@ function Feed({ ctx, segmen, setSegmen, st }: { ctx: Ctx; segmen: string; setSeg
                 {segmenList.map(([k, label]) => <button key={k} role="tab" aria-selected={segmen === k} className={segmen === k ? 'on' : ''} onClick={() => setSegmen(k)}>{label}</button>)}
             </div>
             <div className="kr-feed" ref={wadah}>
-                {st?.sibuk && <div className="kr-sibuk">✍️ Redaksi sedang menyiapkan postingan{st.progres ? ` · ${st.progres}` : ''}</div>}
+                {st?.sibuk && <div className="kr-sibuk"><Ikon e="✍" /> Redaksi sedang menyiapkan postingan{st.progres ? ` · ${st.progres}` : ''}</div>}
                 {list.map((p) => <Pos key={p.id} p={p} ctx={ctx} ganti={ganti} />)}
                 <div ref={ujung} />
                 {muat && <div className="kr-akhir">Memuat…</div>}
-                {galat && <div className="kr-akhir">⚠️ {galat} <button className="btn" onClick={() => ambil(true)}>Coba lagi</button></div>}
+                {galat && <div className="kr-akhir"><Ikon e="⚠" /> {galat} <button className="btn" onClick={() => ambil(true)}>Coba lagi</button></div>}
                 {!muat && habis && <Habis ctx={ctx} kosong={!list.length} segmen={segmen} st={st} muatUlang={() => ambil(true)} />}
             </div>
         </div>
@@ -158,7 +159,7 @@ function Pos({ p, ctx, ganti, diModal }: { p: KPost; ctx: Ctx; ganti: (p: KPost)
     };
     const kepala = (
         <div className="kr-kepala">
-            <button className={`kr-ava ${p.baca ? '' : 'baru'}`} onClick={() => ctx.bukaTema(p.kat)} aria-label={`Buka tema ${tema?.nama}`}><span>{tema?.ikon}</span></button>
+            <button className={`kr-ava ${p.baca ? '' : 'baru'}`} onClick={() => ctx.bukaTema(p.kat)} aria-label={`Buka tema ${tema?.nama}`}><span><Ikon e={tema?.ikon} /></span></button>
             <div className="kr-kepala-t">
                 <button className="kr-akun" onClick={() => ctx.bukaTema(p.kat)}>{tema?.nama || p.kat}</button>
                 <small>{sejak(p.dibuat)} · oleh {p.oleh.map((o) => o.nama).join(', ')}</small>
@@ -171,7 +172,7 @@ function Pos({ p, ctx, ganti, diModal }: { p: KPost; ctx: Ctx; ganti: (p: KPost)
                 <span className="kr-ico">✓</span><span className="kr-lbl">Sudah baca</span>
             </button>
             <button className={buka === 'catatan' ? 'on' : ''} onClick={() => setBuka(buka === 'catatan' ? '' : 'catatan')} title="Komentar">
-                <span className="kr-ico">💬</span><span className="kr-lbl">{p.catatan?.length ? `${p.catatan.length} komentar` : 'Komentar'}</span>
+                <span className="kr-ico"><Ikon e="💬" /></span><span className="kr-lbl">{p.catatan?.length ? `${p.catatan.length} komentar` : 'Komentar'}</span>
             </button>
             <button className={`kr-simpan ${p.folder?.length ? 'on' : ''}`} onClick={() => setBuka(buka === 'simpan' ? '' : 'simpan')} title="Simpan ke folder">
                 <span className="kr-ico">{p.folder?.length ? '★' : '☆'}</span><span className="kr-lbl">{p.folder?.length ? 'Tersimpan' : 'Simpan'}</span>
@@ -427,7 +428,7 @@ function DaftarTema({ ctx, st }: { ctx: Ctx; st: Status | null }) {
             <div className="kr-tema-grid">
                 {Object.entries(ctx.tema).map(([k, t]) => (
                     <button key={k} className="kr-tema-k" onClick={() => ctx.bukaTema(k)}>
-                        <span className={`kr-ava ${st?.per[k]?.baru ? 'baru' : ''}`}><span>{t.ikon}</span></span>
+                        <span className={`kr-ava ${st?.per[k]?.baru ? 'baru' : ''}`}><span><Ikon e={t.ikon} /></span></span>
                         <b>{t.nama}</b><small>{st?.per[k]?.total || 0} postingan{st?.per[k]?.baru ? ` · ${st.per[k].baru} baru` : ''}</small>
                         <em>{t.ket}</em>
                     </button>
@@ -445,7 +446,7 @@ function ProfilTema({ ctx, kat, kembali }: { ctx: Ctx; kat: string; kembali: () 
         <div className="kr-hal">
             <button className="kr-kembali" onClick={kembali}>‹ Semua tema</button>
             <header className="kr-profil">
-                <span className="kr-ava besar"><span>{t?.ikon}</span></span>
+                <span className="kr-ava besar"><span><Ikon e={t?.ikon} /></span></span>
                 <div>
                     <h2>{t?.nama}</h2>
                     <div className="kr-profil-angka"><span><b>{r.data?.jumlah ?? '–'}</b> postingan</span><span><b>{r.data?.dibaca ?? '–'}</b> sudah dibaca</span></div>
@@ -453,7 +454,7 @@ function ProfilTema({ ctx, kat, kembali }: { ctx: Ctx; kat: string; kembali: () 
                 </div>
             </header>
             <div className="kr-saring">{(['semua', 'belum', 'dibaca'] as const).map((f) => <button key={f} className={filter === f ? 'on' : ''} onClick={() => setFilter(f)}>{f === 'semua' ? 'Semua' : f === 'belum' ? 'Belum dibaca' : 'Sudah dibaca'}</button>)}</div>
-            {r.error && <div className="kr-akhir">⚠️ {r.error}</div>}
+            {r.error && <div className="kr-akhir"><Ikon e="⚠" /> {r.error}</div>}
             {!r.data && !r.error && <div className="kr-akhir">Memuat…</div>}
             {r.data && !list.length && <div className="kr-akhir">Belum ada postingan di sini.</div>}
             <div className="kr-grid">{list.map((p) => <SampulKr key={p.id} p={p} tema={t} onClick={() => ctx.bukaPost(p.id)} tanda={p.baca ? '✓' : p.folder?.length ? '★' : p.catatan?.length ? '✎' : undefined} />)}</div>
@@ -490,7 +491,7 @@ function Samping({ ctx, st, setView }: { ctx: Ctx; st: Status | null; setView: (
             <div className="kr-sm-h"><b>Tema</b><button onClick={() => setView({ v: 'tema' })}>Lihat semua</button></div>
             {Object.entries(ctx.tema).map(([k, t]) => (
                 <button key={k} className="kr-sm-tema" onClick={() => ctx.bukaTema(k)}>
-                    <span className={`kr-ava kecil ${st?.per[k]?.baru ? 'baru' : ''}`}><span>{t.ikon}</span></span>
+                    <span className={`kr-ava kecil ${st?.per[k]?.baru ? 'baru' : ''}`}><span><Ikon e={t.ikon} /></span></span>
                     <span><b>{t.nama}</b><small>{st?.per[k]?.baru ? `${st.per[k].baru} baru` : `${st?.per[k]?.total || 0} postingan`}</small></span>
                 </button>
             ))}
@@ -515,7 +516,7 @@ function ModalPost({ id, ctx, tutup }: { id: string; ctx: Ctx; tutup: () => void
         <div className="kr-modal" onClick={(e) => { if (e.target === e.currentTarget) tutup(); }} role="dialog" aria-modal="true">
             <button className="kr-modal-x" onClick={tutup} aria-label="Tutup">×</button>
             <div className="kr-modal-isi">
-                {galat && <div className="kr-akhir">⚠️ {galat}</div>}
+                {galat && <div className="kr-akhir"><Ikon e="⚠" /> {galat}</div>}
                 {!p && !galat && <div className="kr-akhir">Memuat…</div>}
                 {p && <Pos p={p} ctx={ctx} ganti={setP} diModal />}
             </div>

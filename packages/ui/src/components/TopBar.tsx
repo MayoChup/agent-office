@@ -4,6 +4,7 @@ import { logout } from '../kantor/connection';
 import { useTema } from '../kantor/tema';
 import { eventBus } from '../events';
 
+import { Ikon } from './Ikon';
 function useClock() {
     const [now, setNow] = useState(() => new Date());
     useEffect(() => {
@@ -29,9 +30,9 @@ export function TopBar() {
 
     return (
         <div className="topbar interactive">
-            <button className="icon-btn menu-btn" aria-label="Buka menu" onClick={() => eventBus.dispatchEvent(new CustomEvent('buka-menu'))}>☰</button>
+            <button className="icon-btn menu-btn" aria-label="Buka menu" onClick={() => eventBus.dispatchEvent(new CustomEvent('buka-menu'))}><Ikon e="☰" /></button>
             <div className="brand">
-                <div className="brand-logo">🏢</div>
+                <div className="brand-logo"><Ikon e="🏢" /></div>
                 <div style={{ minWidth: 0 }}>
                     <div className="brand-name">{officeName}</div>
                     <div className="brand-sub">Milik {owner} · tersambung ke Hermes</div>
@@ -41,7 +42,7 @@ export function TopBar() {
             <div className="clock">{clock}</div>
             {usage && (
                 <div className="quota" onClick={() => setShowQuota(!showQuota)} title="Kuota AI gratis hari ini">
-                    <div className="quota-row"><span>🧠 <span className="hide-sm">AI gratis</span></span><span>{usage.enabled ? `${usage.used}/${usage.dailyLimit}` : 'off'}</span></div>
+                    <div className="quota-row"><span><Ikon e="🧠" /> <span className="hide-sm">AI gratis</span></span><span>{usage.enabled ? `${usage.used}/${usage.dailyLimit}` : 'off'}</span></div>
                     <div className="bar"><div style={{ width: `${pct}%`, background: barColor }} /></div>
                     {showQuota && (
                         <div className="interactive" style={{ position: 'absolute', top: 60, right: 60, width: 260, padding: 12, borderRadius: 14, background: 'var(--panel-solid)', border: '1px solid var(--line-strong)', boxShadow: 'var(--shadow)', fontSize: 12, lineHeight: 1.7, color: 'var(--muted)' }}>
@@ -56,8 +57,8 @@ export function TopBar() {
                 </div>
             )}
             <div className="pill"><span className={`dot ${dotClass}`} /><span className="hide-sm">{statusText}</span></div>
-            <button className="icon-btn tema-btn" title={tema === 'dark' ? 'Ganti ke tampilan terang' : 'Ganti ke tampilan gelap'} aria-label="Ganti tema" onClick={gantiTema}>{tema === 'dark' ? '☀' : '☾'}</button>
-            {status !== 'login' && <button className="icon-btn" title="Keluar dari kantor" aria-label="Keluar" onClick={() => { if (confirm('Keluar dari Kantor Virtual? Nanti perlu masukkan kata sandi lagi.')) logout(); }}>🚪</button>}
+            <button className="icon-btn tema-btn" title={tema === 'dark' ? 'Ganti ke tampilan terang' : 'Ganti ke tampilan gelap'} aria-label="Ganti tema" onClick={gantiTema}>{tema === 'dark' ? <Ikon e="☀" /> : <Ikon e="☾" />}</button>
+            {status !== 'login' && <button className="icon-btn" title="Keluar dari kantor" aria-label="Keluar" onClick={() => { if (confirm('Keluar dari Kantor Virtual? Nanti perlu masukkan kata sandi lagi.')) logout(); }}><Ikon e="🚪" /></button>}
         </div>
     );
 }

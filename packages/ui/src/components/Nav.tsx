@@ -4,6 +4,7 @@ import { useKantor } from '../kantor/store';
 import { useSubNavState } from '../kantor/subnav';
 import { eventBus } from '../events';
 
+import { Ikon } from './Ikon';
 export type PageKey = 'home' | 'kantor' | 'keuangan' | 'trading' | 'sosmed' | 'tugas' | 'jadwal' | 'obrolan' | 'catatan' | 'berkas' | 'kr';
 export type SidePanel = 'org' | 'activity' | 'papan' | null;
 export type KunciPanel = 'org' | 'activity' | 'papan';
@@ -55,7 +56,7 @@ export function Nav({ page, panel, onGo, hidup = [] }: { page: PageKey; panel: S
     const sisa = sub && sub.items.length > MAKS_BAWAH ? sub.items.slice(MAKS_BAWAH - 1) : [];
     const subBtn = (it: { k: string; ico: string; label: string; badge?: number }) => (
         <button key={it.k} className={`dock-btn ${sub?.aktif === it.k ? 'active' : ''}`} onClick={() => { setMore(false); sub?.pilih(it.k); }}>
-            <span className="ico">{it.ico}</span>
+            <span className="ico"><Ikon e={it.ico} /></span>
             <span className="dock-lbl">{it.label}</span>
             {!!it.badge && <span className="badge">{N(it.badge)}</span>}
         </button>
@@ -68,14 +69,14 @@ export function Nav({ page, panel, onGo, hidup = [] }: { page: PageKey; panel: S
                 {LACI.map((it) => (
                     <React.Fragment key={it.key}>
                         <button className={`sb-item ${isActive(it.key) ? 'on' : ''}`} onClick={() => onGo(it.key)} title={it.label}>
-                            <span className="sb-ico">{it.ico}</span>
+                            <span className="sb-ico"><Ikon e={it.ico} /></span>
                             <span className="sb-t"><b>{it.label}</b>{it.ket && <small>{it.ket}</small>}</span>
                             {badge(it.key) > 0 && <span className="sb-badge">{N(badge(it.key))}</span>}
                             {hidup.includes(it.key as PageKey) && page !== it.key && <i className="sb-hidup" title="Masih terbuka — kembali tanpa memuat ulang" />}
                         </button>
                         {it.key === 'kantor' && page === 'kantor' && ALL.filter((x) => PANEL.has(x.key)).map((x) => (
                             <button key={x.key} className={`sb-item sb-anak ${isActive(x.key) ? 'on' : ''}`} onClick={() => onGo(x.key)} title={x.label}>
-                                <span className="sb-ico">{x.ico}</span><span className="sb-t"><b>{x.label}</b></span>
+                                <span className="sb-ico"><Ikon e={x.ico} /></span><span className="sb-t"><b>{x.label}</b></span>
                             </button>
                         ))}
                     </React.Fragment>
@@ -113,7 +114,7 @@ export function Nav({ page, panel, onGo, hidup = [] }: { page: PageKey; panel: S
                         <div className="laci-h"><b>Menu</b><button className="icon-btn" onClick={() => setLaci(false)} aria-label="Tutup menu">✕</button></div>
                         {LACI.map((it) => (
                             <button key={it.key} className={`laci-btn ${page === it.key ? 'on' : ''}`} onClick={() => { setLaci(false); onGo(it.key); }}>
-                                <span className="laci-ico">{it.ico}</span>
+                                <span className="laci-ico"><Ikon e={it.ico} /></span>
                                 <span className="laci-t"><b>{it.label}</b>{it.ket && <small>{it.ket}</small>}</span>
                                 {badge(it.key) > 0 && <span className="laci-badge">{N(badge(it.key))}</span>}
                             </button>

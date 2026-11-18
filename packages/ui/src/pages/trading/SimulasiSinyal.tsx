@@ -6,6 +6,7 @@ import { usd } from './types';
 import { KurvaAksi, type AksiKurva } from './KurvaAksi';
 import { SimArsip } from './SimArsip';
 
+import { Ikon } from '../../components/Ikon';
 interface Trx { s: string; masuk: string; hMasuk: number; keluar: string; hKeluar: number; pct: number; untung: number; label: string; skor: number; sebab: string }
 interface Hasil {
     opsi: { H: number; guru: string | null; sinyal: string[]; bulan: number; modal: number; porsi: number; maksPosisi: number; keluarJual: boolean; biaya: number; saham: number };
@@ -25,7 +26,7 @@ export function SimulasiSinyal({ onBuka }: { onBuka?: (s: string) => void }) {
     const ganti = (j: 'arsip' | 'backdate') => { setJenis(j); try { localStorage.setItem('kantor:sim-jenis', j); } catch { /* */ } };
     return (
         <section className="sb-card ss">
-            <div className="sd-h"><h3>🧪 Simulasi sinyal</h3>
+            <div className="sd-h"><h3><Ikon e="🧪" /> Simulasi sinyal</h3>
                 <div className="ss-tab" role="tablist">
                     <button role="tab" aria-selected={jenis === 'arsip'} className={jenis === 'arsip' ? 'on' : ''} onClick={() => ganti('arsip')}>Dari sinyal tercatat</button>
                     <button role="tab" aria-selected={jenis === 'backdate'} className={jenis === 'backdate' ? 'on' : ''} onClick={() => ganti('backdate')}>Backdate</button>

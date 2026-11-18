@@ -6,6 +6,7 @@ import { Gambar } from './Gambar';
 import { eventBus } from '../../events';
 import { SampulKr, type KPost, type KTema } from '../kr/Slide';
 
+import { Ikon } from '../../components/Ikon';
 interface Simpul { nama: string; path: string; folder: boolean; mtime: number; size?: number; anak?: Simpul[] }
 interface Pohon { pohon: Simpul; sinkron: { pushAt: number; error: string } }
 const WARNA_BUKU = ['#7c3aed', '#2563eb', '#059669', '#d97706', '#dc2626', '#db2777', '#0891b2', '#4f46e5'];
@@ -69,20 +70,20 @@ export function CatatanPage() {
         setLayar('halaman');
     };
 
-    if (ph.error) return <div className="pg"><div className="sb-card fin-empty">📓 {ph.error}<br /><small>Catatan memakai Otak Kantor (Obsidian) yang tersimpan di VPS.</small></div></div>;
+    if (ph.error) return <div className="pg"><div className="sb-card fin-empty"><Ikon e="📓" /> {ph.error}<br /><small>Catatan memakai Otak Kantor (Obsidian) yang tersimpan di VPS.</small></div></div>;
 
     return (
         <div className={`cat layar-${layar}`}>
             <aside className="cat-buku">
-                <div className="cat-h"><b>📓 Buku catatan</b><button onClick={() => folderBaru('', 'Nama buku catatan baru')} title="Buku baru">＋</button></div>
-                <div className="sb-search cat-search"><span>⌕</span><input placeholder="Cari di semua catatan" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+                <div className="cat-h"><b><Ikon e="📓" /> Buku catatan</b><button onClick={() => folderBaru('', 'Nama buku catatan baru')} title="Buku baru">＋</button></div>
+                <div className="sb-search cat-search"><span><Ikon e="⌕" /></span><input placeholder="Cari di semua catatan" value={q} onChange={(e) => setQ(e.target.value)} /></div>
                 {hasil && (
                     <div className="cat-hasil">
                         {hasil.length === 0 && <small>Tidak ditemukan.</small>}
                         {hasil.map((h) => <button key={h.path} onClick={() => { bukaHal(h.path); setQ(''); }}><b>{judul(h.path.split('/').pop()!)}</b><small>{h.path.split('/').slice(0, -1).join(' › ')}</small>{h.cuplikan && <em>…{h.cuplikan}…</em>}</button>)}
                     </div>
                 )}
-                {!hasil && <button className={`cat-kr-btn ${layar === 'kr' ? 'on' : ''}`} onClick={() => setLayar('kr')}><span>🧠</span><b>Dari Knowledge Reels</b><small>Catatan di postingan</small></button>}
+                {!hasil && <button className={`cat-kr-btn ${layar === 'kr' ? 'on' : ''}`} onClick={() => setLayar('kr')}><span><Ikon e="🧠" /></span><b>Dari Knowledge Reels</b><small>Catatan di postingan</small></button>}
                 {!hasil && bukuList.map((b, i) => (
                     <div key={b.path} className="cat-book">
                         <button className={`cat-book-btn ${buku === b.path ? 'on' : ''}`} onClick={() => { setBuku(b.path); setBagian(''); setLayar('halaman'); }}>
@@ -98,7 +99,7 @@ export function CatatanPage() {
                         )}
                     </div>
                 ))}
-                {ph.data?.sinkron && <div className="cat-sync">{ph.data.sinkron.error ? `⚠️ ${ph.data.sinkron.error}` : ph.data.sinkron.pushAt ? `☁️ Tersinkron ke Obsidian ${waktu(ph.data.sinkron.pushAt)}` : '☁️ Tersinkron otomatis ke Obsidian'}</div>}
+                {ph.data?.sinkron && <div className="cat-sync">{ph.data.sinkron.error ? <><Ikon e="⚠" /> {`${ph.data.sinkron.error}`}</> : ph.data.sinkron.pushAt ? <><Ikon e="☁" /> {`Tersinkron ke Obsidian ${waktu(ph.data.sinkron.pushAt)}`}</> : <><Ikon e="☁" /> {'Tersinkron otomatis ke Obsidian'}</>}</div>}
             </aside>
 
             {layar === 'kr' && <CatatanKr kembali={() => setLayar('buku')} />}
@@ -211,9 +212,9 @@ function Editor({ path, cariFile, bukaHal, onBack, onBerubah, onHapus }: { path:
                 <span className="cat-status">{status}</span>
                 <div className="sb-seg"><button className={mode === 'baca' ? 'on' : ''} onClick={() => setMode('baca')}>Baca</button><button className={mode === 'edit' ? 'on' : ''} onClick={() => setMode('edit')}>Tulis</button></div>
                 <details className="cat-more"><summary>⋯</summary><div>
-                    <button onClick={async () => { const n = prompt('Ganti judul', nama); if (n && n !== nama) { const ke = [folder, `${n.replace(/[\\/:*?"<>|#^[\]]/g, '').trim()}.md`].filter(Boolean).join('/'); try { await apiPost('/api/kantor/catatan/pindah', { dari: path, ke }); onBerubah(); bukaHal(ke); } catch (e: any) { setStatus(String(e.message || e)); } } }}>✏️ Ganti judul</button>
-                    <button onClick={() => { muat(); }}>↻ Muat ulang</button>
-                    <button onClick={async () => { if (confirm(`Pindahkan "${nama}" ke Sampah?`)) { await apiPost('/api/kantor/catatan/buang', { p: path }); onHapus(); } }}>🗑 Pindah ke Sampah</button>
+                    <button onClick={async () => { const n = prompt('Ganti judul', nama); if (n && n !== nama) { const ke = [folder, `${n.replace(/[\\/:*?"<>|#^[\]]/g, '').trim()}.md`].filter(Boolean).join('/'); try { await apiPost('/api/kantor/catatan/pindah', { dari: path, ke }); onBerubah(); bukaHal(ke); } catch (e: any) { setStatus(String(e.message || e)); } } }}><Ikon e="✏" /> Ganti judul</button>
+                    <button onClick={() => { muat(); }}><Ikon e="↻" /> Muat ulang</button>
+                    <button onClick={async () => { if (confirm(`Pindahkan "${nama}" ke Sampah?`)) { await apiPost('/api/kantor/catatan/buang', { p: path }); onHapus(); } }}><Ikon e="🗑" /> Pindah ke Sampah</button>
                 </div></details>
             </div>
             <div className="cat-tools">
@@ -224,14 +225,14 @@ function Editor({ path, cariFile, bukaHal, onBack, onBerubah, onHapus }: { path:
                         <button onClick={() => sisip('==', '==', 'stabilo')} title="Stabilo"><mark>S</mark></button>
                         <button onClick={() => awalBaris('## ')} title="Judul">H</button>
                         <button onClick={() => awalBaris('- ')} title="Daftar">•</button>
-                        <button onClick={() => awalBaris('- [ ] ')} title="Ceklis">☑</button>
+                        <button onClick={() => awalBaris('- [ ] ')} title="Ceklis"><Ikon e="☑" /></button>
                         <button onClick={() => awalBaris('> ')} title="Kutipan">❝</button>
-                        <button onClick={() => sisip('[[', ']]', 'Nama catatan')} title="Tautan ke catatan lain">🔗</button>
-                        <button onClick={() => sisip('\n| Kolom 1 | Kolom 2 |\n|---|---|\n| ', ' |  |\n', 'isi')} title="Tabel">▦</button>
+                        <button onClick={() => sisip('[[', ']]', 'Nama catatan')} title="Tautan ke catatan lain"><Ikon e="🔗" /></button>
+                        <button onClick={() => sisip('\n| Kolom 1 | Kolom 2 |\n|---|---|\n| ', ' |  |\n', 'isi')} title="Tabel"><Ikon e="▦" /></button>
                     </>
                 )}
-                <button onClick={() => setGambar({})} title="Menggambar">✏️ Gambar</button>
-                <label className="cat-upload" title="Sisipkan foto">🖼️ Foto<input type="file" accept="image/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) unggah(f); e.target.value = ''; }} /></label>
+                <button onClick={() => setGambar({})} title="Menggambar"><Ikon e="✏" /> Gambar</button>
+                <label className="cat-upload" title="Sisipkan foto"><Ikon e="🖼" /> Foto<input type="file" accept="image/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) unggah(f); e.target.value = ''; }} /></label>
             </div>
             {mode === 'edit'
                 ? <textarea ref={ta} className="cat-ta" value={isi} onChange={(e) => ubah(e.target.value)} spellCheck={false}
@@ -262,11 +263,11 @@ function CatatanKr({ kembali }: { kembali: () => void }) {
     const buka = (id: string) => eventBus.dispatchEvent(new CustomEvent('open-kr', { detail: { id } }));
     return (
         <section className="cat-kr">
-            <div className="cat-h"><button className="cat-back" onClick={kembali}>‹</button><b>🧠 Komentar di Knowledge Reels</b></div>
+            <div className="cat-h"><button className="cat-back" onClick={kembali}>‹</button><b><Ikon e="🧠" /> Komentar di Knowledge Reels</b></div>
             <p className="cat-kr-ket">Semua catatan yang Bapak tulis di postingan Knowledge Reels. Tekan sampul untuk membuka postingannya lagi. Salinannya juga ada di buku “Knowledge Reels”.</p>
-            <div className="sb-search cat-search"><span>⌕</span><input placeholder="Cari catatan" value={q} onChange={(e) => setQ(e.target.value)} /></div>
-            {r.error && <div className="fin-empty">⚠️ {r.error}</div>}
-            {r.data && !per.size && <div className="fin-empty">Belum ada catatan. Tekan ✎ Catatan di postingan Knowledge Reels untuk menulis.</div>}
+            <div className="sb-search cat-search"><span><Ikon e="⌕" /></span><input placeholder="Cari catatan" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+            {r.error && <div className="fin-empty"><Ikon e="⚠" /> {r.error}</div>}
+            {r.data && !per.size && <div className="fin-empty">Belum ada catatan. Tekan <Ikon e="✎" /> Catatan di postingan Knowledge Reels untuk menulis.</div>}
             <div className="cat-kr-list">
                 {[...per.entries()].map(([pid, cs]) => {
                     const p = cs[0].post!;
@@ -275,7 +276,7 @@ function CatatanKr({ kembali }: { kembali: () => void }) {
                             <SampulKr p={{ ...p, sumber: [], oleh: [], dibuat: 0 } as KPost} tema={p.tema} onClick={() => buka(pid)} />
                             <div>
                                 <button className="cat-kr-j" onClick={() => buka(pid)}>{p.judul}</button>
-                                <small>{p.tema.ikon} {p.tema.nama}</small>
+                                <small><Ikon e={p.tema.ikon} /> {p.tema.nama}</small>
                                 {cs.filter((c) => c.status !== 'menunggu').map((c) => <p key={c.id} className={c.dari && c.dari !== 'rico' ? 'ai' : ''}>{c.dari && c.dari !== 'rico' ? <b>{c.nama}: </b> : null}{c.teks}<small>{waktu(c.at)}</small></p>)}
                             </div>
                         </div>

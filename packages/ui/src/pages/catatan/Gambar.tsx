@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
+import { Ikon } from '../../components/Ikon';
 /** Coretan disimpan sebagai SVG (vektor, tajam di semua layar). Data goresan ikut disimpan di <desc> supaya bisa diedit lagi. */
 interface Gores { c: string; w: number; hl: boolean; p: number[] } // p = [x,y,tekanan, x,y,tekanan, ...]
 const WARNA = ['#111827', '#2563eb', '#dc2626', '#16a34a', '#f59e0b', '#7c3aed', '#ffffff'];
@@ -77,14 +78,14 @@ export function Gambar({ awal, onSimpan, onTutup }: { awal?: string; onSimpan: (
             <div className="gb-bar">
                 <button className="gb-close" onClick={onTutup} aria-label="Tutup">✕</button>
                 <div className="gb-group">
-                    {(['pena', 'stabilo', 'hapus'] as const).map((a) => <button key={a} className={alat === a ? 'on' : ''} onClick={() => setAlat(a)} title={a}>{a === 'pena' ? '✒️' : a === 'stabilo' ? '🖍️' : '🧽'}</button>)}
+                    {(['pena', 'stabilo', 'hapus'] as const).map((a) => <button key={a} className={alat === a ? 'on' : ''} onClick={() => setAlat(a)} title={a}>{a === 'pena' ? <Ikon e="✒" /> : a === 'stabilo' ? <Ikon e="🖍" /> : <Ikon e="🧽" />}</button>)}
                 </div>
                 <div className="gb-group">{WARNA.map((c) => <button key={c} className={`gb-c ${warna === c ? 'on' : ''}`} style={{ background: c }} onClick={() => { setWarna(c); if (alat === 'hapus') setAlat('pena'); }} aria-label={`warna ${c}`} />)}</div>
                 <div className="gb-group">{[2, 4, 8, 14].map((t) => <button key={t} className={tebal === t ? 'on' : ''} onClick={() => setTebal(t)}><i style={{ width: t + 2, height: t + 2 }} /></button>)}</div>
                 <div className="gb-group">
-                    <button onClick={undo} disabled={!gores.length} title="Batal (Ctrl+Z)">↶</button>
-                    <button onClick={ulang} disabled={!redo.length} title="Ulangi">↷</button>
-                    <button onClick={() => { if (confirm('Hapus semua coretan?')) { setGores([]); setRedo([]); } }} title="Bersihkan">🗑</button>
+                    <button onClick={undo} disabled={!gores.length} title="Batal (Ctrl+Z)"><Ikon e="↶" /></button>
+                    <button onClick={ulang} disabled={!redo.length} title="Ulangi"><Ikon e="↷" /></button>
+                    <button onClick={() => { if (confirm('Hapus semua coretan?')) { setGores([]); setRedo([]); } }} title="Bersihkan"><Ikon e="🗑" /></button>
                     <select value={latar} onChange={(e) => setLatar(e.target.value as any)}><option value="#ffffff">Polos</option><option value="garis">Bergaris</option><option value="kotak">Kotak</option></select>
                 </div>
                 <button className="btn primary gb-save" disabled={busy} onClick={async () => { setBusy(true); try { await onSimpan(keSvg(gores, '#ffffff')); } finally { setBusy(false); } }}>{busy ? 'Menyimpan…' : 'Simpan'}</button>
@@ -98,7 +99,7 @@ export function Gambar({ awal, onSimpan, onTutup }: { awal?: string; onSimpan: (
                     {semua.map((g, i) => <path key={i} d={jalur(g)} fill="none" stroke={g.c} strokeWidth={g.w} strokeLinecap="round" strokeLinejoin="round" strokeOpacity={g.hl ? 0.35 : 1} />)}
                 </svg>
             </div>
-            <div className="gb-hint">Pakai jari, stylus (tekanan didukung), atau mouse · 🧽 untuk menghapus goresan · disimpan sebagai gambar di catatan ini</div>
+            <div className="gb-hint">Pakai jari, stylus (tekanan didukung), atau mouse · <Ikon e="🧽" /> untuk menghapus goresan · disimpan sebagai gambar di catatan ini</div>
         </div>,
         document.body
     );

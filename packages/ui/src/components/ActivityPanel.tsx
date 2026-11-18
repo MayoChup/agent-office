@@ -2,6 +2,7 @@ import React from 'react';
 import { useKantor } from '../kantor/store';
 import { Panel } from './Panel';
 
+import { Ikon } from './Ikon';
 const ICON: Record<string, string> = {
     task: '📋', hiring: '🎉', conversation: '💬', high_risk: '⚠️', chaos: '📦', scenario: '🏢'
 };
@@ -16,11 +17,11 @@ function ago(at: number) {
 export function ActivityPanel({ onClose }: { onClose: () => void }) {
     const highlights = useKantor((s) => s.highlights);
     return (
-        <Panel title="⚡ Aktivitas" sub="Kejadian penting di kantor" onClose={onClose}>
+        <Panel title="Aktivitas" sub="Kejadian penting di kantor" onClose={onClose}>
             {highlights.length === 0 && <div className="empty">Belum ada kejadian. Agen akan mulai beraktivitas sebentar lagi.</div>}
             {highlights.map((h) => (
                 <div key={h.id} className="feed-item">
-                    <div className="feed-ico">{ICON[h.type] || '✨'}</div>
+                    <div className="feed-ico">{ICON[h.type] || <Ikon e="✨" />}</div>
                     <div style={{ minWidth: 0 }}>
                         <div className="feed-title">{h.title}</div>
                         <div className="feed-body">{h.body}</div>

@@ -3,6 +3,7 @@ import { useApi } from '../../kantor/api';
 import { FunnelBerita, type Related, type Fokus } from './FunnelBerita';
 import { Info as InfoI } from './InfoI';
 
+import { Ikon } from '../../components/Ikon';
 interface Berita { id: string; t: string; tgl: string; url: string; sent: number; saham: string[] }
 interface Saham { s: string; n: number; nama: string; chg: number; sektor: string }
 interface Data { total: number; at: number; berita: Berita[]; saham: Saham[]; related: Related | null; pantau: string[] }
@@ -214,7 +215,7 @@ export function PetaBerita({ onOpen }: { onOpen: (s: string) => void }) {
                         <canvas ref={cv} onPointerDown={down} onPointerMove={move} onPointerUp={up} onWheel={(e) => { st.current.zoom = Math.max(0.6, Math.min(2.4, st.current.zoom * (e.deltaY > 0 ? 0.92 : 1.08))); }} />
                         <div className="pb-hud mono">berita {g.items.length} · saham {g.saham.length}</div>
                         <div className="pb-ctrl">
-                            <button onClick={() => setPutar(!putar)}>{putar ? '⏸' : '▶'}</button>
+                            <button onClick={() => setPutar(!putar)}>{putar ? <Ikon e="⏸" /> : '▶'}</button>
                             <button onClick={() => { st.current.zoom = Math.min(2.4, st.current.zoom * 1.2); }}>＋</button>
                             <button onClick={() => { st.current.zoom = Math.max(0.6, st.current.zoom / 1.2); }}>－</button>
                         </div>

@@ -4,6 +4,7 @@ import { apiGetSimpan, taruhApi } from '../../kantor/api';
 import { apiGet, apiPost } from '../../kantor/connection';
 import { usd } from './types';
 
+import { Ikon } from '../../components/Ikon';
 interface Prof { nama: string; masuk: number; target: number; stop: number; ket: string; pMasuk: number; pTarget: number; pStop: number; pTidak: number; rr: number; harapan: number; hariTarget: number | null }
 interface Sim { simulasi: number; langkah: number; satuan: 'hari' | 'batang'; harga: number; profil: Prof[]; contoh: Array<{ c: number[]; akhir: 'target' | 'stop' | 'tidak' }>; sumber: string; menitPerBatang?: number; horizon: number; mode: string;
     mesin?: 'kronos' | 'acak'; model?: string; pita?: Array<{ p10: number; p50: number; p90: number }>; riwayat?: Array<{ t: string; c: number }>; pNaik?: number; medianAkhir?: number; medianPct?: number; detik?: number;
@@ -22,7 +23,7 @@ function PasangKronos({ onSiap }: { onSiap: () => void }) {
     if (!st || st.terpasang) return null;
     return (
         <div className="sim-pasang">
-            <b>🔮 Aktifkan prediksi Kronos</b>
+            <b><Ikon e="🔮" /> Aktifkan prediksi Kronos</b>
             <p>Kronos adalah model AI sumber terbuka yang dilatih khusus membaca candlestick dari puluhan bursa dunia. Model ini berjalan di VPS Bapak sendiri (gratis, data tidak dikirim ke mana-mana). Pemasangan sekali saja: ±1,5 GB, sekitar 5–10 menit.</p>
             {st.memasang
                 ? <div className="sim-log"><span className="pk-jalan"><i /> sedang memasang…</span>{st.log.slice(-4).map((l, i) => <code key={i}>{l}</code>)}</div>
@@ -66,13 +67,13 @@ export function Simulasi({ simbol, q, onTutup }: { simbol: string; q: string; on
     return (
         <section className="sb-card sim">
             <div className="sim-h">
-                <span className="sim-tag">{K ? '🔮' : '📊'} {simbol}</span>
+                <span className="sim-tag">{K ? <Ikon e="🔮" /> : <Ikon e="📊" />} {simbol}</span>
                 <div className="sim-n">{!d ? <><b>Prediksi</b> sedang dihitung…</> : K ? <><b>Kronos</b> · {d.simulasi} jalur prediksi</> : <><b>10.000</b> simulasi acak</>}</div>
                 <button className="icon-btn" onClick={onTutup} aria-label="Tutup">✕</button>
             </div>
             {!d && !err && <SimMemuat simbol={simbol} />}
             {d && !K && <PasangKronos onSiap={() => setUlang((n) => n + 1)} />}
-            {d?.kronos?.catatan && <div className="hz-bukti warn">⚠️ <span>Kronos gagal untuk permintaan ini ({d.kronos.catatan}) — yang tampil adalah simulasi acak cadangan. <button className="btn small" onClick={() => setUlang((n) => n + 1)}>Coba lagi</button></span></div>}
+            {d?.kronos?.catatan && <div className="hz-bukti warn"><Ikon e="⚠" /> <span>Kronos gagal untuk permintaan ini ({d.kronos.catatan}) — yang tampil adalah simulasi acak cadangan. <button className="btn small" onClick={() => setUlang((n) => n + 1)}>Coba lagi</button></span></div>}
             {err && <div className="error">{err}</div>}
             {d && p && view && (
                 <>
@@ -111,11 +112,11 @@ export function Simulasi({ simbol, q, onTutup }: { simbol: string; q: string; on
                             return (<>
                                 <div className="sim-lbl t" style={{ top: `${t}%` }}><small>TARGET</small><b className="mono">{usd(p.target)}</b></div>
                                 <div className="sim-lbl m" style={{ top: `${m}%` }}><small>MASUK</small><b className="mono">{usd(p.masuk)}</b></div>
-                                <div className="sim-lbl s" style={{ top: `${st}%` }}><small>STOP LOSS</small><b className="mono">{usd(p.stop)}</b></div>
+                                <div className="sim-lbl s" style={{ top: `${st}%` }}><small>Stop loss</small><b className="mono">{usd(p.stop)}</b></div>
                             </>);
                         })()}
                     </div>
-                    <div className="sim-axis">{K && view.x0 > 0 ? <><span>{view.hist.length} {d.satuan === 'batang' ? 'BATANG' : 'HARI'} TERAKHIR</span><i style={{ flex: '0 0 12%' }} /><span>SEKARANG</span><i /><span>🕑 {akhirLabel}</span></> : <><span>SEKARANG</span><i /><span>🕑 {akhirLabel}</span></>}</div>
+                    <div className="sim-axis">{K && view.x0 > 0 ? <><span>{view.hist.length} {d.satuan === 'batang' ? 'BATANG' : 'HARI'} TERAKHIR</span><i style={{ flex: '0 0 12%' }} /><span>SEKARANG</span><i /><span><Ikon e="🕑" /> {akhirLabel}</span></> : <><span>SEKARANG</span><i /><span><Ikon e="🕑" /> {akhirLabel}</span></>}</div>
                     <div className="sim-grid">
                         {d.profil.map((x, i) => (
                             <button key={x.nama} className={`sim-card ${pil === i ? 'on' : ''}`} onClick={() => setPil(i)}>
@@ -131,7 +132,7 @@ export function Simulasi({ simbol, q, onTutup }: { simbol: string; q: string; on
                             </button>
                         ))}
                     </div>
-                    <div className="sim-foot"><span className="sim-pill">{K ? 'prediksi model, bukan kepastian' : 'simulasi, bukan prediksi'}</span><span className="sim-pill blue">🔒 0 order terkirim · modal masih utuh</span></div>
+                    <div className="sim-foot"><span className="sim-pill">{K ? 'prediksi model, bukan kepastian' : 'simulasi, bukan prediksi'}</span><span className="sim-pill blue"><Ikon e="🔒" /> 0 order terkirim · modal masih utuh</span></div>
                     {K ? <p className="sb-note"><b>Cara membaca:</b> Kronos ({d.model}) membaca {d.sumber}, lalu menghasilkan {d.simulasi} kemungkinan jalur candlestick untuk {d.langkah} {d.satuan === 'batang' ? `batang ${d.menitPerBatang || 5} menit` : 'hari bursa'} ke depan. Garis kuning = jalur tengah, area hijau-kebiruan = rentang 80% jalur, garis tipis = tiap jalur (hijau kena target dulu, merah kena stop dulu). Persentase dihitung dari {d.simulasi} jalur itu, jadi kasar (tiap jalur ≈ {(100 / d.simulasi).toFixed(0)}%). Kronos belum diuji mundur di data kita — perlakukan sebagai salah satu pandangan, bukan kepastian. Bukan saran keuangan.</p>
                         : <p className="sb-note">Tiap jalur menyusun {d.langkah} {d.satuan === 'batang' ? `batang ${d.menitPerBatang || 5} menit (sampai bursa tutup)` : 'hari bursa'} dari potongan pergerakan nyata saham ini ({d.sumber}), diacak 10.000 kali. Persentase target/stop dihitung dari jalur yang sempat menyentuh harga masuk. Kalau target & stop tersentuh di langkah yang sama, dihitung kena stop (lebih hati-hati). Garis: hijau = kena target dulu, merah = kena stop dulu, biru = belum kena keduanya.</p>}
                 </>

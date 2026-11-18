@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { useApi, Acara } from '../kantor/api';
 import { todayWib, dateLabel } from '../kantor/finance';
 
+import { Ikon } from '../components/Ikon';
 export function SchedulePage() {
     const { data, error, loading, reload } = useApi<{ acara: Acara[] }>('/api/kantor/jadwal?hari=30', 300_000);
     const today = todayWib();
@@ -14,8 +15,8 @@ export function SchedulePage() {
     return (
         <div className="pg">
             <div className="pg-head">
-                <div><h2>📅 Jadwal</h2><p>Google Calendar · diurus Sekar si Sekretaris · janji dari WhatsApp ditandai WA</p></div>
-                <button className="icon-btn" onClick={() => reload('&sync=1')} disabled={loading} title="Muat ulang">{loading ? '…' : '↻'}</button>
+                <div><h2><Ikon e="📅" /> Jadwal</h2><p>Google Calendar · diurus Sekar si Sekretaris · janji dari WhatsApp ditandai WA</p></div>
+                <button className="icon-btn" onClick={() => reload('&sync=1')} disabled={loading} title="Muat ulang">{loading ? '…' : <Ikon e="↻" />}</button>
             </div>
             {error && <div className="error">Kalender belum bisa dibaca: {error}</div>}
             {data && groups.length === 0 && <div className="fin-empty">Tidak ada agenda 30 hari ke depan.<br />Minta Sekar lewat Telegram: "jadwalkan meeting dengan Budi Selasa jam 2 siang".</div>}
@@ -27,7 +28,7 @@ export function SchedulePage() {
                             <div className="cal-time">{jam(e)}</div>
                             <div className="fin-tx-main">
                                 <b>{e.judul}{e.dariWa && <em className="tag-wa">WA</em>}</b>
-                                {(e.tempat || e.catatan) && <span>{e.tempat ? `📍 ${e.tempat}` : ''}{e.tempat && e.catatan ? ' · ' : ''}{e.catatan.replace(/\[dari WhatsApp\]/, '').trim()}</span>}
+                                {(e.tempat || e.catatan) && <span>{e.tempat ? <><Ikon e="📍" /> {`${e.tempat}`}</> : ''}{e.tempat && e.catatan ? ' · ' : ''}{e.catatan.replace(/\[dari WhatsApp\]/, '').trim()}</span>}
                             </div>
                         </a>
                     ))}

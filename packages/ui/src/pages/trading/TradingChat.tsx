@@ -5,6 +5,7 @@ import { RichText } from '../../components/common/RichText';
 import { NAMA_MODE } from './Preset';
 import { useAktif } from '../../kantor/aktif';
 
+import { Ikon } from '../../components/Ikon';
 interface Pesan { id: string; dari: string; nama: string; teks: string; at: number; status?: 'gagal' }
 interface Anggota { id: string; nama: string; peran: string }
 const LS_AI = 'kantor:trading-chat-ai';
@@ -60,7 +61,7 @@ export function TradingChat({ q, saham, mode }: { q: string; saham: string | nul
         <>
             {!buka && (
                 <button className="tc-fab" onClick={() => setBuka(true)} aria-label="Konsultasi dengan tim trading">
-                    <span aria-hidden>💬</span><b>Tanya {a?.nama || 'tim trading'}</b>
+                    <span aria-hidden><Ikon e="💬" /></span><b>Tanya {a?.nama || 'tim trading'}</b>
                     {belumDibaca > 0 && <i>{belumDibaca}</i>}
                 </button>
             )}
@@ -75,7 +76,7 @@ export function TradingChat({ q, saham, mode }: { q: string; saham: string | nul
                         </div>
                         <button className="tc-x" onClick={() => setBuka(false)} aria-label="Tutup">✕</button>
                     </header>
-                    <div className="tc-konteks">📎 Data terlampir: {NAMA_MODE[mode] || mode}{saham ? ` · ${saham}` : ''} · skor & sinyal · uji mundur · watchlist & posisi</div>
+                    <div className="tc-konteks"><Ikon e="📎" /> Data terlampir: {NAMA_MODE[mode] || mode}{saham ? ` · ${saham}` : ''} · skor & sinyal · uji mundur · watchlist & posisi</div>
                     <div className="tc-isi">
                         {!anggota.length && <div className="tc-kosong"><p>AI tim trading belum terdeteksi di kantor (profil Hermes tidak terbaca). Coba lagi sebentar lagi.</p></div>}
                         {!!anggota.length && !pesan.length && (

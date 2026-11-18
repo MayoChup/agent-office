@@ -4,6 +4,7 @@ import { apiPost } from '../../kantor/connection';
 import { FaktorKey, ScreenerData } from './types';
 import { Kartu } from './PilihanView';
 
+import { Ikon } from '../../components/Ikon';
 export interface Folder { id: string; nama: string; ikon: string; simbol: string[] }
 export interface FolderData { folders: Folder[]; utama: string[] }
 const IKON = ['📁', '⭐', '💰', '🚀', '🏦', '🤖', '⚡', '🛢️', '💊', '🛒', '👀', '🎯'];
@@ -40,8 +41,8 @@ export function WatchlistView({ data, faktor, onOpen }: { data: ScreenerData; fa
                 <div><h1>Watchlist</h1><p>Kelompokkan saham ke folder. Folder <b>Utama</b> dipantau Dito (strategi harian, investigasi otomatis, data orang dalam).</p></div>
             </section>
             <div className="wl-folders">
-                <button className={aktif === 'utama' ? 'on' : ''} onClick={() => setAktif('utama')}><span>⭐</span>Utama <small>{fd.data?.utama.length ?? 0}</small></button>
-                {folders.map((f) => <button key={f.id} className={aktif === f.id ? 'on' : ''} onClick={() => setAktif(f.id)}><span>{f.ikon}</span>{f.nama} <small>{f.simbol.length}</small></button>)}
+                <button className={aktif === 'utama' ? 'on' : ''} onClick={() => setAktif('utama')}><span><Ikon e="⭐" /></span>Utama <small>{fd.data?.utama.length ?? 0}</small></button>
+                {folders.map((f) => <button key={f.id} className={aktif === f.id ? 'on' : ''} onClick={() => setAktif(f.id)}><span><Ikon e={f.ikon} /></span>{f.nama} <small>{f.simbol.length}</small></button>)}
                 <button className="add" onClick={() => setBaru({ nama: '', ikon: '📁' })}>＋ Folder baru</button>
             </div>
             {baru && (

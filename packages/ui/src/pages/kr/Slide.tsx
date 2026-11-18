@@ -1,5 +1,6 @@
 import React from 'react';
 
+import { Ikon } from '../../components/Ikon';
 /* Tipe data Knowledge Reels (sama dengan server kantor/kr.ts). */
 export interface KSumber { judul: string; url?: string; penerbit?: string; tgl?: string }
 export interface KDampak { kode: string; bursa: 'US' | 'IDX'; arah: 'naik' | 'turun' | 'campur'; alasan: string }
@@ -30,7 +31,7 @@ export function LembarKr({ p, l, tema, n, total, children }: { p: KPost; l: Lemb
             <div className="krs-isi">
                 {l.jenis === 'sampul' && (
                     <>
-                        <span className="krs-tema"><span className="krs-ikon">{tema?.ikon}</span> {tema?.nama}</span>
+                        <span className="krs-tema"><span className="krs-ikon"><Ikon e={tema?.ikon} /></span> {tema?.nama}</span>
                         <h2 className="krs-judul">{p.judul}</h2>
                         {!p.game && p.sub && <p className="krs-sub">{p.sub}</p>}
                         {p.game && <p className="krs-soal">{p.game.soal}</p>}

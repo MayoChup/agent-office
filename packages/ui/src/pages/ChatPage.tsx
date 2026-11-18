@@ -7,6 +7,7 @@ import { useKantor, setChatOpen } from '../kantor/store';
 import { Avatar } from '../components/Avatar';
 import { RichText } from '../components/common/RichText';
 
+import { Ikon } from '../components/Ikon';
 interface ThreadInfo { id: string; nama: string; peran: string; terakhir: { nama: string; teks: string; at: number } | null; menulis: string[]; grup?: boolean; ikon?: string; anggota?: string[] }
 interface Lampiran { rel: string; nama: string; ukuran: number; jenis: 'gambar' | 'berkas' }
 interface Pesan { id: string; dari: string; nama: string; teks: string; at: number; status?: 'gagal'; berat?: boolean; lampiran?: Lampiran[] }
@@ -58,7 +59,7 @@ export function ChatPage({ prefill }: { prefill?: string }) {
         <div className={`wa ${open ? 'has-open' : ''}`}>
             <aside className="wa-list">
                 <div className="wa-list-head">
-                    <div className="wa-list-top"><h2>💬 Chat</h2><TombolNotif /><button className="btn small" onClick={() => setGrupForm('baru')}>＋ Grup baru</button></div>
+                    <div className="wa-list-top"><h2><Ikon e="💬" /> Chat</h2><TombolNotif /><button className="btn small" onClick={() => setGrupForm('baru')}>＋ Grup baru</button></div>
                     <input className="input" placeholder="Cari nama atau peran…" value={q} onChange={(e) => setQ(e.target.value)} />
                 </div>
                 {err && <div className="error" style={{ margin: 10 }}>{err}</div>}
@@ -68,7 +69,7 @@ export function ChatPage({ prefill }: { prefill?: string }) {
                         const s = skin(t.id);
                         return (
                             <button key={t.id} className={`wa-item ${open === t.id ? 'active' : ''}`} onClick={() => setOpen(t.id)}>
-                                <div className="wa-ava">{isGrup(t) ? <span className="wa-group-ico">{t.ikon || '👥'}</span> : s !== undefined ? <Avatar skin={s} size={42} /> : <span className="wa-group-ico">🤖</span>}</div>
+                                <div className="wa-ava">{isGrup(t) ? <span className="wa-group-ico">{t.ikon || <Ikon e="👥" />}</span> : s !== undefined ? <Avatar skin={s} size={42} /> : <span className="wa-group-ico"><Ikon e="🤖" /></span>}</div>
                                 <div className="wa-item-main">
                                     <div className="wa-item-top"><b>{t.nama}{t.peran && !isGrup(t) ? <span className="wa-jabatan"> - {t.peran}</span> : null}</b>{t.terakhir && <span className={unread ? 'unread' : ''}>{tanggal(t.terakhir.at)}</span>}</div>
                                     <div className="wa-item-sub">
@@ -82,7 +83,7 @@ export function ChatPage({ prefill }: { prefill?: string }) {
                         );
                     })}
                     <button className={`wa-item ${open === KANTOR ? 'active' : ''}`} onClick={() => setOpen(KANTOR)}>
-                        <div className="wa-ava"><span className="wa-group-ico">🏢</span></div>
+                        <div className="wa-ava"><span className="wa-group-ico"><Ikon e="🏢" /></span></div>
                         <div className="wa-item-main">
                             <div className="wa-item-top"><b>Obrolan kantor</b></div>
                             <div className="wa-item-sub"><span className="wa-role">Celoteh tokoh kantor 2D & kabar papan tugas</span></div>
@@ -188,7 +189,7 @@ function Thread({ info, threads, skin, onBack, onSeen, onInfo }: { info: ThreadI
         <>
             <header className="wa-head">
                 <button className="icon-btn wa-back" onClick={onBack} aria-label="Kembali">‹</button>
-                <div className="wa-ava sm">{grup ? <span className="wa-group-ico">{info.ikon || '👥'}</span> : s !== undefined ? <Avatar skin={s} size={36} /> : <span className="wa-group-ico">🤖</span>}</div>
+                <div className="wa-ava sm">{grup ? <span className="wa-group-ico">{info.ikon || <Ikon e="👥" />}</span> : s !== undefined ? <Avatar skin={s} size={36} /> : <span className="wa-group-ico"><Ikon e="🤖" /></span>}</div>
                 <div className="wa-head-main">
                     <b>{info.nama}{!grup && info.peran ? ` - ${info.peran}` : ''}</b>
                     <span>{menulis.length ? <em>{grup ? `${menulis.map(nama).join(', ')} mengetik…` : 'mengetik…'}</em> : grup ? anggota.map((a) => a.nama).join(', ') : info.peran}</span>
@@ -215,13 +216,13 @@ function Thread({ info, threads, skin, onBack, onSeen, onInfo }: { info: ThreadI
             )}
             {(lamp.length > 0 || unggah.length > 0) && (
                 <div className="wa-lamp-antre">
-                    {lamp.map((l) => <span key={l.rel} className="wa-lamp-chip">{l.jenis === 'gambar' ? '🖼️' : '📄'} {l.nama}<button type="button" onClick={() => setLamp((x) => x.filter((y) => y.rel !== l.rel))} aria-label="Hapus lampiran">×</button></span>)}
-                    {unggah.map((u) => <span key={u.id} className={`wa-lamp-chip ${u.error ? 'gagal' : ''}`}>⏳ {u.nama} {u.error ? `· ${u.error}` : `${u.persen}%`}{u.error && <button type="button" onClick={() => setUnggah((x) => x.filter((y) => y.id !== u.id))}>×</button>}</span>)}
+                    {lamp.map((l) => <span key={l.rel} className="wa-lamp-chip">{l.jenis === 'gambar' ? <Ikon e="🖼" /> : <Ikon e="📄" />} {l.nama}<button type="button" onClick={() => setLamp((x) => x.filter((y) => y.rel !== l.rel))} aria-label="Hapus lampiran">×</button></span>)}
+                    {unggah.map((u) => <span key={u.id} className={`wa-lamp-chip ${u.error ? 'gagal' : ''}`}><Ikon e="⏳" /> {u.nama} {u.error ? `· ${u.error}` : `${u.persen}%`}{u.error && <button type="button" onClick={() => setUnggah((x) => x.filter((y) => y.id !== u.id))}>×</button>}</span>)}
                 </div>
             )}
             <form className="wa-input" onSubmit={send}>
                 <input ref={fileRef} type="file" multiple hidden onChange={(e) => { pilihFile(e.target.files); e.target.value = ''; }} />
-                <button type="button" className="wa-klip" onClick={() => fileRef.current?.click()} aria-label="Lampirkan file atau gambar" title="Lampirkan file atau gambar">📎</button>
+                <button type="button" className="wa-klip" onClick={() => fileRef.current?.click()} aria-label="Lampirkan file atau gambar" title="Lampirkan file atau gambar"><Ikon e="📎" /></button>
                 <textarea ref={inputRef} rows={1} placeholder={grup ? 'Tulis ke grup…' : `Tulis ke ${info.nama}…`} value={text}
                     onChange={(e) => { setText(e.target.value); e.target.style.height = 'auto'; e.target.style.height = `${Math.min(120, e.target.scrollHeight)}px`; }}
                     onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && window.innerWidth >= 768) { e.preventDefault(); send(); } }} />
@@ -241,7 +242,7 @@ function Bubble({ m, grup, peran }: { m: Pesan; grup: boolean; peran?: string })
             {grup && !me && <div className="wa-name" style={{ color: warna(m.dari) }}>{m.nama}{peran ? <span className="wa-jabatan"> - {peran}</span> : null}</div>}
             {!!m.lampiran?.length && <div className="wa-lamp">{m.lampiran.map((l) => <LampiranView key={l.rel} l={l} />)}</div>}
             {m.teks && <div className="wa-text">{me ? m.teks : <RichText text={m.teks} />}</div>}
-            <div className="wa-time">{m.berat && <span className="wa-berat" title="Dikerjakan dengan model berbayar (Claude) atas keputusan Joni">⚡ Claude</span>}{jam(m.at)}{me && <span className="wa-ticks">✓✓</span>}</div>
+            <div className="wa-time">{m.berat && <span className="wa-berat" title="Dikerjakan dengan model berbayar (Claude) atas keputusan Joni"><Ikon e="⚡" /> Claude</span>}{jam(m.at)}{me && <span className="wa-ticks">✓✓</span>}</div>
         </div>
     );
 }
@@ -274,7 +275,7 @@ function KantorThread({ onBack, prefill }: { onBack: () => void; prefill?: strin
         <>
             <header className="wa-head">
                 <button className="icon-btn wa-back" onClick={onBack} aria-label="Kembali">‹</button>
-                <div className="wa-ava sm"><span className="wa-group-ico">🏢</span></div>
+                <div className="wa-ava sm"><span className="wa-group-ico"><Ikon e="🏢" /></span></div>
                 <div className="wa-head-main"><b>Obrolan kantor</b><span>Tokoh 2D ngobrol santai (AI gratis) & kabar papan tugas</span></div>
             </header>
             <div className="wa-body">
@@ -314,7 +315,7 @@ function LampiranView({ l }: { l: Lampiran }) {
     useEffect(() => { if (l.jenis === 'gambar') tautan(l.rel).then(setSrc).catch(() => setGagal(true)); }, [l.rel, l.jenis]);
     const buka = async (unduh: boolean) => { try { window.open(await tautan(l.rel, unduh), '_blank', 'noopener'); } catch { setGagal(true); } };
     if (l.jenis === 'gambar' && !gagal) return <button type="button" className="wa-gambar" onClick={() => buka(false)} title={l.nama}>{src ? <img src={src} alt={l.nama} onError={() => { tautanCache.delete(`${l.rel}|false`); setGagal(true); }} /> : <span>Memuat gambar…</span>}</button>;
-    return <button type="button" className="wa-berkas" onClick={() => buka(true)} title={`Unduh ${l.nama}`}><span>📄</span><span><b>{l.nama}</b><small>{ukuran(l.ukuran)} · ketuk untuk unduh</small></span></button>;
+    return <button type="button" className="wa-berkas" onClick={() => buka(true)} title={`Unduh ${l.nama}`}><span><Ikon e="📄" /></span><span><b>{l.nama}</b><small>{ukuran(l.ukuran)} · ketuk untuk unduh</small></span></button>;
 }
 
 /* ── Tombol notifikasi HP ── */
@@ -322,7 +323,7 @@ function TombolNotif() {
     const [st, setSt] = useState<string>('');
     const [msg, setMsg] = useState('');
     useEffect(() => { statusNotif().then(setSt); }, []);
-    if (!st || st === 'tidak-didukung') return iosBrowser() ? <button className="icon-btn" title="Notifikasi" onClick={() => setMsg('Di iPhone: buka situs ini di Safari → Bagikan → "Tambah ke Layar Utama", lalu buka dari ikon Kantor untuk menyalakan notifikasi.')}>🔕</button> : null;
+    if (!st || st === 'tidak-didukung') return iosBrowser() ? <button className="icon-btn" title="Notifikasi" onClick={() => setMsg('Di iPhone: buka situs ini di Safari → Bagikan → "Tambah ke Layar Utama", lalu buka dari ikon Kantor untuk menyalakan notifikasi.')}><Ikon e="🔕" /></button> : null;
     const klik = async () => {
         setMsg('');
         try {
@@ -332,7 +333,7 @@ function TombolNotif() {
     };
     return (
         <span className="wa-notif">
-            <button className={`icon-btn ${st === 'aktif' ? 'on' : ''}`} onClick={klik} title={st === 'aktif' ? 'Notifikasi aktif — ketuk untuk mematikan' : st === 'ditolak' ? 'Izin notifikasi ditolak di browser' : 'Nyalakan notifikasi chat di perangkat ini'}>{st === 'aktif' ? '🔔' : '🔕'}</button>
+            <button className={`icon-btn ${st === 'aktif' ? 'on' : ''}`} onClick={klik} title={st === 'aktif' ? 'Notifikasi aktif — ketuk untuk mematikan' : st === 'ditolak' ? 'Izin notifikasi ditolak di browser' : 'Nyalakan notifikasi chat di perangkat ini'}>{st === 'aktif' ? <Ikon e="🔔" /> : <Ikon e="🔕" />}</button>
             {msg && <span className="wa-notif-msg" role="status" onClick={() => setMsg('')}>{msg}</span>}
         </span>
     );

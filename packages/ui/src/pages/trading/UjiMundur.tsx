@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useApi } from '../../kantor/api';
 import { apiPost } from '../../kantor/connection';
 
+import { Ikon } from '../../components/Ikon';
 type R = { n: number; rataEx: number | null; menang: number | null; galatStd: number | null };
 interface HasilH { semua: R; label: Record<string, R>; kuintil: R[]; komponen: Array<R & { nama: string }>; preset: Array<{ id: string; guru: string; nama: string; lolos75: R; lolos50: R; kurang: R }> }
 type UjiL = { label: Record<string, R>; semua: R; selisih: number; galat: number; t: number; tanggal: number };
@@ -34,15 +35,15 @@ export function UjiMundur() {
     return (
         <div className="um">
             <section className="sb-card">
-                <div className="sd-h"><h3>🧪 Uji mundur (backtest)</h3></div>
+                <div className="sd-h"><h3><Ikon e="🧪" /> Uji mundur (backtest)</h3></div>
                 <p className="sb-note">Skor teknikal & preset guru dihitung ulang di setiap tanggal selama ±5 tahun terakhir (hanya memakai data sampai tanggal itu), lalu dibandingkan dengan hasil sesudahnya — <b>dibanding S&P 500 pada periode yang sama, disesuaikan risiko</b> (saham yang biasa bergerak 1,5× pasar dibandingkan dengan 1,5× hasil S&P 500). Positif = mengalahkan pasar.</p>
                 <div className="row" style={{ gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <button className="btn primary" disabled={!!st?.jalan} onClick={jalankan}>{st?.jalan ? '⏳ Sedang berjalan…' : h ? '↻ Jalankan ulang' : '▶ Jalankan uji mundur'}</button>
+                    <button className="btn primary" disabled={!!st?.jalan} onClick={jalankan}>{st?.jalan ? <><Ikon e="⏳" /> {'Sedang berjalan…'}</> : h ? <><Ikon e="↻" /> {'Jalankan ulang'}</> : '▶ Jalankan uji mundur'}</button>
                     <small className="sb-note">{st?.jalan ? `${st.progres} — ±20–40 menit, bisa ditinggal` : h ? `Terakhir: ${new Date(h.at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} · ${h.saham} saham · ${h.sampel.toLocaleString('id-ID')} sampel · ${h.periode.dari} s/d ${h.periode.sampai}` : 'Belum pernah dijalankan.'}</small>
                 </div>
                 {(st?.galat || msg) && <div className="error">{st?.galat || msg}</div>}
-                {!!d.data?.berikutnya && !st?.jalan && <small className="sb-note">🔁 Berjalan otomatis tiap ±30 hari (akhir pekan). Berikutnya: ±{new Date(d.data.berikutnya).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Jakarta' })}. Bobot & rekomendasi di halaman Trading ikut diperbarui sendiri.</small>}
-                {d.data?.saran?.teks && <div className="su-ai-box"><b>✨ Ringkasan AI</b><p>{d.data.saran.teks}</p></div>}
+                {!!d.data?.berikutnya && !st?.jalan && <small className="sb-note"><Ikon e="🔁" /> Berjalan otomatis tiap ±30 hari (akhir pekan). Berikutnya: ±{new Date(d.data.berikutnya).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Jakarta' })}. Bobot & rekomendasi di halaman Trading ikut diperbarui sendiri.</small>}
+                {d.data?.saran?.teks && <div className="su-ai-box"><b><Ikon e="✨" /> Ringkasan AI</b><p>{d.data.saran.teks}</p></div>}
             </section>
             {h && r && (<>
                 <div className="sb-seg scroll">{MODE.map((m) => <button key={m.H} className={H === m.H ? 'on' : ''} onClick={() => setH(m.H)}>{m.label}</button>)}</div>
@@ -84,14 +85,14 @@ export function UjiMundur() {
 
 /** Hasil "bobot dari data": dilatih pada data lama, diuji pada data baru yang tidak dipakai saat melatih. */
 function BobotBaru({ b, H }: { b?: BobotH; H: number }) {
-    if (!b) return <section className="sb-card"><div className="sd-h"><h3>🧠 Bobot baru dari data</h3></div><p className="sb-note">Belum ada — jalankan ulang uji mundur supaya bobot dicari dari data & diuji. (Perlu cukup data sebelum dan sesudah 2025.)</p></section>;
+    if (!b) return <section className="sb-card"><div className="sd-h"><h3><Ikon e="🧠" /> Bobot baru dari data</h3></div><p className="sb-note">Belum ada — jalankan ulang uji mundur supaya bobot dicari dari data & diuji. (Perlu cukup data sebelum dan sesudah 2025.)</p></section>;
     const th = (t: string) => t.slice(0, 4);
     const bar = (u: UjiL, k: string) => u.label[k];
     return (
         <section className="sb-card">
-            <div className="sd-h"><h3>🧠 Bobot baru dari data</h3></div>
+            <div className="sd-h"><h3><Ikon e="🧠" /> Bobot baru dari data</h3></div>
             <p className="sb-note">Bobot tiap ciri grafik <b>disusun dari data {th(b.latih.dari)}–{th(b.latih.sampai)}</b> ({b.latih.n.toLocaleString('id-ID')} kasus), lalu <b>diuji di data {th(b.uji.dari)}–{th(b.uji.sampai)}</b> ({b.uji.n.toLocaleString('id-ID')} kasus) yang sama sekali tidak dipakai saat menyusun — seperti ujian dengan soal baru.</p>
-            <p className="um-vonis">{b.lulus ? `✅ LULUS: dipakai otomatis sebagai skor teknikal untuk horison ±${H} hari.` : `❌ TIDAK LULUS: horison ±${H} hari tetap memakai rumus lama, diberi tanda "belum terbukti".`}</p>
+            <p className="um-vonis">{b.lulus ? <><Ikon e="✅" /> {`LULUS: dipakai otomatis sebagai skor teknikal untuk horison ±${H} hari.`}</> : <><Ikon e="❌" /> {`TIDAK LULUS: horison ±${H} hari tetap memakai rumus lama, diberi tanda "belum terbukti".`}</>}</p>
             {!b.lulus && !!b.uji.alasan.length && <ul className="sd-alasan">{b.uji.alasan.map((a) => <li key={a}>{a}</li>)}</ul>}
             <table className="um-t"><thead><tr><th>Di data uji {th(b.uji.dari)}–{th(b.uji.sampai)}</th><th>Bobot baru</th><th>Rumus lama</th></tr></thead>
                 <tbody>

@@ -4,6 +4,7 @@ import { fullName } from '../kantor/store';
 import { eventBus } from '../events';
 import { Avatar } from './Avatar';
 
+import { Ikon } from './Ikon';
 export function AgentCard({ id, onClose, onOpenDivision }: { id: string; onClose: () => void; onOpenDivision: (divId: string) => void }) {
     const agent = useKantor((s) => s.agents.find((a) => a.id === id));
     const divisions = useKantor((s) => s.divisions);
@@ -20,17 +21,17 @@ export function AgentCard({ id, onClose, onOpenDivision }: { id: string; onClose
                         <span className="chip" style={{ ['--c' as any]: st.color }}>● {st.label}</span>
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
-                        {agent.role}{division ? ` · ${division.icon} ${division.name}` : id === 'default' ? ' · 👑 Kepala Kantor' : ''}
+                        {agent.role}{division ? ` · $<Ikon e={division.icon} /> ${division.name}` : id === 'default' ? ' · 👑 Kepala Kantor' : ''}
                     </div>
-                    {agent.currentTask && <div className="member-task">💼 {agent.currentTask}</div>}
-                    {agent.thought && agent.thought !== `Mengerjakan: ${agent.currentTask}` && <div className="thought">💭 {agent.thought}</div>}
+                    {agent.currentTask && <div className="member-task"><Ikon e="💼" /> {agent.currentTask}</div>}
+                    {agent.thought && agent.thought !== `Mengerjakan: ${agent.currentTask}` && <div className="thought"><Ikon e="💭" /> {agent.thought}</div>}
                 </div>
                 <button className="icon-btn" onClick={onClose} title="Tutup">✕</button>
             </div>
             <div className="member-actions" style={{ marginTop: 12 }}>
-                <button className="btn small" onClick={() => eventBus.dispatchEvent(new CustomEvent('open-chat', { detail: { text: `@${agent.name} ` } }))}>💬 Sapa</button>
-                <button className="btn small" onClick={() => eventBus.dispatchEvent(new CustomEvent('focus-agent', { detail: { id } }))}>📍 Ikuti</button>
-                <button className="btn small" onClick={() => onOpenDivision(division ? division.id : 'default')}>🧭 Lihat {division ? 'divisi' : 'bagan'}</button>
+                <button className="btn small" onClick={() => eventBus.dispatchEvent(new CustomEvent('open-chat', { detail: { text: `@${agent.name} ` } }))}><Ikon e="💬" /> Sapa</button>
+                <button className="btn small" onClick={() => eventBus.dispatchEvent(new CustomEvent('focus-agent', { detail: { id } }))}><Ikon e="📍" /> Ikuti</button>
+                <button className="btn small" onClick={() => onOpenDivision(division ? division.id : 'default')}><Ikon e="🧭" /> Lihat {division ? 'divisi' : 'bagan'}</button>
             </div>
         </div>
     );

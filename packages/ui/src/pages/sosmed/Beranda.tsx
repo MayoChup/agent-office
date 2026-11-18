@@ -3,6 +3,7 @@ import { useApi } from '../../kantor/api';
 import { apiPost } from '../../kantor/connection';
 import { useInterval } from '../../kantor/aktif';
 
+import { Ikon } from '../../components/Ikon';
 export interface AkunInfo { id: string; nama: string; platform: string; handle: string; warna: string; tersambung: boolean; pengikut: number | null; menunggu: number; sibuk: string }
 export interface PlatInfo { nama: string; ikon: string; format: string[]; label: Record<string, string>; kunci: Array<{ k: string; label: string; rahasia: boolean }>; catatan: string }
 interface Baris { nama: string; n: number; rataTayang: number; rataJangkauan: number; er: number | null }
@@ -88,20 +89,20 @@ export function Beranda({ tab, akun, platform, pilihAkun, kabar }: { tab: string
         <section className="br-kpi">{KPI.map(([l, v, k]) => <div key={l}><small>{l}</small><b>{v}</b>{k && <em className={k.startsWith('▲') ? 'naik' : k.startsWith('▼') ? 'turun' : ''}>{k}</em>}</div>)}</section>
         <div className="br-dua">
             <section className="sb-card"><div className="sd-h"><h3>Tayangan & interaksi <small>per tanggal terbit</small></h3></div>
-                <Garis label={x.seri.map((s) => s.tgl)} seri={[{ nama: 'Tayangan', warna: '#14b8a6', nilai: x.seri.map((s) => s.tayang) }, { nama: 'Interaksi', warna: '#f59e0b', nilai: x.seri.map((s) => s.interaksi) }]} /></section>
+                <Garis label={x.seri.map((s) => s.tgl)} seri={[{ nama: 'Tayangan', warna: '#4d8dff', nilai: x.seri.map((s) => s.tayang) }, { nama: 'Interaksi', warna: '#7a8296', nilai: x.seri.map((s) => s.interaksi) }]} /></section>
             <section className="sb-card"><div className="sd-h"><h3>Pengikut <small>{fAkun === 'semua' ? 'jumlah semua akun' : 'akun ini'}</small></h3></div>
-                {adaPk ? <Garis label={x.seri.map((s) => s.tgl)} seri={[{ nama: 'Pengikut', warna: '#8b5cf6', nilai: x.seri.map((s) => s.pengikut) }]} /> : <div className="fin-empty">Belum ada catatan pengikut. Sambungkan akun (otomatis tiap hari) atau isi manual di tab "Akun & tim" tiap akun.</div>}</section>
+                {adaPk ? <Garis label={x.seri.map((s) => s.tgl)} seri={[{ nama: 'Pengikut', warna: '#4d8dff', nilai: x.seri.map((s) => s.pengikut) }]} /> : <div className="fin-empty">Belum ada catatan pengikut. Sambungkan akun (otomatis tiap hari) atau isi manual di tab "Akun & tim" tiap akun.</div>}</section>
         </div>
         <section className="sb-card">
             <div className="sd-h"><h3>Ringkasan AI <small>{r ? `Maya · ${new Date(r.at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })} · dipakai otomatis untuk ide konten berikutnya di semua akun` : 'dibuat otomatis tiap Senin bila sudah ada data'}</small></h3>
-                <button className="btn small primary" disabled={!!x.sibuk} onClick={() => apiPost('/api/kantor/sosmed/ringkasan-ai', {}).then(() => { kabar('Maya sedang membaca data semua akun (±1–3 menit).'); d.reload(); }).catch((e) => kabar(String(e.message || e)))}>{x.sibuk ? 'Sedang dibuat…' : r ? '↻ Perbarui ringkasan' : 'Buat ringkasan AI'}</button></div>
+                <button className="btn small primary" disabled={!!x.sibuk} onClick={() => apiPost('/api/kantor/sosmed/ringkasan-ai', {}).then(() => { kabar('Maya sedang membaca data semua akun (±1–3 menit).'); d.reload(); }).catch((e) => kabar(String(e.message || e)))}>{x.sibuk ? 'Sedang dibuat…' : r ? <><Ikon e="↻" /> {'Perbarui ringkasan'}</> : 'Buat ringkasan AI'}</button></div>
             {!r && <div className="fin-empty">Belum ada ringkasan. Maya akan membaca angka semua postingan dan pengikut, lalu menyimpulkan ke mana niche bergerak dan ide apa yang layak dibuat berikutnya.</div>}
             {r && (<div className="br-ai">
                 <p className="sm-lead">{r.teks}</p>
-                {r.arahNiche && <div className="br-arah"><small>🧭 Arah niche menurut data</small><p>{r.arahNiche}</p></div>}
+                {r.arahNiche && <div className="br-arah"><small><Ikon e="🧭" /> Arah niche menurut data</small><p>{r.arahNiche}</p></div>}
                 <div className="br-ai-dua">
                     {r.poin.length > 0 && <div><h4>Insight</h4><ul>{r.poin.map((p) => <li key={p}>{p}</li>)}</ul></div>}
-                    {r.ide.length > 0 && <div><h4>💡 Ide konten berikutnya</h4><ul>{r.ide.map((p) => <li key={p}>{p}</li>)}</ul></div>}
+                    {r.ide.length > 0 && <div><h4><Ikon e="💡" /> Ide konten berikutnya</h4><ul>{r.ide.map((p) => <li key={p}>{p}</li>)}</ul></div>}
                 </div>
                 {r.perAkun.length > 0 && <div className="br-saran">{r.perAkun.map((p) => { const a = akun.find((y) => y.id === p.id); return a ? <div key={p.id}><b style={{ color: a.warna }}>{platform[a.platform]?.ikon} {a.nama}</b><p>{p.saran}</p></div> : null; })}</div>}
             </div>)}

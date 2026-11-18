@@ -1,5 +1,6 @@
 import React from 'react';
 
+import { Ikon } from '../../components/Ikon';
 export type Shot = 'dekat' | 'sedang' | 'jauh' | 'layar' | 'teks';
 export interface Sketsa { shot: Shot; kamera: string; objek: Array<{ jenis: string; posisi: 'kiri' | 'tengah' | 'kanan'; label?: string }> }
 export interface Adegan { no: number; detik: string; visual: string; teksLayar: string; narasi: string; sfx?: string; efek?: string; sketsa?: Sketsa }
@@ -79,11 +80,11 @@ export function StoryboardSketsa({ adegan, musik, kecil }: { adegan: Adegan[]; m
                 {adegan.map((a) => (
                     <figure key={a.no} className="skt-f">
                         <BingkaiSketsa a={a} />
-                        <figcaption><b>{a.detik ? `${a.detik} dtk` : `#${a.no}`}</b><span>{a.visual}</span>{a.sfx && <em>🔊 {a.sfx}</em>}{a.efek && <em className="skt-ef">✨ {a.efek}</em>}</figcaption>
+                        <figcaption><b>{a.detik ? `${a.detik} dtk` : `#${a.no}`}</b><span>{a.visual}</span>{a.sfx && <em><Ikon e="🔊" /> {a.sfx}</em>}{a.efek && <em className="skt-ef"><Ikon e="✨" /> {a.efek}</em>}</figcaption>
                     </figure>
                 ))}
             </div>
-            {musik && <p className="skt-musik">🎵 Musik latar: {musik}</p>}
+            {musik && <p className="skt-musik"><Ikon e="🎵" /> Musik latar: {musik}</p>}
         </div>
     );
 }

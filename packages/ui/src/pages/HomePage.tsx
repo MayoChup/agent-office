@@ -6,8 +6,9 @@ import { Avatar } from '../components/Avatar';
 import { eventBus } from '../events';
 import type { PageKey } from '../components/Nav';
 
+import { Ikon } from '../components/Ikon';
 const HARI = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
-const BULAN = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+const BULAN_P = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 
 function sapaan() {
     const h = new Date(Date.now() + 7 * 3600_000).getUTCHours();
@@ -19,7 +20,7 @@ function Card({ title, ico, onOpen, children, accent }: { title: string; ico: st
     return (
         <section className="home-card" style={{ ['--c' as any]: accent }}>
             <button className="home-card-head" onClick={onOpen}>
-                <span>{ico} {title}</span><span className="home-more">Buka ›</span>
+                <span><Ikon e={ico} /> {title}</span><span className="home-more">Buka ›</span>
             </button>
             {children}
         </section>
@@ -48,8 +49,16 @@ export function HomePage({ go }: { go: (p: PageKey) => void }) {
     return (
         <div className="home">
             <div className="home-hello">
-                <h1>{sapaan()}, {owner} 👋</h1>
-                <p>{HARI[d.getUTCDay()]}, {d.getUTCDate()} {BULAN[d.getUTCMonth()]} {d.getUTCFullYear()} · {working.length ? `${working.length} orang sedang bekerja` : 'tim sedang santai'} · {active.length} tugas aktif</p>
+                <div className="home-hello-t">
+                    <h1>{HARI[d.getUTCDay()]}, {d.getUTCDate()} {BULAN_P[d.getUTCMonth()]}</h1>
+                    <p>{sapaan()}, {owner} · {working.length ? <><i className="home-live" />{working.length} AI sedang bekerja</> : 'tim sedang santai'}</p>
+                </div>
+                <dl className="home-angka">
+                    <div><dt>Posisi terbuka</dt><dd className="mono">{trd.data ? pos.length : '–'}</dd></div>
+                    <div><dt>Untung/rugi berjalan</dt><dd className={`mono ${upl > 0 ? 'up' : upl < 0 ? 'down' : ''}`}>{trd.data ? `${upl >= 0 ? '+' : '−'}$${Math.abs(upl).toFixed(2)}` : '–'}</dd></div>
+                    <div><dt>Keluar bulan ini</dt><dd className="mono">{r ? rpShort(r.keluar) : '–'}</dd></div>
+                    <div><dt>Tugas aktif</dt><dd className="mono">{active.length}</dd></div>
+                </dl>
             </div>
 
             <div className="home-grid">
@@ -69,10 +78,10 @@ export function HomePage({ go }: { go: (p: PageKey) => void }) {
                     {r && (
                         <>
                             <div className="home-big">
-                                <div><span>Keluar</span><b style={{ color: '#fb7185' }}>{rp(r.keluar)}</b>
+                                <div><span>Keluar</span><b className="mono">{rp(r.keluar)}</b>
                                     {delta(r.keluar, r.prevKeluar) !== null && <small className={delta(r.keluar, r.prevKeluar)! > 0 ? 'bad' : 'good'}>{delta(r.keluar, r.prevKeluar)! > 0 ? '▲' : '▼'} {Math.abs(delta(r.keluar, r.prevKeluar)! * 100).toFixed(0)}%</small>}
                                 </div>
-                                <div><span>Masuk</span><b style={{ color: '#4ade80' }}>{rp(r.masuk)}</b></div>
+                                <div><span>Masuk</span><b className="mono up">{rp(r.masuk)}</b></div>
                             </div>
                             <div className="home-spark">
                                 {r.weeks.slice(-8).map((w) => (
@@ -91,7 +100,7 @@ export function HomePage({ go }: { go: (p: PageKey) => void }) {
                         <>
                             <div className="home-big">
                                 <div><span>Posisi terbuka</span><b>{pos.length}</b></div>
-                                <div><span>Untung/rugi berjalan</span><b style={{ color: upl >= 0 ? '#4ade80' : '#fb7185' }}>{upl >= 0 ? '+' : '−'}${Math.abs(upl).toFixed(2)}</b></div>
+                                <div><span>Untung/rugi berjalan</span><b className={`mono ${upl > 0 ? 'up' : upl < 0 ? 'down' : ''}`}>{upl >= 0 ? '+' : '−'}${Math.abs(upl).toFixed(2)}</b></div>
                             </div>
                             {pos.slice(0, 3).map((p) => (
                                 <div key={p.symbol} className="home-row"><b className="home-time">{p.symbol}</b>
@@ -105,18 +114,18 @@ export function HomePage({ go }: { go: (p: PageKey) => void }) {
                 <Card title="Tugas aktif" ico="📋" accent="#a78bfa" onOpen={() => go('tugas')}>
                     {active.length === 0 && <div className="home-empty">Tidak ada tugas aktif.</div>}
                     {active.slice(0, 4).map((t) => (
-                        <div key={t.id} className="home-row"><b className="home-time">{t.status === 'blocked' ? '⚠️' : t.status === 'in_progress' ? '🔄' : '⏳'}</b>
+                        <div key={t.id} className="home-row"><b className="home-time">{t.status === 'blocked' ? <Ikon e="⚠" /> : t.status === 'in_progress' ? <Ikon e="🔄" /> : <Ikon e="⏳" />}</b>
                             <span className="home-text">{t.title}<small> → {t.assigned_to}</small></span></div>
                     ))}
                 </Card>
             </div>
 
             <section className="home-card wide" style={{ ['--c' as any]: '#818cf8' }}>
-                <button className="home-card-head" onClick={() => go('kantor')}><span>👥 Tim</span><span className="home-more">Lihat kantor ›</span></button>
+                <button className="home-card-head" onClick={() => go('kantor')}><span><Ikon e="👥" /> Tim</span><span className="home-more">Lihat kantor ›</span></button>
                 <div className="home-team">
                     {[{ id: 'default', name: 'Kepala', icon: '👑', color: '#818cf8', memberIds: ['default'] }, ...divisions].map((dv) => (
                         <div key={dv.id} className="home-div">
-                            <div className="home-div-name" style={{ color: dv.color }}>{dv.icon} {dv.name}</div>
+                            <div className="home-div-name" style={{ color: dv.color }}><Ikon e={dv.icon} /> {dv.name}</div>
                             <div className="home-div-members">
                                 {dv.memberIds.map((id) => agents.find((a) => a.id === id)).filter(Boolean).map((a) => {
                                     const st = statusOf(a!.action);
@@ -136,7 +145,7 @@ export function HomePage({ go }: { go: (p: PageKey) => void }) {
             </section>
 
             <section className="home-card wide" style={{ ['--c' as any]: '#fbbf24' }}>
-                <div className="home-card-head static"><span>⚡ Kejadian terbaru</span></div>
+                <div className="home-card-head static"><span><Ikon e="⚡" /> Kejadian terbaru</span></div>
                 {highlights.length === 0 && <div className="home-empty">Belum ada kejadian.</div>}
                 {highlights.slice(0, 5).map((h) => (
                     <div key={h.id} className="home-row"><span className="home-text"><b>{h.title}</b> <small>{h.body}</small></span></div>

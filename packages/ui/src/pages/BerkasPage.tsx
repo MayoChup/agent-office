@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { apiGet, apiPost, serverBase, tokenLogin } from '../kantor/connection';
 
+import { Ikon } from '../components/Ikon';
 interface Item { nama: string; path: string; folder: boolean; size: number; mtime: number; jenis: string }
 interface Daftar { path: string; items: Item[]; terpakai: number; kuota: number; disk: { bebas: number; total: number } | null }
 interface Unggah { id: string; nama: string; persen: number; error?: string; selesai?: boolean }
@@ -78,38 +79,38 @@ export function BerkasPage() {
                 )}
             </section>
             <div className="sb-tools">
-                <div className="sb-search"><span>⌕</span><input placeholder="Cari nama berkas di semua folder" value={q} onChange={(e) => setQ(e.target.value)} /></div>
-                <button className="btn primary" onClick={() => input.current?.click()}>⬆ Unggah</button>
+                <div className="sb-search"><span><Ikon e="⌕" /></span><input placeholder="Cari nama berkas di semua folder" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+                <button className="btn primary" onClick={() => input.current?.click()}><Ikon e="⬆" /> Unggah</button>
                 <button className="btn" onClick={() => { const n = prompt('Nama folder baru'); if (n) aksi(() => apiPost('/api/kantor/berkas/folder', { p, nama: n })); }}>＋ Folder</button>
-                <div className="sb-seg icons"><button className={mode === 'grid' ? 'on' : ''} onClick={() => setMode('grid')}>▦</button><button className={mode === 'list' ? 'on' : ''} onClick={() => setMode('list')}>☰</button></div>
+                <div className="sb-seg icons"><button className={mode === 'grid' ? 'on' : ''} onClick={() => setMode('grid')}><Ikon e="▦" /></button><button className={mode === 'list' ? 'on' : ''} onClick={() => setMode('list')}><Ikon e="☰" /></button></div>
                 <input ref={input} type="file" multiple hidden onChange={(e) => { if (e.target.files) unggah(e.target.files); e.target.value = ''; }} />
             </div>
             {!hasil && (
                 <nav className="br-crumbs">{remah.map((r, i) => {
                     const to = remah.slice(1, i + 1).join('/');
-                    return <React.Fragment key={i}>{i > 0 && <span>›</span>}<button className={i === remah.length - 1 ? 'on' : ''} onClick={() => setP(to)}>{i === 0 ? '☁️ Berkas saya' : r}</button></React.Fragment>;
+                    return <React.Fragment key={i}>{i > 0 && <span>›</span>}<button className={i === remah.length - 1 ? 'on' : ''} onClick={() => setP(to)}>{i === 0 ? <><Ikon e="☁" /> {'Berkas saya'}</> : r}</button></React.Fragment>;
                 })}</nav>
             )}
             {hasil && <div className="sb-meta"><b>{hasil.length} hasil</b> untuk “{q}”</div>}
             {antre.length > 0 && (
                 <div className="br-antre">{antre.map((u) => (
-                    <div key={u.id} className={u.error ? 'err' : u.selesai ? 'ok' : ''}><span>{u.error ? '⚠️' : u.selesai ? '✓' : '⬆'} {u.nama}</span><div className="k-meter"><i style={{ width: `${u.persen}%`, background: u.error ? 'var(--down)' : 'var(--up)' }} /></div><small>{u.error || `${u.persen}%`}</small>{u.error && <button onClick={() => setAntre((a) => a.filter((x) => x.id !== u.id))}>✕</button>}</div>
+                    <div key={u.id} className={u.error ? 'err' : u.selesai ? 'ok' : ''}><span>{u.error ? <Ikon e="⚠" /> : u.selesai ? '✓' : <Ikon e="⬆" />} {u.nama}</span><div className="k-meter"><i style={{ width: `${u.persen}%`, background: u.error ? 'var(--down)' : 'var(--up)' }} /></div><small>{u.error || `${u.persen}%`}</small>{u.error && <button onClick={() => setAntre((a) => a.filter((x) => x.id !== u.id))}>✕</button>}</div>
                 ))}</div>
             )}
             {err && <div className="error">{err}</div>}
-            {d && items.length === 0 && <div className="sb-card fin-empty br-empty">{hasil ? 'Tidak ditemukan.' : <>Folder ini kosong.<br />Tekan <b>⬆ Unggah</b> atau seret berkas ke sini.</>}</div>}
+            {d && items.length === 0 && <div className="sb-card fin-empty br-empty">{hasil ? 'Tidak ditemukan.' : <>Folder ini kosong.<br />Tekan <b><Ikon e="⬆" /> Unggah</b> atau seret berkas ke sini.</>}</div>}
             <div className={mode === 'grid' ? 'br-grid' : 'br-list'}>
                 {items.map((it) => (
                     <div key={it.path} className="br-item" onClick={() => buka(it)}>
-                        <div className="br-ico">{IKON[it.jenis] || '📦'}</div>
+                        <div className="br-ico"><Ikon e={IKON[it.jenis] || '📦'} size={28} /></div>
                         <div className="br-info"><b title={it.nama}>{it.nama}</b><small>{it.folder ? 'Folder' : ukuran(it.size)} · {tgl(it.mtime)}{hasil ? ` · ${it.path.split('/').slice(0, -1).join('/') || 'Berkas saya'}` : ''}</small></div>
                         <button className="br-more" onClick={(e) => { e.stopPropagation(); setMenu(menu === it.path ? null : it.path); }}>⋯</button>
                         {menu === it.path && (
                             <div className="wl-menu br-menu" onClick={(e) => e.stopPropagation()}>
-                                {!it.folder && <button onClick={() => { setMenu(null); unduh(it); }}>⬇ Unduh</button>}
-                                <button onClick={() => { const n = prompt('Nama baru', it.nama); if (n && n !== it.nama) aksi(() => apiPost('/api/kantor/berkas/pindah', { dari: it.path, ke: it.path.split('/').slice(0, -1).join('/'), nama: n })); }}>✏️ Ganti nama</button>
-                                <button onClick={() => { const k = prompt('Pindah ke folder (kosongkan = Berkas saya), mis. Dokumen/Pajak', ''); if (k !== null) aksi(() => apiPost('/api/kantor/berkas/pindah', { dari: it.path, ke: k })); }}>📂 Pindahkan</button>
-                                <button onClick={() => { if (confirm(`Hapus "${it.nama}"? (Disimpan di sampah 30 hari di VPS)`)) aksi(() => apiPost('/api/kantor/berkas/hapus', { p: it.path })); }}>🗑 Hapus</button>
+                                {!it.folder && <button onClick={() => { setMenu(null); unduh(it); }}><Ikon e="⬇" /> Unduh</button>}
+                                <button onClick={() => { const n = prompt('Nama baru', it.nama); if (n && n !== it.nama) aksi(() => apiPost('/api/kantor/berkas/pindah', { dari: it.path, ke: it.path.split('/').slice(0, -1).join('/'), nama: n })); }}><Ikon e="✏" /> Ganti nama</button>
+                                <button onClick={() => { const k = prompt('Pindah ke folder (kosongkan = Berkas saya), mis. Dokumen/Pajak', ''); if (k !== null) aksi(() => apiPost('/api/kantor/berkas/pindah', { dari: it.path, ke: k })); }}><Ikon e="📂" /> Pindahkan</button>
+                                <button onClick={() => { if (confirm(`Hapus "${it.nama}"? (Disimpan di sampah 30 hari di VPS)`)) aksi(() => apiPost('/api/kantor/berkas/hapus', { p: it.path })); }}><Ikon e="🗑" /> Hapus</button>
                             </div>
                         )}
                     </div>
@@ -119,7 +120,7 @@ export function BerkasPage() {
             {lihat && (
                 <div className="k-sheet br-view" onClick={() => setLihat(null)}>
                     <div className="br-view-in" onClick={(e) => e.stopPropagation()}>
-                        <div className="k-sheet-h"><b>{lihat.it.nama}</b><div className="row" style={{ gap: 6 }}><button className="btn small" onClick={() => unduh(lihat.it)}>⬇ Unduh</button><button onClick={() => setLihat(null)}>✕</button></div></div>
+                        <div className="k-sheet-h"><b>{lihat.it.nama}</b><div className="row" style={{ gap: 6 }}><button className="btn small" onClick={() => unduh(lihat.it)}><Ikon e="⬇" /> Unduh</button><button onClick={() => setLihat(null)}>✕</button></div></div>
                         {lihat.it.jenis === 'gambar' && <img src={lihat.url} alt={lihat.it.nama} />}
                         {lihat.it.jenis === 'video' && <video src={lihat.url} controls autoPlay playsInline />}
                         {lihat.it.jenis === 'audio' && <audio src={lihat.url} controls autoPlay />}

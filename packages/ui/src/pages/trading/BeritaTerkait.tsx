@@ -6,6 +6,7 @@ import { FunnelBerita, bagian, type Related, type Fokus } from './FunnelBerita';
 import { Info as InfoI } from './InfoI';
 import { DaftarRelated } from './DaftarRelated';
 
+import { Ikon } from '../../components/Ikon';
 type Dampak = { jenis: 'sektor' | 'industri' | 'saham'; nama: string; arah: number; alasan: string };
 type Tema = { judul: string; ringkas: string; bukti: string[]; dampak: Dampak[] };
 interface Data { data: { at: number; oleh: string; tema: Tema[]; berita: Array<{ id: string; t: string; sumber: string; tgl: string; url: string; topik: string }>; galat?: string } | null; atur: { aktif: boolean; porsi: number }; sibuk: boolean }
@@ -28,7 +29,7 @@ export function BeritaTerkaitKartu({ onUbah }: { onUbah?: () => void }) {
         <section className="sb-card bt">
             <div className="bt-h">
                 <div>
-                    <h3>🌍 News related <InfoI teks="Berita dunia yang TIDAK menyebut sahamnya langsung (suku bunga, minyak, tarif, perang, aturan chip, dll.), tapi diperkirakan merembet ke sektor/industri/saham lewat efek domino. Dipetakan oleh Nina. Kebalikannya: News direct = berita yang memang menyebut saham itu." /></h3>
+                    <h3><Ikon e="🌍" /> News related <InfoI teks="Berita dunia yang TIDAK menyebut sahamnya langsung (suku bunga, minyak, tarif, perang, aturan chip, dll.), tapi diperkirakan merembet ke sektor/industri/saham lewat efek domino. Dipetakan oleh Nina. Kebalikannya: News direct = berita yang memang menyebut saham itu." /></h3>
                     <p className="sb-note">Alurnya seperti corong: semua berita dunia dipindai → berita yang sama dari banyak media digabung jadi satu info → info itu dipetakan dampaknya. Ketuk sebuah bagian (mis. <b>AMZN positif</b>) untuk melihat alasannya.</p>
                 </div>
                 <label className="bt-saklar"><input type="checkbox" checked={!!atur?.aktif} onChange={(e) => set({ aktif: e.target.checked })} /><span>{atur?.aktif ? 'Aktif' : 'Mati'}</span></label>
@@ -42,7 +43,7 @@ export function BeritaTerkaitKartu({ onUbah }: { onUbah?: () => void }) {
             )}
             <div className="bt-meta">
                 {x ? <span>Dipetakan <b>{x.oleh}</b> · {waktu(x.at)} · dari {x.berita.length} judul berita dunia</span> : <span>Belum pernah dipetakan.</span>}
-                <button className="btn small" disabled={d.data.sibuk} onClick={() => apiPost('/api/kantor/berita-terkait/perbarui', {}).then(() => { setMsg('Nina sedang memetakan — lihat Kantor → Papan kerja.'); d.reload(); }).catch((e) => setMsg(String(e.message || e)))}>{d.data.sibuk ? 'Sedang memetakan…' : '↻ Petakan ulang'}</button>
+                <button className="btn small" disabled={d.data.sibuk} onClick={() => apiPost('/api/kantor/berita-terkait/perbarui', {}).then(() => { setMsg('Nina sedang memetakan — lihat Kantor → Papan kerja.'); d.reload(); }).catch((e) => setMsg(String(e.message || e)))}>{d.data.sibuk ? 'Sedang memetakan…' : <><Ikon e="↻" /> {'Petakan ulang'}</>}</button>
             </div>
             {msg && <div className="fin-alert">{msg}</div>}
             {x?.galat && <div className="error">Pembaruan terakhir gagal: {x.galat}</div>}

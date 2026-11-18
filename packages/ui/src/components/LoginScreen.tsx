@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { login, currentServer, isSameOrigin } from '../kantor/connection';
 import { useKantor } from '../kantor/store';
 
+import { Ikon } from './Ikon';
 export function LoginScreen() {
     const error = useKantor((s) => s.error);
     const sameOrigin = isSameOrigin();
@@ -23,7 +24,7 @@ export function LoginScreen() {
     return (
         <div className="login-wrap interactive">
             <form className="login" onSubmit={submit}>
-                <div className="brand-logo" style={{ width: 48, height: 48, fontSize: 26, borderRadius: 14 }}>🏢</div>
+                <div className="brand-logo" style={{ width: 48, height: 48, fontSize: 26, borderRadius: 14 }}><Ikon e="🏢" /></div>
                 <h1>Kantor Virtual</h1>
                 <p>Masuk untuk melihat tim AI kamu bekerja secara langsung.</p>
 

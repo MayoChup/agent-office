@@ -4,6 +4,7 @@ import { getRoom } from '../kantor/connection';
 import { Avatar } from './Avatar';
 import { Panel } from './Panel';
 
+import { Ikon } from './Ikon';
 export function ChatPanel({ onClose, prefill }: { onClose: () => void; prefill: string }) {
     const chat = useKantor((s) => s.chat);
     const agents = useKantor((s) => s.agents);
@@ -29,7 +30,7 @@ export function ChatPanel({ onClose, prefill }: { onClose: () => void; prefill: 
 
     return (
         <Panel
-            title="💬 Obrolan Kantor"
+            title="Obrolan Kantor"
             sub="Ngobrol santai (AI gratis) — bukan perintah kerja"
             onClose={onClose}
             footer={

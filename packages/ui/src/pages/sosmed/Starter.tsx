@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { GaleriPilih, type ItemPilih } from './Pratinjau';
 
+import { Ikon } from '../../components/Ikon';
 export interface JawabanStarter {
     tujuan: string[]; jual: string; target: string; topik: string; niche: string; nicheBantu: boolean; tema: string;
     umur: string[]; gender: string; lokasi: string; siapa: string; masalah: string;
@@ -95,7 +96,7 @@ export function Starter({ platform, formatPlatform, labelFormat, gaya, katalog, 
         ['Visual', [gaya.find((g) => g.id === j.gayaVideo)?.nama || 'gaya dipilihkan', j.grade === 'otomatis' ? 'grade dipilihkan' : j.grade === 'tanpa' ? 'tanpa grade' : katalog.grade.find((g) => g.id === j.grade)?.nama].filter(Boolean).join(' · ')]];
     return (
         <section className="sb-card st">
-            <div className="st-h"><div><h3>{platform.ikon} Kenalan dulu dengan akun ini</h3><p>Seperti brief di agency: Bapak cukup menjawab, sisanya tim yang kerjakan — riset niche, strategi, bio, kalender, sampai sketsa konten pertama.</p></div>{batal && <button className="btn small" onClick={batal}>Tutup</button>}</div>
+            <div className="st-h"><div><h3><Ikon e={platform.ikon} /> Kenalan dulu dengan akun ini</h3><p>Seperti brief di agency: Bapak cukup menjawab, sisanya tim yang kerjakan — riset niche, strategi, bio, kalender, sampai sketsa konten pertama.</p></div>{batal && <button className="btn small" onClick={batal}>Tutup</button>}</div>
             <ol className="st-prog">{LANGKAH.map((l, k) => <li key={l.judul} className={k < i ? 'lewat' : k === i ? 'kini' : ''}><button type="button" onClick={() => setI(k)} disabled={k > i && !LANGKAH.slice(0, k).every((x) => x.ok)}>{l.judul}</button></li>)}<li className={akhir ? 'kini' : ''}><span>Mulai</span></li></ol>
             {!akhir ? (
                 <div className="st-isi">
@@ -108,7 +109,7 @@ export function Starter({ platform, formatPlatform, labelFormat, gaya, katalog, 
                     <h4>Ringkasan brief</h4>
                     <dl className="st-ring">{ringkas.filter(([, v]) => v).map(([k, v]) => <React.Fragment key={k}><dt>{k}</dt><dd>{v}</dd></React.Fragment>)}</dl>
                     <div className="st-akan"><b>Setelah Bapak menekan Mulai, tim otomatis:</b><ol><li>Tara meriset niche: masalah penonton, pola yang berhasil, celah, akun acuan.</li><li>Maya menyusun strategi, pilar konten, dan jadwal unggah per hari.</li><li>Maya membuat paket profil: nama, username, 3 versi bio, link bio, highlight, foto profil, 3 postingan pertama.</li><li>Maya mengisi kalender 7 hari pertama.</li><li>Lala & Vino membuat sketsa + prompt untuk 2 konten pertama.</li></ol><small>Sekitar 10–20 menit. Progresnya terlihat di halaman akun ini; Bapak dikabari lewat Telegram saat selesai.</small></div>
-                    <div className="sm-aksi"><button className="btn" onClick={() => setI(n - 1)}>← Ubah jawaban</button><button className="btn primary" disabled={sibuk} onClick={() => kirim(j)}>{sibuk ? 'Tim sedang bekerja…' : '🚀 Mulai, buatkan semuanya'}</button></div>
+                    <div className="sm-aksi"><button className="btn" onClick={() => setI(n - 1)}>← Ubah jawaban</button><button className="btn primary" disabled={sibuk} onClick={() => kirim(j)}>{sibuk ? 'Tim sedang bekerja…' : <><Ikon e="🚀" /> {'Mulai, buatkan semuanya'}</>}</button></div>
                 </div>
             )}
         </section>

@@ -166,13 +166,13 @@ function KasusDetail({ k, catatan, onBack, onChange }: { k: Kasus; catatan: stri
                 )}
                 {k.penyangkal.map((p, i) => (
                     <div key={i} className="inv-counter">
-                        <div className="inv-hyp-top"><span>BUKTI PENYANGKAL</span><Src ids={p.sumber} /></div>
+                        <div className="inv-hyp-top"><span>Bukti penyangkal</span><Src ids={p.sumber} /></div>
                         <b>{p.teks}</b>
                     </div>
                 ))}
                 {k.penyangkal.length === 0 && <div className="fin-empty">Belum ada bukti penyangkal yang ditemukan.</div>}
                 <div className="inv-check">
-                    <div className="inv-hyp-top"><span>PERIKSA LAGI</span><span>{k.cekSesi} SESI</span></div>
+                    <div className="inv-hyp-top"><span>Periksa lagi</span><span>{k.cekSesi} sesi</span></div>
                     <b>{k.hasil
                         ? `${HASIL[k.hasil.nilai]} — dicek ${k.hasil.dicek}: ${k.simbol} ${k.hasil.vsPasar >= 0 ? '+' : '−'}${Math.abs(k.hasil.vsPasar).toFixed(2)} poin vs pasar (perkiraan: ${k.perkiraan}).`
                         : k.perkiraan === 'tidak tahu' ? 'AI tidak berani memperkirakan arah; klaim ini tidak dinilai.' : `Perkiraan: gerakan ${k.perkiraan}. Dinilai otomatis setelah ${k.cekSesi} sesi bursa.`}</b>

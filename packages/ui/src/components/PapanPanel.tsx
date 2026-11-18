@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useApi } from '../kantor/api';
 import { apiPost } from '../kantor/connection';
 
+import { Ikon } from './Ikon';
 type Status = 'todo' | 'proses' | 'selesai' | 'gagal';
 interface Kerja { id: string; ai: string; nama: string; judul: string; detail?: string; hasil?: string; sumber: 'chat' | 'tugas' | 'sistem' | 'trading' | 'laporan'; status: Status; dibuat: number; mulai?: number; selesai?: number }
 interface StatAi { id: string; nama: string; peran: string; selesai: number; gagal: number; proses: number; todo: number; rataDetik: number | null; terakhir: number; selesai7: number; menganggur: boolean; peringkat: number }
@@ -14,7 +15,7 @@ const KOLOM: Array<{ k: 'todo' | 'proses' | 'selesai'; label: string; ket: strin
     { k: 'proses', label: 'Proses', ket: 'sedang dikerjakan' },
     { k: 'selesai', label: 'Selesai', ket: 'beres bulan ini' }
 ];
-const SUMBER: Record<Kerja['sumber'], string> = { chat: '💬 Chat', tugas: '📋 Tugas', sistem: '⚙️ Sistem', trading: '📈 Trading', laporan: '📝 Laporan' };
+const SUMBER: Record<Kerja['sumber'], string> = { chat: 'Chat', tugas: 'Tugas', sistem: 'Sistem', trading: 'Trading', laporan: 'Laporan' };
 const namaBulan = (b: string) => new Date(`${b}-15T00:00:00Z`).toLocaleDateString('id-ID', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 const jam = (t: number) => new Date(t).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' });
 const hari = (t: number) => new Date(t).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Asia/Jakarta' });
@@ -78,7 +79,7 @@ export function PapanPanel({ onClose }: { onClose: () => void }) {
         <div className="papan interactive">
             <header className="pk-head">
                 <div className="pk-judul-besar">
-                    <h2>🗂️ Papan kerja AI</h2>
+                    <h2><Ikon e="🗂" /> Papan kerja AI</h2>
                     <small>{d.data ? `${namaBulan(d.data.bulan)}${arsip ? ' · arsip' : ' · papan dibersihkan otomatis tiap awal bulan (yang lama masuk arsip)'}` : 'memuat…'}</small>
                 </div>
                 <div className="pk-saring">
@@ -105,7 +106,7 @@ export function PapanPanel({ onClose }: { onClose: () => void }) {
             {d.error && <div className="error">{d.error}</div>}
             <div className="pk-mode">
                 <div className="sb-seg"><button className={tampil === 'papan' ? 'on' : ''} onClick={() => setTampil('papan')}>Papan</button><button className={tampil === 'kinerja' ? 'on' : ''} onClick={() => setTampil('kinerja')}>Kinerja & HR</button><button className={tampil === 'model' ? 'on' : ''} onClick={() => setTampil('model')}>Model AI</button><button className={tampil === 'gotong' ? 'on' : ''} onClick={() => setTampil('gotong')}>Gotong royong</button></div>
-                {tunggu.length > 0 && <span className="pk-tunggu">🔔 {tunggu.length} usulan tugas menunggu persetujuan Bapak</span>}
+                {tunggu.length > 0 && <span className="pk-tunggu"><Ikon e="🔔" /> {tunggu.length} usulan tugas menunggu persetujuan Bapak</span>}
             </div>
             {pesan && <div className="fin-alert">{pesan}</div>}
             {tunggu.length > 0 && <Persetujuan list={tunggu} onSelesai={(m) => { setPesan(m); hr.reload(); d.reload(); setTimeout(() => setPesan(''), 6000); }} />}
@@ -149,7 +150,7 @@ function Persetujuan({ list, onSelesai }: { list: Usulan[]; onSelesai: (m: strin
                         <small className="pk-alasan">Alasan: {u.alasan}</small>
                         <div className="pk-aksi">
                             <button className="btn small primary" disabled={sibuk === u.id} onClick={() => putus(u, 'setuju')}>✓ Setujui & kirim</button>
-                            {!e && <button className="btn small" onClick={() => setUbah({ ...ubah, [u.id]: { judul: u.judul, isi: u.isi } })}>✏️ Ubah dulu</button>}
+                            {!e && <button className="btn small" onClick={() => setUbah({ ...ubah, [u.id]: { judul: u.judul, isi: u.isi } })}><Ikon e="✏" /> Ubah dulu</button>}
                             <button className="btn small" disabled={sibuk === u.id} onClick={() => putus(u, 'tolak')}>Tolak</button>
                         </div>
                     </div>
@@ -248,7 +249,7 @@ function ModelAi() {
                             <select value={a.atur.opsi} onChange={(e) => atur(a.id, e.target.value)} aria-label={`Model untuk ${a.nama}`}>
                                 {m.data!.opsi.filter((o) => o.ada || o.id === a.atur.opsi).map((o) => <option key={o.id} value={o.id}>{o.label}{o.biaya === 'berbayar' ? ' (berbayar)' : ''}</option>)}
                             </select>
-                            <small className="md-oleh">{a.atur.kunci ? <>🔒 dipilih Bapak · <button onClick={() => lepas(a.id)}>serahkan ke HR</button></> : OLEH[a.atur.oleh]}{a.atur.alasan && !a.atur.kunci ? ` — ${a.atur.alasan}` : ''}</small>
+                            <small className="md-oleh">{a.atur.kunci ? <><Ikon e="🔒" /> dipilih Bapak · <button onClick={() => lepas(a.id)}>serahkan ke HR</button></> : OLEH[a.atur.oleh]}{a.atur.alasan && !a.atur.kunci ? ` — ${a.atur.alasan}` : ''}</small>
                             <small className="md-pakai">{a.hariIni} hari ini · {a.minggu.n} / 7 hari</small>
                         </div>
                     ))}

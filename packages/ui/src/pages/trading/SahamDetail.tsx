@@ -10,6 +10,7 @@ import { Bintang, useWatch } from './Bintang';
 import { PegangPosisi } from './PegangPosisi';
 import type { TradingData } from '../../kantor/api';
 
+import { Ikon } from '../../components/Ikon';
 interface FaktorFull { skor: number; label: Label; alasan: string[] }
 interface Profil { nama: string; ringkas: string; deskripsi: string; situs: string; sektor: string; industri: string; alamat: string }
 interface Detail { preset?: PresetEval[]; baris: Baris; skor: Record<FaktorKey, FaktorFull | null>; berita: { n: number; judul: Array<{ t: string; s: number; tgl: string; url: string }> } | null; orang: { net: number; beli: number; jual: number; n: number } | null }
@@ -63,9 +64,9 @@ export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPre
                             <button className="sd-folder" onClick={() => setMenuWl(!menuWl)} aria-expanded={menuWl} title="Simpan ke folder watchlist">{diWatch ? 'Di Watchlist' : 'Watchlist'} ▾</button>
                             {menuWl && (
                                 <div className="wl-menu">
-                                    {(fd.data?.folders || []).map((f) => <button key={f.id} onClick={() => { setMenuWl(false); aksi(() => apiPost('/api/kantor/watchlist-folder', { aksi: f.simbol.includes(b.s) ? 'buang' : 'tambah', id: f.id, simbol: b.s }).then(() => fd.reload()), f.simbol.includes(b.s) ? `✓ ${b.s} dikeluarkan dari folder ${f.nama}.` : `✓ ${b.s} masuk folder ${f.nama}.`); }}>{f.ikon} {f.nama} {f.simbol.includes(b.s) ? '✓' : ''}</button>)}
+                                    {(fd.data?.folders || []).map((f) => <button key={f.id} onClick={() => { setMenuWl(false); aksi(() => apiPost('/api/kantor/watchlist-folder', { aksi: f.simbol.includes(b.s) ? 'buang' : 'tambah', id: f.id, simbol: b.s }).then(() => fd.reload()), f.simbol.includes(b.s) ? `✓ ${b.s} dikeluarkan dari folder ${f.nama}.` : `✓ ${b.s} masuk folder ${f.nama}.`); }}><Ikon e={f.ikon} /> {f.nama} {f.simbol.includes(b.s) ? '✓' : ''}</button>)}
                                     {!(fd.data?.folders || []).length && <small>Belum ada folder. Buat folder di tab Watchlist.</small>}
-                                    <small>⭐ Bintang = Watchlist Utama (dipantau Dito).</small>
+                                    <small><Ikon e="⭐" /> Bintang = Watchlist Utama (dipantau Dito).</small>
                                 </div>
                             )}
                         </div>
@@ -73,8 +74,8 @@ export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPre
                     <div className="sd-price mono">{usd(b.harga)} <span className={b.chg1d >= 0 ? 'up' : 'down'}>{b.chg1d >= 0 ? '▲' : '▼'} {Math.abs(b.chg1d).toFixed(2)}%</span></div>
                     <div className="sd-pegang">
                         {dipegang
-                            ? <span className="sd-dipegang">📌 Dipegang {dipegang.shares} lembar @ {usd(dipegang.entry)}{dipegang.pnl != null && <b className={dipegang.pnl >= 0 ? 'up' : 'down'}> {dipegang.pnl >= 0 ? '+' : '−'}{usd(Math.abs(dipegang.pnl))}</b>} · target {usd(dipegang.target)} · stop {usd(dipegang.stop)}</span>
-                            : <button className="btn primary" onClick={() => setPegang(true)}>📌 Pegang posisi</button>}
+                            ? <span className="sd-dipegang"><Ikon e="📌" /> Dipegang {dipegang.shares} lembar @ {usd(dipegang.entry)}{dipegang.pnl != null && <b className={dipegang.pnl >= 0 ? 'up' : 'down'}> {dipegang.pnl >= 0 ? '+' : '−'}{usd(Math.abs(dipegang.pnl))}</b>} · target {usd(dipegang.target)} · stop {usd(dipegang.stop)}</span>
+                            : <button className="btn primary" onClick={() => setPegang(true)}><Ikon e="📌" /> Pegang posisi</button>}
                     </div>
                     <div className="sd-sub mono">1B {persen(b.chg1m, 1)} · 3B {persen(b.chg3m, 1)} · 1T {persen(b.chg1y, 1)} · RSI {b.rsi ?? '–'} · vol {b.volX}×</div>
                 </div>
@@ -82,7 +83,7 @@ export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPre
                     <div className="sd-score">
                         <div className={`sd-gauge ${kelas(all.label)}`} style={{ ['--p' as any]: skorBar(all.skor) }}><b className="mono">{skorBar(all.skor)}</b><small>/100</small></div>
                         <span className={`lb big ${kelas(all.label)}`}>{all.label.toUpperCase()}</span>
-                        <div className="sd-mini">{FAKTOR.filter((x) => x.k !== 'semua').map((x) => { const s = d.skor[x.k]; return <span key={x.k} className={`lb sm ${kelas(s?.label)}`} title={x.info}>{x.ico} {s ? s.label : '–'}</span>; })}</div>
+                        <div className="sd-mini">{FAKTOR.filter((x) => x.k !== 'semua').map((x) => { const s = d.skor[x.k]; return <span key={x.k} className={`lb sm ${kelas(s?.label)}`} title={x.info}><Ikon e={x.ico} /> {s ? s.label : '–'}</span>; })}</div>
                     </div>
                 )}
             </section>
@@ -96,9 +97,9 @@ export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPre
                     <p>{prof.ringkas || prof.deskripsi.slice(0, 400)}</p>
                     <div className="sd-prof-meta">{[prof.sektor, prof.industri, prof.alamat].filter(Boolean).join(' · ')}</div>
                     <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-                        {prof.situs && <a className="btn" href={prof.situs} target="_blank" rel="noreferrer">🌐 Situs resmi perusahaan</a>}
-                        <a className="btn" href={`https://www.nasdaq.com/market-activity/stocks/${b.s.toLowerCase().replace('-', '.')}`} target="_blank" rel="noreferrer">📄 Profil di Nasdaq</a>
-                        <a className="btn" href={`https://www.google.com/finance/quote/${b.s.replace('-', '.')}`} target="_blank" rel="noreferrer">🔎 Google Finance</a>
+                        {prof.situs && <a className="btn" href={prof.situs} target="_blank" rel="noreferrer"><Ikon e="🌐" /> Situs resmi perusahaan</a>}
+                        <a className="btn" href={`https://www.nasdaq.com/market-activity/stocks/${b.s.toLowerCase().replace('-', '.')}`} target="_blank" rel="noreferrer"><Ikon e="📄" /> Profil di Nasdaq</a>
+                        <a className="btn" href={`https://www.google.com/finance/quote/${b.s.replace('-', '.')}`} target="_blank" rel="noreferrer"><Ikon e="🔎" /> Google Finance</a>
                     </div>
                 </>) : <p className="sb-note">{profErr ? `Profil belum bisa diambil (${profErr}).` : 'Memuat profil perusahaan…'}</p>}
             </section>
@@ -107,7 +108,7 @@ export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPre
 
             {sim ? <Simulasi simbol={b.s} q={q.replace(/&p[tf]=[^&]*/g, '')} onTutup={() => setSim(false)} /> : (
                 <section className="sb-card sim-cta">
-                    <div><b>🔮 Prediksi Kronos</b><small>Model AI candlestick memperkirakan jalur harga ke depan: peluang naik, perkiraan tengah, serta peluang kena target/stop untuk profil Konservatif, Moderat & Agresif.</small></div>
+                    <div><b><Ikon e="🔮" /> Prediksi Kronos</b><small>Model AI candlestick memperkirakan jalur harga ke depan: peluang naik, perkiraan tengah, serta peluang kena target/stop untuk profil Konservatif, Moderat & Agresif.</small></div>
                     <button className="btn primary" onClick={() => setSim(true)}>Lihat prediksi</button>
                 </section>
             )}
@@ -123,7 +124,7 @@ export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPre
                             <div><small>Risiko : hasil</small><b className="mono">1 : {pr.rr}</b><span>peluang naik {pr.peluangNaik}%</span></div>
                         </div>
                     )}
-                    {/Jual/.test(all?.label || '') && <p className="sd-warn">⚠️ Sinyal gabungan sedang <b>{all?.label}</b>. Proyeksi di bawah murni statistik pola harga, bukan alasan untuk masuk.</p>}
+                    {/Jual/.test(all?.label || '') && <p className="sd-warn"><Ikon e="⚠" /> Sinyal gabungan sedang <b>{all?.label}</b>. Proyeksi di bawah murni statistik pola harga, bukan alasan untuk masuk.</p>}
                     <div className="sd-targets">
                         {pr.target.map((t) => (
                             <div key={t.nama} className={t.nama === pr.terbaik ? 'best' : ''}>
@@ -139,7 +140,7 @@ export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPre
             )}
 
             <section className="sb-card sd-faktor">
-                <div className="sb-seg">{FAKTOR.filter((x) => x.k !== 'semua').map((x) => <button key={x.k} className={tab === x.k ? 'on' : ''} onClick={() => setTab(x.k)}>{x.ico} {x.label}</button>)}</div>
+                <div className="sb-seg">{FAKTOR.filter((x) => x.k !== 'semua').map((x) => <button key={x.k} className={tab === x.k ? 'on' : ''} onClick={() => setTab(x.k)}><Ikon e={x.ico} /> {x.label}</button>)}</div>
                 {(() => {
                     const s = d.skor[tab];
                     const info = FAKTOR.find((x) => x.k === tab)!;
@@ -158,7 +159,7 @@ export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPre
                                 const evA = evs.find((e) => e.id === aktif);
                                 return (
                                     <div className="sd-preset">
-                                        <div className="pr-l">Preset guru {k} <small>(⭐ = direkomendasikan untuk rencana posisi ini)</small></div>
+                                        <div className="pr-l">Preset guru {k} <small>(<Ikon e="⭐" /> = direkomendasikan untuk rencana posisi ini)</small></div>
                                         <PresetPilih jenis={k} aktif={aktif} setAktif={(id) => setPreset(k === 'teknikal' ? { ...preset, t: id } : { ...preset, f: id })} mode={mode} data={pd} />
                                         {evA ? <PresetCek ev={evA} p={pd.preset.find((x) => x.id === evA.id)!} /> : (
                                             <div className="pr-semua">{evs.map((e) => { const p = pd.preset.find((x) => x.id === e.id)!; return (
@@ -199,8 +200,8 @@ export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPre
 
             <section className="sb-card">
                 <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-                    <button className="btn" onClick={() => aksi(() => apiPost('/api/kantor/investigasi/selidiki', { simbol: b.s }), `✓ Kasus ${b.s} siap — buka tab Investigasi.`)}>🔎 Selidiki pergerakannya</button>
-                    <button className="btn" onClick={() => window.dispatchEvent(new CustomEvent('kantor:tanya-trading', { detail: `Bagaimana ${b.s} menurut data untuk rencana posisi ini? Layak dipantau atau tidak, dan apa risikonya?` }))}>💬 Tanya tim trading</button>
+                    <button className="btn" onClick={() => aksi(() => apiPost('/api/kantor/investigasi/selidiki', { simbol: b.s }), `✓ Kasus ${b.s} siap — buka tab Investigasi.`)}><Ikon e="🔎" /> Selidiki pergerakannya</button>
+                    <button className="btn" onClick={() => window.dispatchEvent(new CustomEvent('kantor:tanya-trading', { detail: `Bagaimana ${b.s} menurut data untuk rencana posisi ini? Layak dipantau atau tidak, dan apa risikonya?` }))}><Ikon e="💬" /> Tanya tim trading</button>
                 </div>
                 {msg && <div className="sb-note" style={{ marginTop: 8 }}>{msg}</div>}
                 <p className="sb-note">Kantor tidak tersambung ke broker. Untuk riset, bukan saran beli/jual.</p>

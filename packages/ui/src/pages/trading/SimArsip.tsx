@@ -5,6 +5,7 @@ import { useInterval } from '../../kantor/aktif';
 import { usd } from './types';
 import { KurvaAksi, type AksiKurva } from './KurvaAksi';
 
+import { Ikon } from '../../components/Ikon';
 interface Hasil {
     opsi: { H: number; guru: string | null; sinyal: string[]; dari: string | null; modal: number; porsi: number; beliPerHari: number; maksPosisi: number; keluar: { target: boolean; stop: boolean; jual: boolean } };
     dari: string; sampai: string; hari: number; akhir: number; pct: number; spyPct: number | null; maxDD: number; trade: number; menang: number; rataTrade: number; untungTotal: number;
@@ -30,7 +31,7 @@ export function SimArsip({ onBuka }: { onBuka?: (s: string) => void }) {
     const jual = (h?.aksi || []).filter((x) => x.jenis === 'jual');
     return (
         <div>
-            <div className="ss-arsip">{a?.hari ? <>📚 Arsip sinyal: <b>{a.hari} hari bursa</b> ({tgl(a.dari!)} – {tgl(a.sampai!)}). Bertambah otomatis setiap sesi.</> : <>📚 Arsip sinyal mulai dikumpulkan sejak hari ini — simulasi bisa dijalankan setelah ada minimal 2 hari bursa tercatat.</>}</div>
+            <div className="ss-arsip">{a?.hari ? <><Ikon e="📚" /> Arsip sinyal: <b>{a.hari} hari bursa</b> ({tgl(a.dari!)} – {tgl(a.sampai!)}). Bertambah otomatis setiap sesi.</> : <><Ikon e="📚" /> Arsip sinyal mulai dikumpulkan sejak hari ini — simulasi bisa dijalankan setelah ada minimal 2 hari bursa tercatat.</>}</div>
             <div className="ss-form">
                 <fieldset><legend>Gaya posisi</legend><div className="ss-pil">{GAYA.map(([k, n, ket]) => <button key={k} className={f.H === k ? 'on' : ''} onClick={() => set({ H: k })}><b>{n}</b><small>{ket}</small></button>)}</div></fieldset>
                 <fieldset><legend>Guru trader</legend>
@@ -69,7 +70,7 @@ export function SimArsip({ onBuka }: { onBuka?: (s: string) => void }) {
                     </div>
                     <KurvaAksi kurva={h.kurva} aksi={h.aksi} modal={h.opsi.modal} />
                     <small className="ss-meta">{tgl(h.dari)} – {tgl(h.sampai)} · {h.hari} hari bursa · {GAYA.find((g) => g[0] === h.opsi.H)?.[1]} · {h.opsi.sinyal.join(' + ')}</small>
-                    {h.atur && <div className="ss-atur">💼 {h.atur}</div>}
+                    {h.atur && <div className="ss-atur"><Ikon e="💼" /> {h.atur}</div>}
                     {h.komentar && <div className="ss-komentar"><b>{h.oleh || 'Bima'} — Pengawas Anggaran</b><p>{h.komentar}</p></div>}
                     {!!jual.length && (
                         <div className="ss-trx">

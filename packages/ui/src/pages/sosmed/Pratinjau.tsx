@@ -1,5 +1,6 @@
 import React from 'react';
 
+import { Ikon } from '../../components/Ikon';
 /**
  * Pratinjau visual untuk memilih color grade, efek video, dan gaya video tanpa harus hafal namanya.
  * Semua gambar & animasi di sini buatan kantor sendiri (bukan cuplikan film/video orang lain),
@@ -107,7 +108,7 @@ export function PratinjauGaya({ id, gambar }: { id: string; gambar?: string }) {
                 <path d="M84 20 L150 26 L146 80 L80 74 Z" fill="#2f6fb5" filter="drop-shadow(1px 2px 0 rgba(0,0,0,.25))" /><rect x="96" y="40" width="44" height="14" fill="#ffe35a" transform="rotate(4 118 47)" /><text x="100" y="51" fontSize="9" fontWeight="900" fontFamily="system-ui" fill="#111" transform="rotate(4 118 47)">HEMAT!</text><rect x="34" y="72" width="56" height="16" fill="#fff" transform="rotate(-6 60 80)" /></svg>
         )
     };
-    return <div className="pv-gaya" aria-hidden="true">{isi[id] || <div className="pv-kosong">🎨</div>}</div>;
+    return <div className="pv-gaya" aria-hidden="true">{isi[id] || <div className="pv-kosong"><Ikon e="🎨" /></div>}</div>;
 }
 
 /* ── Efek video: animasi mini 9:16 buatan sendiri ── */
@@ -171,7 +172,7 @@ export function GaleriPilih({ jenis, daftar, pilih, onPilih, banyak, maks = 6, g
                     <button key={it.id} type="button" className={`pv-item ${on ? 'on' : ''}`} aria-pressed={banyak ? on : undefined} role={banyak ? undefined : 'radio'} aria-checked={banyak ? undefined : on}
                         disabled={banyak && !on && pilih.length >= maks} onClick={() => onPilih(it.id)} title={it.ket}>
                         {jenis === 'efek' ? <PratinjauEfek id={it.id} /> : jenis === 'grade' ? <PratinjauGrade id={it.id} /> : <PratinjauGaya id={it.id} gambar={gambar?.[it.id]} />}
-                        <span className="pv-nama">{it.diSkill ? '⭐ ' : ''}{it.nama}{it.jenisGaya && <small>{it.jenisGaya}</small>}</span>
+                        <span className="pv-nama">{it.diSkill ? <Ikon e="⭐" /> : ''}{it.nama}{it.jenisGaya && <small>{it.jenisGaya}</small>}</span>
                         <span className="pv-ket">{it.ket}</span>
                         {on && <span className="pv-cek-on" aria-hidden="true">✓</span>}
                     </button>

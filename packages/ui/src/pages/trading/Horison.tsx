@@ -1,5 +1,6 @@
 import React from 'react';
 
+import { Ikon } from '../../components/Ikon';
 /**
  * Horison posisi: sinyal dihitung khusus untuk berapa lama posisi mau dipegang.
  * Satuan = hari bursa AS (Senin–Jumat, di luar hari libur NYSE).
@@ -51,12 +52,12 @@ const thn = (t?: string) => (t || '').slice(0, 4);
 /** Peringatan / tanda bukti skor teknikal untuk horison yang dipilih. */
 export function BuktiTeknikal({ bukti, mode }: { bukti?: Bukti | null; mode: string }) {
     const nm = PRESET.find((p) => p.k === mode)?.label || 'horison ini';
-    if (bukti?.terbukti) return <div className="hz-bukti ok">✅ <span>Skor teknikal untuk <b>{nm}</b> memakai <b>bobot dari data</b>: disusun dari {thn(bukti.latih?.dari)}–{thn(bukti.latih?.sampai)}, lalu lulus uji di data {thn(bukti.uji?.dari)}–{thn(bukti.uji?.sampai)} yang tidak ikut dipakai{bukti.uji?.selisih != null ? <> ("Beli kuat" unggul {bukti.uji.selisih.toFixed(2)}% atas "Jual kuat")</> : null}. Tetap bukan jaminan.</span></div>;
-    if (bukti?.sumber === 'data-belum') return <div className="hz-bukti warn">⚠️ <span><b>Skor teknikal untuk {nm} belum terbukti</b>, tapi bobot dari data ({thn(bukti.latih?.dari)}–{thn(bukti.latih?.sampai)}) di uji {thn(bukti.uji?.dari)}–{thn(bukti.uji?.sampai)} lebih baik dari rumus lama{bukti.uji?.selisih != null ? <> ("Beli kuat" − "Jual kuat" {bukti.uji.selisih.toFixed(2)}% ± {bukti.uji.galat?.toFixed(2)}%, rumus lama {bukti.uji.lama?.toFixed(2)}%)</> : null} — jadi bobot ini yang dipakai, dengan <b>pengaruh teknikal di skor gabungan dikecilkan setengah</b>.</span></div>;
+    if (bukti?.terbukti) return <div className="hz-bukti ok"><Ikon e="✅" /> <span>Skor teknikal untuk <b>{nm}</b> memakai <b>bobot dari data</b>: disusun dari {thn(bukti.latih?.dari)}–{thn(bukti.latih?.sampai)}, lalu lulus uji di data {thn(bukti.uji?.dari)}–{thn(bukti.uji?.sampai)} yang tidak ikut dipakai{bukti.uji?.selisih != null ? <> ("Beli kuat" unggul {bukti.uji.selisih.toFixed(2)}% atas "Jual kuat")</> : null}. Tetap bukan jaminan.</span></div>;
+    if (bukti?.sumber === 'data-belum') return <div className="hz-bukti warn"><Ikon e="⚠" /> <span><b>Skor teknikal untuk {nm} belum terbukti</b>, tapi bobot dari data ({thn(bukti.latih?.dari)}–{thn(bukti.latih?.sampai)}) di uji {thn(bukti.uji?.dari)}–{thn(bukti.uji?.sampai)} lebih baik dari rumus lama{bukti.uji?.selisih != null ? <> ("Beli kuat" − "Jual kuat" {bukti.uji.selisih.toFixed(2)}% ± {bukti.uji.galat?.toFixed(2)}%, rumus lama {bukti.uji.lama?.toFixed(2)}%)</> : null} — jadi bobot ini yang dipakai, dengan <b>pengaruh teknikal di skor gabungan dikecilkan setengah</b>.</span></div>;
     if (bukti?.sumber === 'gagal-uji' || (!bukti && PENDEK.has(mode))) return (
-        <div className="hz-bukti warn">⚠️ <span><b>Skor teknikal untuk {nm} belum terbukti.</b> Di uji mundur, saham berlabel "Beli kuat" tidak jelas lebih baik dari "Jual kuat" untuk posisi ±{bukti?.H ?? (mode === 'swingpendek' ? 5 : 1)} hari bursa. Pakai skor teknikal sebagai <b>gambaran kondisi grafik</b>, bukan ramalan arah harga{PENDEK.has(mode) ? ' — untuk jangka sependek ini pergerakan harga sebagian besar acak' : ''}. {bukti ? <>Pengaruh teknikal di skor gabungan sudah <b>dikecilkan setengah</b>.</> : null}
+        <div className="hz-bukti warn"><Ikon e="⚠" /> <span><b>Skor teknikal untuk {nm} belum terbukti.</b> Di uji mundur, saham berlabel "Beli kuat" tidak jelas lebih baik dari "Jual kuat" untuk posisi ±{bukti?.H ?? (mode === 'swingpendek' ? 5 : 1)} hari bursa. Pakai skor teknikal sebagai <b>gambaran kondisi grafik</b>, bukan ramalan arah harga{PENDEK.has(mode) ? ' — untuk jangka sependek ini pergerakan harga sebagian besar acak' : ''}. {bukti ? <>Pengaruh teknikal di skor gabungan sudah <b>dikecilkan setengah</b>.</> : null}
             {!!bukti?.alasan?.length && <small> Hasil uji: {bukti.alasan.join('; ')}.</small>}</span></div>);
-    if (bukti?.sumber === 'belum-diuji') return <div className="hz-bukti">🧪 <span>Skor teknikal horison ini <b>belum diuji</b>. Buka tab <b>Uji mundur</b> → Jalankan, supaya bobotnya dicari dari data dan diuji.</span></div>;
+    if (bukti?.sumber === 'belum-diuji') return <div className="hz-bukti"><Ikon e="🧪" /> <span>Skor teknikal horison ini <b>belum diuji</b>. Buka tab <b>Uji mundur</b> → Jalankan, supaya bobotnya dicari dari data dan diuji.</span></div>;
     return null;
 }
 
@@ -72,7 +73,7 @@ export function HorisonBar({ h, setH, bobot, bukti }: { h: Horison; setH: (h: Ho
                 <div className="sb-seg scroll">
                     {PRESET.map((p) => <button key={p.k} title={p.info} className={h.mode === p.k ? 'on' : ''} onClick={() => setH({ mode: p.k })}>{p.label} <small>{p.ket}</small></button>)}
                     <label className={`hz-tgl ${h.mode === 'tanggal' ? 'on' : ''}`}>
-                        📅 {h.mode === 'tanggal' && h.tanggal ? `s/d ${fmtTgl(h.tanggal)}` : 'Pilih tanggal'}
+                        <Ikon e="📅" /> {h.mode === 'tanggal' && h.tanggal ? `s/d ${fmtTgl(h.tanggal)}` : 'Pilih tanggal'}
                         <input type="date" min={min} max={max} value={h.tanggal || ''} onClick={(e) => { try { (e.currentTarget as any).showPicker?.(); } catch { /* */ } }} onChange={(e) => e.target.value && setH({ mode: 'tanggal', tanggal: e.target.value })} />
                     </label>
                 </div>

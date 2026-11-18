@@ -8,6 +8,7 @@ import { RichText } from '../../components/common/RichText';
 import { Batang, Donat } from './Grafik';
 import { Tx, rp, rpk, ikon, warnaDari, periode, dalam, keluar, masuk, sum, kelompok, hariIni, tglPanjang, tglPendek } from './util';
 
+import { Ikon } from '../../components/Ikon';
 interface Report { transaksi: Tx[]; sheetUrl: string; pencatat: { lastRun: number; lastError: string } }
 interface Anggaran { mulai: number; batas: Record<string, number>; akun: string[]; kategori: string[]; saldo?: Record<string, { nilai: number; tanggal: string; sumber: string }> }
 type Tab = 'beranda' | 'pengeluaran' | 'anggaran' | 'transaksi' | 'chat';
@@ -47,13 +48,13 @@ export function KeuanganApp() {
                         <button onClick={() => setGeser(Math.min(0, geser + 1))} disabled={geser >= 0} aria-label="Periode berikutnya">›</button>
                     </div>
                     <div className="k-head-act">
-                        <button className="k-pill" onClick={() => setImpor(true)} title="Impor PDF mutasi rekening">📥 Mutasi</button>
-                        {rep.data && <a className="k-pill" href={rep.data.sheetUrl} target="_blank" rel="noreferrer">📄 Sheets</a>}
-                        <button className="k-pill" onClick={muat} disabled={rep.loading}>{rep.loading ? '…' : '↻'}</button>
+                        <button className="k-pill" onClick={() => setImpor(true)} title="Impor PDF mutasi rekening"><Ikon e="📥" /> Mutasi</button>
+                        {rep.data && <a className="k-pill" href={rep.data.sheetUrl} target="_blank" rel="noreferrer"><Ikon e="📄" /> Sheets</a>}
+                        <button className="k-pill" onClick={muat} disabled={rep.loading}>{rep.loading ? '…' : <Ikon e="↻" />}</button>
                     </div>
                 </div>
                 <div className="k-saldo">
-                    <small>SISA PERIODE INI</small>
+                    <small>Sisa periode ini</small>
                     <b className="mono">{rp(msk - kel)}</b>
                 </div>
                 <div className="k-io">
@@ -62,7 +63,7 @@ export function KeuanganApp() {
                 </div>
             </header>
 
-            <nav className="k-tabs">{TABS.map((t) => <button key={t.k} className={tab === t.k ? 'on' : ''} onClick={() => { setTab(t.k); if (t.k !== 'transaksi') setFilter({}); }}><span>{t.ico}</span>{t.label}</button>)}</nav>
+            <nav className="k-tabs">{TABS.map((t) => <button key={t.k} className={tab === t.k ? 'on' : ''} onClick={() => { setTab(t.k); if (t.k !== 'transaksi') setFilter({}); }}><span><Ikon e={t.ico} /></span>{t.label}</button>)}</nav>
 
             {rep.error && <div className="error">Data keuangan belum bisa dibaca: {rep.error}</div>}
             {!rep.data && !rep.error && <div className="fin-empty">Memuat…</div>}
@@ -102,23 +103,23 @@ function Beranda({ tx, p, mulai, ang, onTx, go, onTambah, lihat, onImpor }: { tx
         <div className="k-grid2">
             <section className="k-card">
                 <div className="k-quick">
-                    <button onClick={() => go('chat')}><span className="q b">💬</span>Catat lewat chat</button>
-                    <button onClick={onTambah}><span className="q g">✍️</span>Tambah manual</button>
-                    <button onClick={() => go('pengeluaran')}><span className="q o">📊</span>Laporan</button>
-                    <button onClick={onImpor}><span className="q p">📥</span>Impor mutasi</button>
+                    <button onClick={() => go('chat')}><span className="q b"><Ikon e="💬" /></span>Catat lewat chat</button>
+                    <button onClick={onTambah}><span className="q g"><Ikon e="✍" /></span>Tambah manual</button>
+                    <button onClick={() => go('pengeluaran')}><span className="q o"><Ikon e="📊" /></span>Laporan</button>
+                    <button onClick={onImpor}><span className="q p"><Ikon e="📥" /></span>Impor mutasi</button>
                 </div>
             </section>
             {saldo.length > 0 && (
                 <section className="k-card k-span2">
                     <div className="k-card-h"><h3>Saldo rekening</h3><small>patokan dari mutasi PDF + transaksi sesudahnya</small></div>
                     <div className="k-saldo-akun">{saldo.map((x) => (
-                        <button key={x.a} onClick={() => lihat({ akun: x.a })}><span>🏦 {x.a}</span><b className="mono">{rp(x.kini)}</b><small>per mutasi {tglPendek(x.s.tanggal)}: {rp(x.s.nilai)}</small></button>
+                        <button key={x.a} onClick={() => lihat({ akun: x.a })}><span><Ikon e="🏦" /> {x.a}</span><b className="mono">{rp(x.kini)}</b><small>per mutasi {tglPendek(x.s.tanggal)}: {rp(x.s.nilai)}</small></button>
                     ))}</div>
                 </section>
             )}
             <section className="k-card k-today">
                 <div><small>Pengeluaran hari ini</small><b className="mono">{rp(hariIniKel)}</b></div>
-                {totalBatas > 0 ? <p>{hariIniKel <= jatah ? '🤩 Aman!' : '😬 Melebihi jatah.'} Jatah harian sampai {tglPendek(p.end)}: <b className="mono">{rp(jatah)}</b></p> : <p>Atur anggaran supaya tahu jatah harian. <button className="k-link" onClick={() => go('anggaran')}>Atur →</button></p>}
+                {totalBatas > 0 ? <p>{hariIniKel <= jatah ? <><Ikon e="🤩" /> {'Aman!'}</> : <><Ikon e="😬" /> {'Melebihi jatah.'}</>} Jatah harian sampai {tglPendek(p.end)}: <b className="mono">{rp(jatah)}</b></p> : <p>Atur anggaran supaya tahu jatah harian. <button className="k-link" onClick={() => go('anggaran')}>Atur →</button></p>}
             </section>
             <section className="k-card k-span2">
                 <div className="k-card-h"><h3>Transaksi terakhir</h3><button className="k-link" onClick={() => go('transaksi')}>Lihat semua ›</button></div>
@@ -126,7 +127,7 @@ function Beranda({ tx, p, mulai, ang, onTx, go, onTambah, lihat, onImpor }: { tx
                 {terakhir.map((t, i) => <TxRow key={i} t={t} onClick={() => onTx(t)} />)}
             </section>
             <section className="k-card k-span2 k-insight">
-                <div className="k-card-h"><h3>✨ Ringkasan minggu ini</h3><small>sejak {tglPendek(senin)}</small></div>
+                <div className="k-card-h"><h3><Ikon e="✨" /> Ringkasan minggu ini</h3><small>sejak {tglPendek(senin)}</small></div>
                 <div className="k-ins-grid">
                     <div><small>Keluar minggu ini</small><b className="mono">{rp(sum(minggu))}</b><em className={sum(minggu) > rata8 ? 'down' : 'up'}>{rata8 ? `${sum(minggu) > rata8 ? '▲' : '▼'} ${Math.abs(Math.round((sum(minggu) / rata8 - 1) * 100))}% vs rata-rata 8 minggu` : ''}</em></div>
                     <div><small>Kategori terbesar</small><b>{katMinggu[0] ? `${ikon(katMinggu[0].k)} ${katMinggu[0].k}` : '–'}</b><em>{katMinggu[0] ? rp(katMinggu[0].v) : ''}</em></div>
@@ -141,7 +142,7 @@ function Beranda({ tx, p, mulai, ang, onTx, go, onTambah, lihat, onImpor }: { tx
 function TxRow({ t, onClick }: { t: Tx; onClick: () => void }) {
     return (
         <button className="k-tx" onClick={onClick}>
-            <span className="k-ico" style={{ background: `${warnaDari(t.kat, 0)}22` }}>{t.jenis === 'Masuk' ? '💰' : t.jenis === 'Antar Rekening' ? '🔁' : ikon(t.kat)}<i>{(t.bank || '?').slice(0, 1)}</i></span>
+            <span className="k-ico" style={{ background: `${warnaDari(t.kat, 0)}22` }}>{t.jenis === 'Masuk' ? <Ikon e="💰" /> : t.jenis === 'Antar Rekening' ? <Ikon e="🔁" /> : ikon(t.kat)}<i>{(t.bank || '?').slice(0, 1)}</i></span>
             <span className="k-tx-main"><b>{t.jenis === 'Masuk' ? 'Pemasukan' : t.jenis === 'Antar Rekening' ? 'Antar rekening' : t.kat}</b><small>{t.bank}{t.status === 'Manual' ? ' · manual' : ''}</small><small>{t.pihak || t.ket}</small></span>
             <span className={`k-tx-n mono ${t.jenis === 'Masuk' ? 'in' : t.jenis === 'Keluar' ? 'out' : ''}`}>{t.jenis === 'Masuk' ? '+ ' : t.jenis === 'Keluar' ? '− ' : ''}{rp(t.n)}</span>
         </button>
@@ -176,7 +177,7 @@ function Pengeluaran({ tx, mulai, geser, lihat }: { tx: Tx[]; mulai: number; ges
                 {grup.length === 0 && <div className="fin-empty">Belum ada pengeluaran di periode ini.</div>}
                 {grup.map((g) => (
                     <button key={g.k} className="k-rank" onClick={() => lihat(by === 'kat' ? { kat: g.k, jenis: 'Keluar' } : by === 'bank' ? { akun: g.k, jenis: 'Keluar' } : { pihak: g.k, jenis: 'Keluar' })}>
-                        <span className="k-ico" style={{ background: `${g.c}22` }}>{by === 'kat' ? ikon(g.k) : by === 'bank' ? '🏦' : '🏪'}</span>
+                        <span className="k-ico" style={{ background: `${g.c}22` }}>{by === 'kat' ? ikon(g.k) : by === 'bank' ? <Ikon e="🏦" /> : <Ikon e="🏪" />}</span>
                         <span className="k-rank-main"><b>{g.k}</b><small>{g.n} transaksi</small><span className="k-meter"><i style={{ width: `${(g.v / Math.max(1, grup[0].v)) * 100}%`, background: g.c }} /></span></span>
                         <span className="k-rank-n"><b className="mono">{rp(g.v)}</b><small className="mono">{total ? Math.round((g.v / total) * 100) : 0}%</small></span>
                     </button>
@@ -205,7 +206,7 @@ function AnggaranView({ tx, p, ang, simpan, lihat }: { tx: Tx[]; p: ReturnType<t
                 <b className="k-big mono">{rp(total - terpakai)}</b>
                 <div className="k-meter big"><i style={{ width: `${pct}%`, background: pct > 90 ? 'var(--down)' : pct > 70 ? '#f59e0b' : 'var(--k-blue)' }} /></div>
                 <div className="k-row-sb"><small>Terpakai {rp(terpakai)} ({pct}%)</small><small>dari {rp(total)}</small></div>
-                {total > 0 && <div className="k-tip">🤩 Sisa {sisaHari} hari. Kamu bisa belanja <b className="mono">{rp(Math.max(0, (total - terpakai) / sisaHari))}</b> per hari sampai {tglPendek(p.end)}.</div>}
+                {total > 0 && <div className="k-tip"><Ikon e="🤩" /> Sisa {sisaHari} hari. Kamu bisa belanja <b className="mono">{rp(Math.max(0, (total - terpakai) / sisaHari))}</b> per hari sampai {tglPendek(p.end)}.</div>}
             </section>
             {edit && (
                 <section className="k-card k-span2">
@@ -248,7 +249,7 @@ function Transaksi({ tx, filter, setFilter, onTx }: { tx: Tx[]; filter: any; set
     return (
         <section className="k-card k-span2 k-list">
             <div className="k-list-tools">
-                <div className="sb-search"><span>⌕</span><input placeholder="Cari merchant, catatan, kategori…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+                <div className="sb-search"><span><Ikon e="⌕" /></span><input placeholder="Cari merchant, catatan, kategori…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
                 <div className="k-seg">{['', 'Keluar', 'Masuk', 'Antar Rekening'].map((j) => <button key={j} className={(filter.jenis || '') === j ? 'on' : ''} onClick={() => setFilter({ ...filter, jenis: j || undefined })}>{j || 'Semua'}</button>)}</div>
             </div>
             {aktif.filter(([k]) => k !== 'jenis').length > 0 && <div className="k-chips">{aktif.filter(([k]) => k !== 'jenis').map(([k, v]) => <button key={k} onClick={() => setFilter({ ...filter, [k]: undefined })}>{String(v)} ✕</button>)}</div>}
@@ -281,7 +282,7 @@ function Detail({ t, all, mulai, onClose, lihat, onUbah, onHapus }: { t: Tx; all
             <div className="k-sheet-in" onClick={(e) => e.stopPropagation()}>
                 <div className="k-sheet-h"><b>Detail transaksi</b><button onClick={onClose}>✕</button></div>
                 <div className="k-det-top">
-                    <span className="k-ico big" style={{ background: `${warnaDari(t.kat, 0)}22` }}>{t.jenis === 'Masuk' ? '💰' : ikon(t.kat)}</span>
+                    <span className="k-ico big" style={{ background: `${warnaDari(t.kat, 0)}22` }}>{t.jenis === 'Masuk' ? <Ikon e="💰" /> : ikon(t.kat)}</span>
                     <b className={`mono ${t.jenis === 'Masuk' ? 'in' : 'out'}`}>{t.jenis === 'Masuk' ? '+ ' : t.jenis === 'Keluar' ? '− ' : ''}{rp(t.n)}</b>
                     <small>{tglPanjang(t.d)} · {t.t}</small>
                 </div>
@@ -304,12 +305,12 @@ function Detail({ t, all, mulai, onClose, lihat, onUbah, onHapus }: { t: Tx; all
                 </div>
                 {t.id && (
                     <div className="k-det-act">
-                        <button className="btn" onClick={onUbah}>✏️ Ubah</button>
+                        <button className="btn" onClick={onUbah}><Ikon e="✏" /> Ubah</button>
                         <button className="btn danger" disabled={busy} onClick={async () => {
                             if (!confirm(`Hapus transaksi ${rp(t.n)} (${t.pihak || t.kat}, ${tglPendek(t.d)})? Salinannya tetap disimpan di VPS.`)) return;
                             setBusy(true); setHapusErr('');
                             try { await onHapus(); } catch (e: any) { setHapusErr(String(e?.message || e)); setBusy(false); }
-                        }}>{busy ? 'Menghapus…' : '🗑 Hapus'}</button>
+                        }}>{busy ? 'Menghapus…' : <><Ikon e="🗑" /> {'Hapus'}</>}</button>
                     </div>
                 )}
                 {hapusErr && <div className="error">{hapusErr}</div>}
@@ -344,7 +345,7 @@ function Tambah({ ang, onClose, onSaved, awal, id }: { ang: Anggaran | null; onC
                 <div className="k-seg full">{[['Keluar', 'Pengeluaran'], ['Masuk', 'Pemasukan'], ['Antar Rekening', 'Transfer']].map(([k, l]) => <button key={k} className={jenis === k ? 'on' : ''} onClick={() => setJenis(k)}>{l}</button>)}</div>
                 <label className="k-amount"><span>Rp</span><input inputMode="numeric" autoFocus placeholder="0" value={nominal ? nominal.toLocaleString('id-ID') : ''} onChange={(e) => setN(e.target.value)} /></label>
                 <input className="input" type="date" value={tgl} max={hariIni()} onChange={(e) => setTgl(e.target.value)} />
-                <div className="k-akun">{Array.from(new Set([...(ang?.akun || ['Cash']), akun])).map((a) => <button key={a} className={akun === a ? 'on' : ''} onClick={() => setAkun(a)}>{a === 'Cash' ? '💵' : '🏦'} {a}</button>)}</div>
+                <div className="k-akun">{Array.from(new Set([...(ang?.akun || ['Cash']), akun])).map((a) => <button key={a} className={akun === a ? 'on' : ''} onClick={() => setAkun(a)}>{a === 'Cash' ? <Ikon e="💵" /> : <Ikon e="🏦" />} {a}</button>)}</div>
                 {(jenis === 'Keluar' || id) && <select className="select" value={kat} onChange={(e) => setKat(e.target.value)}>{Array.from(new Set([...(ang?.kategori || ['Lainnya']), 'Pendapatan', kat])).map((k) => <option key={k} value={k}>{ikon(k)} {k}</option>)}</select>}
                 <input className="input" placeholder={jenis === 'Masuk' ? 'Dari siapa? (mis. gaji kantor)' : 'Di mana? (mis. warung, Fore Coffee)'} value={pihak} onChange={(e) => setPihak(e.target.value)} />
                 <input className="input" placeholder="Beli apa / catatan (mis. nasi kuning)" value={ket} onChange={(e) => setKet(e.target.value)} />
@@ -385,14 +386,14 @@ function ChatUang({ ang, onSaved }: { ang: Anggaran | null; onSaved: () => void 
         <section className="k-card k-span2 k-chat">
             <div className="k-chat-body">
                 {pesan.length === 0 && !draf && (
-                    <div className="k-hello"><span>🤖</span><b>Hai, saya Uang</b><small>Tulis transaksi dengan bahasa biasa — saya catat ke Google Sheets. Atau tanya apa saja soal keuanganmu.</small></div>
+                    <div className="k-hello"><span><Ikon e="🤖" /></span><b>Hai, saya Uang</b><small>Tulis transaksi dengan bahasa biasa — saya catat ke Google Sheets. Atau tanya apa saja soal keuanganmu.</small></div>
                 )}
                 {pesan.map((m) => <div key={m.id} className={`wa-bubble ${m.dari === 'owner' ? 'me' : 'them'}`}><div className="wa-text">{m.dari === 'owner' ? m.teks : <RichText text={m.teks} />}</div></div>)}
                 {menulis.length > 0 && <div className="wa-bubble them typing"><span className="dots"><i /><i /><i /></span></div>}
                 {draf && (
                     <div className="k-draf">
                         <small>“{draf.asal}”</small>
-                        <div className="k-draf-row"><span className="k-ico" style={{ background: `${warnaDari(draf.kategori, 0)}22` }}>{draf.jenis === 'Masuk' ? '💰' : ikon(draf.kategori)}</span>
+                        <div className="k-draf-row"><span className="k-ico" style={{ background: `${warnaDari(draf.kategori, 0)}22` }}>{draf.jenis === 'Masuk' ? <Ikon e="💰" /> : ikon(draf.kategori)}</span>
                             <div><b className={`mono ${draf.jenis === 'Masuk' ? 'in' : 'out'}`}>{draf.jenis === 'Masuk' ? '+ ' : '− '}{rp(draf.nominal)}</b><small>{draf.jenis === 'Masuk' ? 'Pemasukan' : draf.kategori} · {draf.akun} · {tglPendek(draf.tanggal)}</small><small>{[draf.pihak, draf.keterangan].filter(Boolean).join(' · ')}</small></div></div>
                         <div className="row" style={{ gap: 8 }}>
                             <button className="btn primary" onClick={async () => { try { await apiPost('/api/kantor/keuangan/tambah', { jenis: draf.jenis, nominal: draf.nominal, akun: draf.akun, kategori: draf.kategori, pihak: draf.pihak, keterangan: draf.keterangan, tanggal: draf.tanggal }); setInfo(`✅ Tercatat: ${rp(draf.nominal)} · ${draf.kategori} · ${draf.akun}`); setDraf(null); onSaved(); } catch (e: any) { setInfo(String(e.message || e)); } }}>✓ Simpan</button>

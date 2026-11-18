@@ -5,6 +5,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useApi } from '../kantor/api';
 import { apiGet, apiPost } from '../kantor/connection';
 
+import { Ikon } from '../components/Ikon';
 interface F { roe: number | null; roa: number | null; pbv: number | null; per: number | null; der: number | null; npm: number | null; revGrowth: number | null; mcap: number | null; tahun: string }
 interface Sinyal {
     goldenCross: number | null; deathCross: number | null; doubleTop: string | null; doubleBottom: string | null;
@@ -188,11 +189,11 @@ export function ScreenerView({ onOpen, q: qApi = '', presetAktif, pd, sumber }: 
                 <div className="scr-meta">
                     <span><b>{hasil.length}</b> dari {data.baris.length} saham</span>
                     <span>Harga: {data.teknikalSesi || '–'} · Fundamental: {sejak(data.fundamentalAt)}</span>
-                    {data.sibuk ? <span className="scr-busy">⏳ Memperbarui {data.progres}</span> : <button className="btn small" onClick={() => perbarui('teknikal')}>↻ Perbarui</button>}
+                    {data.sibuk ? <span className="scr-busy"><Ikon e="⏳" /> Memperbarui {data.progres}</span> : <button className="btn small" onClick={() => perbarui('teknikal')}><Ikon e="↻" /> Perbarui</button>}
                 </div>
             )}
             {msg && <div className="fin-note">{msg}</div>}
-            {data && data.baris.length === 0 && <div className="fin-empty">Data belum ada. Tekan ↻ Perbarui (±5 menit untuk ±500 saham), atau tunggu otomatis setelah bursa tutup.</div>}
+            {data && data.baris.length === 0 && <div className="fin-empty">Data belum ada. Tekan <Ikon e="↻" /> Perbarui (±5 menit untuk ±500 saham), atau tunggu otomatis setelah bursa tutup.</div>}
 
             {hasil.length > 0 && (
                 <div className="scr-table-wrap">
@@ -202,7 +203,7 @@ export function ScreenerView({ onOpen, q: qApi = '', presetAktif, pd, sumber }: 
                             {hasil.slice(0, batas).map((b) => (
                                 <tr key={b.s} onClick={() => onOpen(b.s)}>
                                     <td><div className="c1-b"><Bintang s={b.s} /><div><b>{b.s}</b><small>{b.nama}</small></div></div></td>
-                                    {adaPreset && <td className="pr-td">{['teknikal', 'fundamental'].map((k) => { const x = (b as any).preset?.[k]; return x ? <span key={k} className={`pr-pct ${x.persen == null ? '' : x.persen >= 75 ? 'ok' : x.persen >= 50 ? 'mid' : 'no'}`}>{k === 'teknikal' ? '📈' : '🏛️'} {x.persen == null ? '?' : `${x.lolos}/${x.dinilai}`}</span> : null; })}</td>}
+                                    {adaPreset && <td className="pr-td">{['teknikal', 'fundamental'].map((k) => { const x = (b as any).preset?.[k]; return x ? <span key={k} className={`pr-pct ${x.persen == null ? '' : x.persen >= 75 ? 'ok' : x.persen >= 50 ? 'mid' : 'no'}`}>{k === 'teknikal' ? <Ikon e="📈" /> : <Ikon e="🏛" />} {x.persen == null ? '?' : `${x.lolos}/${x.dinilai}`}</span> : null; })}</td>}
                                     <td>${fmt(b.harga)}</td>
                                     <td>{pct(b.chg1d)}</td>
                                     <td>{pct(b.chg1m)}</td>

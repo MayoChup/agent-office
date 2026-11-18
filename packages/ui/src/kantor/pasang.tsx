@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 
+import { Ikon } from '../components/Ikon';
 /* Pasang situs sebagai aplikasi (PWA). Android/Chrome: dialog bawaan. iPhone/iPad: petunjuk "Tambah ke Layar Utama". */
 let tawaran: any = null;
 const subs = new Set<() => void>();
@@ -24,7 +25,7 @@ export function TombolPasang({ className, kecil }: { className: string; kecil?: 
     return (
         <>
             <button className={className} onClick={klik} title="Pasang Kantor sebagai aplikasi di HP/laptop">
-                <span className={kecil ? 'sb-ico' : 'laci-ico'}>📲</span>
+                <span className={kecil ? 'sb-ico' : 'laci-ico'}><Ikon e="📲" /></span>
                 <span className={kecil ? 'sb-t' : 'laci-t'}><b>Pasang aplikasi</b><small>{ios() ? 'iPhone / iPad' : 'Android / laptop'}</small></span>
             </button>
             {panduan && createPortal(
@@ -35,7 +36,7 @@ export function TombolPasang({ className, kecil }: { className: string; kecil?: 
                         {ios() ? (
                             <ol>
                                 <li>Buka situs ini di <b>Safari</b> (bukan di dalam aplikasi lain seperti Telegram/WhatsApp).</li>
-                                <li>Ketuk tombol <b>Bagikan</b> <span className="pasang-ikon">⬆︎</span> di bawah (iPad: kanan atas).</li>
+                                <li>Ketuk tombol <b>Bagikan</b> <span className="pasang-ikon"><Ikon e="⬆" />︎</span> di bawah (iPad: kanan atas).</li>
                                 <li>Gulir, pilih <b>"Tambah ke Layar Utama"</b> / <b>"Add to Home Screen"</b>.</li>
                                 <li>Ketuk <b>Tambah</b>. Ikon Kantor muncul di layar utama — buka dari situ, lalu masuk sekali lagi dengan kata sandi.</li>
                             </ol>

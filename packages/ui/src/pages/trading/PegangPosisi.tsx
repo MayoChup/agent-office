@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { apiPost } from '../../kantor/connection';
 import { usd } from './types';
 
+import { Ikon } from '../../components/Ikon';
 type Target = { nama: 'Konservatif' | 'Moderat' | 'Agresif'; harga: number; pct: number; peluang: number };
 type Proy = { horizon: number; target: Target[]; stop: { harga: number; pct: number; peluang: number }; terbaik: string } | null | undefined;
 type Profil = 'konservatif' | 'moderat' | 'agresif' | 'kustom';
@@ -51,7 +52,7 @@ export function PegangPosisi({ simbol, harga, proyeksi, ai, kas, onTutup, onSele
     return createPortal(
         <div className="k-sheet interactive" onClick={onTutup}>
             <div className="k-sheet-in pp" onClick={(ev) => ev.stopPropagation()} role="dialog" aria-label={`Pegang posisi ${simbol}`}>
-                <div className="k-sheet-h"><b>📌 Pegang posisi {simbol}</b><button onClick={onTutup} aria-label="Tutup">✕</button></div>
+                <div className="k-sheet-h"><b><Ikon e="📌" /> Pegang posisi {simbol}</b><button onClick={onTutup} aria-label="Tutup">✕</button></div>
                 <p className="sb-note">Hanya pencatatan — belinya tetap Bapak lakukan sendiri di broker. Isi sesuai transaksi Bapak supaya hitungan untung di Portofolio akurat.</p>
 
                 <h4>Profil target <small>dari proyeksi {proyeksi ? `±${proyeksi.horizon} hari bursa` : ''}</small></h4>
@@ -86,7 +87,7 @@ export function PegangPosisi({ simbol, harga, proyeksi, ai, kas, onTutup, onSele
                         <div><small>Risiko : hasil</small><b className="mono">1 : {hitung.rr.toFixed(1)}</b></div>
                     </div>
                 )}
-                {kas != null && ok && biaya > kas + 0.01 && <p className="sd-warn">⚠️ Total beli melebihi kas tersedia ({usd(kas)}). Kalau Bapak menambah dana, catat "Suntik dana" di Portofolio supaya hitungannya pas.</p>}
+                {kas != null && ok && biaya > kas + 0.01 && <p className="sd-warn"><Ikon e="⚠" /> Total beli melebihi kas tersedia ({usd(kas)}). Kalau Bapak menambah dana, catat "Suntik dana" di Portofolio supaya hitungannya pas.</p>}
                 <label className="pp-full">Catatan (opsional)<input value={catatan} maxLength={300} placeholder="alasan beli, broker, dll." onChange={(x) => setCatatan(x.target.value)} /></label>
                 {ai.label && <p className="sb-note">Sinyal saat ini ikut dicatat ({ai.label}{ai.pt ? ` · preset ${ai.pt}` : ''}), supaya nanti terlihat hasil mengikuti sinyal AI.</p>}
                 {err && <div className="error">{err}</div>}

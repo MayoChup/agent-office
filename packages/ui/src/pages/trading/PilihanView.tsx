@@ -3,6 +3,7 @@ import React, { useMemo, useState } from 'react';
 import { Baris, FaktorKey, FAKTOR, LABELS, Label, ScreenerData, kelas, usd, persen, skorBar } from './types';
 import { Sparkline, Mom } from './Sparkline';
 
+import { Ikon } from '../../components/Ikon';
 type Urut = 'skor' | 'chg1d' | 'potensi' | 'peluang' | 'rsi' | 's';
 const URUT: Array<{ k: Urut; label: string }> = [{ k: 'skor', label: 'Skor' }, { k: 'potensi', label: 'Potensi naik' }, { k: 'peluang', label: 'Peluang' }, { k: 'chg1d', label: 'Perubahan' }, { k: 'rsi', label: 'RSI' }, { k: 's', label: 'Kode' }];
 
@@ -54,7 +55,7 @@ export function PilihanView({ data, faktor, setFaktor, onOpen, watchlist }: { da
                     <div className="sb-filter-head"><b>Filter</b><button onClick={() => { setLabel('Semua'); setSektor('Sorotan'); setQ(''); }}>Atur ulang</button></div>
                     <div className="sb-filter-sec">
                         <h4>Faktor</h4>
-                        <div className="sb-faktor-list">{FAKTOR.map((f) => <button key={f.k} className={faktor === f.k ? 'on' : ''} onClick={() => setFaktor(f.k)} title={f.info}><span>{f.ico}</span>{f.label}</button>)}</div>
+                        <div className="sb-faktor-list">{FAKTOR.map((f) => <button key={f.k} className={faktor === f.k ? 'on' : ''} onClick={() => setFaktor(f.k)} title={f.info}><span><Ikon e={f.ico} /></span>{f.label}</button>)}</div>
                         <p className="sb-note">{FAKTOR.find((f) => f.k === faktor)?.info}</p>
                     </div>
                     <div className="sb-filter-sec">
@@ -73,10 +74,10 @@ export function PilihanView({ data, faktor, setFaktor, onOpen, watchlist }: { da
 
                 <div className="sb-main">
                     <div className="sb-tools">
-                        <div className="sb-search"><span>⌕</span><input placeholder="Cari kode atau nama saham" value={q} onChange={(e) => setQ(e.target.value)} /></div>
-                        <button className="sb-filter-btn" onClick={() => setFilterHp(!filterHp)}>☰ Filter</button>
+                        <div className="sb-search"><span><Ikon e="⌕" /></span><input placeholder="Cari kode atau nama saham" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+                        <button className="sb-filter-btn" onClick={() => setFilterHp(!filterHp)}><Ikon e="☰" /> Filter</button>
                         <div className="sb-seg scroll"><span className="sb-seg-lbl">Urutkan</span>{URUT.map((u) => <button key={u.k} className={urut === u.k ? 'on' : ''} onClick={() => setUrut(u.k)}>{u.label}</button>)}</div>
-                        <div className="sb-seg icons"><button className={mode === 'grid' ? 'on' : ''} onClick={() => setMode('grid')} aria-label="Kartu">▦</button><button className={mode === 'list' ? 'on' : ''} onClick={() => setMode('list')} aria-label="Daftar">☰</button></div>
+                        <div className="sb-seg icons"><button className={mode === 'grid' ? 'on' : ''} onClick={() => setMode('grid')} aria-label="Kartu"><Ikon e="▦" /></button><button className={mode === 'list' ? 'on' : ''} onClick={() => setMode('list')} aria-label="Daftar"><Ikon e="☰" /></button></div>
                     </div>
                     <div className="sb-meta"><b>{list.length} saham</b> · faktor {FAKTOR.find((f) => f.k === faktor)?.label.toLowerCase()} <span>Data per {data.teknikalSesi || '–'}</span></div>
                     <div className={mode === 'grid' ? 'sb-grid' : 'sb-rows'}>
