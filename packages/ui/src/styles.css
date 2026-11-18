@@ -3058,7 +3058,7 @@ body.no-office #phaser-container { visibility: hidden; }
 .dr-hal form button { height: 32px; border-radius: 8px; border: 1px solid var(--line-strong); background: none; color: var(--text); cursor: pointer; padding: 0 10px; }
 
 /* ── Trading → History strategi sinyal ── */
-.hs { display: flex; flex-direction: column; gap: 12px; }
+.hs { display: flex; flex-direction: column; gap: 12px; container-type: inline-size; }
 .hs-kepala { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
 .hs-kepala h3 { margin: 0; display: flex; align-items: center; gap: 6px; } .hs-kepala small { color: var(--muted); font-size: 12px; }
 .hs-ringkas { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--muted); }
@@ -3078,7 +3078,7 @@ body.no-office #phaser-container { visibility: hidden; }
 .hs-st i.hs-jalan { color: #38bdf8; background: rgba(56, 189, 248, 0.13); }
 .hs-st i.hs-durasi { color: #f59e0b; background: rgba(245, 158, 11, 0.14); }
 .hs-catatan { margin: 0; color: var(--muted); font-size: 11.5px; }
-@media (max-width: 760px) {
+@container (max-width: 700px) {
   .hs-head { display: none; }
   .hs-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "saham pct" "harga st" "tgl ts"; gap: 4px 10px; }
   .hs-saham { grid-area: saham; } .hs-pct { grid-area: pct; } .hs-harga { grid-area: harga; font-size: 12.5px; } .hs-st { grid-area: st; text-align: right; }

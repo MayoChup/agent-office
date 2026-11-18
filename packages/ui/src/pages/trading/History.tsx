@@ -37,7 +37,7 @@ export function HistorySinyal({ onOpen }: { onOpen: (s: string) => void }) {
     const r = d?.ringkas;
     const periksa = () => apiPost('/api/kantor/history-sinyal/periksa', {}).then(() => setSegar((x) => x + 1)).catch((e) => setErr(String(e.message || e)));
     return (
-        <div className="panel hs">
+        <section className="sb-card hs">
             <div className="hs-kepala">
                 <div>
                     <h3>History strategi sinyal <Info teks={ATURAN} /></h3>
@@ -101,6 +101,6 @@ export function HistorySinyal({ onOpen }: { onOpen: (s: string) => void }) {
                 </nav>
             )}
             <p className="hs-catatan">Hanya mencatat hasil sinyal, bukan transaksi sungguhan. Bukan saran keuangan.</p>
-        </div>
+        </section>
     );
 }
