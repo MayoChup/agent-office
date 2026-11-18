@@ -20,8 +20,10 @@ const TEKS_RELATED = 'News related: kejadian dunia yang tidak menyebut sahamnya,
 /** "Tata surya" berita: matahari = semua berita, cincin dalam = berita/info, cincin luar = saham. Seret untuk memutar. */
 export function PetaBerita({ onOpen }: { onOpen: (s: string) => void }) {
     const { data, error, loading } = useApi<Data>('/api/kantor/peta-berita', 600_000);
-    const [mode, setMode] = useState<Mode>(() => { try { return (localStorage.getItem('kantor:peta-mode') as Mode) || 'gabung'; } catch { return 'gabung'; } });
+    const [modeDipilih, setMode] = useState<Mode>(() => { try { return (localStorage.getItem('kantor:peta-mode') as Mode) || 'gabung'; } catch { return 'gabung'; } });
     const [sent, setSent] = useState<Sent>('semua');
+    // Kalau News related belum ada, tampil sebagai News direct.
+    const mode: Mode = data && !data.related ? 'direct' : modeDipilih;
     const [pilih, setPilih] = useState<Node | null>(null);
     const [hover, setHover] = useState<Node | null>(null);
     const [putar, setPutar] = useState(true);
