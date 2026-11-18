@@ -373,3 +373,9 @@
   :root:root .brand { min-width: 0; flex: 1; }
   :root:root .dock .dock-btn.active, :root:root[data-theme="light"] .dock .dock-btn.active { background: none; border: none; color: var(--accent); box-shadow: none; }
 }
+.home-angka dd { font-family: var(--font); }
+:root:root .home-div-name .ikon-teks { display: none; }
+:root:root .cat-kosong small { display: block; margin-top: 8px; font-size: 13px; color: var(--faint); }
+:root:root .empty { border: 1px dashed var(--line-strong); border-radius: var(--r-kartu); max-width: none; }
+:root:root .home-big b, :root:root .home-big b.mono { font-family: var(--font); }
+@media (max-width: 767px) { :root:root .brand > div, :root:root .brand-name { max-width: none; overflow: visible; } :root:root .topbar-spacer { flex: 0; } }
