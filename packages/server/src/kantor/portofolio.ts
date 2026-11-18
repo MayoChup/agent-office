@@ -6,6 +6,7 @@
 import fs from 'fs';
 import path from 'path';
 import type { TradingDesk, TradingState, Position, Dana } from './trading';
+import { masaPegang } from './trading';
 import { hargaHarian, Bar } from './harga';
 
 const r2 = (x: number) => Math.round(x * 100) / 100;
@@ -139,7 +140,7 @@ export async function laporan(desk: TradingDesk, dataDir: string, hargaKini: (s:
         const harga = kini.get(p.symbol) ?? (H.get(p.symbol)?.length ? H.get(p.symbol)!.at(-1)!.c : null);
         const modal = r2(p.entry * p.shares), nilai = harga != null ? r2(harga * p.shares) : null;
         const pnl = nilai != null ? r2(nilai - modal) : null;
-        return { ...p, modal, harga, nilai, pnl, pnlPct: harga != null ? r2((harga / p.entry - 1) * 100) : null, keTarget: harga != null ? r2((p.target / harga - 1) * 100) : null, keStop: harga != null ? r2((p.stop / harga - 1) * 100) : null, hari: Math.max(0, Math.round((Date.now() - Date.parse(p.openedAt)) / 86400_000)) };
+        return { ...p, modal, harga, nilai, pnl, pnlPct: harga != null ? r2((harga / p.entry - 1) * 100) : null, keTarget: harga != null ? r2((p.target / harga - 1) * 100) : null, keStop: harga != null ? r2((p.stop / harga - 1) * 100) : null, hari: Math.max(0, Math.round((Date.now() - Date.parse(p.openedAt)) / 86400_000)), masa: masaPegang(p) };
     });
     const riwayat = [...st.history].sort((a, b) => (b.closedAt || '').localeCompare(a.closedAt || '')).map((p) => ({ ...p, modal: r2(p.entry * p.shares), pnlPct: p.exit ? r2((p.exit / p.entry - 1) * 100) : null, hari: p.closedAt ? Math.max(0, Math.round((Date.parse(p.closedAt) - Date.parse(p.openedAt)) / 86400_000)) : null }));
 

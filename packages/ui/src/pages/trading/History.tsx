@@ -5,9 +5,11 @@ import { Info } from './InfoI';
 
 type Status = 'target' | 'stop' | 'berjalan' | 'durasi';
 interface Strategi { id: string; s: string; H: number; tgl: string; label: string; skor: number; masuk: number; target: number | null; stop: number | null; status: Status; tglSelesai: string | null; keluar: number; pct: number; sekarang: number | null; pctSekarang: number | null; hari: number; tertinggi: number; terendah: number; sumberHarga: 'ohlc' | 'tutup'; targetDihitung?: boolean }
-interface Data { at: number; jalan: boolean; arsip: { hari: number; dari: string | null; sampai: string | null }; ringkas: { total: number; target: number; stop: number; durasi: number; berjalan: number; menang: number | null; rata: number | null }; total: number; hal: number; halaman: number; item: Strategi[] }
+interface Ringkas { total: number; selesai: number; target: number; stop: number; durasi: number; berjalan: number; menang: number | null; pctTarget: number | null; rata: number | null; rataSelesai: number | null; rataUntung: number | null; rataRugi: number | null; modalPer: number; gain: number; loss: number; bersih: number; bersihPct: number | null; profitFactor: number | null; floating: number; durasiPct: number | null }
+interface Data { at: number; jalan: boolean; arsip: { hari: number; dari: string | null; sampai: string | null }; ringkas: Ringkas; total: number; hal: number; halaman: number; item: Strategi[] }
 
 const GAYA: Array<[number, string]> = [[1, 'Day trading'], [5, 'Swing pendek'], [20, 'Swing'], [60, 'Posisi']];
+const namaProfil = (k: string) => `Target ${({ K: 'Konservatif', M: 'Moderat', A: 'Agresif' } as Record<string, string>)[k] || 'Moderat'}`;
 const namaGaya = (H: number) => GAYA.find((g) => g[0] === H)?.[1] || `${H} hari`;
 const STATUS: Record<Status, { t: string; k: string }> = { target: { t: 'Kena target', k: 'hs-target' }, stop: { t: 'Kena stop', k: 'hs-stop' }, berjalan: { t: 'Berjalan', k: 'hs-jalan' }, durasi: { t: 'Lewat durasi', k: 'hs-durasi' } };
 const tgl = (t: string) => new Date(`${t}T00:00:00Z`).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
@@ -47,17 +49,6 @@ export function HistorySinyal({ onOpen }: { onOpen: (s: string) => void }) {
                 </div>
                 <button className="btn small" onClick={periksa} disabled={d?.jalan}>{d?.jalan ? 'Dito sedang memeriksa…' : 'Periksa ulang harga'}</button>
             </div>
-            {r && r.total > 0 && (
-                <div className="hs-ringkas">
-                    <span><b>{r.total}</b> strategi</span>
-                    <span className="hs-target"><b>{r.target}</b> kena target</span>
-                    <span className="hs-stop"><b>{r.stop}</b> kena stop</span>
-                    <span className="hs-durasi"><b>{r.durasi}</b> lewat durasi</span>
-                    <span className="hs-jalan"><b>{r.berjalan}</b> berjalan</span>
-                    {r.menang != null && <span>Menang <b>{r.menang}%</b> dari yang selesai</span>}
-                    {r.rata != null && <span>Rata-rata <b className={r.rata >= 0 ? 'up' : 'down'}>{pc(r.rata)}</b></span>}
-                </div>
-            )}
             <div className="dr-filter">
                 <div className="hs-profil" role="group" aria-label="Profil target">
                     <span>Target <Info teks={PROFIL_INFO} /></span>
@@ -75,6 +66,29 @@ export function HistorySinyal({ onOpen }: { onOpen: (s: string) => void }) {
                 <label className="dr-cari">Saham<input type="search" placeholder="mis. NVDA" value={f.q} onChange={(e) => set({ q: e.target.value })} /></label>
                 {adaFilter && <button className="btn small" onClick={() => { setF({ profil: f.profil, H: '', status: '', dari: '', sampai: '', urut: f.urut, q: '' }); setHal(1); }}>Hapus filter</button>}
             </div>
+            {r && r.total > 0 && (
+                <div className="hs-rekap" aria-live="polite">
+                    <div className="hs-rekap-h">
+                        <b>Ringkasan {adaFilter ? 'sesuai filter' : 'semua'}</b>
+                        <small>{namaProfil(f.profil)}{f.H ? ` · ${namaGaya(+f.H)}` : ''}{f.dari || f.sampai ? ` · ${f.dari ? tgl(f.dari) : 'awal'} – ${f.sampai ? tgl(f.sampai) : 'sekarang'}` : ''}{f.q ? ` · ${f.q.toUpperCase()}` : ''}</small>
+                        <Info teks={`Kalau Bapak disiplin: tiap strategi dimodali sama ${usd(r.modalPer, 0)}, jual saat kena target/stop, dan yang lewat durasi ditutup di hari terakhir masa pegang. Strategi yang masih berjalan belum dihitung ke hasil bersih (ditampilkan terpisah sebagai floating).`} />
+                    </div>
+                    <div className="hs-rekap-utama">
+                        <div className="hs-bersih"><small>Hasil bersih ({r.selesai} selesai)</small><b className={r.bersih > 0 ? 'up' : r.bersih < 0 ? 'down' : ''}>{r.bersih >= 0 ? '+' : '−'}{usd(Math.abs(r.bersih))}</b><em className={(r.bersihPct ?? 0) >= 0 ? 'up' : 'down'}>{pc(r.bersihPct)} dari modal {usd(r.selesai * r.modalPer, 0)}</em></div>
+                        <div><small>Total gain</small><b className="up">+{usd(r.gain)}</b><em>rata-rata {pc(r.rataUntung)}</em></div>
+                        <div><small>Total loss</small><b className="down">−{usd(Math.abs(r.loss))}</b><em>rata-rata {pc(r.rataRugi)}</em></div>
+                        <div><small>Kena target</small><b>{r.pctTarget == null ? '–' : `${r.pctTarget}%`}</b><em>{r.target} dari {r.selesai} selesai</em></div>
+                        <div><small>Menang</small><b>{r.menang == null ? '–' : `${r.menang}%`}</b><em>profit factor {r.profitFactor ?? '–'}</em></div>
+                    </div>
+                    <div className="hs-ringkas">
+                        <span><b>{r.total}</b> strategi</span>
+                        <span className="hs-target"><b>{r.target}</b> kena target</span>
+                        <span className="hs-stop"><b>{r.stop}</b> kena stop</span>
+                        <span className="hs-durasi"><b>{r.durasi}</b> lewat durasi{r.durasiPct != null ? <> (rata-rata <b className={r.durasiPct >= 0 ? 'up' : 'down'}>{pc(r.durasiPct)}</b>)</> : ''}</span>
+                        <span className="hs-jalan"><b>{r.berjalan}</b> berjalan{r.berjalan ? <> · floating <b className={r.floating >= 0 ? 'up' : 'down'}>{r.floating >= 0 ? '+' : '−'}{usd(Math.abs(r.floating))}</b></> : ''}</span>
+                    </div>
+                </div>
+            )}
             {err && <div className="error">{err}</div>}
             {d && !d.item.length && <div className="fin-empty">{adaFilter ? 'Tidak ada strategi yang cocok dengan filter ini.' : d.arsip.hari ? (f.profil !== 'M' ? 'Belum ada strategi untuk target ini. Target Konservatif & Agresif tercatat mulai sesi bursa berikutnya; untuk arsip lama, target dihitung ulang dari sejarah harga setelah Dito memeriksa harga (tombol "Periksa ulang harga").' : 'Belum ada sinyal Beli/Beli kuat di arsip.') : 'Arsip sinyal masih kosong. Dito mengarsipkan sinyal tiap sesi bursa — History terisi otomatis.'}</div>}
             {d && d.item.length > 0 && (

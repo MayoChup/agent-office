@@ -7,7 +7,7 @@ import { usd } from './types';
 import { SimulasiSinyal } from './SimulasiSinyal';
 
 type Res = 'harian' | 'mingguan' | 'bulanan';
-interface Pos { symbol: string; shares: number; entry: number; target: number; stop: number; openedAt: string; closedAt?: string; exit?: number; pnl: number | null; pnlPct: number | null; modal: number; harga?: number | null; nilai?: number | null; keTarget?: number | null; keStop?: number | null; hari: number | null; profil?: string; ai?: { label?: string; mode?: string; pt?: string }; catatan?: string; notified?: { target?: string; stop?: string } }
+interface Pos { masa?: { H: number; hari: number; sisa: number; status: 'jalan' | 'terakhir' | 'lewat' } | null; symbol: string; shares: number; entry: number; target: number; stop: number; openedAt: string; closedAt?: string; exit?: number; pnl: number | null; pnlPct: number | null; modal: number; harga?: number | null; nilai?: number | null; keTarget?: number | null; keStop?: number | null; hari: number | null; profil?: string; ai?: { label?: string; mode?: string; pt?: string }; catatan?: string; notified?: { target?: string; stop?: string } }
 interface Dana { id: string; tgl: string; jenis: 'awal' | 'setor' | 'tarik'; jumlah: number; catatan?: string }
 interface Data {
     ringkasan: { nilaiTotal: number; untung: number; untungPct: number | null; terealisasi: number; berjalan: number; kas: number; nilaiSaham: number; modalTerpakai: number; totalDana: number; disetor: number; ditarik: number; spyUntung: number | null; spyUntungPct: number | null; mulai: string; danaOtomatis: boolean };
@@ -89,7 +89,9 @@ export function Portofolio({ onBuka }: { onBuka?: (s: string) => void }) {
                             {p.keStop != null && <span>ke stop {pc(p.keStop)}</span>}
                             {p.ai?.label && <span className="pp-ai">sinyal saat beli: {p.ai.label}{p.ai.pt ? ` · ${p.ai.pt}` : ''}</span>}
                             {p.profil && p.profil !== 'kustom' && <span>profil {p.profil}</span>}
+                            {p.masa && <span className={`pp-masa ${p.masa.status}`}>{p.masa.status === 'lewat' ? `Lewat durasi · hari ${p.masa.hari}/${p.masa.H}` : p.masa.status === 'terakhir' ? `Hari terakhir masa pegang (${p.masa.H} hari)` : `Masa pegang hari ${p.masa.hari}/${p.masa.H}`}</span>}
                         </div>
+                        {p.masa?.status === 'lewat' && !p.notified?.target && !p.notified?.stop && <div className="fin-alert">🟠 Sudah lewat masa pegang ({p.masa.H} hari bursa) tanpa kena target/stop. Sesuai rencana: tutup posisi — atau cek sinyal terbaru {p.symbol}; kalau masih Beli, boleh lanjut sebagai rencana baru dengan stop awal tetap dipakai. Bukan saran keuangan.</div>}
                         {(p.notified?.target || p.notified?.stop) && <div className="fin-alert">{p.notified?.target ? '🟢 Target tersentuh — sudah jual? Catat di "Jual".' : '🔴 Stop loss tersentuh — sudah jual? Catat di "Jual".'}</div>}
                         <div className="pp-aksi">
                             <button className="btn small primary" onClick={() => setLembar({ jenis: 'jual', p })}>💵 Jual / tutup</button>

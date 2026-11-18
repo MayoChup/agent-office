@@ -27,6 +27,25 @@ export interface Plan {
     createdAt: string;
 }
 
+/** Hari bursa (Senin–Jumat, waktu New York) yang sudah lewat sejak posisi dibuka — hari buka tidak dihitung. Libur bursa belum dikurangi. */
+export function hariBursaSejak(openedAt: string, kini = Date.now()): number {
+    const ny = (ms: number) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ms));
+    const awal = ny(Date.parse(openedAt)), akhir = ny(kini);
+    let n = 0;
+    for (let t = Date.parse(`${awal}T12:00:00Z`) + 86400_000; ; t += 86400_000) {
+        const d = new Date(t).toISOString().slice(0, 10); if (d > akhir) break;
+        const w = new Date(t).getUTCDay(); if (w !== 0 && w !== 6) n++;
+        if (n > 400) break;
+    }
+    return n;
+}
+/** Status masa pegang sesuai gaya sinyal saat beli (H hari bursa). */
+export function masaPegang(p: { openedAt: string; ai?: { H?: number } }) {
+    const H = p.ai?.H; if (!H) return null;
+    const hari = hariBursaSejak(p.openedAt);
+    return { H, hari, sisa: Math.max(0, H - hari), status: hari > H ? 'lewat' as const : hari === H ? 'terakhir' as const : 'jalan' as const };
+}
+
 export interface Position {
     symbol: string;
     shares: number;
@@ -35,7 +54,7 @@ export interface Position {
     target: number;
     openedAt: string;
     planId?: number;
-    notified?: { stop?: string; target?: string };
+    notified?: { stop?: string; target?: string; durasi?: string };
     closedAt?: string;
     exit?: number;
     pnl?: number;
@@ -361,6 +380,11 @@ export class TradingDesk {
             } else if (price <= p.stop && !p.notified.stop) {
                 p.notified.stop = new Date().toISOString(); rang++;
                 await this.notify(`🔴 STOP LOSS ${p.symbol} kena: $${r2(price)} (stop $${p.stop})${plTxt}\nKalau sudah jual, balas: "jual ${p.symbol} di ${r2(price)}"`);
+            }
+            const mp = masaPegang(p);
+            if (mp?.status === 'lewat' && !p.notified.durasi && !p.notified.target && !p.notified.stop) {
+                p.notified.durasi = new Date().toISOString(); rang++;
+                await this.notify(`🟠 ${p.symbol} LEWAT DURASI: sudah ${mp.hari} hari bursa (rencana ${mp.H} hari) tanpa kena target/stop. Harga $${r2(price)}${plTxt}.\nSesuai rencana: tutup posisi, atau cek sinyal terbaru — kalau masih Beli boleh dianggap strategi baru; stop awal tetap dipakai. Bukan saran keuangan.`);
             }
             await new Promise((r) => setTimeout(r, 500));
         }

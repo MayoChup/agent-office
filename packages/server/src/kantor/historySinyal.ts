@@ -109,11 +109,21 @@ export class HistorySinyal {
     daftar(q: { hal: number; n: number; H: number | null; profil: Profil; dari: string | null; sampai: string | null; status: StatusH | null; urut: 'terbaru' | 'cuan' | 'rugi'; q: string }) {
         let it = this.data.item.filter((x) => (x.profil || 'M') === q.profil && (!q.H || x.H === q.H) && (!q.dari || x.tgl >= q.dari) && (!q.sampai || x.tgl <= q.sampai) && (!q.q || x.s.includes(q.q.toUpperCase())));
         const ringkas = (a: Strategi[]) => {
-            const selesai = a.filter((x) => x.status !== 'berjalan');
+            // "Disiplin": yang lewat durasi dianggap ditutup di hari terakhir masa pegang. Modal sama tiap strategi ($1.000) supaya bisa dijumlah.
+            const M = 1000, r2 = (n: number) => +n.toFixed(2);
+            const selesai = a.filter((x) => x.status !== 'berjalan'), jalan = a.filter((x) => x.status === 'berjalan');
+            const untung = selesai.filter((x) => x.pct > 0), rugi = selesai.filter((x) => x.pct < 0);
+            const jml = (b: Strategi[]) => b.reduce((s, x) => s + (x.pct / 100) * M, 0);
+            const rata = (b: Strategi[]) => (b.length ? r2(b.reduce((s, x) => s + x.pct, 0) / b.length) : null);
+            const gain = jml(untung), loss = jml(rugi);
             return {
-                total: a.length, target: a.filter((x) => x.status === 'target').length, stop: a.filter((x) => x.status === 'stop').length, durasi: a.filter((x) => x.status === 'durasi').length, berjalan: a.length - selesai.length,
-                menang: selesai.length ? +((selesai.filter((x) => x.pct > 0).length / selesai.length) * 100).toFixed(1) : null,
-                rata: a.length ? +(a.reduce((s, x) => s + x.pct, 0) / a.length).toFixed(2) : null
+                total: a.length, selesai: selesai.length, target: a.filter((x) => x.status === 'target').length, stop: a.filter((x) => x.status === 'stop').length, durasi: a.filter((x) => x.status === 'durasi').length, berjalan: jalan.length,
+                menang: selesai.length ? +((untung.length / selesai.length) * 100).toFixed(1) : null,
+                pctTarget: selesai.length ? +((selesai.filter((x) => x.status === 'target').length / selesai.length) * 100).toFixed(1) : null,
+                rata: rata(a), rataSelesai: rata(selesai), rataUntung: rata(untung), rataRugi: rata(rugi),
+                modalPer: M, gain: r2(gain), loss: r2(loss), bersih: r2(gain + loss), bersihPct: selesai.length ? r2(((gain + loss) / (selesai.length * M)) * 100) : null,
+                profitFactor: loss < 0 ? r2(gain / -loss) : null, floating: r2(jml(jalan)),
+                durasiPct: rata(a.filter((x) => x.status === 'durasi'))
             };
         };
         const sum = ringkas(it);

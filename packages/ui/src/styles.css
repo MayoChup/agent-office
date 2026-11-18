@@ -3090,3 +3090,15 @@ body.no-office #phaser-container { visibility: hidden; }
 .hs-profil > button { border: 1px solid var(--line-strong); background: none; color: var(--muted); padding: 5px 12px; font: inherit; font-size: 12.5px; cursor: pointer; margin-left: -1px; }
 .hs-profil > button:first-of-type { border-radius: 8px 0 0 8px; margin-left: 0; } .hs-profil > button:last-of-type { border-radius: 0 8px 8px 0; }
 .hs-profil > button.on { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; position: relative; }
+.hs-rekap { border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 10px; background: var(--sb-soft); }
+.hs-rekap-h { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; } .hs-rekap-h small { color: var(--muted); font-size: 12px; }
+.hs-rekap-utama { display: grid; grid-template-columns: 1.4fr repeat(4, minmax(0, 1fr)); gap: 10px; }
+.hs-rekap-utama > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.hs-rekap-utama small { color: var(--muted); font-size: 11.5px; } .hs-rekap-utama em { font-style: normal; color: var(--muted); font-size: 11.5px; }
+.hs-rekap-utama b { font-size: 17px; font-variant-numeric: tabular-nums; } .hs-rekap-utama .up { color: var(--up); } .hs-rekap-utama .down { color: var(--down); }
+.hs-bersih b { font-size: 24px; } .hs-bersih em.up { color: var(--up); } .hs-bersih em.down { color: var(--down); }
+@container (max-width: 700px) { .hs-rekap-utama { grid-template-columns: repeat(2, minmax(0, 1fr)); } .hs-bersih { grid-column: 1 / -1; } }
+.pp-masa { font-weight: 700; padding: 1px 8px; border-radius: 99px; }
+.pp-masa.jalan { color: #38bdf8; background: rgba(56, 189, 248, 0.12); }
+.pp-masa.terakhir { color: #f59e0b; background: rgba(245, 158, 11, 0.13); }
+.pp-masa.lewat { color: #f59e0b; background: rgba(245, 158, 11, 0.18); }
