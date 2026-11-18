@@ -23,6 +23,7 @@ import { presetInfo, REKOMENDASI } from './kantor/preset';
 import { profil as nasdaqProfil, fundamentalNasdaq } from './kantor/nasdaq';
 import { simulasi, langkahDari, ringkasJalur } from './kantor/simulasi';
 import { simulasiSinyal, type HasilSim } from './kantor/simSinyal';
+import { ArsipSinyal, type HasilArsip } from './kantor/arsipSinyal';
 import { konteksTrading } from './kantor/konteksTrading';
 import * as porto from './kantor/portofolio';
 import { PERAN_AI } from './kantor/papan';
@@ -505,6 +506,62 @@ app.get('/api/kantor/ujimundur/saran', requireToken, (_req, res) => {
     // Bagian angka selalu dihitung segar dari hasil uji; penjelasan AI diambil dari simpanan.
     const segar = saranDariUji(config.dataDir), simpan = bacaSaran();
     res.json({ ok: true, saran: segar ? { ...segar, teks: simpan?.teks || null, dibuat: simpan?.dibuat || 0 } : null, berikutnya: at ? at + UJI_HARI * 86400_000 : 0, jalan: statusUji.jalan, progres: statusUji.progres });
+});
+// ── Arsip sinyal harian (tidak pernah dibuang) + simulasi dari sinyal tercatat — alokasi modal diatur Bima (Pengawas Anggaran) ──
+const arsipSinyal = new ArsipSinyal(config.dataDir);
+function arsipkanSinyal() {
+    const sesi = screener.sesi();
+    if (!sesi || arsipSinyal.ada(sesi) || !screener.daftarSimbol().length) return;
+    papan.jalankan({ ai: 'trading', judul: `Mengarsipkan sinyal sesi ${sesi}`, detail: 'Sinyal lengkap (teknikal, fundamental, berita, whales) disimpan untuk simulasi.', sumber: 'trading' },
+        async () => arsipSinyal.simpan(screener.potretSinyal()), () => `${arsipSinyal.info().hari} hari bursa tercatat.`).catch((e) => console.warn('[Arsip sinyal]', e?.message || e));
+}
+setTimeout(arsipkanSinyal, 5 * 60_000); setInterval(arsipkanSinyal, 30 * 60_000);
+const fileSimArsip = path.join(config.dataDir, 'simulasi-arsip.json');
+const simA: { jalan: boolean; galat: string; hasil: (HasilArsip & { komentar?: string; oleh?: string; atur?: string; at: number }) | null } =
+    (() => { try { return { jalan: false, galat: '', ...JSON.parse(fs.readFileSync(fileSimArsip, 'utf8')) }; } catch { return { jalan: false, galat: '', hasil: null }; } })();
+simA.jalan = false;
+app.get('/api/kantor/simulasi-arsip', requireToken, (_req, res) => { res.json({ ok: true, ...simA, arsip: arsipSinyal.info() }); });
+app.post('/api/kantor/simulasi-arsip', requireToken, (req, res) => {
+    if (simA.jalan) { res.status(400).json({ ok: false, error: 'Simulasi sedang berjalan.' }); return; }
+    const b = req.body || {};
+    const H = [1, 5, 20, 60].includes(+b.H) ? +b.H : 20;
+    const sinyal = (Array.isArray(b.sinyal) ? b.sinyal : ['Beli kuat']).filter((x: any) => ['Beli kuat', 'Beli'].includes(x));
+    if (!sinyal.length) { res.status(400).json({ ok: false, error: 'Pilih minimal satu sinyal.' }); return; }
+    const guru = typeof b.guru === 'string' && presetInfo().some((p) => p.id === b.guru) ? b.guru : null;
+    const modal = Math.max(100, Math.min(10_000_000, +b.modal || 10_000));
+    const dari = typeof b.dari === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(b.dari) ? b.dari : null;
+    const keluar = { target: b.keluarTarget !== false, stop: b.keluarStop !== false, jual: b.keluarJual !== false };
+    simA.jalan = true; simA.galat = '';
+    const bima = roster().find((a) => a.id === 'keuangan-budget');
+    const namaBima = bima?.nama || 'Bima';
+    papan.jalankan({ ai: 'keuangan-budget', judul: `Simulasi trading dari sinyal tercatat (${namaH(H)}, modal $${modal.toLocaleString('en-US')})`, detail: 'Mengatur alokasi modal & memutar ulang sinyal yang dikirim kantor.', sumber: 'trading' }, async () => {
+        // 1) Alokasi: Bima yang menentukan (kalau diminta), dibatasi pagar aman; kalau tidak, pakai angka Pak Rico.
+        let beliPerHari = Math.max(1, Math.min(10, Math.round(+b.beliPerHari || 3))), porsi = Math.max(0.02, Math.min(0.5, (+b.porsi || 10) / 100)), maksPosisi = Math.max(1, Math.min(25, Math.round(+b.maksPosisi || 10)));
+        let atur = 'Diatur Pak Rico.';
+        const tanya = async (prompt: string) => {
+            if (bima) { try { return await percakapan.tugas('keuangan-budget', 'Mengatur alokasi modal simulasi trading', prompt, `Gaya ${namaH(H)}`, 'trading'); } catch { /* cadangan */ } }
+            return String(await OfficeRoom.sharedLlm()?.complete(`Kamu ${namaBima}, pengawas anggaran. Jawab sesuai format.`, prompt, 400, 2) || '');
+        };
+        if (b.olehBima !== false) {
+            const info = arsipSinyal.info();
+            const raw = await tanya(`Kamu ${namaBima}, pengawas anggaran kantor. Atur alokasi modal untuk simulasi trading saham AS dari sinyal AI.\nGaya posisi: ${namaH(H)} (pegang ±${H} hari bursa). Modal: $${modal}. Sinyal yang dieksekusi: ${sinyal.join(' + ')}${guru ? ` dan harus lolos kriteria guru ${guru}` : ''}. Arsip: ${info.hari} hari bursa.\nTentukan: berapa saham maksimal dibeli per hari, berapa % nilai portofolio per posisi, dan maksimal posisi terbuka bersamaan. Prinsip: jangan taruh semua modal di satu saham, sisakan kas, makin pendek gayanya makin kecil porsinya. Untung diputar lagi (bola salju).\nJawab HANYA JSON: {"beliPerHari":3,"porsiPersen":10,"maksPosisi":8,"alasan":"1-2 kalimat"}`);
+            const j = (() => { const a = raw.indexOf('{'), z = raw.lastIndexOf('}'); try { return JSON.parse(raw.slice(a, z + 1)); } catch { return null; } })();
+            if (j) {
+                beliPerHari = Math.max(1, Math.min(10, Math.round(+j.beliPerHari || beliPerHari)));
+                porsi = Math.max(0.02, Math.min(0.35, (+j.porsiPersen || porsi * 100) / 100));
+                maksPosisi = Math.max(1, Math.min(25, Math.round(+j.maksPosisi || maksPosisi)));
+                if (porsi * maksPosisi > 1) maksPosisi = Math.max(1, Math.floor(1 / porsi));
+                atur = `${namaBima}: maks ${beliPerHari} saham/hari, ${Math.round(porsi * 100)}% per posisi, maks ${maksPosisi} posisi. ${String(j.alasan || '').slice(0, 240)}`;
+            } else atur = `${namaBima} tidak menjawab — pakai bawaan: maks ${beliPerHari} saham/hari, ${Math.round(porsi * 100)}% per posisi, maks ${maksPosisi} posisi.`;
+        }
+        const h = arsipSinyal.simulasi({ H, guru, sinyal, dari, modal, porsi, beliPerHari, maksPosisi, keluar, biaya: 0.001 });
+        // 2) Penjelasan singkat dari Bima.
+        const komentar = await tanya(`Jelaskan hasil simulasi trading dari sinyal tercatat ini untuk Pak Rico, 3–5 kalimat bahasa awam: hasil vs S&P 500, risiko (turun terdalam), dan apakah alokasinya perlu diubah. HANYA angka yang ada. Akhiri "Bukan saran keuangan."\n${atur}\nPeriode ${h.dari}–${h.sampai} (${h.hari} hari bursa). Modal $${modal} → $${h.akhir} (${h.pct}%). SPY ${h.spyPct ?? '–'}%. Turun terdalam ${h.maxDD}%. ${h.trade} transaksi selesai, ${h.menang}% untung, total untung terealisasi $${h.untungTotal}. Posisi masih terbuka: ${h.terbuka.length}.`).catch(() => '');
+        simA.hasil = { ...h, komentar: komentar.trim(), oleh: namaBima, atur, at: Date.now() };
+        fs.writeFileSync(fileSimArsip, JSON.stringify({ hasil: simA.hasil }));
+        return h;
+    }, (h) => `Modal $${modal} → $${h.akhir} (${h.pct}%).`).catch((e) => { simA.galat = String(e?.message || e); }).finally(() => { simA.jalan = false; });
+    res.json({ ok: true, jalan: true });
 });
 // ── Simulasi sinyal (backdate) di Portofolio: dikerjakan Dito (Kepala Trading), lalu dijelaskan Dito dengan bahasa awam ──
 const fileSimSinyal = path.join(config.dataDir, 'simulasi-sinyal.json');

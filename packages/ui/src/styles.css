@@ -2980,3 +2980,23 @@ body.no-office #phaser-container { visibility: hidden; }
 .ss-riwayat > div { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line); align-items: center; }
 @media (max-width: 767px) { .ss-kpi { grid-template-columns: 1fr 1fr; } }
 .linkish { border: none; background: none; padding: 0; color: var(--accent); cursor: pointer; font: inherit; }
+/* Simulasi: tab jenis, arsip, grafik dengan tanda beli/jual */
+.ss .sd-h { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.ss-tab { display: inline-flex; padding: 3px; border-radius: 12px; background: var(--sb-soft); border: 1px solid var(--line); }
+.ss-tab button { border: none; background: none; color: var(--muted); font: inherit; font-size: 12.5px; font-weight: 600; padding: 6px 12px; border-radius: 9px; cursor: pointer; }
+.ss-tab button.on { background: var(--panel-solid); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2); }
+.ss-arsip { font-size: 12.5px; color: var(--muted); margin: 4px 0 10px; } .ss-arsip b { color: var(--text); }
+.ss-cek { display: flex; gap: 6px; align-items: center; font-size: 12.5px; }
+.ss-atur { font-size: 12.5px; padding: 8px 10px; border-radius: 10px; background: var(--sb-soft); }
+.ss-terbuka { font-size: 12.5px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 8px; } .ss-terbuka span { font-family: var(--mono); }
+.ka-wadah { position: relative; }
+.ka-svg { width: 100%; height: auto; display: block; touch-action: pan-y; cursor: crosshair; }
+.ka-nilai { fill: none; stroke: var(--accent); stroke-width: 2.2; }
+.ka-spy { fill: none; stroke: var(--muted); stroke-width: 1.4; stroke-dasharray: 4 4; }
+.ka-modal { stroke: var(--line-strong); stroke-width: 1; stroke-dasharray: 2 4; }
+.ka-beli { fill: #60a5fa; }
+.ka-jual { stroke: var(--panel-solid); stroke-width: 1.5; } .ka-jual.up { fill: #4ade80; } .ka-jual.down { fill: #f87171; }
+.ka-garis { stroke: var(--muted); stroke-width: 1; opacity: 0.5; }
+.ka-tip { position: absolute; top: 6px; transform: translateX(10px); z-index: 5; display: flex; flex-direction: column; gap: 3px; min-width: 190px; max-width: 280px; padding: 8px 10px; border-radius: 10px; background: var(--panel-solid); border: 1px solid var(--line-strong); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3); font-size: 12px; pointer-events: none; }
+.ka-tip[data-kanan] { transform: translateX(calc(-100% - 10px)); }
+.ka-tip em { font-style: normal; } .ka-tip em.up { color: var(--up); } .ka-tip em.down { color: var(--down); } .ka-tip small, .ka-redup { color: var(--muted); }

@@ -3,6 +3,8 @@ import { useApi } from '../../kantor/api';
 import { apiPost } from '../../kantor/connection';
 import { useInterval } from '../../kantor/aktif';
 import { usd } from './types';
+import { KurvaAksi, type AksiKurva } from './KurvaAksi';
+import { SimArsip } from './SimArsip';
 
 interface Trx { s: string; masuk: string; hMasuk: number; keluar: string; hKeluar: number; pct: number; untung: number; label: string; skor: number; sebab: string }
 interface Hasil {
@@ -17,8 +19,26 @@ const SINYAL = ['Beli kuat', 'Beli'];
 const pc = (n: number) => `${n >= 0 ? '+' : '−'}${Math.abs(n).toFixed(2)}%`;
 const tgl = (t: string) => new Date(`${t}T00:00:00Z`).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: '2-digit', timeZone: 'UTC' });
 
-/** Simulasi backdate: kalau dulu sinyal AI dijalankan dengan aturan ini, hasilnya berapa? Dikerjakan Dito (Kepala Trading). */
+/** Dua jenis simulasi: dari sinyal yang benar-benar dikirim kantor (arsip harian) dan backdate (sinyal teknikal dihitung ulang di masa lalu). */
 export function SimulasiSinyal({ onBuka }: { onBuka?: (s: string) => void }) {
+    const [jenis, setJenis] = useState<'arsip' | 'backdate'>(() => { try { return (localStorage.getItem('kantor:sim-jenis') as 'arsip' | 'backdate') || 'arsip'; } catch { return 'arsip'; } });
+    const ganti = (j: 'arsip' | 'backdate') => { setJenis(j); try { localStorage.setItem('kantor:sim-jenis', j); } catch { /* */ } };
+    return (
+        <section className="sb-card ss">
+            <div className="sd-h"><h3>🧪 Simulasi sinyal</h3>
+                <div className="ss-tab" role="tablist">
+                    <button role="tab" aria-selected={jenis === 'arsip'} className={jenis === 'arsip' ? 'on' : ''} onClick={() => ganti('arsip')}>Dari sinyal tercatat</button>
+                    <button role="tab" aria-selected={jenis === 'backdate'} className={jenis === 'backdate' ? 'on' : ''} onClick={() => ganti('backdate')}>Backdate</button>
+                </div>
+            </div>
+            <p className="sb-note">{jenis === 'arsip' ? 'Memutar ulang sinyal yang benar-benar dikirim kantor setiap hari (teknikal + fundamental + berita + whales). Arsipnya disimpan permanen sejak fitur ini aktif, jadi makin lama makin panjang. Alokasi modal diatur Bima.' : 'Sinyal teknikal dihitung ulang di masa lalu (berita & fundamental lama tidak tersedia). Berguna untuk menguji periode panjang sebelum arsip sinyal terkumpul.'}</p>
+            {jenis === 'arsip' ? <SimArsip onBuka={onBuka} /> : <SimBackdate onBuka={onBuka} />}
+        </section>
+    );
+}
+
+/** Simulasi backdate: kalau dulu sinyal AI dijalankan dengan aturan ini, hasilnya berapa? Dikerjakan Dito (Kepala Trading). */
+function SimBackdate({ onBuka }: { onBuka?: (s: string) => void }) {
     const d = useApi<Data>('/api/kantor/simulasi-sinyal', 0);
     useInterval(() => d.reload(), d.data?.jalan ? 3000 : null);
     const [f, setF] = useState({ H: 20, guru: '', sinyal: ['Beli kuat'], bulan: 3, semesta: 'watchlist', modal: 10000, porsi: 10, maksPosisi: 8, keluarJual: true });
@@ -28,8 +48,7 @@ export function SimulasiSinyal({ onBuka }: { onBuka?: (s: string) => void }) {
     const jalan = () => apiPost('/api/kantor/simulasi-sinyal', { ...f, guru: f.guru || null, porsi: f.porsi / 100 }).then(() => { setMsg(''); d.reload(); }).catch((e) => setMsg(String(e.message || e)));
     const h = d.data?.hasil;
     return (
-        <section className="sb-card ss">
-            <div className="sd-h"><h3>🧪 Simulasi sinyal <small>backdate — kalau dulu sinyal AI dijalankan, hasilnya berapa?</small></h3></div>
+        <div>
             <div className="ss-form">
                 <fieldset><legend>Gaya posisi</legend><div className="ss-pil">{GAYA.map(([k, n, ket]) => <button key={k} className={f.H === k ? 'on' : ''} onClick={() => set({ H: k })}><b>{n}</b><small>{ket}</small></button>)}</div></fieldset>
                 <fieldset><legend>Guru trader</legend>
@@ -66,7 +85,7 @@ export function SimulasiSinyal({ onBuka }: { onBuka?: (s: string) => void }) {
                         <div><small>Turun terdalam</small><b className="mono down">{h.maxDD.toFixed(2)}%</b><small>dari puncak</small></div>
                         <div><small>Transaksi</small><b className="mono">{h.trade}</b><small>{h.menang}% untung · rata {pc(h.rataTrade)}</small></div>
                     </div>
-                    <Kurva k={h.kurva} />
+                    <KurvaAksi kurva={h.kurva} modal={h.opsi.modal} aksi={h.transaksi.flatMap((t): AksiKurva[] => [{ t: t.masuk, jenis: 'beli', s: t.s, harga: t.hMasuk, nilai: 0 }, { t: t.keluar, jenis: 'jual', s: t.s, harga: t.hKeluar, nilai: 0, pct: t.pct, untung: t.untung, sebab: t.sebab }])} />
                     <small className="ss-meta">{tgl(h.dari)} – {tgl(h.sampai)} · {GAYA.find((g) => g[0] === h.opsi.H)?.[1]} · {h.opsi.guru ? d.data?.guru.find((g) => g.id === h.opsi.guru)?.guru : 'tanpa guru'} · {h.opsi.sinyal.join(' + ')} · {h.opsi.saham} saham{h.gagal.length ? ` · ${h.gagal.length} saham tanpa data` : ''}</small>
                     {h.komentar && <div className="ss-komentar"><b>{h.oleh || 'Dito'} — Kepala Trading</b><p>{h.komentar}</p></div>}
                     {!!h.transaksi.length && (
@@ -86,22 +105,6 @@ export function SimulasiSinyal({ onBuka }: { onBuka?: (s: string) => void }) {
                     {d.data.riwayat.map((r, i) => <div key={i}><span>{r.ringkas}</span><b className={`mono ${r.pct >= 0 ? 'up' : 'down'}`}>{pc(r.pct)}</b><small className="mono">SPY {pc(r.spyPct)} · {r.trade} trx</small></div>)}
                 </details>
             )}
-        </section>
-    );
-}
-
-function Kurva({ k }: { k: Hasil['kurva'] }) {
-    if (k.length < 2) return null;
-    const W = 700, H = 200, all = k.flatMap((x) => [x.nilai, x.spy]), lo = Math.min(...all), hi = Math.max(...all), rg = hi - lo || 1;
-    const X = (i: number) => (i / (k.length - 1)) * W, Y = (v: number) => H - 10 - ((v - lo) / rg) * (H - 20);
-    const garis = (f: (x: Hasil['kurva'][0]) => number) => k.map((x, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)},${Y(f(x)).toFixed(1)}`).join(' ');
-    return (
-        <div className="ss-kurva">
-            <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label="Grafik nilai simulasi dibanding S&P 500">
-                <path d={garis((x) => x.spy)} fill="none" stroke="var(--muted)" strokeWidth="1.5" strokeDasharray="4 4" vectorEffect="non-scaling-stroke" />
-                <path d={garis((x) => x.nilai)} fill="none" stroke="var(--accent)" strokeWidth="2.2" vectorEffect="non-scaling-stroke" />
-            </svg>
-            <div className="ss-legenda"><span><i className="a" />Sinyal AI</span><span><i className="b" />S&P 500</span><span className="mono">{usd(hi)} / {usd(lo)}</span></div>
         </div>
     );
 }

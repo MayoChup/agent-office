@@ -34,7 +34,7 @@ export interface Baris {
 }
 interface StatusLangkah { at: number; n: number; galat: string }
 interface Spark { s: string; tgl: string[]; c: number[]; ma50: (number | null)[]; ma200: (number | null)[] }
-interface Simpanan { baris: Baris[]; teknikalSesi: string; teknikalAt: number; fundamentalAt: number; gagal: string[]; berita?: Record<string, Berita>; beritaAt?: number; orang?: Record<string, Orang>; tape?: Array<{ s: string; nama: string; harga: number; chg: number }>; galatAt?: number; status?: Record<string, StatusLangkah> }
+interface Simpanan { baris: Baris[]; teknikalSesi: string; teknikalAt: number; fundamentalAt: number; gagal: string[]; berita?: Record<string, Berita>; beritaAt?: number; orang?: Record<string, Orang>; tape?: Array<{ s: string; nama: string; harga: number; chg: number }>; galatAt?: number; status?: Record<string, StatusLangkah>; spyC?: number }
 
 /* ── Indikator ─────────────────────────────────────────────── */
 export function sma(x: number[], n: number): (number | null)[] {
@@ -248,6 +248,24 @@ export class Screener {
         }
         return { semua: gabung(f, H, mode, this.teknikalTerbukti(H, mode).terbukti), ...f };
     }
+    /** Sesi bursa terakhir yang sudah dihitung (tanggal AS). */
+    sesi() { return this.st.teknikalSesi || ''; }
+    /** Potret sinyal harian lengkap (4 faktor + gabungan) untuk arsip: per saham & per gaya posisi H, plus kepatuhan tiap preset guru. */
+    potretSinyal(HS = [1, 5, 20, 60]) {
+        const sari = bacaLaporanSari(this.deskDir);
+        const baris = this.st.baris.map((b) => {
+            const L: Record<string, [number, string, number | null, number | null]> = {};
+            for (const H of HS) {
+                const sk = this.skor(b, sari, H).semua; if (!sk) continue;
+                const pr = this.proyeksiH(b, H); const mod = pr?.target.find((t) => t.nama === 'Moderat');
+                L[H] = [sk.skor, sk.label, mod ? +mod.harga.toFixed(2) : null, pr ? +pr.stop.harga.toFixed(2) : null];
+            }
+            const g: Record<string, number> = {};
+            for (const p of PRESET) { const e = evaluasi(p, p.jenis === 'teknikal' ? b.ind : b.f); if (e.persen != null) g[p.id] = e.persen; }
+            return { s: b.s, c: b.harga, L, g };
+        });
+        return { tgl: this.st.teknikalSesi, at: Date.now(), spy: this.st.spyC ?? null, baris };
+    }
     /** Kepatuhan semua preset untuk satu saham (untuk daftar centang di halaman detail). */
     presetSaham(b: Baris) { return PRESET.map((p) => ({ ...evaluasi(p, p.jenis === 'teknikal' ? b.ind : b.f), jenis: p.jenis })); }
 
@@ -418,7 +436,7 @@ export class Screener {
             await Promise.all([kerja(), kerja(), kerja()]);
             if (baru.length) {
                 this.st.baris = baru.sort((a, b) => a.s.localeCompare(b.s));
-                this.st.teknikalSesi = sesi; this.st.teknikalAt = Date.now(); this.st.gagal = gagal;
+                this.st.teknikalSesi = sesi; this.st.teknikalAt = Date.now(); this.st.gagal = gagal; this.st.spyC = spy.c[spy.c.length - 1];
                 this.segarkanHorison();
                 this.simpan();
             }
