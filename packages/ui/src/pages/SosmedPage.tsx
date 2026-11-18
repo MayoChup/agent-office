@@ -81,7 +81,7 @@ function Salin({ teks, label = 'Salin' }: { teks: string; label?: string }) {
     const [ok, setOk] = useState(false);
     return <button className="btn small" onClick={() => { navigator.clipboard?.writeText(teks).then(() => { setOk(true); setTimeout(() => setOk(false), 1600); }).catch(() => undefined); }}>{ok ? '✓ Tersalin' : <><Ikon e="📋" /> {`${label}`}</>}</button>;
 }
-function Fmt({ f }: { f: Format }) { return <span className={`sm-fmt f-${f}`}><Ikon e=<Ikon e={FMT[f].ico} /> /> {FMT[f].label}</span>; }
+function Fmt({ f }: { f: Format }) { return <span className={`sm-fmt f-${f}`}><Ikon e={FMT[f].ico} /> {FMT[f].label}</span>; }
 async function unggahBerkas(folder: string, f: File, onPct: (n: number) => void): Promise<{ path: string }> {
     return new Promise((ok, gagal) => {
         const xhr = new XMLHttpRequest();
@@ -676,7 +676,7 @@ function TabAkun({ x, aksi, kabar, muat, keBeranda, bukaKuis }: P & { muat: () =
                 {FORMAT_URUT.includes('video') && <label>Durasi video panjang (menit)<input type="number" min={1} max={60} value={Math.round(p.durasiPanjang / 60)} onChange={(e) => setP({ ...p, durasiPanjang: +e.target.value * 60 })} /></label>}
                 <label>Look editing (real) <small>skill /video-edit</small><select value={p.look} onChange={set('look')}><option value="otomatis">Otomatis (dipilih AI)</option>{x.katalog.look.map((l) => <option key={l.id} value={l.id}>{l.nama}</option>)}</select></label>
                 <label>Color grade<select value={p.grade} onChange={set('grade')}><option value="otomatis">Otomatis (dipilih AI)</option><option value="tanpa">Tanpa color grade</option>{x.katalog.grade.map((l) => <option key={l.id} value={l.id}>{l.nama}</option>)}</select></label>
-                <div className="lebar sm-cek"><small>Format yang dipakai di {pi?.nama}</small>{FORMAT_URUT.map((f) => <label key={f}><input type="checkbox" checked={p.format.includes(f)} onChange={(e) => setP({ ...p, format: e.target.checked ? [...p.format, f] : p.format.filter((y) => y !== f) })} /> <Ikon e=<Ikon e={FMT[f].ico} /> /> {FMT[f].label} <small>({RASIO(f)})</small></label>)}</div>
+                <div className="lebar sm-cek"><small>Format yang dipakai di {pi?.nama}</small>{FORMAT_URUT.map((f) => <label key={f}><input type="checkbox" checked={p.format.includes(f)} onChange={(e) => setP({ ...p, format: e.target.checked ? [...p.format, f] : p.format.filter((y) => y !== f) })} /> <Ikon e={FMT[f].ico} /> {FMT[f].label} <small>({RASIO(f)})</small></label>)}</div>
                 <label className="lebar">Catatan lain untuk tim<textarea rows={2} value={p.catatan} placeholder="hal yang harus dihindari, produk yang dijual, contoh akun panutan, dll." onChange={set('catatan')} /></label>
             </div>
             <button className="btn primary" onClick={() => aksi(post('/api/kantor/sosmed/profil', { ...p, akun: handle || p.akun }), '✓ Profil akun disimpan. Lanjut: tab Strategi → Susun strategi.')}>Simpan profil</button>
