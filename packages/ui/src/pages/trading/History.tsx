@@ -76,7 +76,7 @@ export function HistorySinyal({ onOpen }: { onOpen: (s: string) => void }) {
                 {adaFilter && <button className="btn small" onClick={() => { setF({ profil: f.profil, H: '', status: '', dari: '', sampai: '', urut: f.urut, q: '' }); setHal(1); }}>Hapus filter</button>}
             </div>
             {err && <div className="error">{err}</div>}
-            {d && !d.item.length && <div className="fin-empty">{adaFilter ? 'Tidak ada strategi yang cocok dengan filter ini.' : d.arsip.hari ? 'Belum ada sinyal Beli/Beli kuat di arsip.' : 'Arsip sinyal masih kosong. Dito mengarsipkan sinyal tiap sesi bursa — History terisi otomatis.'}</div>}
+            {d && !d.item.length && <div className="fin-empty">{adaFilter ? 'Tidak ada strategi yang cocok dengan filter ini.' : d.arsip.hari ? (f.profil !== 'M' ? 'Belum ada strategi untuk target ini. Target Konservatif & Agresif tercatat mulai sesi bursa berikutnya; untuk arsip lama, target dihitung ulang dari sejarah harga setelah Dito memeriksa harga (tombol "Periksa ulang harga").' : 'Belum ada sinyal Beli/Beli kuat di arsip.') : 'Arsip sinyal masih kosong. Dito mengarsipkan sinyal tiap sesi bursa — History terisi otomatis.'}</div>}
             {d && d.item.length > 0 && (
                 <div className="hs-list" role="table" aria-label="Daftar strategi sinyal">
                     <div className="hs-row hs-head" role="row"><span>Dibuat</span><span>Saham</span><span>Masuk → {f.status === 'berjalan' ? 'sekarang' : 'hasil'}</span><span>Target / stop</span><span className="hs-kanan">Gain/loss</span><span>Status</span></div>

@@ -3087,6 +3087,6 @@ body.no-office #phaser-container { visibility: hidden; }
 }
 .hs-profil { display: inline-flex; align-items: center; gap: 0; width: 100%; flex-wrap: wrap; }
 .hs-profil > span { font-size: 12px; color: var(--muted); margin-right: 8px; display: inline-flex; align-items: center; gap: 4px; }
-.hs-profil button { border: 1px solid var(--line-strong); background: none; color: var(--muted); padding: 5px 12px; font: inherit; font-size: 12.5px; cursor: pointer; margin-left: -1px; }
-.hs-profil button:first-of-type { border-radius: 8px 0 0 8px; margin-left: 0; } .hs-profil button:last-of-type { border-radius: 0 8px 8px 0; }
-.hs-profil button.on { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; position: relative; }
+.hs-profil > button { border: 1px solid var(--line-strong); background: none; color: var(--muted); padding: 5px 12px; font: inherit; font-size: 12.5px; cursor: pointer; margin-left: -1px; }
+.hs-profil > button:first-of-type { border-radius: 8px 0 0 8px; margin-left: 0; } .hs-profil > button:last-of-type { border-radius: 0 8px 8px 0; }
+.hs-profil > button.on { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; position: relative; }
