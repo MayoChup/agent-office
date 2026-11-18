@@ -4,6 +4,7 @@ import { apiPost } from '../../kantor/connection';
 import { useInterval } from '../../kantor/aktif';
 import { FunnelBerita, bagian, type Related, type Fokus } from './FunnelBerita';
 import { Info as InfoI } from './InfoI';
+import { DaftarRelated } from './DaftarRelated';
 
 type Dampak = { jenis: 'sektor' | 'industri' | 'saham'; nama: string; arah: number; alasan: string };
 type Tema = { judul: string; ringkas: string; bukti: string[]; dampak: Dampak[] };
@@ -59,6 +60,7 @@ export function BeritaTerkaitKartu({ onUbah }: { onUbah?: () => void }) {
                     <FunnelBerita key={fokus ? `${fokus.nama}|${fokus.arah}` : 'semua'} r={r} fokus={fokus} />
                 </>
             )}
+            {atur?.aktif && <DaftarRelated />}
             <p className="sb-note">Peta dampak adalah <b>penilaian AI atas judul berita</b>: bisa salah, dan belum bisa diuji mundur. Diperbarui otomatis ±sekali sehari. Kalau ragu, matikan saklarnya — skor Berita kembali hanya dari news direct.</p>
         </section>
     );

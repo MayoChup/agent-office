@@ -11,7 +11,11 @@ import type { ModelRouter } from './model';
  * Balasan dibuat dengan `hermes [-p profil] -z "<prompt>"` (sekali jalan, tanpa token Telegram).
  */
 
-export interface Pesan { id: string; dari: string; nama: string; teks: string; at: number; status?: 'gagal'; berat?: boolean }
+/** Lampiran: berkas di Berkas (cloud pribadi) — rel = path relatif di Berkas. */
+export interface Lampiran { rel: string; nama: string; ukuran: number; jenis: 'gambar' | 'berkas' }
+export interface Pesan { id: string; dari: string; nama: string; teks: string; at: number; status?: 'gagal'; berat?: boolean; lampiran?: Lampiran[] }
+/** Grup buatan Pak Rico (seperti grup WhatsApp): nama, ikon emoji, anggota AI. */
+export interface GrupChat { id: string; nama: string; ikon: string; anggota: string[]; dibuat: number }
 export interface Anggota { id: string; nama: string; peran: string; deskripsi: string }
 type Llm = { complete(system: string, user: string, maxTokens?: number, attempts?: number): Promise<string | null> } | null;
 
@@ -66,7 +70,7 @@ export class Percakapan {
         const ai = this.roster().find((a) => a.id === aiId);
         const trading = thread.startsWith('trading-');
         const terakhir = [...this.baca(thread)].reverse().find((m) => m.dari === 'owner')?.teks || '';
-        return this.papan.catat({ ai: aiId, nama: ai?.nama || aiId, judul: trading ? 'Konsultasi di halaman Trading' : thread === 'grup' ? 'Membalas di Grup Kantor' : 'Membalas chat pribadi', detail: terakhir, sumber: trading ? 'trading' : 'chat', status: 'todo' });
+        return this.papan.catat({ ai: aiId, nama: ai?.nama || aiId, judul: trading ? 'Konsultasi di halaman Trading' : thread === 'grup' || this.grupCari(thread) ? `Membalas di grup ${this.infoThread(thread).nama}` : 'Membalas chat pribadi', detail: terakhir, sumber: trading ? 'trading' : 'chat', status: 'todo' });
     }
 
     constructor(
@@ -95,7 +99,78 @@ export class Percakapan {
         const msg = { ...p, id: (this.seq++).toString(36) };
         list.push(msg);
         this.tulis(thread, list);
+        if (msg.dari !== 'owner') try { this.onPesan?.(thread, msg); } catch (e: any) { console.warn('[Chat] notifikasi:', e?.message || e); }
         return msg;
+    }
+    /** Dipanggil tiap ada pesan baru dari AI (untuk notifikasi HP). */
+    onPesan?: (thread: string, p: Pesan) => void;
+
+    /* ── Grup buatan sendiri ── */
+    private fileGrup() { return path.join(this.dir, '_grup.json'); }
+    grupList(): GrupChat[] { try { return JSON.parse(fs.readFileSync(this.fileGrup(), 'utf8')); } catch { return []; } }
+    private grupSimpan(g: GrupChat[]) { fs.writeFileSync(this.fileGrup(), JSON.stringify(g)); }
+    grupCari(id: string) { return this.grupList().find((g) => g.id === id); }
+    /** Info judul untuk thread mana pun (dipakai notifikasi & tampilan). */
+    infoThread(id: string): { nama: string; ikon: string; grup: boolean } {
+        if (id === 'grup') return { nama: 'Grup Kantor', ikon: '👥', grup: true };
+        const g = this.grupCari(id); if (g) return { nama: g.nama, ikon: g.ikon, grup: true };
+        const a = this.roster().find((x) => x.id === id); return { nama: a ? a.nama : id, ikon: '🤖', grup: false };
+    }
+    private anggotaThread(thread: string): Anggota[] {
+        const r = this.roster();
+        if (thread === 'grup') return r;
+        const g = this.grupCari(thread); if (g) return r.filter((a) => g.anggota.includes(a.id));
+        return r.filter((a) => a.id === thread);
+    }
+    grupSimpanSatu(x: { id?: string; nama: string; ikon: string; anggota: string[] }): GrupChat {
+        const ids = new Set(this.roster().map((a) => a.id));
+        const nama = String(x.nama || '').trim().slice(0, 50), ikon = Array.from(String(x.ikon || '👥').trim()).slice(0, 2).join('') || '👥';
+        const anggota = [...new Set((x.anggota || []).map(String))].filter((a) => ids.has(a)).slice(0, 30);
+        if (!nama) throw new Error('Nama grup wajib diisi.');
+        if (!anggota.length) throw new Error('Pilih minimal satu anggota.');
+        const list = this.grupList();
+        if (x.id) {
+            const g = list.find((y) => y.id === x.id); if (!g) throw new Error('Grup tidak ditemukan.');
+            const lama = new Set(g.anggota);
+            Object.assign(g, { nama, ikon, anggota }); this.grupSimpan(list);
+            const masuk = anggota.filter((a) => !lama.has(a)).map((a) => this.roster().find((r) => r.id === a)?.nama).filter(Boolean);
+            const keluar = [...lama].filter((a) => !anggota.includes(a)).map((a) => this.roster().find((r) => r.id === a)?.nama).filter(Boolean);
+            if (masuk.length || keluar.length) this.tambahSistem(g.id, [masuk.length ? `${this.ownerName} menambahkan ${masuk.join(', ')}` : '', keluar.length ? `${this.ownerName} mengeluarkan ${keluar.join(', ')}` : ''].filter(Boolean).join(' · '));
+            return g;
+        }
+        const g: GrupChat = { id: `g-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, nama, ikon, anggota, dibuat: Date.now() };
+        list.push(g); this.grupSimpan(list);
+        this.tambahSistem(g.id, `${this.ownerName} membuat grup "${nama}" dan menambahkan ${anggota.map((a) => this.roster().find((r) => r.id === a)?.nama || a).join(', ')}`);
+        return g;
+    }
+    grupHapus(id: string) { this.grupSimpan(this.grupList().filter((g) => g.id !== id)); try { fs.rmSync(this.file(id), { force: true }); } catch { /* */ } }
+    private tambahSistem(thread: string, teks: string) { const list = this.baca(thread); list.push({ id: (this.seq++).toString(36), dari: 'sistem', nama: 'info', teks, at: Date.now() }); this.tulis(thread, list); }
+
+    /* ── Lampiran ── */
+    /** Folder Berkas tempat AI menaruh file untuk Pak Rico (diisi index.ts). */
+    berkasRoot?: string;
+    private teksLampiran(l?: Lampiran[]) {
+        if (!l?.length || !this.berkasRoot) return '';
+        return `\nLampiran dari ${this.ownerName} (bisa kamu buka/baca di komputer ini${l.some((x) => x.jenis === 'gambar') ? '; gambar bisa kamu lihat dengan alat visi bila ada' : ''}):\n${l.map((x) => `- ${path.join(this.berkasRoot!, x.rel)} (${x.nama})`).join('\n')}`;
+    }
+    private petunjukKirimFile(aiNama: string) {
+        if (!this.berkasRoot) return '';
+        const dir = path.join(this.berkasRoot, 'Dari AI', aiNama.replace(/[^\w .-]+/g, ''));
+        return `Kalau kamu membuat file/gambar untuk ${this.ownerName}, simpan di folder ${dir}/ lalu tulis satu baris per file: [[lampiran: Dari AI/${aiNama.replace(/[^\w .-]+/g, '')}/nama-file.ext]] — file itu akan muncul sebagai lampiran di chat.`;
+    }
+    /** Ambil penanda [[lampiran: ...]] dari jawaban AI → lampiran sungguhan (hanya file yang benar-benar ada di Berkas). */
+    private ambilLampiran(out: string): { teks: string; lampiran: Lampiran[] } {
+        const lampiran: Lampiran[] = [];
+        const teks = out.replace(/\[\[\s*lampiran\s*:\s*([^\]]+?)\s*\]\]/gi, (_m, p: string) => {
+            if (!this.berkasRoot) return '';
+            let rel = p.trim().replace(/^\/+/, '');
+            if (path.isAbsolute(p.trim()) && p.trim().startsWith(this.berkasRoot)) rel = path.relative(this.berkasRoot, p.trim());
+            const abs = path.resolve(this.berkasRoot, rel);
+            if (!abs.startsWith(path.resolve(this.berkasRoot) + path.sep)) return '';
+            try { const st = fs.statSync(abs); if (st.isFile() && lampiran.length < 10) lampiran.push({ rel: path.relative(this.berkasRoot, abs), nama: path.basename(abs), ukuran: st.size, jenis: /\.(png|jpe?g|gif|webp)$/i.test(abs) ? 'gambar' : 'berkas' }); } catch { /* file tidak ada */ }
+            return '';
+        }).replace(/\n{3,}/g, '\n\n').trim();
+        return { teks, lampiran };
     }
 
     /** Daftar thread untuk layar depan chat. */
@@ -106,7 +181,8 @@ export class Percakapan {
             const last = list[list.length - 1];
             return { id, nama, peran, terakhir: last ? { nama: last.nama, teks: last.teks.slice(0, 120), at: last.at } : null, menulis: Array.from(this.menulis.get(id) || []) };
         };
-        return [item('grup', 'Grup Kantor', `${roster.length} anggota`), ...roster.map((a) => item(a.id, a.nama, a.peran))];
+        const grup = this.grupList().map((g) => ({ ...item(g.id, g.nama, `${g.anggota.length} anggota`), grup: true, ikon: g.ikon, anggota: g.anggota }));
+        return [{ ...item('grup', 'Grup Kantor', `${roster.length} anggota`), grup: true, ikon: '👥', anggota: roster.map((a) => a.id) }, ...grup, ...roster.map((a) => item(a.id, a.nama, a.peran))];
     }
 
     thread(id: string) {
@@ -114,13 +190,14 @@ export class Percakapan {
     }
 
     /* ── Kirim pesan dari Pak Rico ── */
-    kirim(thread: string, teks: string): Pesan {
+    kirim(thread: string, teks: string, lampiran: Lampiran[] = []): Pesan {
         const roster = this.roster();
-        if (thread !== 'grup' && !roster.some((a) => a.id === thread)) throw new Error('Chat tidak ditemukan.');
+        const kustom = this.grupCari(thread);
+        if (thread !== 'grup' && !kustom && !roster.some((a) => a.id === thread)) throw new Error('Chat tidak ditemukan.');
         const t = teks.trim().slice(0, 2000);
-        if (!t) throw new Error('Pesan kosong.');
-        const msg = this.tambah(thread, { dari: 'owner', nama: this.ownerName, teks: t, at: Date.now() });
-        if (thread === 'grup') this.balasGrup(t).catch((e) => console.warn('[Chat] grup:', e?.message || e));
+        if (!t && !lampiran.length) throw new Error('Pesan kosong.');
+        const msg = this.tambah(thread, { dari: 'owner', nama: this.ownerName, teks: t, at: Date.now(), ...(lampiran.length ? { lampiran: lampiran.slice(0, 10) } : {}) });
+        if (thread === 'grup' || kustom) this.balasGrup(t || '(mengirim lampiran)', thread).catch((e) => console.warn('[Chat] grup:', e?.message || e));
         else this.balas(thread, thread).catch((e) => console.warn('[Chat]', e?.message || e));
         return msg;
     }
@@ -176,34 +253,36 @@ export class Percakapan {
     /** Kapan terakhir Pak Rico menulis di chat mana pun (untuk "minggu ini belum ada perintah"). */
     terakhirOwner(): number {
         let t = 0;
-        for (const id of ['grup', ...this.roster().map((a) => a.id)]) for (const m of this.baca(id)) if (m.dari === 'owner' && m.at > t) t = m.at;
+        for (const id of ['grup', ...this.grupList().map((g) => g.id), ...this.roster().map((a) => a.id)]) for (const m of this.baca(id)) if (m.dari === 'owner' && m.at > t) t = m.at;
         return t;
     }
 
     /** Anggota yang di-@sebut (atau @semua = para kepala). Kosong = Joni yang menentukan. */
-    disebut(teks: string): string[] {
-        const roster = this.roster();
+    disebut(teks: string, thread = 'grup'): string[] {
+        const roster = this.anggotaThread(thread);
         if (/@(semua|all)\b/i.test(teks)) return roster.filter((a) => a.id === 'default' || !a.id.includes('-')).map((a) => a.id);
         return roster.filter((a) => new RegExp(`@(${esc(a.nama)}|${esc(a.id)})\\b`, 'i').test(teks)).slice(0, 4).map((a) => a.id);
     }
 
     private riwayat(thread: string) {
-        return this.baca(thread).slice(-RIWAYAT_PROMPT)
-            .map((p) => `${p.dari === 'owner' ? this.ownerName : p.nama}: ${p.teks.slice(0, 1200)}`).join('\n');
+        return this.baca(thread).filter((p) => p.dari !== 'sistem').slice(-RIWAYAT_PROMPT)
+            .map((p) => `${p.dari === 'owner' ? this.ownerName : p.nama}: ${p.teks.slice(0, 1200)}${p.lampiran?.length ? ` [lampiran: ${p.lampiran.map((l) => l.nama).join(', ')}]` : ''}`).join('\n');
     }
 
-    private async balasGrup(teks: string) {
-        const sebut = this.disebut(teks);
-        if (sebut.length) { for (const id of sebut) await this.balas('grup', id); return; }
-
-        // Tanpa tag: Joni (kepala) membaca, lalu menjawab sendiri atau menugaskan anggota yang tepat.
-        const roster = this.roster();
-        const joni = roster.find((a) => a.id === 'default');
+    private async balasGrup(teks: string, thread = 'grup') {
+        const sebut = this.disebut(teks, thread);
+        if (sebut.length) { for (const id of sebut) await this.balas(thread, id); return; }
+        const roster = this.anggotaThread(thread);
+        const namaGrup = this.infoThread(thread).nama;
+        // Grup kecil berisi satu AI → langsung dia yang menjawab.
+        if (roster.length === 1) { await this.balas(thread, roster[0].id); return; }
+        // Tanpa tag: moderator (Joni kalau ada di grup; kalau tidak, kepala divisi pertama / anggota pertama) membaca, lalu menjawab atau menugaskan.
+        const joni = roster.find((a) => a.id === 'default') || roster.find((a) => !a.id.includes('-')) || roster[0];
         if (!joni) return;
-        const daftar = roster.filter((a) => a.id !== 'default').map((a) => `- ${a.id}: ${a.nama} (${a.peran}) — ${a.deskripsi}`.slice(0, 220)).join('\n');
+        const daftar = roster.filter((a) => a.id !== joni.id).map((a) => `- ${a.id}: ${a.nama} (${a.peran}) — ${a.deskripsi}`.slice(0, 220)).join('\n');
         const prompt = [
-            `[Grup chat "Grup Kantor" di aplikasi Kantor Virtual. Kamu ${joni.nama}, kepala kantor & moderator grup.]`,
-            'Riwayat terakhir:', this.riwayat('grup'), '',
+            `[Grup chat "${namaGrup}" di aplikasi Kantor Virtual. Kamu ${joni.nama} (${joni.peran}), moderator grup ini.]`,
+            'Riwayat terakhir:', this.riwayat(thread), '',
             'Anggota & jobdesk:', daftar, '',
             `Tentukan cara terbaik menanggapi pesan terakhir ${this.ownerName}:`,
             '- Kalau sapaan/umum/koordinasi atau tidak cocok untuk siapa pun → jawab sendiri.',
@@ -212,23 +291,23 @@ export class Percakapan {
             'Jawab HANYA JSON tanpa teks lain:',
             '{"pesan":"kalimat singkatmu di grup, mis. \\"Uang, tolong cek pengeluaran bulan ini ya.\\"","jawaban":"isi jawabanmu kalau kamu menjawab sendiri; kosongkan kalau menugaskan","tugaskan":[{"id":"<id-profil>","instruksi":"...","berat":false}]}'
         ].join('\n');
-        const out = await this.jalankanAi('grup', 'default', prompt, false).catch((e) => { this.gagal('grup', joni, e); return null; });
+        const out = await this.jalankanAi(thread, joni.id, prompt, false).catch((e) => { this.gagal(thread, joni, e); return null; });
         if (out === null) return;
         const j = extractJson(out);
         const tugas: Array<{ id: string; instruksi: string; berat: boolean }> = (Array.isArray(j?.tugaskan) ? j.tugaskan : [])
             .map((t: any) => ({ id: String(t?.id || ''), instruksi: String(t?.instruksi || '').slice(0, 1500), berat: t?.berat === true }))
-            .filter((t: any) => t.id !== 'default' && roster.some((a) => a.id === t.id)).slice(0, 3);
+            .filter((t: any) => t.id !== joni.id && roster.some((a) => a.id === t.id)).slice(0, 3);
         if (!j || (!tugas.length && !String(j.jawaban || j.pesan || '').trim())) {
-            this.tambah('grup', { dari: 'default', nama: joni.nama, teks: out || '(tidak ada jawaban)', at: Date.now() });
+            this.tambah(thread, { dari: joni.id, nama: joni.nama, teks: out || '(tidak ada jawaban)', at: Date.now() });
             return;
         }
         if (!tugas.length) {
-            this.tambah('grup', { dari: 'default', nama: joni.nama, teks: String(j.jawaban || j.pesan).trim(), at: Date.now() });
+            this.tambah(thread, { dari: joni.id, nama: joni.nama, teks: String(j.jawaban || j.pesan).trim(), at: Date.now() });
             return;
         }
         const nama = (id: string) => roster.find((a) => a.id === id)?.nama || id;
-        this.tambah('grup', { dari: 'default', nama: joni.nama, teks: String(j.pesan || '').trim() || `${tugas.map((t) => nama(t.id)).join(' & ')}, tolong ditangani ya.`, at: Date.now() });
-        for (const t of tugas) await this.balas('grup', t.id, { instruksi: t.instruksi, berat: t.berat });
+        this.tambah(thread, { dari: joni.id, nama: joni.nama, teks: String(j.pesan || '').trim() || `${tugas.map((t) => nama(t.id)).join(' & ')}, tolong ditangani ya.`, at: Date.now() });
+        for (const t of tugas) await this.balas(thread, t.id, { instruksi: t.instruksi, berat: t.berat });
     }
 
     /** Minta satu AI membalas di thread tertentu. */
@@ -270,7 +349,9 @@ export class Percakapan {
     private async balasSekarang(thread: string, aiId: string, opts: { instruksi?: string; berat?: boolean; data?: string; aturan?: string; kerja?: string }) {
         const ai = this.roster().find((a) => a.id === aiId);
         if (!ai) { this.papan?.ubah(opts.kerja, 'gagal', 'AI tidak ditemukan.'); return; }
-        const grup = thread === 'grup';
+        const grup = thread === 'grup' || !!this.grupCari(thread);
+        const info = this.infoThread(thread);
+        const lampOwner = [...this.baca(thread)].reverse().find((m) => m.dari === 'owner')?.lampiran;
         const berat = Boolean(opts.berat && this.kuota?.ambil());
         const prompt = opts.data ? [
             opts.aturan || '',
@@ -279,7 +360,7 @@ export class Percakapan {
             `Balas pesan terakhir ${this.ownerName} sebagai ${ai.nama} (${ai.peran}) dalam Bahasa Indonesia, singkat & jelas.`
         ].join('\n') : [
             grup
-                ? `[Grup chat "Grup Kantor" di aplikasi Kantor Virtual. Anggota: ${this.roster().map((a) => `${a.nama} (${a.peran})`).join(', ')}. Semua membaca; kamu diminta menjawab.]`
+                ? `[Grup chat "${info.nama}" di aplikasi Kantor Virtual. Anggota: ${this.anggotaThread(thread).map((a) => `${a.nama} (${a.peran})`).join(', ')}. Semua membaca; kamu diminta menjawab.]`
                 : `[Chat pribadi dengan ${this.ownerName} di aplikasi Kantor Virtual (bukan Telegram).]`,
             'Riwayat terakhir:',
             this.riwayat(thread),
@@ -287,11 +368,14 @@ export class Percakapan {
             opts.instruksi ? `Instruksi dari ${this.roster().find((a) => a.id === 'default')?.nama || 'kepala kantor'} untukmu: ${opts.instruksi}` : '',
             `Balas sebagai ${ai.nama} (${ai.peran}) dalam Bahasa Indonesia. Gaya chat: singkat, jelas, tanpa basa-basi.`,
             grup ? 'Jawab hanya bagian yang sesuai keahlianmu; jangan mengulang jawaban anggota lain. Kalau perlu orang lain, sebut namanya.' : '',
-            'Kalau diminta mengerjakan sesuatu, kerjakan dengan alat/skill-mu seperti biasa, lalu laporkan hasilnya di sini.'
+            'Kalau diminta mengerjakan sesuatu, kerjakan dengan alat/skill-mu seperti biasa, lalu laporkan hasilnya di sini.',
+            this.teksLampiran(lampOwner),
+            this.petunjukKirimFile(ai.nama)
         ].filter(Boolean).join('\n');
         try {
             const out = await this.jalankanAi(thread, aiId, prompt, berat, opts.kerja);
-            this.tambah(thread, { dari: aiId, nama: ai.nama, teks: out || '(tidak ada jawaban)', at: Date.now(), ...(berat ? { berat: true } : {}) });
+            const { teks, lampiran } = this.ambilLampiran(out || '');
+            this.tambah(thread, { dari: aiId, nama: ai.nama, teks: teks || (lampiran.length ? '' : '(tidak ada jawaban)'), at: Date.now(), ...(berat ? { berat: true } : {}), ...(lampiran.length ? { lampiran } : {}) });
         } catch (e: any) { this.gagal(thread, ai, e); }
     }
 }

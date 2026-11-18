@@ -24,6 +24,8 @@ import { profil as nasdaqProfil, fundamentalNasdaq } from './kantor/nasdaq';
 import { simulasi, langkahDari, ringkasJalur } from './kantor/simulasi';
 import { simulasiSinyal, type HasilSim } from './kantor/simSinyal';
 import { ArsipSinyal, type HasilArsip } from './kantor/arsipSinyal';
+import { Notifikasi } from './kantor/push';
+import type { Lampiran } from './kantor/percakapan';
 import { konteksTrading } from './kantor/konteksTrading';
 import * as porto from './kantor/portofolio';
 import { PERAN_AI } from './kantor/papan';
@@ -57,7 +59,7 @@ gantiNamaPenasihat(config.hermesHome, process.env.KANTOR_CONFIG || path.join(pro
 const hermesProfiles = new HermesBridge(config.hermesHome, config.kanbanDbPath, config.hermesBin);
 let rosterCache: { at: number; list: Anggota[] } = { at: 0, list: [] };
 const roster = (): Anggota[] => {
-    if (Date.now() - rosterCache.at < 60_000) return rosterCache.list;
+    if (Date.now() - rosterCache.at < 15_000) return rosterCache.list;
     const list = hermesProfiles.listProfiles().map((p) => {
         const o = config.agents[p.id] || {};
         return { id: p.id, nama: o.name || p.displayName || p.id, peran: o.title || PERAN_AI[p.id] || p.title || '', deskripsi: o.role || p.description || '' };
@@ -428,10 +430,51 @@ const percakapan = new Percakapan(config.dataDir, config.hermesBin, config.owner
 percakapan.papan = papan;
 app.get('/api/kantor/chat', requireToken, (_req, res) => { res.json({ ok: true, thread: percakapan.daftar() }); });
 app.get('/api/kantor/chat/:id', requireToken, (req, res) => { res.json({ ok: true, ...percakapan.thread(String(req.params.id)) }); });
+percakapan.berkasRoot = berkas.root;
+/** Lampiran yang dikirim harus benar-benar berkas di Berkas (cloud pribadi). */
+const lampiranValid = (x: any): Lampiran[] => (Array.isArray(x) ? x : []).slice(0, 10).map((l: any) => {
+    try { const abs = berkas.lokasi(String(l?.rel || '')); const st = fs.statSync(abs); return { rel: path.relative(berkas.root, abs).split(path.sep).join('/'), nama: path.basename(abs), ukuran: st.size, jenis: /\.(png|jpe?g|gif|webp)$/i.test(abs) ? 'gambar' : 'berkas' } as Lampiran; } catch { return null; }
+}).filter(Boolean) as Lampiran[];
 app.post('/api/kantor/chat/:id', requireToken, (req, res) => {
-    try { res.json({ ok: true, pesan: percakapan.kirim(String(req.params.id), String(req.body?.teks || '')) }); }
+    try { res.json({ ok: true, pesan: percakapan.kirim(String(req.params.id), String(req.body?.teks || ''), lampiranValid(req.body?.lampiran)) }); }
     catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
 });
+// Unggah lampiran chat → disimpan di Berkas: "Chat/<nama chat>/".
+app.post('/api/kantor/chat/:id/unggah', requireToken, (req, res) => {
+    try {
+        const nama = percakapan.infoThread(String(req.params.id)).nama.replace(/[\\/:*?"<>|]+/g, ' ').trim().slice(0, 60) || 'Chat';
+        fs.mkdirSync(path.join(berkas.root, 'Chat', nama), { recursive: true });
+        (req.query as any).p = `Chat/${nama}`;
+        berkas.unggah(req, res);
+    } catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
+});
+// Grup buatan sendiri.
+app.post('/api/kantor/chat-grup', requireToken, (req, res) => {
+    try { res.json({ ok: true, grup: percakapan.grupSimpanSatu({ id: req.body?.id ? String(req.body.id) : undefined, nama: String(req.body?.nama || ''), ikon: String(req.body?.ikon || '👥'), anggota: Array.isArray(req.body?.anggota) ? req.body.anggota : [] }) }); }
+    catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
+});
+app.post('/api/kantor/chat-grup/:id/hapus', requireToken, (req, res) => { percakapan.grupHapus(String(req.params.id)); res.json({ ok: true }); });
+
+// ── Notifikasi HP ala WhatsApp (Web Push) ──
+const notif = (() => { try { return new Notifikasi(config.dataDir); } catch (e: any) { console.warn('[Push] mati:', e?.message || e); return null; } })();
+percakapan.onPesan = (thread, p) => {
+    if (!notif || !notif.jumlah()) return;
+    const info = percakapan.infoThread(thread);
+    const pribadi = roster().find((a) => a.id === thread);
+    if (!info.grup && !pribadi) return; // thread kerja/konsultasi tidak dinotifikasi
+    const peran = roster().find((a) => a.id === p.dari)?.peran;
+    const isi = `${p.teks || ''}${p.lampiran?.length ? `${p.teks ? ' ' : ''}📎 ${p.lampiran.map((l) => l.nama).join(', ')}` : ''}`.replace(/\s+/g, ' ').trim().slice(0, 180) || 'Pesan baru';
+    const judul = info.grup ? `${info.ikon} ${info.nama}` : `${p.nama}${peran ? ` - ${peran}` : ''}`;
+    notif.kirim(thread, judul, info.grup ? `${p.nama}: ${isi}` : isi).catch((e) => console.warn('[Push]', e?.message || e));
+};
+app.get('/api/kantor/push/kunci', requireToken, (_req, res) => { res.json({ ok: !!notif, kunci: notif?.kunciPublik() || null, langganan: notif?.jumlah() || 0 }); });
+app.post('/api/kantor/push/langgan', requireToken, (req, res) => {
+    try { if (!notif) throw new Error('Notifikasi belum tersedia di server.'); notif.langgan(req.body?.langganan, String(req.headers['user-agent'] || '')); res.json({ ok: true }); }
+    catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
+});
+app.post('/api/kantor/push/berhenti', requireToken, (req, res) => { notif?.berhenti(String(req.body?.endpoint || '')); res.json({ ok: true }); });
+app.post('/api/kantor/push/lihat', requireToken, (req, res) => { notif?.lihat(req.body?.thread ? String(req.body.thread) : null); res.json({ ok: true, belum: notif?.totalBelum() || 0 }); });
+app.post('/api/kantor/push/uji', requireToken, (_req, res) => { notif?.uji().catch(() => undefined); res.json({ ok: !!notif }); });
 
 // ── Penyaring saham (fundamental SEC + teknikal) ─────────────────────
 const screener = new Screener(config.dataDir, () => { const st = tradingDesk.load(); return Array.from(new Set([...st.positions.map((p) => p.symbol), ...st.watchlist])); }, tradingDeskDir);
@@ -642,6 +685,11 @@ async function perbaruiBeritaTerkait(sebab: string) {
 setInterval(() => { if (beritaTerkait.atur.aktif && !beritaTerkait.segar && screener.daftarSimbol().length) perbaruiBeritaTerkait('otomatis harian').catch((e) => console.warn('[Berita terkait]', e?.message || e)); }, 3600_000);
 setTimeout(() => { if (beritaTerkait.atur.aktif && !beritaTerkait.segar && screener.daftarSimbol().length) perbaruiBeritaTerkait('otomatis').catch((e) => console.warn('[Berita terkait]', e?.message || e)); }, 120_000);
 app.get('/api/kantor/berita-terkait', requireToken, (_req, res) => { res.json({ ok: true, data: beritaTerkait.data, atur: beritaTerkait.atur, sibuk: beritaTerkait.sibuk }); });
+app.get('/api/kantor/berita-terkait/daftar', requireToken, (req, res) => {
+    const q = req.query as Record<string, string>;
+    const tgl = (x?: string) => (x && /^\d{4}-\d{2}-\d{2}$/.test(x) ? x : undefined);
+    res.json({ ok: true, ...beritaTerkait.daftar({ hal: +q.hal || 1, n: +q.n || 10, dari: tgl(q.dari), sampai: tgl(q.sampai), topik: q.topik || undefined, industri: q.industri || undefined, q: (q.q || '').slice(0, 80) || undefined }) });
+});
 app.post('/api/kantor/berita-terkait/atur', requireToken, (req, res) => { beritaTerkait.setAtur(req.body || {}); screener.bersihkanCache(); res.json({ ok: true, atur: beritaTerkait.atur }); });
 app.post('/api/kantor/berita-terkait/perbarui', requireToken, (_req, res) => {
     perbaruiBeritaTerkait('diminta Pak Rico').catch((e) => console.warn('[Berita terkait]', e?.message || e));

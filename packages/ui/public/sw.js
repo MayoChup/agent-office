@@ -16,3 +16,26 @@ self.addEventListener('fetch', (e) => {
     e.respondWith(caches.match(req).then((hit) => hit || fetch(req).then((r) => { if (r.ok) { const k = r.clone(); caches.open(CACHE).then((c) => c.put(req, k)); } return r; })));
   }
 });
+
+/* ── Notifikasi chat ala WhatsApp (Web Push dari server kantor) ── */
+self.addEventListener('push', (e) => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch { d = { title: 'Kantor Virtual', body: e.data ? e.data.text() : '' }; }
+  e.waitUntil((async () => {
+    await self.registration.showNotification(d.title || 'Kantor Virtual', {
+      body: d.body || '', tag: d.tag || 'kantor', renotify: true, icon: '/icon-192.png', badge: '/icon-192.png',
+      data: { url: d.url || '/' }, timestamp: Date.now()
+    });
+    try { if (d.badge && self.navigator && 'setAppBadge' in self.navigator) await self.navigator.setAppBadge(d.badge); } catch { /* tidak didukung */ }
+  })());
+});
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const url = new URL((e.notification.data && e.notification.data.url) || '/', self.location.origin);
+  const chat = url.searchParams.get('chat');
+  e.waitUntil((async () => {
+    const list = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const c of list) { if ('focus' in c) { c.postMessage({ bukaChat: chat }); return c.focus(); } }
+    return self.clients.openWindow(url.href);
+  })());
+});

@@ -80,11 +80,17 @@ export function App() {
         const onAgent = (e: Event) => setAgentId((e as CustomEvent).detail?.id ?? null);
         // Dari Catatan → buka postingan Knowledge Reels (halaman KR membaca id ini saat terpasang / lewat event yang sama).
         const onKr = (e: Event) => { try { sessionStorage.setItem('kantor:kr-buka', String((e as CustomEvent).detail?.id || '')); } catch { /* */ } setPanel(null); setPage('kr'); };
+        // Notifikasi chat diketuk → buka chat itu (dari URL ?chat= atau pesan service worker).
+        const bukaChat = (id: string | null) => { if (!id) return; try { sessionStorage.setItem('kantor:buka-chat', id); } catch { /* */ } setPanel(null); setPage('obrolan'); eventBus.dispatchEvent(new CustomEvent('buka-chat', { detail: { id } })); };
+        try { const u = new URL(location.href); const c = u.searchParams.get('chat'); if (c) { u.searchParams.delete('chat'); history.replaceState(null, '', u.pathname + u.search + u.hash); setTimeout(() => bukaChat(c), 0); } } catch { /* */ }
+        const onSw = (e: MessageEvent) => { if (e.data?.bukaChat) bukaChat(String(e.data.bukaChat)); };
+        navigator.serviceWorker?.addEventListener('message', onSw);
         eventBus.addEventListener('open-kr', onKr);
         eventBus.addEventListener('open-division', onDivision);
         eventBus.addEventListener('open-chat', onChat);
         eventBus.addEventListener('agent-select', onAgent);
         return () => {
+            navigator.serviceWorker?.removeEventListener('message', onSw);
             eventBus.removeEventListener('open-kr', onKr);
             eventBus.removeEventListener('open-division', onDivision);
             eventBus.removeEventListener('open-chat', onChat);

@@ -1,12 +1,16 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { apiGet, apiPost, getRoom } from '../kantor/connection';
+import { apiGet, apiPost, getRoom, serverBase, tokenLogin } from '../kantor/connection';
+import { eventBus } from '../events';
+import { statusNotif, aktifkanNotif, matikanNotif, laporLihat, iosBrowser } from '../kantor/notif';
 import { useAktif } from '../kantor/aktif';
 import { useKantor, setChatOpen } from '../kantor/store';
 import { Avatar } from '../components/Avatar';
 import { RichText } from '../components/common/RichText';
 
-interface ThreadInfo { id: string; nama: string; peran: string; terakhir: { nama: string; teks: string; at: number } | null; menulis: string[] }
-interface Pesan { id: string; dari: string; nama: string; teks: string; at: number; status?: 'gagal'; berat?: boolean }
+interface ThreadInfo { id: string; nama: string; peran: string; terakhir: { nama: string; teks: string; at: number } | null; menulis: string[]; grup?: boolean; ikon?: string; anggota?: string[] }
+interface Lampiran { rel: string; nama: string; ukuran: number; jenis: 'gambar' | 'berkas' }
+interface Pesan { id: string; dari: string; nama: string; teks: string; at: number; status?: 'gagal'; berat?: boolean; lampiran?: Lampiran[] }
+const isGrup = (t?: ThreadInfo) => !!t && (t.grup || t.id === 'grup');
 
 const LS_SEEN = 'kantor:chat-seen';
 const KANTOR = '__kantor';
@@ -23,7 +27,9 @@ function readSeen(): Record<string, number> { try { return JSON.parse(localStora
 export function ChatPage({ prefill }: { prefill?: string }) {
     const agents = useKantor((s) => s.agents);
     const [threads, setThreads] = useState<ThreadInfo[]>([]);
-    const [open, setOpen] = useState<string | null>(() => (window.innerWidth >= 768 ? 'grup' : null));
+    const [open, setOpen] = useState<string | null>(() => { try { const c = sessionStorage.getItem('kantor:buka-chat'); if (c) { sessionStorage.removeItem('kantor:buka-chat'); return c; } } catch { /* */ } return window.innerWidth >= 768 ? 'grup' : null; });
+    const [grupForm, setGrupForm] = useState<ThreadInfo | 'baru' | null>(null);
+    useEffect(() => { const f = (e: Event) => { const id = (e as CustomEvent).detail?.id; if (id) { setOpen(id); try { sessionStorage.removeItem('kantor:buka-chat'); } catch { /* */ } } }; eventBus.addEventListener('buka-chat', f); return () => eventBus.removeEventListener('buka-chat', f); }, []);
     const [seen, setSeen] = useState<Record<string, number>>(readSeen);
     const [q, setQ] = useState('');
     const [err, setErr] = useState('');
@@ -52,7 +58,7 @@ export function ChatPage({ prefill }: { prefill?: string }) {
         <div className={`wa ${open ? 'has-open' : ''}`}>
             <aside className="wa-list">
                 <div className="wa-list-head">
-                    <h2>💬 Chat</h2>
+                    <div className="wa-list-top"><h2>💬 Chat</h2><TombolNotif /><button className="btn small" onClick={() => setGrupForm('baru')}>＋ Grup baru</button></div>
                     <input className="input" placeholder="Cari nama atau peran…" value={q} onChange={(e) => setQ(e.target.value)} />
                 </div>
                 {err && <div className="error" style={{ margin: 10 }}>{err}</div>}
@@ -62,12 +68,12 @@ export function ChatPage({ prefill }: { prefill?: string }) {
                         const s = skin(t.id);
                         return (
                             <button key={t.id} className={`wa-item ${open === t.id ? 'active' : ''}`} onClick={() => setOpen(t.id)}>
-                                <div className="wa-ava">{t.id === 'grup' ? <span className="wa-group-ico">👥</span> : s !== undefined ? <Avatar skin={s} size={42} /> : <span className="wa-group-ico">🤖</span>}</div>
+                                <div className="wa-ava">{isGrup(t) ? <span className="wa-group-ico">{t.ikon || '👥'}</span> : s !== undefined ? <Avatar skin={s} size={42} /> : <span className="wa-group-ico">🤖</span>}</div>
                                 <div className="wa-item-main">
-                                    <div className="wa-item-top"><b>{t.nama}{t.peran && t.id !== 'grup' ? <span className="wa-jabatan"> - {t.peran}</span> : null}</b>{t.terakhir && <span className={unread ? 'unread' : ''}>{tanggal(t.terakhir.at)}</span>}</div>
+                                    <div className="wa-item-top"><b>{t.nama}{t.peran && !isGrup(t) ? <span className="wa-jabatan"> - {t.peran}</span> : null}</b>{t.terakhir && <span className={unread ? 'unread' : ''}>{tanggal(t.terakhir.at)}</span>}</div>
                                     <div className="wa-item-sub">
-                                        {t.menulis.length ? <em>{t.id === 'grup' ? `${t.menulis.map((id) => threads.find((x) => x.id === id)?.nama || id).join(', ')} mengetik…` : 'mengetik…'}</em>
-                                            : t.terakhir ? <span>{t.id === 'grup' || t.terakhir.nama === 'Pak Rico' ? `${t.terakhir.nama === 'Pak Rico' ? 'Anda' : namaPeran(threads, t.terakhir.nama)}: ` : ''}{t.terakhir.teks}</span>
+                                        {t.menulis.length ? <em>{isGrup(t) ? `${t.menulis.map((id) => threads.find((x) => x.id === id)?.nama || id).join(', ')} mengetik…` : 'mengetik…'}</em>
+                                            : t.terakhir ? <span>{isGrup(t) || t.terakhir.nama === 'Pak Rico' ? `${t.terakhir.nama === 'Pak Rico' ? 'Anda' : namaPeran(threads, t.terakhir.nama)}: ` : ''}{t.terakhir.teks}</span>
                                                 : <span className="wa-role">{t.peran}</span>}
                                         {unread && <i className="wa-dot" />}
                                     </div>
@@ -86,14 +92,15 @@ export function ChatPage({ prefill }: { prefill?: string }) {
             </aside>
             <section className="wa-thread">
                 {open === KANTOR ? <KantorThread onBack={() => setOpen(null)} prefill={prefill} />
-                    : cur ? <Thread key={cur.id} info={cur} threads={threads} skin={skin} onBack={() => setOpen(null)} onSeen={(at) => markSeen(cur.id, at)} />
+                    : cur ? <Thread key={cur.id} info={cur} threads={threads} skin={skin} onBack={() => setOpen(null)} onSeen={(at) => markSeen(cur.id, at)} onInfo={() => setGrupForm(cur)} />
                         : <div className="wa-empty">Pilih chat di sebelah kiri.<br /><small>Chat pribadi langsung ke AI Hermes (pakai ingatan & skill masing-masing). Di Grup Kantor semua AI membaca; yang menjawab yang paling relevan atau yang di-@sebut.</small></div>}
             </section>
+            {grupForm && <FormGrup awal={grupForm === 'baru' ? null : grupForm} threads={threads} tutup={() => setGrupForm(null)} selesai={(id) => { setGrupForm(null); if (id) setOpen(id); else setOpen(null); }} />}
         </div>
     );
 }
 
-function Thread({ info, threads, skin, onBack, onSeen }: { info: ThreadInfo; threads: ThreadInfo[]; skin: (id: string) => number | undefined; onBack: () => void; onSeen: (at: number) => void }) {
+function Thread({ info, threads, skin, onBack, onSeen, onInfo }: { info: ThreadInfo; threads: ThreadInfo[]; skin: (id: string) => number | undefined; onBack: () => void; onSeen: (at: number) => void; onInfo: () => void }) {
     const [pesan, setPesan] = useState<Pesan[]>([]);
     const [menulis, setMenulis] = useState<string[]>([]);
     const [text, setText] = useState('');
@@ -101,8 +108,36 @@ function Thread({ info, threads, skin, onBack, onSeen }: { info: ThreadInfo; thr
     const [err, setErr] = useState('');
     const endRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLTextAreaElement>(null);
-    const grup = info.id === 'grup';
-    const anggota = threads.filter((t) => t.id !== 'grup');
+    const grup = isGrup(info), kustom = grup && info.id !== 'grup';
+    const anggota = threads.filter((t) => !isGrup(t) && (!kustom || info.anggota?.includes(t.id)));
+    const [lamp, setLamp] = useState<Lampiran[]>([]);
+    const [unggah, setUnggah] = useState<Array<{ id: string; nama: string; persen: number; error?: string }>>([]);
+    const fileRef = useRef<HTMLInputElement>(null);
+    const pilihFile = (files: FileList | null) => {
+        for (const f of Array.from<File>(files || [])) {
+            if (f.size > 50e6) { setErr(`${f.name} lebih dari 50 MB.`); continue; }
+            const id = `${Date.now()}-${Math.random()}`;
+            setUnggah((u) => [...u, { id, nama: f.name, persen: 0 }]);
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', `${serverBase()}/api/kantor/chat/${encodeURIComponent(info.id)}/unggah?nama=${encodeURIComponent(f.name)}&ukuran=${f.size}`);
+            xhr.setRequestHeader('Authorization', `Bearer ${tokenLogin()}`);
+            xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+            xhr.upload.onprogress = (e) => { if (e.lengthComputable) setUnggah((u) => u.map((x) => (x.id === id ? { ...x, persen: Math.round((e.loaded / e.total) * 100) } : x))); };
+            xhr.onload = () => {
+                let r: any = {}; try { r = JSON.parse(xhr.responseText); } catch { /* */ }
+                if (xhr.status < 300 && r.path) { setLamp((l) => [...l, { rel: r.path, nama: r.path.split('/').pop(), ukuran: r.size || f.size, jenis: /^image\//.test(f.type) ? 'gambar' : 'berkas' }]); setUnggah((u) => u.filter((x) => x.id !== id)); }
+                else setUnggah((u) => u.map((x) => (x.id === id ? { ...x, error: r.error || `HTTP ${xhr.status}` } : x)));
+            };
+            xhr.onerror = () => setUnggah((u) => u.map((x) => (x.id === id ? { ...x, error: 'Koneksi terputus' } : x)));
+            xhr.send(f);
+        }
+    };
+    // Beri tahu server chat ini sedang dibuka → tidak ada notifikasi dobel.
+    useEffect(() => {
+        const lapor = () => laporLihat(document.visibilityState === 'visible' ? info.id : null);
+        lapor(); const t = setInterval(lapor, 15_000); document.addEventListener('visibilitychange', lapor);
+        return () => { clearInterval(t); document.removeEventListener('visibilitychange', lapor); laporLihat(null); };
+    }, [info.id]);
 
     const load = async () => {
         try {
@@ -124,12 +159,12 @@ function Thread({ info, threads, skin, onBack, onSeen }: { info: ThreadInfo; thr
     const send = async (e?: React.FormEvent) => {
         e?.preventDefault();
         const t = text.trim();
-        if (!t || sending) return;
+        if ((!t && !lamp.length) || sending || unggah.some((u) => !u.error)) return;
         setSending(true);
         try {
-            const d = await apiPost<{ pesan: Pesan }>(`/api/kantor/chat/${encodeURIComponent(info.id)}`, { teks: t });
+            const d = await apiPost<{ pesan: Pesan }>(`/api/kantor/chat/${encodeURIComponent(info.id)}`, { teks: t, lampiran: lamp });
             setPesan((p) => [...p, d.pesan]);
-            setText('');
+            setText(''); setLamp([]); setUnggah([]);
             setTimeout(load, 800);
         } catch (e: any) { setErr(String(e.message || e)); }
         setSending(false);
@@ -153,17 +188,18 @@ function Thread({ info, threads, skin, onBack, onSeen }: { info: ThreadInfo; thr
         <>
             <header className="wa-head">
                 <button className="icon-btn wa-back" onClick={onBack} aria-label="Kembali">‹</button>
-                <div className="wa-ava sm">{grup ? <span className="wa-group-ico">👥</span> : s !== undefined ? <Avatar skin={s} size={36} /> : <span className="wa-group-ico">🤖</span>}</div>
+                <div className="wa-ava sm">{grup ? <span className="wa-group-ico">{info.ikon || '👥'}</span> : s !== undefined ? <Avatar skin={s} size={36} /> : <span className="wa-group-ico">🤖</span>}</div>
                 <div className="wa-head-main">
                     <b>{info.nama}{!grup && info.peran ? ` - ${info.peran}` : ''}</b>
                     <span>{menulis.length ? <em>{grup ? `${menulis.map(nama).join(', ')} mengetik…` : 'mengetik…'}</em> : grup ? anggota.map((a) => a.nama).join(', ') : info.peran}</span>
                 </div>
+                {kustom && <button className="icon-btn" onClick={onInfo} aria-label="Info grup" title="Info grup">⋮</button>}
             </header>
             <div className="wa-body">
                 {pesan.length === 0 && (
-                    <div className="wa-note">{grup ? 'Semua AI kantor ada di grup ini. Tulis @Nama untuk memanggil orang tertentu, atau @semua untuk para kepala divisi.' : `Chat langsung dengan ${info.nama}. Balasan bisa butuh 10–60 detik karena ${info.nama} benar-benar bekerja (pakai skill & ingatannya).`}</div>
+                    <div className="wa-note">{kustom ? `Grup ini berisi ${anggota.map((a) => a.nama).join(', ')}. Tulis @Nama untuk memanggil orang tertentu; tanpa tag, yang paling relevan yang menjawab.` : grup ? 'Semua AI kantor ada di grup ini. Tulis @Nama untuk memanggil orang tertentu, atau @semua untuk para kepala divisi.' : `Chat langsung dengan ${info.nama}. Balasan bisa butuh 10–60 detik karena ${info.nama} benar-benar bekerja (pakai skill & ingatannya).`}</div>
                 )}
-                {items.map((it, i) => it.day ? <div key={`d${i}`} className="wa-day"><span>{dayLabel(it.day)}</span></div> : (
+                {items.map((it, i) => it.day ? <div key={`d${i}`} className="wa-day"><span>{dayLabel(it.day)}</span></div> : it.m!.dari === 'sistem' ? <div key={it.m!.id} className="wa-day wa-sistem"><span>{it.m!.teks}</span></div> : (
                     <Bubble key={it.m!.id} m={it.m!} grup={grup} peran={threads.find((x) => x.id === it.m!.dari)?.peran} />
                 ))}
                 {menulis.map((id) => <div key={`t-${id}`} className="wa-bubble them typing">{grup && <div className="wa-name" style={{ color: warna(id) }}>{nama(id)}</div>}<span className="dots"><i /><i /><i /></span></div>)}
@@ -172,16 +208,24 @@ function Thread({ info, threads, skin, onBack, onSeen }: { info: ThreadInfo; thr
             {err && <div className="error" style={{ margin: '0 12px 6px' }}>{err}</div>}
             {grup && (
                 <div className="wa-mentions">
-                    {['semua', ...anggota.map((a) => a.nama)].map((n) => (
+                    {[...(kustom ? [] : ['semua']), ...anggota.map((a) => a.nama)].map((n) => (
                         <button key={n} type="button" onClick={() => { setText((t) => `${t}${t && !t.endsWith(' ') ? ' ' : ''}@${n} `); inputRef.current?.focus(); }}>@{n}</button>
                     ))}
                 </div>
             )}
+            {(lamp.length > 0 || unggah.length > 0) && (
+                <div className="wa-lamp-antre">
+                    {lamp.map((l) => <span key={l.rel} className="wa-lamp-chip">{l.jenis === 'gambar' ? '🖼️' : '📄'} {l.nama}<button type="button" onClick={() => setLamp((x) => x.filter((y) => y.rel !== l.rel))} aria-label="Hapus lampiran">×</button></span>)}
+                    {unggah.map((u) => <span key={u.id} className={`wa-lamp-chip ${u.error ? 'gagal' : ''}`}>⏳ {u.nama} {u.error ? `· ${u.error}` : `${u.persen}%`}{u.error && <button type="button" onClick={() => setUnggah((x) => x.filter((y) => y.id !== u.id))}>×</button>}</span>)}
+                </div>
+            )}
             <form className="wa-input" onSubmit={send}>
+                <input ref={fileRef} type="file" multiple hidden onChange={(e) => { pilihFile(e.target.files); e.target.value = ''; }} />
+                <button type="button" className="wa-klip" onClick={() => fileRef.current?.click()} aria-label="Lampirkan file atau gambar" title="Lampirkan file atau gambar">📎</button>
                 <textarea ref={inputRef} rows={1} placeholder={grup ? 'Tulis ke grup…' : `Tulis ke ${info.nama}…`} value={text}
                     onChange={(e) => { setText(e.target.value); e.target.style.height = 'auto'; e.target.style.height = `${Math.min(120, e.target.scrollHeight)}px`; }}
                     onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && window.innerWidth >= 768) { e.preventDefault(); send(); } }} />
-                <button className="wa-send" type="submit" disabled={!text.trim() || sending} aria-label="Kirim">➤</button>
+                <button className="wa-send" type="submit" disabled={(!text.trim() && !lamp.length) || sending || unggah.some((u) => !u.error)} aria-label="Kirim">➤</button>
             </form>
         </>
     );
@@ -195,7 +239,8 @@ function Bubble({ m, grup, peran }: { m: Pesan; grup: boolean; peran?: string })
     return (
         <div className={`wa-bubble ${me ? 'me' : 'them'} ${m.status === 'gagal' ? 'fail' : ''}`}>
             {grup && !me && <div className="wa-name" style={{ color: warna(m.dari) }}>{m.nama}{peran ? <span className="wa-jabatan"> - {peran}</span> : null}</div>}
-            <div className="wa-text">{me ? m.teks : <RichText text={m.teks} />}</div>
+            {!!m.lampiran?.length && <div className="wa-lamp">{m.lampiran.map((l) => <LampiranView key={l.rel} l={l} />)}</div>}
+            {m.teks && <div className="wa-text">{me ? m.teks : <RichText text={m.teks} />}</div>}
             <div className="wa-time">{m.berat && <span className="wa-berat" title="Dikerjakan dengan model berbayar (Claude) atas keputusan Joni">⚡ Claude</span>}{jam(m.at)}{me && <span className="wa-ticks">✓✓</span>}</div>
         </div>
     );
@@ -251,5 +296,89 @@ function KantorThread({ onBack, prefill }: { onBack: () => void; prefill?: strin
                 <button className="wa-send" type="submit" disabled={!text.trim()}>➤</button>
             </form>
         </>
+    );
+}
+
+/* ── Lampiran: gambar tampil langsung, berkas bisa diunduh. Tautan sementara 10 menit dari Berkas. ── */
+const tautanCache = new Map<string, { url: string; exp: number }>();
+async function tautan(rel: string, unduh = false) {
+    const k = `${rel}|${unduh}`; const c = tautanCache.get(k);
+    if (c && c.exp > Date.now()) return c.url;
+    const r = await apiPost<{ url: string }>('/api/kantor/berkas/tautan', { p: rel, unduh });
+    const url = `${serverBase()}${r.url}`; tautanCache.set(k, { url, exp: Date.now() + 8 * 60_000 }); return url;
+}
+const ukuran = (n: number) => (n > 1e6 ? `${(n / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1e3))} KB`);
+function LampiranView({ l }: { l: Lampiran }) {
+    const [src, setSrc] = useState('');
+    const [gagal, setGagal] = useState(false);
+    useEffect(() => { if (l.jenis === 'gambar') tautan(l.rel).then(setSrc).catch(() => setGagal(true)); }, [l.rel, l.jenis]);
+    const buka = async (unduh: boolean) => { try { window.open(await tautan(l.rel, unduh), '_blank', 'noopener'); } catch { setGagal(true); } };
+    if (l.jenis === 'gambar' && !gagal) return <button type="button" className="wa-gambar" onClick={() => buka(false)} title={l.nama}>{src ? <img src={src} alt={l.nama} onError={() => { tautanCache.delete(`${l.rel}|false`); setGagal(true); }} /> : <span>Memuat gambar…</span>}</button>;
+    return <button type="button" className="wa-berkas" onClick={() => buka(true)} title={`Unduh ${l.nama}`}><span>📄</span><span><b>{l.nama}</b><small>{ukuran(l.ukuran)} · ketuk untuk unduh</small></span></button>;
+}
+
+/* ── Tombol notifikasi HP ── */
+function TombolNotif() {
+    const [st, setSt] = useState<string>('');
+    const [msg, setMsg] = useState('');
+    useEffect(() => { statusNotif().then(setSt); }, []);
+    if (!st || st === 'tidak-didukung') return iosBrowser() ? <button className="icon-btn" title="Notifikasi" onClick={() => setMsg('Di iPhone: buka situs ini di Safari → Bagikan → "Tambah ke Layar Utama", lalu buka dari ikon Kantor untuk menyalakan notifikasi.')}>🔕</button> : null;
+    const klik = async () => {
+        setMsg('');
+        try {
+            if (st === 'aktif') { await matikanNotif(); setSt('mati'); setMsg('Notifikasi chat dimatikan di perangkat ini.'); }
+            else { await aktifkanNotif(); setSt('aktif'); setMsg('Notifikasi aktif — kami kirim satu notifikasi uji.'); }
+        } catch (e: any) { setMsg(String(e.message || e)); statusNotif().then(setSt); }
+    };
+    return (
+        <span className="wa-notif">
+            <button className={`icon-btn ${st === 'aktif' ? 'on' : ''}`} onClick={klik} title={st === 'aktif' ? 'Notifikasi aktif — ketuk untuk mematikan' : st === 'ditolak' ? 'Izin notifikasi ditolak di browser' : 'Nyalakan notifikasi chat di perangkat ini'}>{st === 'aktif' ? '🔔' : '🔕'}</button>
+            {msg && <span className="wa-notif-msg" role="status" onClick={() => setMsg('')}>{msg}</span>}
+        </span>
+    );
+}
+
+/* ── Buat / ubah grup (nama, ikon emoji, anggota) ── */
+const EMOJI = ['👥', '💼', '📈', '💰', '🎬', '🧠', '📚', '🏠', '🚀', '⚡', '🎯', '🌏', '🛒', '🏋️', '🍜', '✈️', '🎮', '📰', '🧾', '🗂️', '💡', '🔥', '🌱', '❤️', '⭐', '🤝', '🛠️', '📊', '🎨', '🧪'];
+function FormGrup({ awal, threads, tutup, selesai }: { awal: ThreadInfo | null; threads: ThreadInfo[]; tutup: () => void; selesai: (id: string | null) => void }) {
+    const ai = threads.filter((t) => !isGrup(t));
+    const [nama, setNama] = useState(awal?.nama || '');
+    const [ikon, setIkon] = useState(awal?.ikon || '👥');
+    const [anggota, setAnggota] = useState<string[]>(awal?.anggota || []);
+    const [q, setQ] = useState('');
+    const [err, setErr] = useState('');
+    const [kirim, setKirim] = useState(false);
+    const simpan = async () => {
+        setKirim(true); setErr('');
+        try { const r = await apiPost<{ grup: { id: string } }>('/api/kantor/chat-grup', { id: awal?.id, nama, ikon, anggota }); selesai(r.grup.id); }
+        catch (e: any) { setErr(String(e.message || e)); }
+        setKirim(false);
+    };
+    const hapus = async () => { if (!awal || !confirm(`Hapus grup "${awal.nama}" beserta isi chatnya?`)) return; await apiPost(`/api/kantor/chat-grup/${awal.id}/hapus`, {}); selesai(null); };
+    const daftar = ai.filter((a) => !q || `${a.nama} ${a.peran}`.toLowerCase().includes(q.toLowerCase()));
+    return (
+        <div className="wa-modal-bg" onClick={tutup}>
+            <div className="wa-modal" role="dialog" aria-label={awal ? 'Info grup' : 'Grup baru'} onClick={(e) => e.stopPropagation()}>
+                <header><b>{awal ? 'Info grup' : 'Grup baru'}</b><button className="icon-btn" onClick={tutup} aria-label="Tutup">×</button></header>
+                <div className="wa-grup-id">
+                    <span className="wa-grup-ikon">{ikon}</span>
+                    <input className="input" placeholder="Nama grup" value={nama} maxLength={50} onChange={(e) => setNama(e.target.value)} autoFocus />
+                </div>
+                <div className="wa-emoji">{EMOJI.map((e) => <button key={e} type="button" className={ikon === e ? 'on' : ''} onClick={() => setIkon(e)}>{e}</button>)}
+                    <input className="input" aria-label="Emoji lain" placeholder="lain" value={EMOJI.includes(ikon) ? '' : ikon} onChange={(e) => setIkon(Array.from(e.target.value).slice(-1).join('') || '👥')} /></div>
+                <div className="wa-anggota-h"><b>Anggota ({anggota.length})</b><input className="input" placeholder="Cari AI…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+                <div className="wa-anggota">
+                    {daftar.map((a) => {
+                        const on = anggota.includes(a.id);
+                        return <label key={a.id} className={on ? 'on' : ''}><input type="checkbox" checked={on} onChange={() => setAnggota(on ? anggota.filter((x) => x !== a.id) : [...anggota, a.id])} /><span><b>{a.nama}</b><small>{a.peran}</small></span></label>;
+                    })}
+                </div>
+                {err && <div className="error">{err}</div>}
+                <footer>
+                    {awal && <button className="btn danger" onClick={hapus}>Hapus grup</button>}
+                    <button className="btn primary" disabled={kirim || !nama.trim() || !anggota.length} onClick={simpan}>{awal ? 'Simpan' : 'Buat grup'}</button>
+                </footer>
+            </div>
+        </div>
     );
 }

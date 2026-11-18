@@ -152,7 +152,8 @@ export function loadConfig(): KantorConfig {
         divisions: file.divisions && typeof file.divisions === 'object' ? file.divisions : {},
         password: env.KANTOR_PASSWORD || '',
         allowedOrigins: String(env.KANTOR_ALLOWED_ORIGINS || file.allowedOrigins || '*').split(',').map((s: string) => s.trim()).filter(Boolean),
-        maxAgents: num(env.KANTOR_MAX_AGENTS || file.maxAgents, 8),
+        // Semua AI harus tampil di kantor: batas lama (8/12/20) dari config dinaikkan otomatis.
+        maxAgents: Math.max(num(env.KANTOR_MAX_AGENTS || file.maxAgents, 60), 60),
         berat: {
             model: String(env.KANTOR_BERAT_MODEL || file.berat?.model || 'anthropic/claude-sonnet-5.5'),
             perHari: num(env.KANTOR_BERAT_PER_HARI || file.berat?.perHari, 15)

@@ -12,6 +12,7 @@ import type { Faktor } from './skor';
 import { label } from './skor';
 
 const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
+export interface InfoRiwayat { id: string; judul: string; ringkas: string; tgl: string; at: number; topik: string; artikel: Array<{ t: string; sumber: string; tgl: string; url: string; topik: string }>; dampak: Dampak[]; oleh: string }
 export interface JudulDunia { id: string; t: string; sumber: string; tgl: string; url: string; topik: string }
 export interface Dampak { jenis: 'sektor' | 'industri' | 'saham'; nama: string; arah: number; alasan: string }
 export interface Tema { judul: string; ringkas: string; bukti: string[]; dampak: Dampak[] }
@@ -110,6 +111,7 @@ export class BeritaTerkait {
         this.file = path.join(dataDir, 'berita-terkait.json'); this.fileAtur = path.join(dataDir, 'berita-terkait-atur.json');
         try { this.data = JSON.parse(fs.readFileSync(this.file, 'utf8')); } catch { /* belum ada */ }
         try { this.atur = { ...this.atur, ...JSON.parse(fs.readFileSync(this.fileAtur, 'utf8')) }; } catch { /* bawaan */ }
+        if (this.data && !fs.existsSync(this.fileRiwayat)) try { this.catatRiwayat(this.data); } catch { /* */ }
     }
     setAtur(x: Partial<AturTerkait>) {
         if (typeof x.aktif === 'boolean') this.atur.aktif = x.aktif;
@@ -128,11 +130,48 @@ export class BeritaTerkait {
             if (!tema.length) throw new Error('AI tidak menghasilkan peta dampak yang valid.');
             this.data = { at: Date.now(), oleh: r.oleh, tema, berita };
             fs.writeFileSync(this.file, JSON.stringify(this.data));
+            try { this.catatRiwayat(this.data); } catch (e: any) { console.warn('[Berita terkait] riwayat:', e?.message || e); }
             return this.data;
         } catch (e: any) {
             if (this.data) this.data.galat = String(e?.message || e);
             throw e;
         } finally { this.sibuk = false; }
+    }
+    /* ── Riwayat News related: semua info unik dari setiap pemetaan disimpan (tidak dibuang), untuk daftar berhalaman + filter. ── */
+    private get fileRiwayat() { return this.file.replace(/\.json$/, '-riwayat.json'); }
+    riwayat(): InfoRiwayat[] { try { return JSON.parse(fs.readFileSync(this.fileRiwayat, 'utf8')); } catch { return []; } }
+    private catatRiwayat(d: DataTerkait) {
+        const list = this.riwayat();
+        const art = new Map(d.berita.map((b) => [b.id, b]));
+        const kata = (t: string) => new Set(t.toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').split(' ').filter((w) => w.length >= 4));
+        const mirip = (a: string, b: string) => { const x = kata(a), y = kata(b); if (!x.size || !y.size) return 0; let n = 0; for (const w of x) if (y.has(w)) n++; return n / Math.min(x.size, y.size); };
+        for (const t of d.tema) {
+            const artikel = t.bukti.map((id) => art.get(id)).filter(Boolean).map((b) => ({ t: b!.t, sumber: b!.sumber, tgl: b!.tgl, url: b!.url, topik: b!.topik }));
+            if (!artikel.length) continue;
+            const hitung = new Map<string, number>(); for (const a of artikel) hitung.set(a.topik, (hitung.get(a.topik) || 0) + 1);
+            const topik = [...hitung.entries()].sort((a, b) => b[1] - a[1])[0][0];
+            const tgl = artikel.map((a) => a.tgl).sort().pop() || new Date(d.at).toISOString().slice(0, 10);
+            const lama = list.slice(-400).find((x) => mirip(x.judul, t.judul) >= 0.6 && Math.abs(Date.parse(x.tgl) - Date.parse(tgl)) < 4 * 86400_000);
+            if (lama) {
+                const ada = new Set(lama.artikel.map((a) => a.url));
+                lama.artikel.push(...artikel.filter((a) => !ada.has(a.url)));
+                lama.tgl = tgl > lama.tgl ? tgl : lama.tgl; lama.at = d.at; lama.dampak = t.dampak; lama.ringkas = t.ringkas || lama.ringkas; lama.oleh = d.oleh;
+            } else list.push({ id: `${d.at.toString(36)}-${list.length}`, judul: t.judul, ringkas: t.ringkas, tgl, at: d.at, topik, artikel, dampak: t.dampak, oleh: d.oleh });
+        }
+        fs.writeFileSync(this.fileRiwayat, JSON.stringify(list.slice(-4000)));
+    }
+    /** Daftar berhalaman: terbaru di atas; filter tanggal, tema (topik), industri/sektor, kata kunci. */
+    daftar(o: { hal: number; n: number; dari?: string; sampai?: string; topik?: string; industri?: string; q?: string }) {
+        const semua = this.riwayat();
+        const lolos = semua.filter((x) => (!o.dari || x.tgl >= o.dari) && (!o.sampai || x.tgl <= o.sampai) && (!o.topik || x.topik === o.topik)
+            && (!o.industri || x.dampak.some((d) => d.nama === o.industri)) && (!o.q || `${x.judul} ${x.ringkas}`.toLowerCase().includes(o.q.toLowerCase())))
+            .sort((a, b) => b.tgl.localeCompare(a.tgl) || b.at - a.at);
+        const n = Math.max(5, Math.min(50, o.n || 10)), halaman = Math.max(1, Math.ceil(lolos.length / n)), hal = Math.max(1, Math.min(halaman, o.hal || 1));
+        const hitung = (f: (x: InfoRiwayat) => string[]) => { const m = new Map<string, number>(); for (const x of semua) for (const k of new Set(f(x))) m.set(k, (m.get(k) || 0) + 1); return [...m.entries()].sort((a, b) => b[1] - a[1]).map(([nama, jumlah]) => ({ nama, jumlah })); };
+        return {
+            items: lolos.slice((hal - 1) * n, hal * n), total: lolos.length, hal, halaman, n,
+            pilihan: { topik: hitung((x) => [x.topik]), industri: hitung((x) => x.dampak.filter((d) => d.jenis !== 'saham').map((d) => d.nama)), tanggal: { min: semua.map((x) => x.tgl).sort()[0] || null, max: semua.map((x) => x.tgl).sort().pop() || null } }
+        };
     }
     /** Peta dianggap basi setelah 30 jam (berita dunia cepat usang). */
     get segar() { return !!this.data && Date.now() - this.data.at < 30 * 3600_000; }
