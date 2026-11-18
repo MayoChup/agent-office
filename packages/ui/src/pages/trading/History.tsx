@@ -76,7 +76,7 @@ export function HistorySinyal({ onOpen }: { onOpen: (s: string) => void }) {
                     <div className="hs-rekap-utama">
                         <div className="hs-bersih"><small>Hasil bersih ({r.selesai} selesai)</small><b className={r.bersih > 0 ? 'up' : r.bersih < 0 ? 'down' : ''}>{r.bersih >= 0 ? '+' : '−'}{usd(Math.abs(r.bersih))}</b><em className={(r.bersihPct ?? 0) >= 0 ? 'up' : 'down'}>{pc(r.bersihPct)} dari modal {usd(r.selesai * r.modalPer, 0)}</em></div>
                         <div><small>Total gain</small><b className="up">+{usd(r.gain)}</b><em>rata-rata {pc(r.rataUntung)}</em></div>
-                        <div><small>Total loss</small><b className="down">−{usd(Math.abs(r.loss))}</b><em>rata-rata {pc(r.rataRugi)}</em></div>
+                        <div><small>Total loss</small><b className={r.loss < 0 ? 'down' : ''}>{r.loss < 0 ? '−' : ''}{usd(Math.abs(r.loss))}</b><em>rata-rata {pc(r.rataRugi)}</em></div>
                         <div><small>Kena target</small><b>{r.pctTarget == null ? '–' : `${r.pctTarget}%`}</b><em>{r.target} dari {r.selesai} selesai</em></div>
                         <div><small>Menang</small><b>{r.menang == null ? '–' : `${r.menang}%`}</b><em>profit factor {r.profitFactor ?? '–'}</em></div>
                     </div>
