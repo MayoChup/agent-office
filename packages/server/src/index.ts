@@ -24,6 +24,7 @@ import { profil as nasdaqProfil, fundamentalNasdaq } from './kantor/nasdaq';
 import { simulasi, langkahDari, ringkasJalur } from './kantor/simulasi';
 import { konteksTrading } from './kantor/konteksTrading';
 import * as porto from './kantor/portofolio';
+import { PERAN_AI } from './kantor/papan';
 import { Papan, Kerja, bulanWib } from './kantor/papan';
 import { Kronos, BarK, hariBursaBerikut } from './kantor/kronos';
 import { BeritaTerkait } from './kantor/beritaTerkait';
@@ -57,7 +58,7 @@ const roster = (): Anggota[] => {
     if (Date.now() - rosterCache.at < 60_000) return rosterCache.list;
     const list = hermesProfiles.listProfiles().map((p) => {
         const o = config.agents[p.id] || {};
-        return { id: p.id, nama: o.name || p.displayName || p.id, peran: o.title || p.title || (p.id === 'default' ? 'Kepala' : ''), deskripsi: o.role || p.description || '' };
+        return { id: p.id, nama: o.name || p.displayName || p.id, peran: o.title || PERAN_AI[p.id] || p.title || '', deskripsi: o.role || p.description || '' };
     });
     rosterCache = { at: Date.now(), list };
     return list;
@@ -420,6 +421,7 @@ app.get('/api/kantor/trading', requireToken, async (_req, res) => {
 });
 // ── Chat ala WhatsApp dengan AI Hermes (pribadi & grup) ─────────────
 const papan = new Papan(config.dataDir);
+papan.namaAi = (id) => roster().find((a) => a.id === id)?.nama;
 const percakapan = new Percakapan(config.dataDir, config.hermesBin, config.ownerName, roster, () => OfficeRoom.sharedLlm(), kuotaBerat);
 percakapan.papan = papan;
 app.get('/api/kantor/chat', requireToken, (_req, res) => { res.json({ ok: true, thread: percakapan.daftar() }); });
@@ -447,7 +449,10 @@ app.post('/api/kantor/watchlist-folder', requireToken, (req, res) => {
     try { res.json({ ok: true, folders: watchFolder.aksi(req.body), utama: tradingDesk.load().watchlist }); }
     catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
 });
-app.get('/api/kantor/peta-berita', requireToken, (_req, res) => { res.json({ ok: true, ...screener.petaBerita() }); });
+app.get('/api/kantor/peta-berita', requireToken, (_req, res) => {
+    const st = tradingDesk.load(); const pantau = Array.from(new Set([...st.positions.map((p) => p.symbol), ...st.watchlist]));
+    res.json({ ok: true, ...screener.petaBerita(), related: beritaTerkait.atur.aktif ? screener.petaRelated(pantau) : null, pantau });
+});
 app.get('/api/kantor/saham-detail/:s', requireToken, (req, res) => {
     const d = screener.detail(String(req.params.s).toUpperCase(), ...qH(req));
     if (!d) { res.status(404).json({ ok: false, error: 'Belum ada di data penyaring' }); return; }
@@ -476,7 +481,7 @@ function jalankanUji(sebab: string) {
     const daftar = screener.daftarSimbol();
     if (!daftar.length) throw new Error('Ambil data pasar dulu (↻ di Trading).');
     console.log(`[Uji mundur] mulai (${sebab}), ${daftar.length} saham`);
-    papan.jalankan({ judul: `Uji mundur ${daftar.length} saham (${sebab})`, detail: 'Menguji skor teknikal & preset di data ±5 tahun, lalu memperbarui bobot dan rekomendasi.', sumber: 'trading' },
+    papan.jalankan({ ai: 'trading', judul: `Uji mundur ${daftar.length} saham (${sebab})`, detail: 'Menguji skor teknikal & preset di data ±5 tahun, lalu memperbarui bobot dan rekomendasi.', sumber: 'trading' },
         () => ujiMundur(daftar, fileUji(config.dataDir), statusUji).then(() => buatSaran()), () => 'Bobot & rekomendasi di halaman Trading diperbarui.').catch((e) => console.warn('[Uji mundur]', e?.message || e));
     return true;
 }
@@ -520,9 +525,9 @@ async function perbaruiBeritaTerkait(sebab: string) {
             try { return { teks: await percakapan.tugas(ID_NINA, 'Memetakan berita dunia ke saham (berita terkait)', prompt, `Mencari efek domino dari berita global (${sebab}).`, 'trading'), oleh: nina.nama }; }
             catch (e: any) { console.warn('[Berita terkait] Nina gagal, pakai cadangan:', e?.message || e); }
         }
-        const teks = await papan.jalankan({ ai: nina ? ID_NINA : 'sistem', nama: nina ? `${nina.nama} (otak cadangan)` : 'Sistem kantor', judul: 'Memetakan berita dunia ke saham (berita terkait)', detail: `Mencari efek domino dari berita global (${sebab}).`, sumber: 'trading' },
+        const teks = await papan.jalankan({ ai: ID_NINA, nama: `${nina?.nama || 'Nina'} · otak cadangan`, judul: 'Memetakan berita dunia ke saham (berita terkait)', detail: `Mencari efek domino dari berita global (${sebab}).`, sumber: 'trading' },
             async () => { const o = await OfficeRoom.sharedLlm()?.complete('Kamu analis berita pasar saham. Jawab hanya JSON valid.', prompt, 1800, 3); if (!o) throw new Error('AI gratis tidak menjawab.'); return o; });
-        return { teks, oleh: nina ? `${nina.nama} (otak cadangan)` : 'AI kantor' };
+        return { teks, oleh: `${nina?.nama || 'Nina'} (otak cadangan)` };
     });
     screener.bersihkanCache();
 }
@@ -537,9 +542,9 @@ app.post('/api/kantor/berita-terkait/perbarui', requireToken, (_req, res) => {
 });
 
 // ── Papan kerja AI (To do / Proses / Selesai), dibersihkan tiap ganti bulan ──
-for (const [m, judul] of [['perbaruiTeknikal', 'Memperbarui harga & sinyal teknikal ±500 saham'], ['perbaruiFundamental', 'Memperbarui data fundamental (laporan keuangan)'], ['perbaruiBerita', 'Membaca & menilai berita saham']] as const) {
+for (const [m, judul, ai] of [['perbaruiTeknikal', 'Memperbarui harga & sinyal teknikal ±500 saham', 'trading'], ['perbaruiFundamental', 'Memperbarui data fundamental (laporan keuangan)', 'trading-fundamental'], ['perbaruiBerita', 'Membaca & menilai berita saham', 'trading-berita']] as const) {
     const asli = (screener as any)[m].bind(screener);
-    (screener as any)[m] = (...a: any[]) => papan.jalankanLama({ judul, sumber: 'trading' }, () => asli(...a));
+    (screener as any)[m] = (...a: any[]) => papan.jalankanLama({ ai, judul, sumber: 'trading' }, () => asli(...a));
 }
 /** Semua pekerjaan AI satu bulan: catatan kantor + tugas papan Kanban Hermes (hanya-baca). */
 async function semuaKerja(bulan?: string): Promise<{ bulan: string; kini: string; items: Kerja[] }> {
@@ -560,7 +565,7 @@ async function semuaKerja(bulan?: string): Promise<{ bulan: string; kini: string
 app.get('/api/kantor/papan', requireToken, async (req, res) => {
     try {
         const r = await semuaKerja(String(req.query.bulan || ''));
-        res.json({ ok: true, bulan: r.bulan, bulanIni: r.kini, daftarBulan: papan.daftarBulan(), items: r.items, anggota: [...roster().map((a) => ({ id: a.id, nama: a.nama })), { id: 'sistem', nama: 'Sistem kantor' }], menunggu: hr.menunggu.length });
+        res.json({ ok: true, bulan: r.bulan, bulanIni: r.kini, daftarBulan: papan.daftarBulan(), items: r.items, anggota: [...roster().map((a) => ({ id: a.id, nama: a.nama }))], menunggu: hr.menunggu.length });
     } catch (e: any) { res.status(500).json({ ok: false, error: String(e?.message || e) }); }
 });
 
@@ -649,7 +654,7 @@ app.post('/api/kantor/hr/pasang', requireToken, (_req, res) => {
     jalankanBerkas('bash', [f], { timeout: 60_000, env: { ...process.env, HERMES_HOME: config.hermesHome } }, (err, stdout, stderr) => {
         rosterCache.at = 0;
         if (err) { res.status(400).json({ ok: false, error: String(stdout || stderr || err.message).trim().split('\n').slice(-2).join(' ').slice(0, 300) }); return; }
-        papan.catat({ ai: 'sistem', nama: 'Sistem kantor', judul: 'Menambah AI baru: Hana (HR Officer)', sumber: 'sistem', status: 'selesai' });
+        papan.catat({ ai: 'default', nama: '', judul: 'Merekrut AI baru: Hana (HR Officer)', sumber: 'sistem', status: 'selesai' });
         res.json({ ok: true, pesan: String(stdout).trim().split('\n').slice(-2).join(' ') });
     });
 });
@@ -755,14 +760,14 @@ const kronos = new Kronos(config.dataDir);
 const JALUR_KRONOS = Math.max(8, Math.min(48, Number(process.env.KRONOS_JALUR) || 24));
 app.get('/api/kantor/kronos/status', requireToken, (_req, res) => { res.json({ ok: true, ...kronos.status(), jalur: JALUR_KRONOS }); });
 app.post('/api/kantor/kronos/pasang', requireToken, (_req, res) => {
-    if (kronos.pasang()) papan.catat({ ai: 'sistem', nama: 'Sistem kantor', judul: 'Memasang Kronos (model prediksi candlestick) di VPS', sumber: 'trading', status: 'selesai' });
+    if (kronos.pasang()) papan.catat({ ai: 'trading', nama: '', judul: 'Memasang Kronos (model prediksi candlestick) di VPS', sumber: 'trading', status: 'selesai' });
     res.json({ ok: true, ...kronos.status() });
 });
 /** Jalur prediksi Kronos → ringkasan profil target/stop + pita sebaran untuk grafik. */
 async function prediksiKronos(s: string, H: number, harga: number, batang: BarK[], yT: string[], satuan: 'hari' | 'batang') {
     const P = yT.length;
     const n = Math.max(8, Math.min(JALUR_KRONOS, Math.round((JALUR_KRONOS * 40) / Math.max(40, P)))); // horison panjang → jalur lebih sedikit supaya CPU VPS kuat
-    const r = await papan.jalankanLama({ judul: `Prediksi Kronos ${s} (${P} ${satuan === 'hari' ? 'hari bursa' : 'batang'} ke depan)`, sumber: 'trading' }, () => kronos.prediksi(batang.slice(-Math.min(kronos.maksKonteks - P, P <= 20 ? 400 : 256)), yT, n)); // horison panjang → konteks lebih pendek supaya CPU kuat
+    const r = await papan.jalankanLama({ ai: 'trading', judul: `Prediksi Kronos ${s} (${P} ${satuan === 'hari' ? 'hari bursa' : 'batang'} ke depan)`, sumber: 'trading' }, () => kronos.prediksi(batang.slice(-Math.min(kronos.maksKonteks - P, P <= 20 ? 400 : 256)), yT, n)); // horison panjang → konteks lebih pendek supaya CPU kuat
     const jalur = new Float64Array(n * P * 3);
     const tutup: number[][] = [];
     r.paths.forEach((p, i) => {

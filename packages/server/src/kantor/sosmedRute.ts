@@ -246,7 +246,7 @@ export function pasangSosmed(d: DepsSosmed) {
             else file = all.map((x) => berkas.lokasi(x.path));
         } catch (e: any) { k.status = 'gagal'; k.galat = String(e?.message || e).slice(0, 200); s.simpan(); return; }
         k.status = 'mengunggah'; k.galat = undefined; s.simpan();
-        papan.jalankan({ ai: d.roster().some((x) => x.id === ID_SOSMED.produksi) ? ID_SOSMED.produksi : 'sistem', nama: 'Vino (Admin unggah)', judul: `Mengunggah ${P.NAMA_FORMAT_P(a.platform, k.format)} ke ${label(a)}: ${k.judul}`, detail: 'Disetujui Pak Rico.', sumber: 'tugas' },
+        papan.jalankan({ ai: ID_SOSMED.produksi, nama: 'Vino (Admin unggah)', judul: `Mengunggah ${P.NAMA_FORMAT_P(a.platform, k.format)} ke ${label(a)}: ${k.judul}`, detail: 'Disetujui Pak Rico.', sumber: 'tugas' },
             () => P.unggah(sb, { url, file, caption, format: k.format, judul: k.youtube?.judul || k.hook || k.judul, tag: k.hashtag || [] }), (r) => r.tautan || 'Terbit.')
             .then((r) => { k.status = 'terbit'; k.ig = { id: r.id, tautan: r.tautan, at: Date.now() }; k.diubah = Date.now(); s.simpan(); try { rapikanVideo(); } catch { /* tidak fatal */ } d.kabari(`✅ Terbit di ${label(a)}: ${k.judul}${r.tautan ? ` — ${r.tautan}` : ''}${r.privat ? ' (PRIVAT: aplikasi TikTok belum lolos audit)' : ''}`).catch(() => undefined); })
             .catch((e) => { k.status = 'gagal'; k.galat = String(e?.message || e).slice(0, 260); s.simpan(); d.kabari(`⚠️ Gagal unggah ke ${nama} "${k.judul}": ${k.galat}`).catch(() => undefined); });
@@ -272,7 +272,7 @@ export function pasangSosmed(d: DepsSosmed) {
         for (const s2 of disentuh) s2.simpan();
         if (dihapus.length) {
             console.log(`[Sosmed] ${dihapus.length} video terbit dihapus dari VPS (batas ${MAKS_VIDEO}).`);
-            papan.catat({ ai: 'sistem', nama: 'Sistem kantor', judul: `Merapikan penyimpanan: ${dihapus.length} video yang sudah terbit dihapus (batas ${MAKS_VIDEO} video)`, detail: dihapus.join(', ').slice(0, 600), sumber: 'sistem', status: 'selesai' });
+            papan.catat({ ai: ID_SOSMED.produksi, nama: '', judul: `Merapikan penyimpanan: ${dihapus.length} video yang sudah terbit dihapus (batas ${MAKS_VIDEO} video)`, detail: dihapus.join(', ').slice(0, 600), sumber: 'sistem', status: 'selesai' });
         }
         return dihapus;
     }
@@ -420,7 +420,7 @@ export function pasangSosmed(d: DepsSosmed) {
             d.resetRoster();
             if (err) { res.status(400).json({ ok: false, error: String(stdout || stderr || err.message).trim().split('\n').slice(-2).join(' ').slice(0, 300) }); return; }
             for (const c of semua()) c.s.tulisSuara();
-            papan.catat({ ai: 'sistem', nama: 'Sistem kantor', judul: 'Membentuk/memperbarui Divisi Social Media (Maya, Tara, Lala, Vino, Dea) + skill Instagram, reels-cepat & video-edit', sumber: 'sistem', status: 'selesai' });
+            papan.catat({ ai: 'hr', nama: '', judul: 'Membentuk/memperbarui Divisi Social Media (Maya, Tara, Lala, Vino, Dea) + skill Instagram, reels-cepat & video-edit', sumber: 'sistem', status: 'selesai' });
             res.json({ ok: true });
         });
     });

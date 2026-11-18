@@ -2903,3 +2903,50 @@ body.no-office #phaser-container { visibility: hidden; }
 .kr-tag-cepat { display: flex; gap: 6px; flex-wrap: wrap; }
 .kr-tag-cepat button { border: 1px solid var(--line-strong); background: none; color: var(--muted); border-radius: 99px; padding: 3px 10px; font-size: 12px; cursor: pointer; }
 .cat-kr-item p.ai { margin-left: 18px; background: color-mix(in srgb, var(--accent) 7%, var(--panel-solid)); }
+.wa-jabatan { font-weight: 500; opacity: 0.72; }
+
+/* Peta berita: saklar News direct / related + filter sentimen */
+.pb-saklar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 12px; }
+.pb-saklar .seg { display: inline-flex; padding: 3px; border-radius: 12px; background: var(--sb-soft); border: 1px solid var(--line); }
+.pb-saklar .seg button { border: none; background: none; color: var(--muted); font: inherit; font-size: 12.5px; font-weight: 600; padding: 6px 12px; border-radius: 9px; cursor: pointer; white-space: nowrap; }
+.pb-saklar .seg button.on { background: var(--panel-solid); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2); }
+.pb-saklar .seg button.on.pos { color: var(--up); } .pb-saklar .seg button.on.neg { color: var(--down); }
+.pb-saklar .seg button:disabled { opacity: 0.4; cursor: default; }
+.info-i { position: relative; display: inline-flex; vertical-align: middle; }
+.info-i > button { width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--line-strong); background: none; color: var(--muted); font: italic 700 11px Georgia, serif; cursor: pointer; display: grid; place-items: center; padding: 0; }
+.info-i-pop { position: absolute; z-index: 40; top: calc(100% + 6px); left: -8px; width: min(300px, 80vw); padding: 10px 12px; border-radius: 10px; background: var(--panel-solid); border: 1px solid var(--line-strong); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35); color: var(--text); font-size: 12.5px; font-weight: 400; line-height: 1.5; white-space: pre-line; text-transform: none; letter-spacing: 0; }
+.pb-pn { display: inline-flex; gap: 6px; } .pb-pn em { font-style: normal; font-size: 12px; } .pb-pn em.up { color: var(--up); } .pb-pn em.down { color: var(--down); }
+.pb-dot.biru { background: #38bdf8; box-shadow: 0 0 10px #38bdf8; }
+.pb-news { flex-direction: row; gap: 8px; } .pb-news > span:nth-child(2) { flex: 1; } .pb-news em { font-style: normal; color: var(--muted); }
+.pb-news .sent.pos { color: var(--up); } .pb-news .sent.neg { color: var(--down); }
+.pb-jenis { display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 99px; background: rgba(250, 204, 21, 0.15); color: #facc15; margin-right: 4px; }
+.pb-jenis.rel { background: rgba(56, 189, 248, 0.15); color: #38bdf8; }
+.pb-src { display: inline-block; margin: 2px 6px 0 0; font-size: 11.5px; color: var(--accent); }
+.pb-aksi { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.pb-chips button.pos { border-color: rgba(74, 222, 128, 0.55); background: rgba(74, 222, 128, 0.1); } .pb-chips button.neg { border-color: rgba(248, 113, 113, 0.55); background: rgba(248, 113, 113, 0.1); }
+
+/* Funnel News related (luar angkasa, tidak bisa digeser) */
+.fb { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.fb-tahap { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; font-size: 12px; color: var(--muted); }
+.fb-tahap span:nth-child(2) { text-align: center; } .fb-tahap span:nth-child(3) { text-align: right; }
+.fb-tahap b { color: var(--text); font-size: 16px; margin-right: 3px; }
+.fb-svg { width: 100%; height: auto; border-radius: 14px; display: block; }
+.fb-titik { cursor: pointer; outline: none; }
+.fb-titik:focus-visible circle:last-of-type { stroke: #fff; stroke-width: 2; }
+.fb-lbl { fill: #cbd5e1; font: 500 11px 'JetBrains Mono', monospace; pointer-events: none; }
+.fb-lbl.kuat { fill: #f1f5f9; font-weight: 600; }
+.fb-detail { padding: 10px 12px; border-radius: 12px; background: var(--sb-soft); font-size: 13px; line-height: 1.5; }
+.fb-detail > div { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.fb-detail small { color: var(--muted); } .fb-detail p { margin: 0; }
+.fb-petunjuk { margin: 0; color: var(--muted); font-size: 12.5px; }
+.fb-daftar { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.fb-daftar a { color: var(--accent); } .fb-daftar em { font-style: normal; color: var(--muted); font-size: 11.5px; }
+.fb-daftar li.up b { color: var(--up); } .fb-daftar li.down b { color: var(--down); }
+.fb-bagian { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.fb-bagian button { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; border: 1px solid var(--line-strong); background: var(--sb-soft); color: var(--text); border-radius: 10px; padding: 6px 10px; cursor: pointer; font-size: 12.5px; }
+.fb-bagian button small { color: var(--muted); font-size: 10.5px; }
+.fb-bagian button.pos b { color: var(--up); } .fb-bagian button.neg b { color: var(--down); }
+.fb-bagian button.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.fb-modal { position: fixed; inset: 0; z-index: 300; background: rgba(4, 6, 12, 0.7); display: grid; place-items: center; padding: 16px; overflow-y: auto; }
+.fb-modal-isi { width: min(980px, 100%); background: var(--panel-solid); border: 1px solid var(--line); border-radius: 16px; padding: 14px; box-sizing: border-box; }
+@media (max-width: 767px) { .fb-lbl { font-size: 14px; } .fb-tahap b { font-size: 14px; } }

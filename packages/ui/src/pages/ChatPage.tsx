@@ -64,10 +64,10 @@ export function ChatPage({ prefill }: { prefill?: string }) {
                             <button key={t.id} className={`wa-item ${open === t.id ? 'active' : ''}`} onClick={() => setOpen(t.id)}>
                                 <div className="wa-ava">{t.id === 'grup' ? <span className="wa-group-ico">👥</span> : s !== undefined ? <Avatar skin={s} size={42} /> : <span className="wa-group-ico">🤖</span>}</div>
                                 <div className="wa-item-main">
-                                    <div className="wa-item-top"><b>{t.nama}</b>{t.terakhir && <span className={unread ? 'unread' : ''}>{tanggal(t.terakhir.at)}</span>}</div>
+                                    <div className="wa-item-top"><b>{t.nama}{t.peran && t.id !== 'grup' ? <span className="wa-jabatan"> - {t.peran}</span> : null}</b>{t.terakhir && <span className={unread ? 'unread' : ''}>{tanggal(t.terakhir.at)}</span>}</div>
                                     <div className="wa-item-sub">
                                         {t.menulis.length ? <em>{t.id === 'grup' ? `${t.menulis.map((id) => threads.find((x) => x.id === id)?.nama || id).join(', ')} mengetik…` : 'mengetik…'}</em>
-                                            : t.terakhir ? <span>{t.id === 'grup' || t.terakhir.nama === 'Pak Rico' ? `${t.terakhir.nama === 'Pak Rico' ? 'Anda' : t.terakhir.nama}: ` : ''}{t.terakhir.teks}</span>
+                                            : t.terakhir ? <span>{t.id === 'grup' || t.terakhir.nama === 'Pak Rico' ? `${t.terakhir.nama === 'Pak Rico' ? 'Anda' : namaPeran(threads, t.terakhir.nama)}: ` : ''}{t.terakhir.teks}</span>
                                                 : <span className="wa-role">{t.peran}</span>}
                                         {unread && <i className="wa-dot" />}
                                     </div>
@@ -155,7 +155,7 @@ function Thread({ info, threads, skin, onBack, onSeen }: { info: ThreadInfo; thr
                 <button className="icon-btn wa-back" onClick={onBack} aria-label="Kembali">‹</button>
                 <div className="wa-ava sm">{grup ? <span className="wa-group-ico">👥</span> : s !== undefined ? <Avatar skin={s} size={36} /> : <span className="wa-group-ico">🤖</span>}</div>
                 <div className="wa-head-main">
-                    <b>{info.nama}</b>
+                    <b>{info.nama}{!grup && info.peran ? ` - ${info.peran}` : ''}</b>
                     <span>{menulis.length ? <em>{grup ? `${menulis.map(nama).join(', ')} mengetik…` : 'mengetik…'}</em> : grup ? anggota.map((a) => a.nama).join(', ') : info.peran}</span>
                 </div>
             </header>
@@ -164,7 +164,7 @@ function Thread({ info, threads, skin, onBack, onSeen }: { info: ThreadInfo; thr
                     <div className="wa-note">{grup ? 'Semua AI kantor ada di grup ini. Tulis @Nama untuk memanggil orang tertentu, atau @semua untuk para kepala divisi.' : `Chat langsung dengan ${info.nama}. Balasan bisa butuh 10–60 detik karena ${info.nama} benar-benar bekerja (pakai skill & ingatannya).`}</div>
                 )}
                 {items.map((it, i) => it.day ? <div key={`d${i}`} className="wa-day"><span>{dayLabel(it.day)}</span></div> : (
-                    <Bubble key={it.m!.id} m={it.m!} grup={grup} />
+                    <Bubble key={it.m!.id} m={it.m!} grup={grup} peran={threads.find((x) => x.id === it.m!.dari)?.peran} />
                 ))}
                 {menulis.map((id) => <div key={`t-${id}`} className="wa-bubble them typing">{grup && <div className="wa-name" style={{ color: warna(id) }}>{nama(id)}</div>}<span className="dots"><i /><i /><i /></span></div>)}
                 <div ref={endRef} />
@@ -187,11 +187,14 @@ function Thread({ info, threads, skin, onBack, onSeen }: { info: ThreadInfo; thr
     );
 }
 
-function Bubble({ m, grup }: { m: Pesan; grup: boolean }) {
+/** "Joni" → "Joni - Kepala Kantor" (nama di pratinjau pesan terakhir). */
+function namaPeran(threads: ThreadInfo[], nama: string) { const t = threads.find((x) => x.nama === nama || nama.startsWith(`${x.nama} `)); return t?.peran && t.id !== 'grup' ? `${nama} - ${t.peran}` : nama; }
+
+function Bubble({ m, grup, peran }: { m: Pesan; grup: boolean; peran?: string }) {
     const me = m.dari === 'owner';
     return (
         <div className={`wa-bubble ${me ? 'me' : 'them'} ${m.status === 'gagal' ? 'fail' : ''}`}>
-            {grup && !me && <div className="wa-name" style={{ color: warna(m.dari) }}>{m.nama}</div>}
+            {grup && !me && <div className="wa-name" style={{ color: warna(m.dari) }}>{m.nama}{peran ? <span className="wa-jabatan"> - {peran}</span> : null}</div>}
             <div className="wa-text">{me ? m.teks : <RichText text={m.teks} />}</div>
             <div className="wa-time">{m.berat && <span className="wa-berat" title="Dikerjakan dengan model berbayar (Claude) atas keputusan Joni">⚡ Claude</span>}{jam(m.at)}{me && <span className="wa-ticks">✓✓</span>}</div>
         </div>

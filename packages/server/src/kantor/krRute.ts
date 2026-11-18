@@ -350,7 +350,7 @@ export function pasangKr(d: DepsKr) {
         d.jalankanBerkas('bash', [f], { timeout: 60_000, env: { ...process.env, HERMES_HOME: d.hermesHome } }, (err, stdout, stderr) => {
             d.resetRoster();
             if (err) { res.status(400).json({ ok: false, error: String(stdout || stderr || err.message).trim().split('\n').slice(-2).join(' ').slice(0, 300) }); return; }
-            papan.catat({ ai: 'sistem', nama: 'Sistem kantor', judul: 'Membentuk Kirana (Kurator Knowledge Reels)', sumber: 'sistem', status: 'selesai' });
+            papan.catat({ ai: 'hr', nama: '', judul: 'Membentuk Kirana (Kurator Knowledge Reels)', sumber: 'sistem', status: 'selesai' });
             res.json({ ok: true });
         });
     });

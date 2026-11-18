@@ -330,6 +330,24 @@ export class Screener {
             saham
         };
     }
+    /** News related untuk peta & funnel: artikel dunia yang dipindai → info unik (tema) → dampak (sektor/industri/saham),
+     *  dampak sektor/industri diturunkan ke saham: semua watchlist/posisi di kelompok itu + 5 saham terbesar. */
+    petaRelated(pantau: string[]) {
+        const d = this.terkait?.data;
+        if (!d) return null;
+        const pan = new Set(pantau);
+        const besar = (k: 'sektor' | 'industri', nama: string) => {
+            const isi = this.st.baris.filter((b) => (b as any)[k] === nama);
+            const top = [...isi].sort((a, b) => ((b as any).mcap || 0) - ((a as any).mcap || 0)).slice(0, 5).map((b) => b.s);
+            return Array.from(new Set([...isi.filter((b) => pan.has(b.s)).map((b) => b.s), ...top]));
+        };
+        const info = d.tema.map((t, i) => ({ id: `T${i + 1}`, judul: t.judul, ringkas: t.ringkas, bukti: t.bukti,
+            dampak: t.dampak.map((x) => ({ ...x, saham: x.jenis === 'saham' ? [x.nama] : besar(x.jenis, x.nama) })) }));
+        const semua = new Set(info.flatMap((t) => t.dampak.flatMap((x) => x.saham)));
+        const meta: Record<string, { nama: string; chg: number; sektor: string; industri: string }> = {};
+        for (const b of this.st.baris) if (semua.has(b.s)) meta[b.s] = { nama: b.nama || b.s, chg: (b as any).chg1d ?? 0, sektor: b.sektor || '', industri: (b as any).industri || '' };
+        return { at: d.at, oleh: d.oleh, artikel: d.berita, info, meta };
+    }
 
     spark(s: string): Spark | null {
         try { return JSON.parse(fs.readFileSync(path.join(this.sparkDir, `${s.replace(/[^A-Z0-9-]/gi, '')}.json`), 'utf8')); } catch { return null; }

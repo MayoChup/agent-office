@@ -29,7 +29,7 @@ const TOPIK: Array<[string, string]> = [
 ];
 const bersih = (s: string) => s.replace(/<!\[CDATA\[|\]\]>/g, '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s+/g, ' ').trim();
 
-export async function ambilJudulDunia(perTopik = 9): Promise<JudulDunia[]> {
+export async function ambilJudulDunia(perTopik = 14): Promise<JudulDunia[]> {
     const out: JudulDunia[] = []; const lihat = new Set<string>();
     for (const [topik, url] of TOPIK) {
         try {
@@ -59,9 +59,9 @@ export async function ambilJudulDunia(perTopik = 9): Promise<JudulDunia[]> {
 export function susunPrompt(berita: JudulDunia[], sektor: string[], industri: string[], pantau: string[]) {
     return [
         'Kamu pembaca berita tim trading saham AS. Di bawah ada judul berita DUNIA 3 hari terakhir (bukan berita per saham).',
-        'Tugas: temukan paling banyak 8 TEMA yang bisa berefek domino ke saham, lalu petakan dampaknya.',
+        'Tugas: (1) KELOMPOKKAN judul yang membahas INFO/kejadian yang sama (sering diberitakan banyak media) jadi satu TEMA — satu info = satu tema; (2) ambil paling banyak 12 TEMA yang bisa berefek domino ke saham; (3) petakan dampaknya.',
         'ATURAN:',
-        '- Pakai HANYA judul di bawah sebagai bukti (tulis id-nya). Jangan menambah fakta atau angka yang tidak ada di judul.',
+        '- Pakai HANYA judul di bawah sebagai bukti. "bukti" = SEMUA id judul yang membahas info itu (dari media mana pun). Jangan menambah fakta atau angka yang tidak ada di judul.',
         '- "dampak" hanya boleh memakai nama PERSIS dari daftar SEKTOR / INDUSTRI / SAHAM di bawah.',
         '- arah: 2 = sangat menguntungkan, 1 = menguntungkan, -1 = merugikan, -2 = sangat merugikan. Kalau tidak jelas, jangan dimasukkan.',
         '- alasan: satu kalimat Bahasa Indonesia yang menjelaskan rantai sebab-akibatnya (mis. "minyak naik → biaya bahan bakar maskapai naik").',
@@ -85,8 +85,8 @@ export function validasi(raw: string, berita: JudulDunia[], sektor: string[], in
     const cari = (list: string[]) => { const m = new Map(list.map((x) => [x.toLowerCase(), x])); return (n: string) => m.get(String(n || '').trim().toLowerCase()); };
     const cs = cari(sektor), ci = cari(industri), ct = cari(pantau);
     const out: Tema[] = [];
-    for (const t of j.tema.slice(0, 8)) {
-        const bukti = (Array.isArray(t.bukti) ? t.bukti : []).map(String).filter((x: string) => ids.has(x)).slice(0, 5);
+    for (const t of j.tema.slice(0, 12)) {
+        const bukti = (Array.isArray(t.bukti) ? t.bukti : []).map(String).filter((x: string) => ids.has(x)).slice(0, 15);
         if (!bukti.length) continue; // tema tanpa bukti judul = ditolak
         const dampak: Dampak[] = [];
         for (const d of Array.isArray(t.dampak) ? t.dampak.slice(0, 12) : []) {

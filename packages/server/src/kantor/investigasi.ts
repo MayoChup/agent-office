@@ -208,7 +208,7 @@ export class Investigasi {
             ].join('\n');
 
             const llm = this.llm();
-            const idK = this.papan?.catat({ ai: 'sistem', nama: 'Tim investigasi', judul: `Menyelidiki pergerakan ${simbol}`, detail: `${bukti.length} bukti (berita & dokumen) untuk sesi ${g.tanggal}`, sumber: 'trading', status: 'proses' });
+            const idK = this.papan?.catat({ ai: 'trading-berita', nama: '', judul: `Menyelidiki pergerakan ${simbol}`, detail: `${bukti.length} bukti (berita & dokumen) untuk sesi ${g.tanggal}`, sumber: 'trading', status: 'proses' });
             const raw = llm ? await llm.complete(SYSTEM, prompt, 1100, 3).catch(() => null) : null;
             this.papan?.ubah(idK, raw ? 'selesai' : 'gagal', raw ? 'Analisis penyebab selesai — lihat tab Investigasi.' : 'AI tidak menjawab.');
             const j = extractJson(raw || '') || {};
