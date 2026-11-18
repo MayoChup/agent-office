@@ -4,7 +4,7 @@ import { usd } from './types';
 import { Info } from './InfoI';
 
 type Status = 'target' | 'stop' | 'berjalan' | 'durasi';
-interface Strategi { id: string; s: string; H: number; tgl: string; label: string; skor: number; masuk: number; target: number | null; stop: number | null; status: Status; tglSelesai: string | null; keluar: number; pct: number; sekarang: number | null; pctSekarang: number | null; hari: number; tertinggi: number; terendah: number; sumberHarga: 'ohlc' | 'tutup' }
+interface Strategi { id: string; s: string; H: number; tgl: string; label: string; skor: number; masuk: number; target: number | null; stop: number | null; status: Status; tglSelesai: string | null; keluar: number; pct: number; sekarang: number | null; pctSekarang: number | null; hari: number; tertinggi: number; terendah: number; sumberHarga: 'ohlc' | 'tutup'; targetDihitung?: boolean }
 interface Data { at: number; jalan: boolean; arsip: { hari: number; dari: string | null; sampai: string | null }; ringkas: { total: number; target: number; stop: number; durasi: number; berjalan: number; menang: number | null; rata: number | null }; total: number; hal: number; halaman: number; item: Strategi[] }
 
 const GAYA: Array<[number, string]> = [[1, 'Day trading'], [5, 'Swing pendek'], [20, 'Swing'], [60, 'Posisi']];
@@ -14,11 +14,13 @@ const tgl = (t: string) => new Date(`${t}T00:00:00Z`).toLocaleDateString('id-ID'
 const pc = (n: number | null) => (n == null ? '–' : `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(n).toFixed(2)}%`);
 const hariIni = () => new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
 const mundur = (n: number) => new Date(Date.now() + 7 * 3600_000 - n * 86400_000).toISOString().slice(0, 10);
+const PROFIL: Array<[string, string]> = [['K', 'Konservatif'], ['M', 'Moderat'], ['A', 'Agresif']];
+const PROFIL_INFO = 'Tiap sinyal punya 3 pilihan target. Konservatif = target dekat, paling sering tersentuh tapi untungnya kecil. Moderat = tengah-tengah. Agresif = target jauh, untung besar kalau tercapai tapi lebih jarang. Stop loss sama untuk ketiganya. Pilih profil untuk melihat hasil kalau Bapak selalu memakai target itu.';
 const ATURAN = 'Strategi lahir saat sinyal sebuah saham jadi Beli kuat/Beli untuk gaya itu. Masuk = harga penutupan hari sinyal. Tiap hari bursa sesudahnya dicek harga tertinggi & terendah: menyentuh target → "Kena target" (dihitung untung walau sesudahnya turun), menyentuh stop → "Kena stop" (kalau keduanya di hari yang sama, dianggap stop). Belum menyentuh apa-apa → "Berjalan" (floating, pakai harga sekarang). Sudah melewati masa pegang gaya itu tanpa menyentuh target/stop → "Lewat durasi": hasil dikunci di harga penutupan hari terakhir masa pegang.';
 
 /** Tab History: semua strategi beli yang pernah dikeluarkan kantor beserta hasilnya. */
 export function HistorySinyal({ onOpen }: { onOpen: (s: string) => void }) {
-    const [f, setF] = useState({ H: '', status: '', dari: '', sampai: '', urut: 'terbaru', q: '' });
+    const [f, setF] = useState({ profil: 'M', H: '', status: '', dari: '', sampai: '', urut: 'terbaru', q: '' });
     const [hal, setHal] = useState(1);
     const [lompat, setLompat] = useState('');
     const [d, setD] = useState<Data | null>(null);
@@ -57,6 +59,10 @@ export function HistorySinyal({ onOpen }: { onOpen: (s: string) => void }) {
                 </div>
             )}
             <div className="dr-filter">
+                <div className="hs-profil" role="group" aria-label="Profil target">
+                    <span>Target <Info teks={PROFIL_INFO} /></span>
+                    {PROFIL.map(([k, n]) => <button key={k} className={f.profil === k ? 'on' : ''} aria-pressed={f.profil === k} onClick={() => set({ profil: k })}>{n}</button>)}
+                </div>
                 <div className="dr-cepat">{[['', 'Semua gaya'], ...GAYA.map(([h, n]) => [String(h), n])].map(([k, l]) => <button key={k} className={f.H === k ? 'on' : ''} onClick={() => set({ H: k })}>{l}</button>)}</div>
                 <div className="dr-cepat">{[['semua', 'Semua tanggal'], ['hari', 'Hari ini'], ['kemarin', 'Kemarin'], ['7', '7 hari'], ['30', '30 hari']].map(([k, l]) => {
                     const on = k === 'semua' ? !f.dari && !f.sampai : k === 'hari' ? f.dari === hariIni() && f.sampai === hariIni() : k === 'kemarin' ? f.dari === mundur(1) && f.sampai === mundur(1) : k === '7' ? f.dari === mundur(6) && !f.sampai : f.dari === mundur(29) && !f.sampai;
@@ -67,7 +73,7 @@ export function HistorySinyal({ onOpen }: { onOpen: (s: string) => void }) {
                 <label>Status<select value={f.status} onChange={(e) => set({ status: e.target.value })}><option value="">Semua status</option>{(Object.keys(STATUS) as Status[]).map((k) => <option key={k} value={k}>{STATUS[k].t}</option>)}</select></label>
                 <label>Urutkan<select value={f.urut} onChange={(e) => set({ urut: e.target.value })}><option value="terbaru">Terbaru</option><option value="cuan">Cuan terbesar</option><option value="rugi">Rugi terbesar</option></select></label>
                 <label className="dr-cari">Saham<input type="search" placeholder="mis. NVDA" value={f.q} onChange={(e) => set({ q: e.target.value })} /></label>
-                {adaFilter && <button className="btn small" onClick={() => { setF({ H: '', status: '', dari: '', sampai: '', urut: f.urut, q: '' }); setHal(1); }}>Hapus filter</button>}
+                {adaFilter && <button className="btn small" onClick={() => { setF({ profil: f.profil, H: '', status: '', dari: '', sampai: '', urut: f.urut, q: '' }); setHal(1); }}>Hapus filter</button>}
             </div>
             {err && <div className="error">{err}</div>}
             {d && !d.item.length && <div className="fin-empty">{adaFilter ? 'Tidak ada strategi yang cocok dengan filter ini.' : d.arsip.hari ? 'Belum ada sinyal Beli/Beli kuat di arsip.' : 'Arsip sinyal masih kosong. Dito mengarsipkan sinyal tiap sesi bursa — History terisi otomatis.'}</div>}
@@ -81,7 +87,7 @@ export function HistorySinyal({ onOpen }: { onOpen: (s: string) => void }) {
                                 <span className="hs-tgl">{tgl(x.tgl)}</span>
                                 <span className="hs-saham"><b>{x.s}</b><small>{namaGaya(x.H)} · {x.label}</small></span>
                                 <span className="hs-harga">{usd(x.masuk)} → {usd(x.keluar)}{selesai && x.tglSelesai && <small>{x.status === 'durasi' ? 'tutup hari ke-' + x.H : 'pada'} {tgl(x.tglSelesai)}</small>}</span>
-                                <span className="hs-ts"><em className="up">{usd(x.target)}</em> / <em className="down">{usd(x.stop)}</em></span>
+                                <span className="hs-ts"><em className="up" title={x.targetDihitung ? 'Target profil ini dihitung ulang dari sejarah harga sampai hari sinyal (arsip lama hanya mencatat target Moderat).' : undefined}>{usd(x.target)}{x.targetDihitung ? '*' : ''}</em> / <em className="down">{usd(x.stop)}</em></span>
                                 <span className={`hs-pct hs-kanan ${x.pct > 0 ? 'up' : x.pct < 0 ? 'down' : ''}`}>{pc(x.pct)}{selesai && x.pctSekarang != null && <small title="Kalau masih dipegang sampai sekarang">sekarang {pc(x.pctSekarang)}</small>}</span>
                                 <span className="hs-st"><i className={STATUS[x.status].k}>{STATUS[x.status].t}</i><small>{x.status === 'berjalan' ? `hari ${x.hari}/${x.H}` : `${x.hari} hari`}</small></span>
                             </div>
@@ -100,7 +106,7 @@ export function HistorySinyal({ onOpen }: { onOpen: (s: string) => void }) {
                     </form>
                 </nav>
             )}
-            <p className="hs-catatan">Hanya mencatat hasil sinyal, bukan transaksi sungguhan. Bukan saran keuangan.</p>
+            <p className="hs-catatan">{d?.item.some((x) => x.targetDihitung) ? '* target dihitung ulang dari sejarah harga sampai hari sinyal (arsip lama hanya mencatat target Moderat). ' : ''}Hanya mencatat hasil sinyal, bukan transaksi sungguhan. Bukan saran keuangan.</p>
         </section>
     );
 }

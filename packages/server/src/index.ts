@@ -43,7 +43,7 @@ import { execFile as jalankanBerkas } from 'child_process';
 import { Hr, statistik, kunciMinggu, ambilUsulanJson, ID_HR, ID_JONI, StatAi } from './kantor/hr';
 import { ujiMundur, rekomendasiUji, fileUji, statusPreset, StatusUji, saranDariUji, fileSaran, namaH } from './kantor/ujimundur';
 import { cnbcChart, hargaHarian } from './kantor/harga';
-import { HistorySinyal, type StatusH } from './kantor/historySinyal';
+import { HistorySinyal, type StatusH, type Profil } from './kantor/historySinyal';
 import { telegramKirim } from './kantor/telegram';
 import { HermesBridge } from './kantor/hermes';
 import { slidesCli } from './kantor/slides';
@@ -591,7 +591,7 @@ app.get('/api/kantor/history-sinyal', requireToken, (req, res) => {
     const H = [1, 5, 20, 60].includes(+q.H) ? +q.H : null;
     const status = (['target', 'stop', 'berjalan', 'durasi'] as StatusH[]).find((x) => x === q.status) || null;
     const urut = q.urut === 'cuan' || q.urut === 'rugi' ? q.urut : 'terbaru';
-    res.json({ ok: true, jalan: historyJalan, arsip: arsipSinyal.info(), ...historyS.daftar({ hal: +q.hal || 1, n: +q.n || 20, H, dari: tgl(q.dari), sampai: tgl(q.sampai), status, urut, q: String(q.q || '').replace(/[^A-Za-z0-9.-]/g, '').slice(0, 10) }) });
+    res.json({ ok: true, jalan: historyJalan, arsip: arsipSinyal.info(), ...historyS.daftar({ hal: +q.hal || 1, n: +q.n || 20, H, profil: (['K', 'M', 'A'] as Profil[]).find((x) => x === q.profil) || 'M', dari: tgl(q.dari), sampai: tgl(q.sampai), status, urut, q: String(q.q || '').replace(/[^A-Za-z0-9.-]/g, '').slice(0, 10) }) });
 });
 app.post('/api/kantor/history-sinyal/periksa', requireToken, (_req, res) => { void periksaHistory(true); res.json({ ok: true, jalan: true }); });
 const fileSimArsip = path.join(config.dataDir, 'simulasi-arsip.json');

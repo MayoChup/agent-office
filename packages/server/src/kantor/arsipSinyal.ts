@@ -6,7 +6,7 @@
 import fs from 'fs';
 import path from 'path';
 
-export interface Potret { tgl: string; at: number; spy: number | null; baris: Array<{ s: string; c: number; L: Record<string, [number, string, number | null, number | null]>; g: Record<string, number> }> }
+export interface Potret { tgl: string; at: number; spy: number | null; baris: Array<{ s: string; c: number; L: Record<string, [number, string, number | null, number | null, (number | null)?, (number | null)?]>; g: Record<string, number> }> }
 export interface OpsiArsip { H: number; guru: string | null; sinyal: string[]; dari: string | null; modal: number; porsi: number; beliPerHari: number; maksPosisi: number; keluar: { target: boolean; stop: boolean; jual: boolean }; biaya: number }
 export interface Aksi { t: string; jenis: 'beli' | 'jual'; s: string; harga: number; nilai: number; pct?: number; untung?: number; sebab?: string; label?: string }
 export interface HasilArsip {

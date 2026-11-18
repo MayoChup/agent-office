@@ -254,11 +254,12 @@ export class Screener {
     potretSinyal(HS = [1, 5, 20, 60]) {
         const sari = bacaLaporanSari(this.deskDir);
         const baris = this.st.baris.map((b) => {
-            const L: Record<string, [number, string, number | null, number | null]> = {};
+            const L: Record<string, [number, string, number | null, number | null, number | null, number | null]> = {};
             for (const H of HS) {
                 const sk = this.skor(b, sari, H).semua; if (!sk) continue;
-                const pr = this.proyeksiH(b, H); const mod = pr?.target.find((t) => t.nama === 'Moderat');
-                L[H] = [sk.skor, sk.label, mod ? +mod.harga.toFixed(2) : null, pr ? +pr.stop.harga.toFixed(2) : null];
+                const pr = this.proyeksiH(b, H); const tg = (n: string) => { const t = pr?.target.find((x) => x.nama === n); return t ? +t.harga.toFixed(2) : null; };
+                // [skor, label, target Moderat, stop, target Konservatif, target Agresif]
+                L[H] = [sk.skor, sk.label, tg('Moderat'), pr ? +pr.stop.harga.toFixed(2) : null, tg('Konservatif'), tg('Agresif')];
             }
             const g: Record<string, number> = {};
             for (const p of PRESET) { const e = evaluasi(p, p.jenis === 'teknikal' ? b.ind : b.f); if (e.persen != null) g[p.id] = e.persen; }

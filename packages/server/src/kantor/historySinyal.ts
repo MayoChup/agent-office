@@ -12,18 +12,31 @@ import path from 'path';
 import type { ArsipSinyal } from './arsipSinyal';
 
 export type StatusH = 'target' | 'stop' | 'berjalan' | 'durasi';
+export type Profil = 'K' | 'M' | 'A';
 export interface Strategi {
-    id: string; s: string; H: number; tgl: string; label: string; skor: number; masuk: number; target: number | null; stop: number | null;
-    status: StatusH; tglSelesai: string | null; keluar: number; pct: number; sekarang: number | null; pctSekarang: number | null; hari: number; tertinggi: number; terendah: number; sumberHarga: 'ohlc' | 'tutup';
+    id: string; s: string; H: number; profil: Profil; tgl: string; label: string; skor: number; masuk: number; target: number | null; stop: number | null;
+    status: StatusH; tglSelesai: string | null; keluar: number; pct: number; sekarang: number | null; pctSekarang: number | null; hari: number; tertinggi: number; terendah: number; sumberHarga: 'ohlc' | 'tutup'; targetDihitung?: boolean;
 }
 export interface Hl { t: string; h: number; l: number; c: number }
+type L6 = [number, string, number | null, number | null, (number | null)?, (number | null)?];
 const GAYA = [1, 5, 20, 60];
+const PROFIL: Array<[Profil, number]> = [['K', 0.3], ['M', 0.5], ['A', 0.72]];
 
-/** Bangun & nilai semua strategi. `ohlc(s)` = batang harian (boleh kosong → pakai harga penutupan arsip). */
+/** Target per profil dari sejarah harga sampai hari sinyal (rumus yang sama dengan proyeksi kantor): kuantil kenaikan tertinggi dalam H hari. */
+function targetDariSejarah(bar: Hl[], tgl: string, H: number, p: number, masuk: number): number | null {
+    const lalu = bar.filter((x) => x.t <= tgl); const n = lalu.length;
+    const ups: number[] = [];
+    for (let i = Math.max(0, n - 1 - 250); i < n - H; i++) { let mx = -Infinity; for (let k = i + 1; k <= i + H; k++) mx = Math.max(mx, lalu[k].h); ups.push(mx / lalu[i].c - 1); }
+    if (ups.length < 60) return null;
+    ups.sort((a, b) => a - b);
+    const g = Math.max(0.005, ups[Math.min(ups.length - 1, Math.max(0, Math.floor(p * ups.length)))]);
+    return masuk * (1 + g);
+}
+
+/** Bangun & nilai semua strategi untuk tiga profil target (Konservatif / Moderat / Agresif). `ohlc(s)` = batang harian (boleh kosong → pakai harga penutupan arsip). */
 export function bangunHistory(arsip: ArsipSinyal, ohlc: (s: string) => Hl[] | null, hargaKini: (s: string) => number | null): Strategi[] {
     const hari = arsip.daftar();
-    // Kumpulkan per saham: hari → {c, L}
-    const per = new Map<string, Array<{ t: string; c: number; L: Record<string, [number, string, number | null, number | null]> }>>();
+    const per = new Map<string, Array<{ t: string; c: number; L: Record<string, L6> }>>();
     for (const t of hari) {
         const p = arsip.baca(t); if (!p) continue;
         for (const b of p.baris) { if (!b.c) continue; const a = per.get(b.s) || []; a.push({ t, c: b.c, L: b.L }); per.set(b.s, a); }
@@ -31,17 +44,22 @@ export function bangunHistory(arsip: ArsipSinyal, ohlc: (s: string) => Hl[] | nu
     const hasil: Strategi[] = [];
     for (const [s, deret] of per) {
         const bar = ohlc(s);
-        const pakaiOhlc = !!bar && bar.length > 0;
+        const pakaiOhlc = !!bar && bar.some((x) => x.t >= deret[0].t);
         const kini = hargaKini(s) ?? (pakaiOhlc ? bar![bar!.length - 1].c : deret[deret.length - 1].c);
-        for (const H of GAYA) {
-            let bebasSejak = ''; // strategi berikutnya hanya boleh lahir SETELAH tanggal ini
+        for (const H of GAYA) for (const [profil, q] of PROFIL) {
+            let bebasSejak = ''; // strategi berikutnya hanya boleh lahir mulai tanggal ini
             for (const d of deret) {
                 const L = d.L[String(H)]; if (!L) continue;
                 if (bebasSejak && d.t < bebasSejak) continue;
                 if (L[1] !== 'Beli kuat' && L[1] !== 'Beli') continue;
-                const st = nilai(s, H, d.t, d.c, L, pakaiOhlc ? bar!.filter((x) => x.t > d.t) : deret.filter((x) => x.t > d.t).map((x) => ({ t: x.t, h: x.c, l: x.c, c: x.c })), kini, pakaiOhlc);
+                // Target: Moderat selalu tercatat; Konservatif/Agresif tercatat di arsip baru, untuk arsip lama dihitung ulang dari sejarah harga sampai hari itu.
+                let target: number | null = profil === 'M' ? L[2] : profil === 'K' ? L[4] ?? null : L[5] ?? null, dihitung = false;
+                if (target == null && profil !== 'M' && bar) { target = targetDariSejarah(bar, d.t, H, q, d.c); dihitung = target != null; }
+                if (target == null) continue;
+                const st = nilai(s, H, profil, d.t, d.c, [L[0], L[1], target, L[3]], pakaiOhlc ? bar!.filter((x) => x.t > d.t) : deret.filter((x) => x.t > d.t).map((x) => ({ t: x.t, h: x.c, l: x.c, c: x.c })), kini, pakaiOhlc);
+                if (dihitung) st.targetDihitung = true;
                 hasil.push(st);
-                if (st.status === 'berjalan') break; // masih terbuka → tidak ada strategi baru untuk (s, H)
+                if (st.status === 'berjalan') break; // masih terbuka → tidak ada strategi baru untuk (s, H, profil)
                 bebasSejak = st.tglSelesai || d.t;
             }
         }
@@ -49,7 +67,7 @@ export function bangunHistory(arsip: ArsipSinyal, ohlc: (s: string) => Hl[] | nu
     return hasil;
 }
 
-function nilai(s: string, H: number, tgl: string, masuk: number, L: [number, string, number | null, number | null], sesudah: Hl[], kini: number, pakaiOhlc: boolean): Strategi {
+function nilai(s: string, H: number, profil: Profil, tgl: string, masuk: number, L: [number, string, number | null, number | null], sesudah: Hl[], kini: number, pakaiOhlc: boolean): Strategi {
     const [skor, label, target, stop] = L;
     let status: StatusH = 'berjalan', tglSelesai: string | null = null, keluar = kini, tinggi = masuk, rendah = masuk;
     const jendela = sesudah.slice(0, H);
@@ -63,7 +81,7 @@ function nilai(s: string, H: number, tgl: string, masuk: number, L: [number, str
     const hariJalan = tglSelesai ? sesudah.findIndex((b) => b.t === tglSelesai) + 1 : sesudah.length;
     const r2 = (n: number) => +n.toFixed(2);
     return {
-        id: `${s}-${H}-${tgl}`, s, H, tgl, label, skor: r2(skor), masuk: r2(masuk), target: target != null ? r2(target) : null, stop: stop != null ? r2(stop) : null,
+        id: `${s}-${H}-${profil}-${tgl}`, s, H, profil, tgl, label, skor: r2(skor), masuk: r2(masuk), target: target != null ? r2(target) : null, stop: stop != null ? r2(stop) : null,
         status, tglSelesai, keluar: r2(keluar), pct: r2((keluar / masuk - 1) * 100), sekarang: r2(kini), pctSekarang: r2((kini / masuk - 1) * 100), hari: hariJalan,
         tertinggi: r2(tinggi), terendah: r2(rendah), sumberHarga: pakaiOhlc ? 'ohlc' : 'tutup'
     };
@@ -80,7 +98,7 @@ export class HistorySinyal {
         try { this.data = JSON.parse(fs.readFileSync(this.fHasil, 'utf8')); } catch { /* kosong */ }
     }
     simbolArsip(arsip: ArsipSinyal) { const set = new Set<string>(); for (const t of arsip.daftar()) for (const b of arsip.baca(t)?.baris || []) set.add(b.s); return [...set]; }
-    simpanOhlc(s: string, bar: Hl[], dari: string) { this.ohlc[s] = { at: Date.now(), bar: bar.filter((b) => b.t >= dari) }; }
+    simpanOhlc(s: string, bar: Hl[], dari: string) { const awal = new Date(Date.parse(`${dari}T00:00:00Z`) - 400 * 86400_000).toISOString().slice(0, 10); this.ohlc[s] = { at: Date.now(), bar: bar.filter((b) => b.t >= awal) }; }
     tulisOhlc() { fs.writeFileSync(this.fOhlc, JSON.stringify(this.ohlc)); }
     hitung(arsip: ArsipSinyal, hargaKini: (s: string) => number | null) {
         this.data = { at: Date.now(), item: bangunHistory(arsip, (s) => this.ohlc[s]?.bar || null, hargaKini) };
@@ -88,8 +106,8 @@ export class HistorySinyal {
         return this.data;
     }
     /** Daftar berhalaman + ringkasan. */
-    daftar(q: { hal: number; n: number; H: number | null; dari: string | null; sampai: string | null; status: StatusH | null; urut: 'terbaru' | 'cuan' | 'rugi'; q: string }) {
-        let it = this.data.item.filter((x) => (!q.H || x.H === q.H) && (!q.dari || x.tgl >= q.dari) && (!q.sampai || x.tgl <= q.sampai) && (!q.q || x.s.includes(q.q.toUpperCase())));
+    daftar(q: { hal: number; n: number; H: number | null; profil: Profil; dari: string | null; sampai: string | null; status: StatusH | null; urut: 'terbaru' | 'cuan' | 'rugi'; q: string }) {
+        let it = this.data.item.filter((x) => (x.profil || 'M') === q.profil && (!q.H || x.H === q.H) && (!q.dari || x.tgl >= q.dari) && (!q.sampai || x.tgl <= q.sampai) && (!q.q || x.s.includes(q.q.toUpperCase())));
         const ringkas = (a: Strategi[]) => {
             const selesai = a.filter((x) => x.status !== 'berjalan');
             return {
