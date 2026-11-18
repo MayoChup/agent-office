@@ -22,6 +22,7 @@ import { bacaPdf, urai, cocokkan } from './kantor/mutasi';
 import { presetInfo, REKOMENDASI } from './kantor/preset';
 import { profil as nasdaqProfil, fundamentalNasdaq } from './kantor/nasdaq';
 import { simulasi, langkahDari, ringkasJalur } from './kantor/simulasi';
+import { simulasiSinyal, type HasilSim } from './kantor/simSinyal';
 import { konteksTrading } from './kantor/konteksTrading';
 import * as porto from './kantor/portofolio';
 import { PERAN_AI } from './kantor/papan';
@@ -504,6 +505,55 @@ app.get('/api/kantor/ujimundur/saran', requireToken, (_req, res) => {
     // Bagian angka selalu dihitung segar dari hasil uji; penjelasan AI diambil dari simpanan.
     const segar = saranDariUji(config.dataDir), simpan = bacaSaran();
     res.json({ ok: true, saran: segar ? { ...segar, teks: simpan?.teks || null, dibuat: simpan?.dibuat || 0 } : null, berikutnya: at ? at + UJI_HARI * 86400_000 : 0, jalan: statusUji.jalan, progres: statusUji.progres });
+});
+// ── Simulasi sinyal (backdate) di Portofolio: dikerjakan Dito (Kepala Trading), lalu dijelaskan Dito dengan bahasa awam ──
+const fileSimSinyal = path.join(config.dataDir, 'simulasi-sinyal.json');
+const simSt: { jalan: boolean; progres: string; galat: string; hasil: (HasilSim & { komentar?: string; oleh?: string; at: number }) | null; riwayat: Array<{ at: number; ringkas: string; pct: number; spyPct: number; trade: number }> } =
+    (() => { try { return { jalan: false, progres: '', galat: '', ...JSON.parse(fs.readFileSync(fileSimSinyal, 'utf8')) }; } catch { return { jalan: false, progres: '', galat: '', hasil: null, riwayat: [] }; } })();
+simSt.jalan = false;
+const LABEL_OK = ['Beli kuat', 'Beli', 'Tahan', 'Jual', 'Jual kuat'];
+app.get('/api/kantor/simulasi-sinyal', requireToken, (_req, res) => {
+    const st = tradingDesk.load();
+    res.json({ ok: true, ...simSt, guru: presetInfo().filter((p) => p.jenis === 'teknikal').map((p) => ({ id: p.id, guru: p.guru, nama: p.nama, ringkas: p.ringkas })), watchlist: Array.from(new Set([...st.positions.map((p) => p.symbol), ...st.watchlist])).length, semesta: screener.daftarSimbol().length });
+});
+app.post('/api/kantor/simulasi-sinyal', requireToken, (req, res) => {
+    if (simSt.jalan) { res.status(400).json({ ok: false, error: 'Simulasi lain sedang berjalan.' }); return; }
+    const b = req.body || {};
+    const H = [1, 5, 20, 60].includes(+b.H) ? +b.H : 20;
+    const sinyal = (Array.isArray(b.sinyal) ? b.sinyal : ['Beli kuat']).filter((x: any) => LABEL_OK.includes(x));
+    if (!sinyal.length) { res.status(400).json({ ok: false, error: 'Pilih minimal satu sinyal.' }); return; }
+    const bulan = Math.max(1, Math.min(24, Math.round(+b.bulan || 3)));
+    const st = tradingDesk.load();
+    let semesta = Array.from(new Set([...st.positions.map((p) => p.symbol), ...st.watchlist]));
+    if (b.semesta === 'besar' || !semesta.length) semesta = screener.daftarSimbol().map((x) => screener.hargaTerakhir(x)).filter(Boolean).sort((x: any, y: any) => (y.mcap || 0) - (x.mcap || 0)).slice(0, 50).map((x: any) => x.s);
+    semesta = semesta.slice(0, 60);
+    if (!semesta.length) { res.status(400).json({ ok: false, error: 'Watchlist kosong dan data pasar belum ada.' }); return; }
+    const guru = typeof b.guru === 'string' && presetInfo().some((p) => p.id === b.guru && p.jenis === 'teknikal') ? b.guru : null;
+    const opsi = { H, guru, sinyal, bulan, modal: Math.max(100, Math.min(10_000_000, +b.modal || 10_000)), porsi: Math.max(0.02, Math.min(1, +b.porsi || 0.1)), maksPosisi: Math.max(1, Math.min(20, Math.round(+b.maksPosisi || 8))), keluarJual: b.keluarJual !== false, biaya: Math.max(0, Math.min(0.01, +b.biaya || 0.001)), semesta };
+    const guruNama = guru ? presetInfo().find((p) => p.id === guru)?.guru : 'tanpa guru';
+    const ringkasOpsi = `${namaH(H)} · ${guruNama} · ${sinyal.join(' + ')} · ${bulan} bulan · ${semesta.length} saham`;
+    simSt.jalan = true; simSt.galat = ''; simSt.progres = 'mulai…';
+    const dito = roster().find((a) => a.id === 'trading');
+    papan.jalankan({ ai: 'trading', judul: `Simulasi sinyal backdate: ${ringkasOpsi}`, detail: 'Menjalankan ulang sinyal AI di masa lalu untuk Portofolio.', sumber: 'trading' }, async () => {
+        const h = await simulasiSinyal(opsi, (t) => { simSt.progres = t; });
+        simSt.progres = 'Dito menulis penjelasan…';
+        const fakta = [`Pengaturan: ${ringkasOpsi}; modal $${opsi.modal}; ${Math.round(opsi.porsi * 100)}% per posisi; maks ${opsi.maksPosisi} posisi; keluar saat sinyal jual: ${opsi.keluarJual ? 'ya' : 'tidak'}.`,
+            `Periode ${h.dari} s.d. ${h.sampai}. Hasil: ${h.pct}% (SPY ${h.spyPct}%), drawdown terdalam ${h.maxDD}%, ${h.trade} transaksi, ${h.menang}% untung, rata-rata ${h.rataTrade}% per transaksi.`,
+            h.terbaik ? `Terbaik: ${h.terbaik.s} ${h.terbaik.pct}% (${h.terbaik.masuk}→${h.terbaik.keluar}). Terburuk: ${h.terburuk!.s} ${h.terburuk!.pct}%.` : 'Tidak ada transaksi.'].join('\n');
+        const prompt = `Jelaskan hasil simulasi backdate sinyal AI berikut untuk Pak Rico dengan bahasa awam, 4–6 kalimat: apakah strategi ini mengalahkan S&P 500, seberapa berisiko (drawdown), apa yang bisa dicoba diubah (gaya, guru, jenis sinyal). HANYA pakai angka yang ada. Jangan menjanjikan untung. Akhiri dengan "Bukan saran keuangan." Tanpa judul.\n\n${fakta}`;
+        let komentar = '', oleh = dito?.nama || 'Dito';
+        try {
+            if (dito) komentar = await percakapan.tugas('trading', 'Menjelaskan hasil simulasi sinyal', prompt, ringkasOpsi, 'trading');
+            else komentar = String(await OfficeRoom.sharedLlm()?.complete('Kamu Dito, kepala trading. Jujur dan hati-hati.', prompt, 500, 2) || '');
+        } catch { oleh = `${oleh} (otak cadangan)`; komentar = String(await OfficeRoom.sharedLlm()?.complete('Kamu Dito, kepala trading. Jujur dan hati-hati.', prompt, 500, 2).catch(() => '') || ''); }
+        simSt.hasil = { ...h, komentar: komentar.trim(), oleh, at: Date.now() };
+        simSt.riwayat = [{ at: Date.now(), ringkas: ringkasOpsi, pct: h.pct, spyPct: h.spyPct, trade: h.trade }, ...simSt.riwayat].slice(0, 10);
+        fs.writeFileSync(fileSimSinyal, JSON.stringify({ hasil: simSt.hasil, riwayat: simSt.riwayat }));
+        return h;
+    }, (h) => `Hasil ${h.pct}% vs SPY ${h.spyPct}% (${h.trade} transaksi).`)
+        .catch((e) => { simSt.galat = String(e?.message || e); })
+        .finally(() => { simSt.jalan = false; simSt.progres = ''; });
+    res.json({ ok: true, jalan: true });
 });
 app.post('/api/kantor/ujimundur/jalankan', requireToken, (_req, res) => {
     try { jalankanUji('manual'); res.json({ ok: true, status: statusUji }); } catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }

@@ -4,6 +4,7 @@ import { createChart, ColorType, CrosshairMode, LineStyle } from 'lightweight-ch
 import { useApi } from '../../kantor/api';
 import { apiPost } from '../../kantor/connection';
 import { usd } from './types';
+import { SimulasiSinyal } from './SimulasiSinyal';
 
 type Res = 'harian' | 'mingguan' | 'bulanan';
 interface Pos { symbol: string; shares: number; entry: number; target: number; stop: number; openedAt: string; closedAt?: string; exit?: number; pnl: number | null; pnlPct: number | null; modal: number; harga?: number | null; nilai?: number | null; keTarget?: number | null; keStop?: number | null; hari: number | null; profil?: string; ai?: { label?: string; mode?: string; pt?: string }; catatan?: string; notified?: { target?: string; stop?: string } }
@@ -140,6 +141,8 @@ export function Portofolio({ onBuka }: { onBuka?: (s: string) => void }) {
                     </div>
                 ))}
             </section>
+
+            <SimulasiSinyal onBuka={onBuka} />
 
             {lembar?.jenis === 'jual' && <LembarJual p={lembar.p} onTutup={() => setLembar(null)} onSelesai={selesai} />}
             {lembar?.jenis === 'ubah' && <LembarUbah p={lembar.p} onTutup={() => setLembar(null)} onSelesai={selesai} />}
