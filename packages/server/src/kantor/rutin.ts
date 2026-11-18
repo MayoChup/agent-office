@@ -62,6 +62,7 @@ export const GOTONG: Array<{ fitur: string; ikon: string; ai: string; tugas: str
     { fitur: 'Keuangan', ikon: '💰', ai: 'keuangan-penasihat', tugas: '3 saran keuangan konkret', jadwal: 'Senin 08.00', kunci: 'Saran keuangan' },
     { fitur: 'Keuangan', ikon: '💰', ai: 'eca-sheets', tugas: 'Rekap bulan lalu vs sebelumnya', jadwal: 'Tanggal 1', kunci: 'Rekap pengeluaran' },
     { fitur: 'Trading', ikon: '📈', ai: 'trading', tugas: 'Mengarsipkan sinyal harian (untuk simulasi)', jadwal: 'Tiap sesi bursa', kunci: 'Mengarsipkan sinyal' },
+    { fitur: 'Trading', ikon: '📈', ai: 'trading', tugas: 'Memeriksa hasil sinyal (History: target/stop/berjalan)', jadwal: 'Tiap sesi bursa', kunci: 'Memeriksa hasil sinyal' },
     { fitur: 'Trading', ikon: '📈', ai: 'keuangan-budget', tugas: 'Mengatur alokasi modal simulasi trading', jadwal: 'Saat simulasi dijalankan', kunci: 'Simulasi trading' },
     { fitur: 'Trading', ikon: '📈', ai: 'trading', tugas: 'Rencana trading minggu depan', jadwal: 'Sabtu 09.00', kunci: 'Rencana trading' },
     { fitur: 'Trading', ikon: '📈', ai: 'trading-berita', tugas: 'Memetakan berita dunia ke saham', jadwal: 'Tiap hari', kunci: 'berita terkait' },

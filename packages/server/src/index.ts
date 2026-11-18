@@ -42,7 +42,8 @@ import ATUR_KURATOR from './kantor/skrip/atur-kurator.sh';
 import { execFile as jalankanBerkas } from 'child_process';
 import { Hr, statistik, kunciMinggu, ambilUsulanJson, ID_HR, ID_JONI, StatAi } from './kantor/hr';
 import { ujiMundur, rekomendasiUji, fileUji, statusPreset, StatusUji, saranDariUji, fileSaran, namaH } from './kantor/ujimundur';
-import { cnbcChart } from './kantor/harga';
+import { cnbcChart, hargaHarian } from './kantor/harga';
+import { HistorySinyal, type StatusH } from './kantor/historySinyal';
 import { telegramKirim } from './kantor/telegram';
 import { HermesBridge } from './kantor/hermes';
 import { slidesCli } from './kantor/slides';
@@ -559,6 +560,40 @@ function arsipkanSinyal() {
         async () => arsipSinyal.simpan(screener.potretSinyal()), () => `${arsipSinyal.info().hari} hari bursa tercatat.`).catch((e) => console.warn('[Arsip sinyal]', e?.message || e));
 }
 setTimeout(arsipkanSinyal, 5 * 60_000); setInterval(arsipkanSinyal, 30 * 60_000);
+// ── History sinyal (tab Trading → History): Dito memeriksa hasil tiap strategi beli (kena target / stop / berjalan / lewat durasi) ──
+const historyS = new HistorySinyal(config.dataDir);
+let historyJalan = false, historyCekSesi = '';
+const hargaKiniH = (s: string) => screener.hargaTerakhir(s)?.harga ?? null;
+async function periksaHistory(paksa = false) {
+    const sesi = screener.sesi();
+    if (historyJalan || !arsipSinyal.daftar().length || (!paksa && sesi === historyCekSesi)) return;
+    historyJalan = true;
+    const simbol = historyS.simbolArsip(arsipSinyal), dari = arsipSinyal.daftar()[0];
+    await papan.jalankan({ ai: 'trading', judul: 'Memeriksa hasil sinyal (History)', detail: `Mengambil harga tertinggi/terendah harian ${simbol.length} saham untuk mengecek target & stop tiap strategi.`, sumber: 'trading' }, async () => {
+        let ok = 0;
+        for (const s of simbol) {
+            const ada = historyS.ohlc[s];
+            if (ada && Date.now() - ada.at < 6 * 3600_000) { ok++; continue; }
+            try { const d = await hargaHarian(s); historyS.simpanOhlc(s, d.rows.map((b) => ({ t: b.t, h: b.h, l: b.l, c: b.c })), dari); ok++; } catch { /* pakai harga penutupan arsip */ }
+            await new Promise((r) => setTimeout(r, 250));
+        }
+        historyS.tulisOhlc();
+        const h = historyS.hitung(arsipSinyal, hargaKiniH);
+        historyCekSesi = sesi;
+        return { ok, n: h.item.length };
+    }, (r) => `${r.n} strategi dinilai (harga tertinggi/terendah ${r.ok}/${simbol.length} saham).`).catch((e) => console.warn('[History sinyal]', e?.message || e)).finally(() => { historyJalan = false; });
+}
+setTimeout(() => periksaHistory(), 8 * 60_000); setInterval(() => periksaHistory(), 60 * 60_000);
+app.get('/api/kantor/history-sinyal', requireToken, (req, res) => {
+    if (Date.now() - historyS.data.at > 10 * 60_000 && arsipSinyal.daftar().length) { try { historyS.hitung(arsipSinyal, hargaKiniH); } catch (e: any) { console.warn('[History sinyal]', e?.message || e); } }
+    const q = req.query as Record<string, string>;
+    const tgl = (v: string) => (/^\d{4}-\d{2}-\d{2}$/.test(v || '') ? v : null);
+    const H = [1, 5, 20, 60].includes(+q.H) ? +q.H : null;
+    const status = (['target', 'stop', 'berjalan', 'durasi'] as StatusH[]).find((x) => x === q.status) || null;
+    const urut = q.urut === 'cuan' || q.urut === 'rugi' ? q.urut : 'terbaru';
+    res.json({ ok: true, jalan: historyJalan, arsip: arsipSinyal.info(), ...historyS.daftar({ hal: +q.hal || 1, n: +q.n || 20, H, dari: tgl(q.dari), sampai: tgl(q.sampai), status, urut, q: String(q.q || '').replace(/[^A-Za-z0-9.-]/g, '').slice(0, 10) }) });
+});
+app.post('/api/kantor/history-sinyal/periksa', requireToken, (_req, res) => { void periksaHistory(true); res.json({ ok: true, jalan: true }); });
 const fileSimArsip = path.join(config.dataDir, 'simulasi-arsip.json');
 const simA: { jalan: boolean; galat: string; hasil: (HasilArsip & { komentar?: string; oleh?: string; atur?: string; at: number }) | null } =
     (() => { try { return { jalan: false, galat: '', ...JSON.parse(fs.readFileSync(fileSimArsip, 'utf8')) }; } catch { return { jalan: false, galat: '', hasil: null }; } })();
