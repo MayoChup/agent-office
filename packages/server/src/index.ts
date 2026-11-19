@@ -436,7 +436,7 @@ app.get('/api/kantor/trading', requireToken, async (_req, res) => {
 const papan = new Papan(config.dataDir);
 papan.namaAi = (id) => roster().find((a) => a.id === id)?.nama;
 const percakapan = new Percakapan(config.dataDir, config.hermesBin, config.ownerName, roster, () => OfficeRoom.sharedLlm(), kuotaBerat);
-const memoriTim = new MemoriTim(config.hermesHome, () => roster().map((a) => ({ id: a.id, nama: a.nama })));
+const memoriTim = new MemoriTim(config.hermesHome, () => roster().map((a) => ({ id: a.id, nama: a.nama })), () => percakapan.router?.lindungi() ?? false);
 percakapan.ingatanRekan = (ai, teks) => memoriTim.rekan(ai, teks);
 percakapan.papan = papan;
 app.get('/api/kantor/chat', requireToken, (_req, res) => { res.json({ ok: true, thread: percakapan.daftar() }); });

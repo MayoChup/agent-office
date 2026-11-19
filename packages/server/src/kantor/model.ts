@@ -11,7 +11,7 @@ import fs from 'fs';
 import path from 'path';
 
 export type Cara = 'hermes' | 'gemini' | 'groq' | 'xai' | 'freellm';
-/** AI yang memegang data pribadi Pak Rico: tidak pernah dialihkan ke penyedia gratis pihak ketiga (FreeLLM). */
+/** AI yang memegang data pribadi Pak Rico. Sejak 19 Nov 2026 Pak Rico MENGIZINKAN mereka lewat FreeLLM; set KANTOR_FREELLM_PRIVAT=0 untuk mengunci lagi. */
 export const AI_PRIVAT = /^(default|hr|sekretaris|keuangan.*|eca.*)$/;
 export interface Opsi { id: string; label: string; cara: Cara; model: string; biaya: 'gratis' | 'berbayar'; batasHari: number; alat: boolean; ket: string; ada: boolean }
 export interface Atur { opsi: string; oleh: 'awal' | 'hr' | 'rico'; alasan: string; at: number; kunci: boolean }
@@ -30,7 +30,10 @@ const PILIH: Record<Exclude<Cara, 'hermes' | 'freellm'>, { prefer: RegExp[]; avo
 
 export class ModelRouter {
     /** Router FreeLLMAPI di VPS (opsional). */
-    freellm?: { siap(): boolean; chat(sistem: string, prompt: string, maks?: number): Promise<{ teks: string; model: string }> };
+    freellm?: { siap(): boolean; chat(sistem: string, prompt: string, maks?: number): Promise<{ teks: string; model: string }>; lihat?(sistem: string, prompt: string, gambar: Array<{ mime: string; data: Buffer }>, maks?: number): Promise<{ teks: string; model: string }> };
+    /** true = AI privat tidak boleh lewat FreeLLM (hanya kalau KANTOR_FREELLM_PRIVAT=0). */
+    lindungi() { return this.env.KANTOR_FREELLM_PRIVAT === '0'; }
+    private bolehFree(id: string) { return !(this.lindungi() && AI_PRIVAT.test(id)); }
     private file: string;
     st: St = { atur: {}, hari: '', pakai: {}, aiHari: {}, riwayat: [], review: null, modelAuto: {} };
     private dingin = new Map<string, number>();
@@ -52,7 +55,7 @@ export class ModelRouter {
             { id: 'gemini', label: 'Gemini Flash (langsung)', cara: 'gemini', model: this.env.GEMINI_MODEL || this.st.modelAuto.gemini?.model || 'otomatis (flash)', biaya: 'gratis', batasHari: n('KANTOR_GEMINI_PER_HARI', 250), alat: false, ket: 'Gratis, cepat, rapi untuk JSON & ringkasan. Tanpa alat.', ada: !!this.env.GEMINI_API_KEY },
             { id: 'groq', label: 'Groq Llama (langsung)', cara: 'groq', model: this.env.GROQ_MODEL || this.st.modelAuto.groq?.model || 'otomatis (llama 70B)', biaya: 'gratis', batasHari: n('KANTOR_GROQ_PER_HARI', 300), alat: false, ket: 'Gratis & sangat cepat. Cocok untuk teks pendek, game, tata desain.', ada: !!this.env.GROQ_API_KEY },
             { id: 'grok', label: 'Grok (xAI, langsung)', cara: 'xai', model: this.env.XAI_MODEL || this.st.modelAuto.xai?.model || 'otomatis (grok mini)', biaya: 'berbayar', batasHari: n('KANTOR_XAI_PER_HARI', 30), alat: false, ket: 'Berbayar per token. Hanya Pak Rico yang bisa memilih ini.', ada: !!this.env.XAI_API_KEY },
-            { id: 'freellm', label: 'FreeLLM (ratusan model gratis)', cara: 'freellm', model: 'otomatis (router)', biaya: 'gratis', batasHari: n('KANTOR_FREELLM_PER_HARI', 2000), alat: false, ket: 'Router gratis di VPS: pindah otomatis antar penyedia kalau kena limit. Hanya untuk tugas non-pribadi (berita, konten, Reels, riset).', ada: !!this.freellm?.siap() }
+            { id: 'freellm', label: 'FreeLLM (ratusan model gratis)', cara: 'freellm', model: 'otomatis (router)', biaya: 'gratis', batasHari: n('KANTOR_FREELLM_PER_HARI', 2000), alat: false, ket: 'Router gratis di VPS: membagi beban ke banyak penyedia (termasuk yang tanpa kunci) dan pindah otomatis kalau kena limit.', ada: !!this.freellm?.siap() }
         ];
     }
     private cari(id: string) { return this.opsi().find((o) => o.id === id); }
@@ -64,10 +67,13 @@ export class ModelRouter {
         for (const id of ids) {
             const a = this.st.atur[id];
             // Yang dulu terpaksa ke Hermes karena kunci Gemini/Groq belum ada → dibagi ulang begitu kuncinya tersedia.
-            if (a && this.cari(a.opsi)?.ada && !(a.oleh === 'awal' && a.opsi === 'hermes' && langsung.length)) continue;
+            // FreeLLM didahulukan: bebannya tersebar ke banyak penyedia, bukan hanya kunci Gemini/Groq Bapak.
+            const pindahKeFree = a?.oleh === 'awal' && a.opsi !== 'freellm' && langsung.some((o) => o.cara === 'freellm') && this.bolehFree(id);
+            if (a && this.cari(a.opsi)?.ada && !pindahKeFree && !(a.oleh === 'awal' && a.opsi === 'hermes' && langsung.length)) continue;
             if (a && a.kunci) continue;
-            const boleh = langsung.filter((o) => o.cara !== 'freellm' || !AI_PRIVAT.test(id));
-            const pilih = boleh.length ? boleh[i++ % boleh.length].id : 'hermes';
+            const boleh = langsung.filter((o) => o.cara !== 'freellm' || this.bolehFree(id));
+            const free = boleh.find((o) => o.cara === 'freellm');
+            const pilih = free ? free.id : boleh.length ? boleh[i++ % boleh.length].id : 'hermes';
             this.st.atur[id] = { opsi: pilih, oleh: 'awal', alasan: 'Pembagian awal supaya kuota tersebar.', at: Date.now(), kunci: false };
             ubah = true;
         }
@@ -75,7 +81,7 @@ export class ModelRouter {
     }
     /** Urutan opsi untuk satu tugas teks: pilihan AI itu dulu, lalu opsi gratis lain yang masih longgar, terakhir Hermes. */
     rute(aiId: string): Opsi[] {
-        const semua = this.opsi().filter((o) => o.ada && (o.cara !== 'freellm' || !AI_PRIVAT.test(aiId)));
+        const semua = this.opsi().filter((o) => o.ada && (o.cara !== 'freellm' || this.bolehFree(aiId)));
         const utama = semua.find((o) => o.id === (this.st.atur[aiId]?.opsi || 'hermes')) || this.cari('hermes');
         const longgar = (o: Opsi) => this.terpakai(o.id) < o.batasHari && (this.dingin.get(o.id) || 0) < Date.now();
         const urut: Opsi[] = [];
@@ -114,7 +120,7 @@ export class ModelRouter {
     /** Panggil satu opsi langsung (OpenAI-compatible). */
     async langsung(o: Opsi, aiId: string, nama: string, prompt: string, maks = 4000): Promise<string> {
         if (o.cara === 'freellm') {
-            if (AI_PRIVAT.test(aiId)) throw new Error('AI ini memegang data pribadi; tidak lewat FreeLLM.');
+            if (!this.bolehFree(aiId)) throw new Error('AI ini memegang data pribadi; FreeLLM dikunci untuknya.');
             if (!this.freellm?.siap()) throw new Error('FreeLLM belum siap.');
             const sistem = [`Kamu ${nama}, anggota tim AI di Kantor Virtual milik Pak Rico. Ikuti format keluaran yang diminta persis (kalau diminta JSON, keluarkan JSON saja).`, this.otak(aiId)].filter(Boolean).join('\n\n');
             try { return (await this.freellm.chat(sistem, prompt, maks)).teks; }
@@ -139,45 +145,74 @@ export class ModelRouter {
         if (!out) throw new Error(`${o.label}: jawaban kosong.`);
         return out;
     }
-    /** Model yang bisa MELIHAT gambar (visi). Urutan: Gemini → Groq (Llama 4) → xAI. Hanya penyedia yang kuncinya ada. */
-    visiAda() { return (['gemini', 'groq', 'xai'] as const).some((c) => !!this.env[KUNCI[c]]); }
+    /** Model yang bisa MELIHAT gambar (visi): FreeLLM → Gemini → Groq → OpenRouter (model visi gratis) → NVIDIA → xAI. */
+    visiAda() { return !!this.freellm?.siap() || ['GEMINI_API_KEY', 'GROQ_API_KEY', 'OPENROUTER_API_KEY', 'NVIDIA_API_KEY', 'XAI_API_KEY'].some((k) => !!this.env[k]); }
+    private visiOr: { at: number; model: string[] } = { at: 0, model: [] };
+    /** Model visi GRATIS di OpenRouter (dicek ulang tiap 6 jam; nama model gratis sering berganti). */
+    private async modelVisiOpenRouter(): Promise<string[]> {
+        if (this.env.OPENROUTER_VISION_MODEL) return [this.env.OPENROUTER_VISION_MODEL];
+        if (Date.now() - this.visiOr.at < 6 * 3600_000 && this.visiOr.model.length) return this.visiOr.model;
+        try {
+            const j: any = await (await fetch('https://openrouter.ai/api/v1/models', { signal: AbortSignal.timeout(15_000) })).json();
+            const m = (j?.data || []).filter((x: any) => /:free$/.test(x?.id || '') && (x?.architecture?.input_modalities || []).includes('image'))
+                .sort((a: any, b: any) => (b.context_length || 0) - (a.context_length || 0)).map((x: any) => String(x.id));
+            this.visiOr = { at: Date.now(), model: m.slice(0, 3) };
+        } catch { /* pakai daftar lama */ }
+        return this.visiOr.model.length ? this.visiOr.model : ['google/gemma-3-27b-it:free'];
+    }
     /**
      * Baca gambar dengan model visi atas nama satu AI (gotong royong: dicatat ke AI itu).
-     * gambar = berkas lokal (dibaca dari disk, dikirim sebagai data URL); tidak disimpan di penyedia oleh kantor.
+     * Gambar dikirim sebagai data URL; kantor tidak menyimpannya di penyedia.
      */
     async lihat(aiId: string, nama: string, prompt: string, gambar: Array<{ mime: string; data: Buffer }>, maks = 1500): Promise<{ teks: string; model: string }> {
         if (!gambar.length) throw new Error('Tidak ada gambar.');
-        const urut: Array<Exclude<Cara, 'hermes' | 'freellm'>> = ['gemini', 'groq', 'xai'];
+        const sistem = `Kamu ${nama}, anggota tim AI di Kantor Virtual milik Pak Rico. Kamu sedang melihat gambar. Jawab dalam Bahasa Indonesia; kalau diminta JSON, keluarkan JSON saja. Jangan mengarang isi yang tidak terlihat.`;
+        const isi: any[] = [{ type: 'text', text: prompt }, ...gambar.slice(0, 4).map((g) => ({ type: 'image_url', image_url: { url: `data:${g.mime};base64,${g.data.toString('base64')}` } }))];
         const galat: string[] = [];
-        for (const cara of urut) {
-            const kunci = this.env[KUNCI[cara]]; if (!kunci) continue;
-            const kunciDingin = `visi-${cara}`; if ((this.dingin.get(kunciDingin) || 0) > Date.now()) continue;
-            let model = cara === 'gemini' ? (this.env.GEMINI_VISION_MODEL || 'gemini-2.5-flash') : cara === 'groq' ? (this.env.GROQ_VISION_MODEL || 'meta-llama/llama-4-scout-17b-16e-instruct') : (this.env.XAI_VISION_MODEL || 'grok-2-vision-1212');
-            const isi: any[] = [{ type: 'text', text: prompt }, ...gambar.slice(0, 4).map((g) => ({ type: 'image_url', image_url: { url: `data:${g.mime};base64,${g.data.toString('base64')}` } }))];
-            try {
-                const r = await fetch(`${BASE[cara]}/chat/completions`, {
-                    method: 'POST', signal: AbortSignal.timeout(90_000), headers: { Authorization: `Bearer ${kunci}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ model, messages: [{ role: 'system', content: `Kamu ${nama}, anggota tim AI di Kantor Virtual milik Pak Rico. Kamu sedang melihat gambar. Jawab dalam Bahasa Indonesia; kalau diminta JSON, keluarkan JSON saja.` }, { role: 'user', content: isi }], temperature: 0.2, max_tokens: maks })
-                });
-                if (!r.ok) {
-                    const t = (await r.text()).slice(0, 160);
-                    this.dingin.set(kunciDingin, Date.now() + (r.status === 429 ? 10 * 60_000 : 3 * 60_000));
-                    throw new Error(`HTTP ${r.status} ${t}`);
+        const jalur: Array<{ id: string; coba: () => Promise<{ teks: string; model: string }> }> = [];
+        if (this.freellm?.siap() && this.freellm.lihat && this.bolehFree(aiId)) jalur.push({ id: 'freellm', coba: () => this.freellm!.lihat!(sistem, prompt, gambar, maks) });
+        const langsung = (id: string, base: string, kunci: string | undefined, model: () => Promise<string[]> | string[]) => {
+            if (!kunci) return;
+            jalur.push({ id, coba: async () => {
+                let akhir: any = null;
+                for (const m of await model()) {
+                    const r = await fetch(`${base}/chat/completions`, {
+                        method: 'POST', signal: AbortSignal.timeout(90_000), headers: { Authorization: `Bearer ${kunci}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ model: m, messages: [{ role: 'system', content: sistem }, { role: 'user', content: isi }], temperature: 0.2, max_tokens: maks })
+                    });
+                    if (!r.ok) { akhir = new Error(`HTTP ${r.status} ${(await r.text()).slice(0, 120)}`); if (r.status === 429 || r.status === 401) break; continue; }
+                    const j: any = await r.json(); const out = String(j?.choices?.[0]?.message?.content || '').trim();
+                    if (out) return { teks: out, model: m };
+                    akhir = new Error('jawaban kosong');
                 }
-                const j: any = await r.json();
-                const out = String(j?.choices?.[0]?.message?.content || '').trim();
-                if (!out) throw new Error('jawaban kosong');
-                this.catat(aiId, `visi-${cara}`, prompt.length + 1000 * gambar.length, out.length, true);
-                return { teks: out, model: `${cara}:${model}` };
-            } catch (e: any) { galat.push(`${cara}: ${e?.message || e}`); this.catat(aiId, `visi-${cara}`, prompt.length, 0, false); }
+                throw akhir || new Error('tidak ada model');
+            } });
+        };
+        langsung('gemini', BASE.gemini, this.env.GEMINI_API_KEY, () => [this.env.GEMINI_VISION_MODEL || 'gemini-2.5-flash', 'gemini-2.5-flash-lite']);
+        langsung('groq', BASE.groq, this.env.GROQ_API_KEY, () => [this.env.GROQ_VISION_MODEL || 'meta-llama/llama-4-scout-17b-16e-instruct', 'meta-llama/llama-4-maverick-17b-128e-instruct']);
+        langsung('openrouter', 'https://openrouter.ai/api/v1', this.env.OPENROUTER_API_KEY, () => this.modelVisiOpenRouter());
+        langsung('nvidia', 'https://integrate.api.nvidia.com/v1', this.env.NVIDIA_API_KEY, () => [this.env.NVIDIA_VISION_MODEL || 'meta/llama-3.2-90b-vision-instruct', 'meta/llama-3.2-11b-vision-instruct']);
+        langsung('xai', BASE.xai, this.env.XAI_API_KEY, () => [this.env.XAI_VISION_MODEL || 'grok-2-vision-1212']);
+        for (const j of jalur) {
+            const kd = `visi-${j.id}`;
+            if ((this.dingin.get(kd) || 0) > Date.now()) { galat.push(`${j.id}: istirahat sebentar (kena limit)`); continue; }
+            try {
+                const r = await j.coba();
+                this.catat(aiId, kd, prompt.length + 1000 * gambar.length, r.teks.length, true);
+                return { teks: r.teks, model: `${j.id}:${r.model}` };
+            } catch (e: any) {
+                const m = String(e?.message || e); galat.push(`${j.id}: ${m.slice(0, 100)}`);
+                this.dingin.set(kd, Date.now() + (/429|quota|limit/i.test(m) ? 10 * 60_000 : 2 * 60_000));
+                this.catat(aiId, kd, prompt.length, 0, false);
+            }
         }
-        throw new Error(galat.length ? `Model visi gagal (${galat.join(' · ')})` : 'Belum ada model visi: isi GEMINI_API_KEY atau GROQ_API_KEY di server.');
+        throw new Error(galat.length ? `Semua model visi gagal (${galat.join(' · ')})` : 'Belum ada model visi: FreeLLM belum jalan dan kunci Gemini/Groq/OpenRouter belum ada di server.');
     }
     /** Pak Rico / HR mengatur opsi satu AI. HR hanya boleh opsi gratis & tidak boleh mengubah yang dikunci Pak Rico. */
     setAtur(aiId: string, opsi: string, oleh: 'hr' | 'rico', alasan = '', kunci?: boolean) {
         const o = this.cari(opsi); if (!o) throw new Error('Opsi model tidak dikenal.'); if (!o.ada) throw new Error(`${o.label} belum diatur di server (kunci API belum ada).`);
         const lama = this.st.atur[aiId];
-        if (o.cara === 'freellm' && AI_PRIVAT.test(aiId)) throw new Error('AI ini memegang data pribadi Pak Rico; tidak boleh memakai penyedia gratis pihak ketiga.');
+        if (o.cara === 'freellm' && !this.bolehFree(aiId)) throw new Error('AI ini memegang data pribadi Pak Rico; FreeLLM dikunci untuknya (KANTOR_FREELLM_PRIVAT=0).');
         if (oleh === 'hr') { if (o.biaya !== 'gratis') throw new Error('HR hanya boleh memilih opsi gratis.'); if (lama?.kunci) throw new Error('Dikunci Pak Rico.'); }
         this.st.atur[aiId] = { opsi, oleh, alasan: alasan.slice(0, 200), at: Date.now(), kunci: oleh === 'rico' ? kunci !== false : false };
         this.simpan(); return this.st.atur[aiId];

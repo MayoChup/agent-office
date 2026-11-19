@@ -11,6 +11,8 @@
  *  - Tanggal 1        Sasa: rekap pengeluaran bulan lalu vs bulan sebelumnya.
  * Peta "siapa menyumbang apa" di tiap fitur: GOTONG (ditampilkan di Papan kerja → Gotong royong).
  */
+import { execFile } from 'child_process';
+import ATUR_OTAK_FREELLM from './skrip/atur-otak-freellm.sh';
 import fs from 'fs';
 import path from 'path';
 import type { RequestHandler, Express } from 'express';
@@ -90,7 +92,7 @@ const rp = (n: number) => `Rp${Math.round(n).toLocaleString('id-ID')}`;
 export function pasangRutin(d: DepsRutin) {
     const { app, requireToken, papan, percakapan } = d;
     // Kunci Gemini/Groq/xAI boleh ada di environment kantor ATAU di .env Hermes (yang diisi Pak Rico). Hanya nama kunci ini yang dibaca; nilainya tidak pernah ditampilkan.
-    const BOLEH = /^(GEMINI_API_KEY|GEMINI_MODEL|GEMINI_VISION_MODEL|GROQ_API_KEY|GROQ_MODEL|GROQ_VISION_MODEL|XAI_API_KEY|XAI_MODEL|OPENROUTER_API_KEY|CEREBRAS_API_KEY|MISTRAL_API_KEY|NVIDIA_API_KEY|FREELLM_PORT|FREELLM_MODEL)$/;
+    const BOLEH = /^(GEMINI_API_KEY|GEMINI_MODEL|GEMINI_VISION_MODEL|GROQ_API_KEY|GROQ_MODEL|GROQ_VISION_MODEL|XAI_API_KEY|XAI_MODEL|OPENROUTER_API_KEY|CEREBRAS_API_KEY|MISTRAL_API_KEY|NVIDIA_API_KEY|NVIDIA_VISION_MODEL|OPENROUTER_VISION_MODEL|XAI_VISION_MODEL|COHERE_API_KEY|HF_TOKEN|ZHIPU_API_KEY|FREELLM_PORT|FREELLM_MODEL|KANTOR_FREELLM_PRIVAT|KANTOR_FREELLM_ANONIM)$/;
     const envHermes: Record<string, string> = {};
     try {
         for (const baris of fs.readFileSync(path.join(d.hermesHome, '.env'), 'utf8').split('\n')) {
@@ -104,6 +106,29 @@ export function pasangRutin(d: DepsRutin) {
     router.freellm = freellm;
     freellm.start();
     process.on('exit', () => freellm.stop());
+    // Otak chat Hermes lewat FreeLLM (tombol di Tugas → Model AI). Model lama tetap jadi cadangan pertama; bisa dimatikan kapan saja.
+    const otakFile = path.join(d.dataDir, 'otak-freellm.json');
+    const otak = (): { nyala: boolean; at: number; hasil: string } => { try { return JSON.parse(fs.readFileSync(otakFile, 'utf8')); } catch { return { nyala: false, at: 0, hasil: '' }; } };
+    let otakSibuk = false;
+    app.get('/api/kantor/freellm/otak', requireToken, (_req, res) => { res.json({ ok: true, ...otak(), sibuk: otakSibuk, siap: freellm.siap() }); });
+    app.post('/api/kantor/freellm/otak', requireToken, (req, res) => {
+        const nyala = !!req.body?.nyala;
+        if (otakSibuk) { res.status(409).json({ ok: false, error: 'Sedang mengatur, tunggu sebentar.' }); return; }
+        if (nyala && !freellm.siap()) { res.status(400).json({ ok: false, error: `FreeLLM belum siap: ${freellm.status.pesan}` }); return; }
+        const f = path.join(d.dataDir, 'atur-otak-freellm.sh');
+        try { fs.writeFileSync(f, ATUR_OTAK_FREELLM); } catch (e: any) { res.status(500).json({ ok: false, error: String(e?.message || e) }); return; }
+        otakSibuk = true;
+        execFile('bash', [f, nyala ? 'nyala' : 'mati'], { timeout: 120_000, env: { ...process.env, HERMES_HOME: d.hermesHome, FREELLM_KUNCI_FILE: freellm.fileKunci(), FREELLM_PORT: String(freellm.port) } }, (err, stdout, stderr) => {
+            otakSibuk = false;
+            const hasil = String(stdout || '').trim();
+            if (err) { res.status(400).json({ ok: false, error: String(stdout || stderr || err.message).trim().split('\n').slice(-2).join(' ').slice(0, 300) }); return; }
+            const st = { nyala, at: Date.now(), hasil: hasil.slice(-1500) };
+            try { fs.writeFileSync(otakFile, JSON.stringify(st)); } catch { /* */ }
+            const n = /JUMLAH (\d+)/.exec(hasil)?.[1] || '0';
+            d.papan.catat({ ai: d.idHr, nama: '', judul: nyala ? `Memindahkan otak chat ${n} AI ke FreeLLM (model lama jadi cadangan)` : `Mengembalikan otak chat ${n} AI ke pengaturan semula`, sumber: 'sistem', status: 'selesai' });
+            res.json({ ok: true, ...st });
+        });
+    });
     app.get('/api/kantor/freellm', requireToken, async (_req, res) => { res.json({ ok: true, terpasang: freellm.terpasang(), port: freellm.port, ...(await freellm.cek().catch(() => freellm.status)) }); });
     const tim = () => d.roster().filter((a) => a.id !== 'sistem');
     const bagi = () => { try { router.aturAwal(tim().map((a) => a.id)); } catch (e: any) { console.warn('[Model] bagi awal:', e?.message || e); } };

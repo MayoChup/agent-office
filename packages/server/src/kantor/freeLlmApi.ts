@@ -4,7 +4,8 @@
  * - Kunci enkripsi dibuat sekali di data/freellm/kunci (izin 600), tidak pernah ditampilkan.
  * - Kunci penyedia yang SUDAH ada di VPS (Gemini, Groq, OpenRouter) diteruskan lewat konfigurasi deklaratif di memori
  *   (FREEAPI_CONFIG_JSON), tidak ditulis ke berkas oleh kantor. Kunci penyedia lain Pak Rico isi sendiri di dasbornya.
- * - Kebijakan kantor: jalur ini HANYA untuk tugas non-pribadi (berita, konten, Reels, riset). Keuangan & chat pribadi tidak lewat sini.
+ * - Sejak 19 Nov 2026 Pak Rico mengizinkan semua AI (termasuk yang memegang data pribadi) lewat sini; KANTOR_FREELLM_PRIVAT=0 mengunci lagi.
+ * - Penyedia tanpa kunci (Kilo, OVH) ikut dinyalakan supaya beban tidak hanya di kunci Bapak; KANTOR_FREELLM_ANONIM=0 mematikannya.
  */
 import fs from 'fs';
 import path from 'path';
@@ -37,7 +38,10 @@ export class FreeLlmApi {
         const tambah = (platform: string, nama: string) => { const k = this.env[nama]; if (k) keys.push({ platform, key: k, label: 'dari VPS kantor' }); };
         tambah('google', 'GEMINI_API_KEY'); tambah('groq', 'GROQ_API_KEY'); tambah('openrouter', 'OPENROUTER_API_KEY');
         tambah('cerebras', 'CEREBRAS_API_KEY'); tambah('mistral', 'MISTRAL_API_KEY'); tambah('nvidia', 'NVIDIA_API_KEY');
-        return JSON.stringify({ keys, routing: { strategy: 'balanced' } });
+        tambah('cohere', 'COHERE_API_KEY'); tambah('huggingface', 'HF_TOKEN'); tambah('zhipu', 'ZHIPU_API_KEY');
+        // Penyedia TANPA kunci (gratis, anonim): beban tidak lagi menumpuk di kunci Bapak. Matikan dengan KANTOR_FREELLM_ANONIM=0.
+        const anonim = this.env.KANTOR_FREELLM_ANONIM !== '0' ? ['kilo', 'ovh'].map((platform) => ({ platform, label: 'tanpa kunci (gratis)' })) : [];
+        return JSON.stringify({ keys: [...keys, ...anonim], routing: { strategy: 'balanced' } });
     }
 
     start() {
@@ -83,11 +87,31 @@ export class FreeLlmApi {
             if (r.status === 401) { this.kunciApi = ''; throw new Error('kunci terpadu berubah'); }
             const j: any = await r.json();
             this.status = { ...this.status, jalan: true, model: Array.isArray(j?.data) ? j.data.length : null, pesan: 'Jalan', cekAt: Date.now() };
+            this.tulisKunciUntukHermes();
         } catch (e: any) {
             this.status = { ...this.status, jalan: false, pesan: `Belum siap: ${String(e?.message || e).slice(0, 120)}`, cekAt: Date.now() };
             setTimeout(() => void this.cek(), 30_000);
         }
         return this.status;
+    }
+    /** Berkas kunci (izin 600) yang dibaca Hermes lewat key_cmd, supaya otak chat bisa lewat router ini. Hanya berlaku di 127.0.0.1. */
+    fileKunci() { return path.join(this.data, 'kunci-api'); }
+    private tulisKunciUntukHermes() {
+        try { const f = this.fileKunci(); if (!fs.existsSync(f) || fs.readFileSync(f, 'utf8').trim() !== this.kunciApi) fs.writeFileSync(f, this.kunciApi, { mode: 0o600 }); } catch { /* */ }
+    }
+    /** Baca gambar lewat router: FreeLLM memilih sendiri model yang bisa melihat (Gemini, Llama 4, GLM-V, dll.). */
+    async lihat(sistem: string, prompt: string, gambar: Array<{ mime: string; data: Buffer }>, maks = 1500): Promise<{ teks: string; model: string }> {
+        if (!this.siap()) throw new Error(`FreeLLM belum siap (${this.status.pesan}).`);
+        const isi = [{ type: 'text', text: prompt }, ...gambar.slice(0, 4).map((g) => ({ type: 'image_url', image_url: { url: `data:${g.mime};base64,${g.data.toString('base64')}` } }))];
+        const r = await fetch(`http://127.0.0.1:${this.port}/v1/chat/completions`, {
+            method: 'POST', signal: AbortSignal.timeout(120_000), headers: { Authorization: `Bearer ${this.kunciApi}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: 'auto', messages: [{ role: 'system', content: sistem }, { role: 'user', content: isi }], temperature: 0.2, max_tokens: maks })
+        });
+        if (!r.ok) throw new Error(`HTTP ${r.status} ${(await r.text()).slice(0, 160)}`);
+        const j: any = await r.json();
+        const teks = String(j?.choices?.[0]?.message?.content || '').trim();
+        if (!teks) throw new Error('jawaban kosong');
+        return { teks, model: String(j?.model || 'auto') };
     }
     /** Panggilan teks (OpenAI-compatible). model "auto" = router memilih model gratis terbaik yang tersedia. */
     async chat(sistem: string, prompt: string, maks = 4000, model = this.env.FREELLM_MODEL || 'auto'): Promise<{ teks: string; model: string }> {

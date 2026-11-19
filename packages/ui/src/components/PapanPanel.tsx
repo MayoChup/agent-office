@@ -3,6 +3,7 @@ import { useApi } from '../kantor/api';
 import { apiPost } from '../kantor/connection';
 
 import { Ikon } from './Ikon';
+import { konfirmasi } from './Konfirmasi';
 type Status = 'todo' | 'proses' | 'selesai' | 'gagal';
 interface Kerja { id: string; ai: string; nama: string; judul: string; detail?: string; hasil?: string; sumber: 'chat' | 'tugas' | 'sistem' | 'trading' | 'laporan'; status: Status; dibuat: number; mulai?: number; selesai?: number }
 interface StatAi { id: string; nama: string; peran: string; selesai: number; gagal: number; proses: number; todo: number; rataDetik: number | null; terakhir: number; selesai7: number; menganggur: boolean; peringkat: number }
@@ -216,8 +217,9 @@ function ModelAi() {
     return (
         <div className="md-wrap">
             {pesan && <div className="fin-alert">{pesan}</div>}
+            <OtakFreellm />
             <section className="pk-kotak">
-                <div className="pk-kh2"><b>Kuota model hari ini</b><small>Tugas teks dikerjakan Gemini/Groq (gratis) supaya kuota OpenRouter untuk chat & alat tidak habis. Penuh → otomatis pindah ke opsi gratis lain.</small></div>
+                <div className="pk-kh2"><b>Kuota model hari ini</b><small>Tugas teks (ringkasan, JSON, Reels) didahulukan ke FreeLLM supaya bebannya tersebar ke banyak penyedia gratis. Penuh → otomatis pindah ke opsi gratis lain.</small></div>
                 <div className="md-opsi">
                     {m.data.opsi.map((o) => {
                         const pct = Math.min(100, Math.round((o.hariIni.n / o.batasHari) * 100));
@@ -304,5 +306,37 @@ function GotongRoyong() {
                 </div>
             </section>
         </div>
+    );
+}
+
+/** Otak chat semua AI lewat FreeLLM: beban chat tidak lagi bertumpu pada kunci OpenRouter/Gemini Bapak. Model lama tetap jadi cadangan. */
+function OtakFreellm() {
+    const o = useApi<{ nyala: boolean; at: number; hasil: string; sibuk: boolean; siap: boolean }>('/api/kantor/freellm/otak', 30_000);
+    const f = useApi<{ jalan: boolean; model: number | null; pesan: string }>('/api/kantor/freellm', 60_000);
+    const [proses, setProses] = useState(false);
+    const [pesan, setPesan] = useState('');
+    const ubah = async (nyala: boolean) => {
+        if (!nyala && !(await konfirmasi('Kembalikan otak chat semua AI ke model sebelumnya (kunci API Bapak)?', { ok: 'Kembalikan' }))) return;
+        setProses(true); setPesan('');
+        try { await apiPost('/api/kantor/freellm/otak', { nyala }); setPesan(nyala ? 'Selesai. Chat berikutnya sudah lewat FreeLLM.' : 'Dikembalikan ke pengaturan semula.'); o.reload(); }
+        catch (e: any) { setPesan(String(e.message || e)); } finally { setProses(false); }
+    };
+    const nyala = !!o.data?.nyala;
+    return (
+        <section className="pk-kotak of">
+            <div className="of-h">
+                <div className="pk-kh2"><b>Otak chat semua AI</b><small>{nyala
+                    ? 'Lewat FreeLLM: beban dibagi ke banyak penyedia gratis, termasuk yang tanpa kunci. Kalau FreeLLM gagal, AI otomatis memakai model lama.'
+                    : 'Sekarang chat memakai model di pengaturan Hermes (kunci OpenRouter/Gemini Bapak). Pindahkan ke FreeLLM supaya kunci Bapak jadi cadangan saja.'}</small></div>
+                <button className={`btn ${nyala ? '' : 'primary'}`} disabled={proses || o.data?.sibuk || (!nyala && !o.data?.siap)} onClick={() => ubah(!nyala)}>
+                    {proses ? 'Mengatur…' : nyala ? 'Kembalikan' : 'Pakai FreeLLM'}
+                </button>
+            </div>
+            <div className="of-status">
+                <span className={`of-titik ${f.data?.jalan ? 'ok' : ''}`} aria-hidden />
+                <small>{f.data ? (f.data.jalan ? `FreeLLM jalan · ${f.data.model ?? '?'} model tersedia` : `FreeLLM: ${f.data.pesan}`) : 'Memeriksa FreeLLM…'}{nyala && o.data?.at ? ` · aktif sejak ${new Date(o.data.at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}` : ''}</small>
+            </div>
+            {pesan && <small className="of-pesan">{pesan}</small>}
+        </section>
     );
 }

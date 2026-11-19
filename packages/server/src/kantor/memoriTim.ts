@@ -4,8 +4,8 @@
  *  - cari(q): pencarian teks untuk palet Cari di aplikasi;
  *  - rekan(aiId, teks): potongan ingatan AI LAIN yang relevan dengan pesan Pak Rico, diselipkan ke prompt
  *    supaya pengetahuan berpindah antaranggota tanpa Bapak mengulang cerita.
- * Batas privasi: ingatan AI privat (Joni, HR, sekretaris, keuangan, ECA) hanya dibagikan ke sesama AI privat,
- * karena AI non-privat boleh memakai penyedia gratis pihak ketiga. Folder vault "Pribadi/" tidak pernah dibaca.
+ * Batas privasi: kalau FreeLLM dikunci untuk AI privat (KANTOR_FREELLM_PRIVAT=0), ingatan AI privat hanya dibagikan ke sesama AI privat.
+ * Sejak 19 Nov 2026 Pak Rico mengizinkan berbagi ke semua anggota. Folder vault "Pribadi/" tidak pernah dibaca.
  */
 import fs from 'fs';
 import path from 'path';
@@ -16,7 +16,7 @@ const KATA_UMUM = new Set('yang untuk dengan dari pada dalam akan atau juga suda
 
 export class MemoriTim {
     private cache = new Map<string, { mtime: number; isi: string }>();
-    constructor(private hermesHome: string, private roster: () => AnggotaRingkas[]) {}
+    constructor(private hermesHome: string, private roster: () => AnggotaRingkas[], private lindungi: () => boolean = () => true) {}
     private dir(id: string) { return id === 'default' ? this.hermesHome : path.join(this.hermesHome, 'profiles', id); }
     /** Semua berkas ingatan satu AI: [{rel, isi}] (di-cache per mtime). */
     berkas(id: string): Array<{ rel: string; isi: string }> {
@@ -51,7 +51,7 @@ export class MemoriTim {
         const privat = AI_PRIVAT.test(aiId);
         const calon: Array<{ nama: string; skor: number; isi: string }> = [];
         for (const a of this.roster()) {
-            if (a.id === aiId || (AI_PRIVAT.test(a.id) && !privat)) continue;
+            if (a.id === aiId || (this.lindungi() && AI_PRIVAT.test(a.id) && !privat)) continue;
             for (const b of this.berkas(a.id)) for (const par of b.isi.split(/\n\s*\n|\n(?=[-*#§])/)) {
                 const p = par.trim(); if (p.length < 20) continue;
                 const l = p.toLowerCase(); const skor = kata.reduce((s, w) => s + (l.includes(w) ? 1 : 0), 0);

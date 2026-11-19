@@ -714,3 +714,13 @@ button.hz-tgl.on { background: var(--panel-solid); color: var(--text); }
 .ln-aksi small { font-size: 11px; color: var(--faint); margin-right: auto; }
 .ln-aksi button { border: 0; background: transparent; color: var(--accent); font: inherit; font-size: 13px; cursor: pointer; padding: 4px 0; min-height: 32px; }
 .ln-kosong { color: var(--muted); font-size: 14px; padding: 24px 0; text-align: center; }
+
+/* Otak chat lewat FreeLLM */
+.of { border-color: var(--aksen-garis); }
+.of-h { display: flex; gap: 16px; align-items: flex-start; justify-content: space-between; }
+.of-h .btn { flex: 0 0 auto; min-height: 40px; }
+.of-status { display: flex; align-items: center; gap: 8px; margin-top: 12px; color: var(--muted); }
+.of-titik { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
+.of-titik.ok { background: var(--good); }
+.of-pesan { display: block; margin-top: 8px; color: var(--accent); }
+@media (max-width: 640px) { .of-h { flex-direction: column; } .of-h .btn { width: 100%; } }
