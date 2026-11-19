@@ -72,6 +72,8 @@ export class FreeLlmApi {
         setTimeout(() => void this.cek(), 8000);
     }
     stop() { try { this.proc?.kill(); } catch { /* */ } }
+    /** Kunci penyedia berubah → konfigurasi dibaca ulang: proses dimatikan, lalu dinyalakan lagi otomatis (±10 detik). */
+    muatUlang(env: Record<string, string | undefined>) { this.env = env; this.gagalBeruntun = 0; if (this.proc) this.stop(); else this.start(); }
 
     /** Ambil kunci terpadu dari database FreeLLMAPI (dibaca dengan better-sqlite3 milik paketnya sendiri). Hanya disimpan di memori. */
     private bacaKunci(): string {

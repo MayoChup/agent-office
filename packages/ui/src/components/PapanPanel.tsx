@@ -218,6 +218,7 @@ function ModelAi() {
         <div className="md-wrap">
             {pesan && <div className="fin-alert">{pesan}</div>}
             <OtakFreellm />
+            <KunciGratis />
             <section className="pk-kotak">
                 <div className="pk-kh2"><b>Kuota model hari ini</b><small>Tugas teks (ringkasan, JSON, Reels) didahulukan ke FreeLLM supaya bebannya tersebar ke banyak penyedia gratis. Penuh → otomatis pindah ke opsi gratis lain.</small></div>
                 <div className="md-opsi">
@@ -337,6 +338,47 @@ function OtakFreellm() {
                 <small>{f.data ? (f.data.jalan ? `FreeLLM jalan · ${f.data.model ?? '?'} model tersedia` : `FreeLLM: ${f.data.pesan}`) : 'Memeriksa FreeLLM…'}{nyala && o.data?.at ? ` · aktif sejak ${new Date(o.data.at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}` : ''}</small>
             </div>
             {pesan && <small className="of-pesan">{pesan}</small>}
+        </section>
+    );
+}
+
+/** Kunci API gratis tambahan: ditempel di sini, disimpan di VPS, tidak pernah ditampilkan lagi. Makin banyak kunci, makin lega kuotanya. */
+function KunciGratis() {
+    const k = useApi<{ kunci: Array<{ nama: string; label: string; daftar: string; visi: boolean; ada: boolean }> }>('/api/kantor/kunci', 0);
+    const [buka, setBuka] = useState<string | null>(null);
+    const [nilai, setNilai] = useState('');
+    const [proses, setProses] = useState(false);
+    const [pesan, setPesan] = useState<{ ok: boolean; t: string } | null>(null);
+    const simpan = async (nama: string, label: string) => {
+        setProses(true); setPesan(null);
+        try { await apiPost('/api/kantor/kunci', { nama, nilai }); setNilai(''); setBuka(null); setPesan({ ok: true, t: `Kunci ${label} tersimpan. FreeLLM memuat ulang ±10 detik.` }); k.reload(); }
+        catch (e: any) { setPesan({ ok: false, t: String(e.message || e) }); } finally { setProses(false); }
+    };
+    if (!k.data) return null;
+    const visiAda = k.data.kunci.filter((x) => x.visi && x.ada).length;
+    return (
+        <section className="pk-kotak">
+            <div className="pk-kh2"><b>Kunci gratis tambahan</b><small>Daftar gratis di penyedia, salin kuncinya, tempel di sini. Kunci disimpan di VPS dan tidak pernah ditampilkan lagi. {visiAda ? `${visiAda} penyedia pembaca gambar sudah terpasang.` : 'Belum ada penyedia pembaca gambar selain kunci lama Bapak.'}</small></div>
+            <div className="kg-daftar">
+                {k.data.kunci.map((x) => (
+                    <div key={x.nama} className="kg-baris">
+                        <div className="kg-info"><b>{x.label}</b><small>{x.visi ? 'Teks & gambar' : 'Teks'} · {x.ada ? 'terpasang' : 'belum ada'}</small></div>
+                        {buka === x.nama ? (
+                            <form className="kg-isi" onSubmit={(e) => { e.preventDefault(); if (nilai.trim()) void simpan(x.nama, x.label); }}>
+                                <input type="password" autoComplete="off" autoFocus value={nilai} onChange={(e) => setNilai(e.target.value)} placeholder={`Tempel kunci ${x.label}`} aria-label={`Kunci ${x.label}`} />
+                                <button className="btn primary small" disabled={proses || !nilai.trim()}>{proses ? 'Menyimpan…' : 'Simpan'}</button>
+                                <button type="button" className="btn small" onClick={() => { setBuka(null); setNilai(''); }}>Batal</button>
+                            </form>
+                        ) : (
+                            <div className="kg-aksi">
+                                {!x.ada && <a href={x.daftar} target="_blank" rel="noreferrer">Ambil kunci</a>}
+                                <button className="btn small" onClick={() => { setBuka(x.nama); setNilai(''); setPesan(null); }}>{x.ada ? 'Ganti' : 'Tempel'}</button>
+                            </div>
+                        )}
+                    </div>
+                ))}
+            </div>
+            {pesan && <small className={pesan.ok ? 'of-pesan' : 'pesan-salah'} role={pesan.ok ? 'status' : 'alert'}>{pesan.t}</small>}
         </section>
     );
 }

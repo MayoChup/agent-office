@@ -724,3 +724,14 @@ button.hz-tgl.on { background: var(--panel-solid); color: var(--text); }
 .of-titik.ok { background: var(--good); }
 .of-pesan { display: block; margin-top: 8px; color: var(--accent); }
 @media (max-width: 640px) { .of-h { flex-direction: column; } .of-h .btn { width: 100%; } }
+/* Kunci gratis tambahan */
+.kg-daftar { display: grid; gap: 2px; margin-top: 8px; }
+.kg-baris { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; padding: 10px 0; border-top: 1px solid var(--line); }
+.kg-baris:first-child { border-top: 0; }
+.kg-info { display: grid; gap: 2px; min-width: 0; }
+.kg-info b { font-weight: 600; font-size: 14px; }
+.kg-info small { font-size: 12px; color: var(--muted); }
+.kg-aksi { display: flex; gap: 12px; align-items: center; }
+.kg-aksi a { font-size: 13px; color: var(--accent); text-decoration: none; }
+.kg-isi { display: flex; gap: 8px; flex: 1 1 320px; }
+.kg-isi input { flex: 1; min-width: 0; height: 36px; padding: 0 12px; border-radius: var(--r-kontrol); border: 1px solid var(--line-strong); background: var(--naik); color: var(--text); font: inherit; }

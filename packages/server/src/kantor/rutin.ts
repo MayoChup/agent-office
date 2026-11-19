@@ -106,6 +106,34 @@ export function pasangRutin(d: DepsRutin) {
     router.freellm = freellm;
     freellm.start();
     process.on('exit', () => freellm.stop());
+    /* ── Kunci gratis tambahan: diisi Pak Rico di aplikasi, ditulis ke .env Hermes (izin 600). Nilainya TIDAK PERNAH dikirim balik. ── */
+    const KUNCI_TAMBAH: Array<{ nama: string; label: string; daftar: string; visi: boolean; pola: RegExp }> = [
+        { nama: 'ZHIPU_API_KEY', label: 'Zhipu (GLM-4V-Flash)', daftar: 'https://open.bigmodel.cn/usercenter/apikeys', visi: true, pola: /^[A-Za-z0-9._-]{20,200}$/ },
+        { nama: 'NVIDIA_API_KEY', label: 'NVIDIA NIM', daftar: 'https://build.nvidia.com/settings/api-keys', visi: true, pola: /^nvapi-[A-Za-z0-9_-]{20,200}$/ },
+        { nama: 'GROQ_API_KEY', label: 'Groq', daftar: 'https://console.groq.com/keys', visi: true, pola: /^gsk_[A-Za-z0-9]{20,200}$/ },
+        { nama: 'GEMINI_API_KEY', label: 'Google Gemini', daftar: 'https://aistudio.google.com/apikey', visi: true, pola: /^AIza[A-Za-z0-9_-]{20,200}$/ },
+        { nama: 'CEREBRAS_API_KEY', label: 'Cerebras', daftar: 'https://cloud.cerebras.ai/platform', visi: false, pola: /^csk-[A-Za-z0-9]{20,200}$/ },
+        { nama: 'MISTRAL_API_KEY', label: 'Mistral', daftar: 'https://console.mistral.ai/api-keys', visi: false, pola: /^[A-Za-z0-9]{20,200}$/ }
+    ];
+    const envAktif: Record<string, string | undefined> = { ...envHermes, ...Object.fromEntries(Object.entries(process.env).filter(([k, v]) => v && BOLEH.test(k))) };
+    app.get('/api/kantor/kunci', requireToken, (_req, res) => { res.json({ ok: true, kunci: KUNCI_TAMBAH.map(({ nama, label, daftar, visi }) => ({ nama, label, daftar, visi, ada: !!envAktif[nama] })) }); });
+    app.post('/api/kantor/kunci', requireToken, (req, res) => {
+        const k = KUNCI_TAMBAH.find((x) => x.nama === String(req.body?.nama || ''));
+        const nilai = String(req.body?.nilai || '').trim().replace(/^['"]|['"]$/g, '');
+        if (!k) { res.status(400).json({ ok: false, error: 'Jenis kunci tidak dikenal.' }); return; }
+        if (!k.pola.test(nilai)) { res.status(400).json({ ok: false, error: `Bentuk kunci ${k.label} tidak cocok. Salin ulang dari halaman ${k.label}, tanpa spasi.` }); return; }
+        const f = path.join(d.hermesHome, '.env');
+        try {
+            const lama = fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : '';
+            const baris = lama.split('\n').filter((b) => !new RegExp(`^\\s*(export\\s+)?${k.nama}\\s*=`).test(b));
+            while (baris.length && !baris[baris.length - 1].trim()) baris.pop();
+            fs.writeFileSync(f, [...baris, `${k.nama}=${nilai}`, ''].join('\n'), { mode: 0o600 }); fs.chmodSync(f, 0o600);
+        } catch (e: any) { res.status(500).json({ ok: false, error: `Gagal menyimpan: ${String(e?.message || e).slice(0, 120)}` }); return; }
+        envAktif[k.nama] = nilai; router.setEnv(k.nama, nilai); freellm.muatUlang({ ...envAktif });
+        d.papan.catat({ ai: d.idHr, nama: '', judul: `Memasang kunci ${k.label} untuk FreeLLM${k.visi ? ' (bisa membaca gambar)' : ''}`, sumber: 'sistem', status: 'selesai' });
+        res.json({ ok: true });
+    });
+
     // Otak chat Hermes lewat FreeLLM (tombol di Tugas → Model AI). Model lama tetap jadi cadangan pertama; bisa dimatikan kapan saja.
     const otakFile = path.join(d.dataDir, 'otak-freellm.json');
     const otak = (): { nyala: boolean; at: number; hasil: string } => { try { return JSON.parse(fs.readFileSync(otakFile, 'utf8')); } catch { return { nyala: false, at: 0, hasil: '' }; } };
@@ -129,6 +157,24 @@ export function pasangRutin(d: DepsRutin) {
             res.json({ ok: true, ...st });
         });
     });
+    // Pak Rico minta (19 Nov 2026, "lakukan yang terbaik"): otak chat dipindah ke FreeLLM SEKALI otomatis begitu FreeLLM siap.
+    // Kalau Bapak menekan "Kembalikan", berkas status tercatat dan ini tidak diulang.
+    const otomatis = setInterval(() => {
+        if (fs.existsSync(otakFile)) { clearInterval(otomatis); return; }
+        if (!freellm.siap() || otakSibuk) return;
+        clearInterval(otomatis); otakSibuk = true;
+        const f = path.join(d.dataDir, 'atur-otak-freellm.sh');
+        try { fs.writeFileSync(f, ATUR_OTAK_FREELLM); } catch { otakSibuk = false; return; }
+        execFile('bash', [f, 'nyala'], { timeout: 120_000, env: { ...process.env, HERMES_HOME: d.hermesHome, FREELLM_KUNCI_FILE: freellm.fileKunci(), FREELLM_PORT: String(freellm.port) } }, (err, stdout) => {
+            otakSibuk = false;
+            if (err) { console.warn('[FreeLLM] otak otomatis gagal:', String(stdout || err.message).slice(-200)); return; }
+            const hasil = String(stdout || '').trim();
+            try { fs.writeFileSync(otakFile, JSON.stringify({ nyala: true, at: Date.now(), hasil: hasil.slice(-1500), otomatis: true })); } catch { /* */ }
+            const n = /JUMLAH (\d+)/.exec(hasil)?.[1] || '0';
+            d.papan.catat({ ai: d.idHr, nama: '', judul: `Memindahkan otak chat ${n} AI ke FreeLLM (model lama jadi cadangan)`, sumber: 'sistem', status: 'selesai' });
+            void d.kabari(`🧠 Hana: otak chat ${n} AI sekarang lewat FreeLLM supaya kunci API Bapak tidak terkuras. Model lama tetap jadi cadangan. Bisa dikembalikan di Tugas → Model AI.`).catch(() => undefined);
+        });
+    }, 60_000);
     app.get('/api/kantor/freellm', requireToken, async (_req, res) => { res.json({ ok: true, terpasang: freellm.terpasang(), port: freellm.port, ...(await freellm.cek().catch(() => freellm.status)) }); });
     const tim = () => d.roster().filter((a) => a.id !== 'sistem');
     const bagi = () => { try { router.aturAwal(tim().map((a) => a.id)); } catch (e: any) { console.warn('[Model] bagi awal:', e?.message || e); } };

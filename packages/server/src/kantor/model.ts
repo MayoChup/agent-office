@@ -33,6 +33,8 @@ export class ModelRouter {
     freellm?: { siap(): boolean; chat(sistem: string, prompt: string, maks?: number): Promise<{ teks: string; model: string }>; lihat?(sistem: string, prompt: string, gambar: Array<{ mime: string; data: Buffer }>, maks?: number): Promise<{ teks: string; model: string }> };
     /** true = AI privat tidak boleh lewat FreeLLM (hanya kalau KANTOR_FREELLM_PRIVAT=0). */
     lindungi() { return this.env.KANTOR_FREELLM_PRIVAT === '0'; }
+    /** Kunci baru dari formulir Pak Rico langsung dipakai tanpa memulai ulang kantor. */
+    setEnv(k: string, v: string) { this.env = { ...this.env, [k]: v }; this.visiOr = { at: 0, model: [] }; }
     private bolehFree(id: string) { return !(this.lindungi() && AI_PRIVAT.test(id)); }
     private file: string;
     st: St = { atur: {}, hari: '', pakai: {}, aiHari: {}, riwayat: [], review: null, modelAuto: {} };
