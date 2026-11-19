@@ -1,5 +1,5 @@
 import fs from 'fs';
-import { GAYA_MANUSIA } from './gayaManusia';
+import { GAYA_MANUSIA, PAGAR_SISTEM } from './gayaManusia';
 import path from 'path';
 import { execFile } from 'child_process';
 import { extractJson } from './freeLlm';
@@ -430,7 +430,7 @@ export class Percakapan {
             opts.aturan || '',
             '', '=== DATA (satu-satunya sumber yang boleh dipakai) ===', opts.data, '=== AKHIR DATA ===', '',
             'Riwayat chat konsultasi ini:', this.riwayat(thread), '',
-            `Balas pesan terakhir ${this.ownerName} sebagai ${ai.nama} (${ai.peran}) dalam Bahasa Indonesia, singkat & jelas.`, GAYA_MANUSIA
+            `Balas pesan terakhir ${this.ownerName} sebagai ${ai.nama} (${ai.peran}) dalam Bahasa Indonesia, singkat & jelas.`, GAYA_MANUSIA, PAGAR_SISTEM
         ].join('\n') : [
             grup
                 ? `[Grup chat "${info.nama}" di aplikasi Kantor Virtual. Anggota: ${this.anggotaThread(thread).map((a) => `${a.nama} (${a.peran})`).join(', ')}. Semua membaca; kamu diminta menjawab.]`
@@ -441,6 +441,7 @@ export class Percakapan {
             opts.instruksi ? `Instruksi dari ${this.roster().find((a) => a.id === 'default')?.nama || 'kepala kantor'} untukmu: ${opts.instruksi}` : '',
             `Balas sebagai ${ai.nama} (${ai.peran}) dalam Bahasa Indonesia. Gaya chat: singkat, jelas, tanpa basa-basi.`,
             GAYA_MANUSIA,
+            PAGAR_SISTEM,
             grup ? 'Jawab hanya bagian yang sesuai keahlianmu; jangan mengulang jawaban anggota lain. Kalau perlu orang lain, sebut namanya.' : '',
             'Kalau diminta mengerjakan sesuatu, kerjakan dengan alat/skill-mu seperti biasa, lalu laporkan hasilnya di sini.',
             this.teksLampiran(lampOwner),

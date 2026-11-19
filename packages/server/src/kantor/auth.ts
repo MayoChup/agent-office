@@ -39,6 +39,9 @@ export class KantorAuth {
         this.secret = crypto.createHash('sha256').update(`${base}:${this.password}`).digest();
     }
 
+    /** Hanya untuk kata sandi yang DIBUAT OTOMATIS: dikirim sekali ke Telegram Pak Rico supaya bisa masuk lagi tanpa membuka VPS. */
+    kataSandiSementara(): string | null { return this.generated ? this.password : null; }
+
     private sign(payload: string) {
         return crypto.createHmac('sha256', this.secret).update(payload).digest('base64url');
     }

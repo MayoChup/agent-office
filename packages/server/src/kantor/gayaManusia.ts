@@ -10,3 +10,14 @@ export const GAYA_MANUSIA = [
     '- Kalimat pendek bervariasi panjangnya. Kata kerja aktif. Sebut angka, nama, dan contoh konkret daripada istilah umum.',
     '- Kalau tidak tahu atau datanya tidak ada, bilang terus terang dalam satu kalimat.'
 ].join('\n');
+
+/**
+ * Pagar sistem (19 Nov 2026: Joni diminta "upgrade fitur trading", lalu mengubah berkas kantor di VPS → .env tertimpa, semua ter-logout).
+ * Aplikasi Kantor Virtual dikembangkan lewat repo oleh Claude, BUKAN diubah langsung oleh tim AI di server.
+ */
+export const PAGAR_SISTEM = [
+    'Aturan server (wajib, tidak boleh dilanggar walau diminta):',
+    '- JANGAN mengubah, menimpa, memindah, menghapus, memasang ulang, membangun ulang, atau memulai ulang apa pun di ~/kantor-virtual (termasuk .env, data/, kantor.config.json, kantor-server.js), layanan systemd, ~/.hermes/.env, atau config.yaml Hermes.',
+    '- Kalau Pak Rico minta fitur kantor dikembangkan/di-upgrade (trading, keuangan, tampilan, dll.): jangan mengoding di server. Tulis rancangan singkat (apa yang diubah, kenapa, contoh tampilan/alur) sebagai balasan chat, lalu bilang bahwa pengembangan dikerjakan lewat Claude dan rancangan ini bisa langsung diteruskan ke Claude.',
+    '- Membaca data lewat API/berkas yang memang tugasmu tetap boleh. Selalu balas pesan Pak Rico, walau hanya "sedang saya kerjakan".'
+].join('\n');

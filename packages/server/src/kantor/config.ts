@@ -121,8 +121,42 @@ const bool = (v: any, fallback: boolean) => {
     return ['1', 'true', 'yes', 'ya', 'on'].includes(String(v).toLowerCase());
 };
 
+/** Nama-nama kunci .env yang dipulihkan otomatis saat menyala (diisi pulihkanEnv; nilainya tidak pernah dicatat). */
+export const envDipulihkan: string[] = [];
+const bacaEnv = (teks: string) => {
+    const m = new Map<string, string>();
+    for (const raw of teks.split(/\r?\n/)) { const l = raw.trim(); if (!l || l.startsWith('#')) continue; const eq = l.indexOf('='); if (eq > 0) m.set(l.slice(0, eq).replace(/^export\s+/, '').trim(), raw); }
+    return m;
+};
+/**
+ * Pengaman .env (19 Nov 2026: .env pernah tertimpa saat AI mengerjakan "upgrade", kata sandi hilang → semua orang ter-logout).
+ * - Tiap menyala, isi .env disalin ke data/.env-cadangan (izin 600).
+ * - Kunci yang ada di cadangan tapi HILANG dari .env ditambahkan kembali (nilai yang sudah ada tidak diubah).
+ * Untuk sengaja menghapus satu kunci: hapus juga dari data/.env-cadangan.
+ */
+export function pulihkanEnv(root: string) {
+    const f = path.join(root, '.env');
+    const dataDir = process.env.KANTOR_DATA || path.join(root, 'data');
+    const cad = path.join(dataDir, '.env-cadangan');
+    try {
+        const kini = fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : '';
+        const lama = fs.existsSync(cad) ? fs.readFileSync(cad, 'utf8') : '';
+        const mKini = bacaEnv(kini), mLama = bacaEnv(lama);
+        const hilang = [...mLama.keys()].filter((k) => !mKini.has(k));
+        let baru = kini;
+        if (hilang.length) {
+            baru = `${kini.replace(/\s*$/, '')}${kini.trim() ? '\n' : ''}# Dipulihkan otomatis dari data/.env-cadangan (${new Date().toISOString().slice(0, 16)}):\n${hilang.map((k) => mLama.get(k)).join('\n')}\n`;
+            fs.writeFileSync(f, baru, { mode: 0o600 }); fs.chmodSync(f, 0o600);
+            envDipulihkan.push(...hilang);
+            console.warn(`[Kantor] .env kehilangan ${hilang.length} kunci (${hilang.join(', ')}); dipulihkan dari cadangan.`);
+        }
+        if (bacaEnv(baru).size) { fs.mkdirSync(dataDir, { recursive: true }); fs.writeFileSync(cad, baru, { mode: 0o600 }); fs.chmodSync(cad, 0o600); }
+    } catch (e: any) { console.warn('[Kantor] pengaman .env:', e?.message || e); }
+}
+
 export function loadConfig(): KantorConfig {
     const root = process.env.KANTOR_ROOT || process.cwd();
+    pulihkanEnv(root);
     loadDotEnv(path.join(root, '.env'));
 
     const configFile = process.env.KANTOR_CONFIG || path.join(root, 'kantor.config.json');
@@ -130,6 +164,13 @@ export function loadConfig(): KantorConfig {
     const env = process.env;
 
     const hermesHome = env.HERMES_HOME || file.hermesHome || path.join(os.homedir(), '.hermes');
+    // Kunci AI yang hilang dari .env kantor diambil dari .env Hermes (tempat Pak Rico biasanya mengisinya).
+    try {
+        const h = bacaEnv(fs.readFileSync(path.join(hermesHome, '.env'), 'utf8'));
+        for (const k of ['OPENROUTER_API_KEY', 'GEMINI_API_KEY', 'GROQ_API_KEY']) {
+            const raw = h.get(k); if (raw && env[k] === undefined) env[k] = raw.slice(raw.indexOf('=') + 1).trim().replace(/^['"]|['"]$/g, '');
+        }
+    } catch { /* tidak ada .env Hermes */ }
     const defaultBin = path.join(os.homedir(), '.local', 'bin', 'hermes');
 
     const agents: Record<string, AgentOverride> = {

@@ -13,6 +13,7 @@
  */
 import { execFile } from 'child_process';
 import ATUR_OTAK_FREELLM from './skrip/atur-otak-freellm.sh';
+import ATUR_PAGAR from './skrip/atur-pagar.sh';
 import fs from 'fs';
 import path from 'path';
 import type { RequestHandler, Express } from 'express';
@@ -157,6 +158,20 @@ export function pasangRutin(d: DepsRutin) {
             res.json({ ok: true, ...st });
         });
     });
+    // Pagar sistem: aturan di SOUL.md tiap AI + gerbang tulis Hermes untuk berkas penting (sekali per versi skrip).
+    setTimeout(() => {
+        const tanda = path.join(d.dataDir, 'pagar-versi.txt'), versi = String(ATUR_PAGAR.length);
+        try { if (fs.readFileSync(tanda, 'utf8').trim() === versi) return; } catch { /* belum */ }
+        const f = path.join(d.dataDir, 'atur-pagar.sh');
+        try { fs.writeFileSync(f, ATUR_PAGAR); } catch { return; }
+        execFile('bash', [f], { timeout: 60_000, env: { ...process.env, HERMES_HOME: d.hermesHome } }, (err, stdout) => {
+            if (err) { console.warn('[Pagar] gagal:', String(stdout || err.message).slice(-200)); return; }
+            try { fs.writeFileSync(tanda, versi); } catch { /* */ }
+            const n = /JUMLAH (\d+)/.exec(String(stdout))?.[1] || '0';
+            d.papan.catat({ ai: d.idHr, nama: '', judul: `Memasang aturan server di ${n} AI: tidak boleh mengubah berkas & layanan kantor`, sumber: 'sistem', status: 'selesai' });
+        });
+    }, 30_000);
+
     // Pak Rico minta (19 Nov 2026, "lakukan yang terbaik"): otak chat dipindah ke FreeLLM SEKALI otomatis begitu FreeLLM siap.
     // Kalau Bapak menekan "Kembalikan", berkas status tercatat dan ini tidak diulang.
     const otomatis = setInterval(() => {

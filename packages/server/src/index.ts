@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import zlib from 'zlib';
 import { MemoriTim } from './kantor/memoriTim';
 import { mulaiRiwayatNotif, daftarNotif, tandaiNotifDibaca } from './kantor/riwayatNotif';
@@ -8,11 +9,11 @@ import express from 'express';
 import { Server, matchMaker } from 'colyseus';
 import { createServer } from 'http';
 import { OfficeRoom } from './rooms/OfficeRoom';
-import { loadConfig } from './kantor/config';
+import { envDipulihkan, loadConfig } from './kantor/config';
 import { KantorAuth } from './kantor/auth';
 import { KategoriAi } from './kantor/kategoriAi';
 import { Rem } from './kantor/rem';
-import { Pencatat, telegramNotifier, ringkasanKeuangan, telegramSebagai, sambilMengetik, kategoriOf } from './kantor/pencatat';
+import { Pencatat, telegramNotifier, telegramRahasia, ringkasanKeuangan, telegramSebagai, sambilMengetik, kategoriOf } from './kantor/pencatat';
 import { TradingDesk, tradingCli, fetchPrice, marketOpen } from './kantor/trading';
 import { Kalender } from './kantor/kalender';
 import { Percakapan, Anggota, KuotaBerat, hermesSekali, jalankan as jalankanHermes } from './kantor/percakapan';
@@ -871,6 +872,20 @@ app.get('/api/kantor/papan', requireToken, async (req, res) => {
 const hr = new Hr(config.dataDir);
 if (!hr.st.reviewAt) { hr.st.reviewAt = Date.now() - (hr.hariReview - 7) * 86400_000; hr.simpan(); } // review pertama ±seminggu setelah dipasang (butuh data dulu)
 const kabariTelegram = telegramNotifier(config.hermesHome);
+// Pemulihan tanpa membuka VPS: kalau .env sempat tertimpa, kabari Pak Rico (nama kunci saja), dan kirim kata sandi sementara SEKALI ke Telegram.
+setTimeout(() => {
+    if (envDipulihkan.length) void kabariTelegram(`🛡️ Kantor: file .env sempat kehilangan ${envDipulihkan.length} pengaturan (${envDipulihkan.join(', ')}). Sudah dipulihkan otomatis dari cadangan.`).catch(() => undefined);
+    const sementara = auth.kataSandiSementara();
+    if (!sementara) return;
+    const tanda = path.join(config.dataDir, 'kantor-password-dikabari');
+    const sidik = crypto.createHash('sha256').update(sementara).digest('hex');
+    try { if (fs.readFileSync(tanda, 'utf8').trim() === sidik) return; } catch { /* belum pernah */ }
+    void telegramRahasia(config.hermesHome, [
+        '🔑 Kantor Virtual: KANTOR_PASSWORD tidak ada di .env, jadi kantor memakai kata sandi sementara:',
+        sementara,
+        'Masuk dengan itu, lalu (kalau mau) isi lagi KANTOR_PASSWORD di ~/kantor-virtual/.env dan mulai ulang layanan. Hapus pesan ini setelah dipakai.'
+    ].join('\n')).then((r) => { if (r === true) try { fs.writeFileSync(tanda, sidik, { mode: 0o600 }); } catch { /* */ } }).catch(() => undefined);
+}, 20_000);
 const namaJoni = () => roster().find((a) => a.id === ID_JONI)?.nama || 'Joni';
 /** Statistik N hari: gabungan bulan ini + bulan lalu (supaya awal bulan tidak terlihat kosong). */
 async function statHr(hari: number): Promise<StatAi[]> {

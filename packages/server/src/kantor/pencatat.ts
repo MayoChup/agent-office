@@ -663,6 +663,16 @@ export function telegramNotifier(hermesHome: string) {
     };
 }
 
+/** Pesan rahasia ke Telegram Pak Rico (mis. kata sandi sementara): TIDAK dicatat di riwayat notifikasi. true = terkirim. */
+export async function telegramRahasia(hermesHome: string, text: string): Promise<boolean> {
+    try {
+        const { token, chat } = teleCreds(hermesHome);
+        if (!token || !chat) return false;
+        const r = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: chat, text }) });
+        return r.ok;
+    } catch { return false; }
+}
+
 function teleCreds(hermesHome: string) {
     const env = fs.readFileSync(path.join(hermesHome, '.env'), 'utf8');
     const get = (k: string) => (env.match(new RegExp(`^${k}=(.*)$`, 'm'))?.[1] || '').trim().replace(/^["']|["']$/g, '');
