@@ -390,7 +390,7 @@ function Tambah({ ang, onClose, onSaved, awal, id }: { ang: Anggaran | null; onC
                 )}
                 {struk.info && <div className="k-struk-ok"><Ikon e="✅" /> {struk.info}</div>}
                 <div className="k-seg full">{[['Keluar', 'Pengeluaran'], ['Masuk', 'Pemasukan'], ['Antar Rekening', 'Transfer']].map(([k, l]) => <button key={k} className={jenis === k ? 'on' : ''} onClick={() => setJenis(k)}>{l}</button>)}</div>
-                <label className={`k-amount${nominalSalah ? ' salah-isi' : ''}`}><span>Rp</span><input inputMode="numeric" autoFocus={!struk.busy} placeholder="0" aria-invalid={!!nominalSalah} aria-describedby="k-nominal-pesan" style={nominal >= 10_000_000 ? { fontSize: nominal >= 1e9 ? 28 : 36 } : undefined} value={nominal ? nominal.toLocaleString('id-ID') : ''} onBlur={() => setDisentuh(true)} onChange={(e) => setN(e.target.value)} /></label>
+                <label className={`k-amount${nominalSalah ? ' salah-isi' : ''}`}><span>Rp</span><input inputMode="numeric" autoFocus={!struk.busy} placeholder="0" aria-invalid={!!nominalSalah} aria-describedby="k-nominal-pesan" style={nominal >= 10_000_000 ? { fontSize: nominal >= 1e9 ? 28 : 36 } : undefined} value={nominal ? nominal.toLocaleString('id-ID') : ''} onBlur={() => n !== '' && setDisentuh(true)} onChange={(e) => { setN(e.target.value); if (e.target.value) setDisentuh(true); }} /></label>
                 {nominalPesan && <div id="k-nominal-pesan" className={nominalSalah ? 'pesan-salah' : 'k-catatan'} role={nominalSalah ? 'alert' : undefined}>{nominalPesan}</div>}
                 <div className="k-cepat">{[10_000, 25_000, 50_000, 100_000].map((v) => <button key={v} type="button" onClick={() => setN(String(v))}>{v >= 1e6 ? `${v / 1e6}jt` : `${v / 1e3}rb`}</button>)}</div>
                 <div className="k-tgl">
@@ -404,7 +404,7 @@ function Tambah({ ang, onClose, onSaved, awal, id }: { ang: Anggaran | null; onC
                 <input className="input" placeholder={jenis === 'Masuk' ? 'Dari siapa? (mis. gaji kantor)' : 'Di mana? (mis. warung, Fore Coffee)'} value={pihak} onChange={(e) => setPihak(e.target.value)} />
                 <input className="input" placeholder="Beli apa / catatan (mis. nasi kuning)" value={ket} onChange={(e) => setKet(e.target.value)} />
                 {err && <div className="error">{err}</div>}
-                <button className="btn primary k-save" disabled={!nominal || busy} onClick={simpan} onPointerDown={() => setDisentuh(true)}>{busy ? 'Menyimpan…' : id ? 'Simpan perubahan' : 'Simpan ke Google Sheets'}</button>
+                <button className="btn primary k-save" disabled={!nominal || busy} onClick={simpan}>{busy ? 'Menyimpan…' : id ? 'Simpan perubahan' : 'Simpan ke Google Sheets'}</button>
             </div>
         </div>
     );
