@@ -73,9 +73,18 @@ if [ -n "${fl_url:-}" ] && [ "$(cat "$DIR/.freellm-size" 2>/dev/null)" != "$fl_s
 fi
 
 if [ -z "${asset_id:-}" ]; then log "Rilis belum punya paket, lewati."; exit 0; fi
-if [ -f "$STATE" ] && [ "$(cat "$STATE")" = "$asset_id" ]; then exit 0; fi
 
-log "Versi baru ditemukan (${commit}). Mengunduh..."
+# Sidik berkas aplikasi: kalau ada yang mengubah kantor di luar update (mis. AI di server), versi resmi dipasang ulang.
+sidik() { ( cd "$DIR" && { sha256sum kantor-server.js package.json 2>/dev/null; find ui -type f -print0 2>/dev/null | sort -z | xargs -0 sha256sum 2>/dev/null; } | sha256sum | cut -d' ' -f1 ); }
+SIDIK="$DIR/.deployed-sidik"
+if [ -f "$STATE" ] && [ "$(cat "$STATE")" = "$asset_id" ]; then
+  if [ ! -f "$SIDIK" ]; then sidik > "$SIDIK"; exit 0; fi           # versi lama belum punya sidik: catat sekarang
+  [ "$(sidik)" = "$(cat "$SIDIK")" ] && exit 0
+  log "Berkas kantor berubah di luar update. Memasang ulang versi resmi ${commit}..."
+  notify "🛡️ Berkas aplikasi Kantor Virtual diubah di luar update (kemungkinan oleh AI di server). Versi resmi dipasang ulang otomatis."
+fi
+
+log "Memasang versi ${commit}. Mengunduh..."
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 curl -fsSL -m 300 "$url" -o "$tmp/paket.tgz"
@@ -110,6 +119,7 @@ done
 
 if [ -n "$ok" ]; then
   echo "$asset_id" > "$STATE"
+  sidik > "$SIDIK"
   log "Update berhasil ke versi ${commit}."
   notify "✅ Kantor Virtual diperbarui ke versi ${commit}."
 else
@@ -121,8 +131,9 @@ else
   cp -a "$DIR/.previous/." "$DIR/"
   [ -f "$tmp/update-baru.sh" ] && cp "$tmp/update-baru.sh" "$DIR/kantor-update.sh" || true
   systemctl --user start kantor-virtual
-  # Tandai versi ini supaya tidak dicoba berulang-ulang.
+  # Tandai versi ini supaya tidak dicoba berulang-ulang (sidik = versi lama yang dipulihkan, supaya tidak dipasang ulang terus).
   echo "$asset_id" > "$STATE"
+  sidik > "$SIDIK"
   notify "⚠️ Update Kantor Virtual ke versi ${commit} gagal jalan, otomatis kembali ke versi lama. Cek log: journalctl --user -u kantor-virtual"
   exit 1
 fi
