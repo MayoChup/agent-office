@@ -499,3 +499,37 @@
   :root:root .nama-halaman { display: inline; font-size: 17px; font-weight: 600; }
   :root:root .brand-logo, :root:root .brand-sub { display: none; }
 }
+
+/* HP: menu utama di bawah, bagian halaman sebagai tab geser di atas */
+.subtab, .dock-utama { display: none; }
+@media (max-width: 767px) {
+  :root:root .menu-btn { display: none; }
+  :root:root .dock-utama { display: flex; gap: 2px; }
+  :root:root .dock-utama .dock-btn { flex: 1 1 0; min-width: 0; width: auto; position: relative; }
+  :root:root .dock-utama .dock-lbl { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  :root:root .dock-utama .badge { position: absolute; top: 4px; right: calc(50% - 22px); min-width: 16px; height: 16px; border-radius: 99px; background: var(--aksen-isi); color: #fff; font-size: 10px; line-height: 16px; text-align: center; padding: 0 4px; }
+  .subtab { display: flex; position: fixed; top: 56px; left: 0; right: 0; z-index: 30; height: 44px; gap: 4px; padding: 0 12px; overflow-x: auto; scrollbar-width: none; background: var(--kanvas); border-bottom: 1px solid var(--line); align-items: stretch; }
+  .subtab::-webkit-scrollbar { display: none; }
+  .subtab button { flex: none; border: none; background: none; color: var(--muted); font: inherit; font-size: 14px; font-weight: 500; padding: 0 10px; border-bottom: 2px solid transparent; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap; }
+  .subtab button.on { color: var(--text); border-bottom-color: var(--accent); }
+  .subtab .badge { min-width: 16px; height: 16px; border-radius: 99px; background: var(--naik-2); color: var(--text); font-size: 10px; line-height: 16px; text-align: center; padding: 0 4px; }
+  :root:root body:not(.tanpa-subnav) .page { top: 100px; }
+  :root:root .page, :root:root body.tanpa-subnav .page { bottom: 64px; }
+  /* Tab di dalam halaman yang sama dengan tab atas tidak perlu tampil dua kali */
+  :root:root body:not(.tanpa-subnav) .sm-tabs, :root:root body:not(.tanpa-subnav) .kr-tabs-dobel { display: none; }
+}
+/* Trading: 4 kelompok + sub-bagian */
+.tr-sub { display: inline-flex; gap: 2px; padding: 2px; margin: 12px 0 4px; border-radius: 10px; background: var(--naik); border: 1px solid var(--line); max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.tr-sub::-webkit-scrollbar { display: none; }
+.tr-sub button { flex: none; height: 32px; padding: 0 14px; border: none; border-radius: 8px; background: none; color: var(--muted); font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+.tr-sub button.on { background: var(--panel-solid); color: var(--text); box-shadow: 0 0 0 1px var(--line); }
+/* Halaman Tugas (gabungan Tugas + Papan kerja) */
+.tugas-hal { max-width: 1280px; margin: 0 auto; padding: 24px 32px 48px; display: flex; flex-direction: column; gap: 12px; height: 100%; box-sizing: border-box; }
+.tugas-kepala { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.tugas-kepala h2 { margin: 0; font-size: 28px; font-weight: 500; }
+.tugas-kepala .tr-sub { margin: 0; }
+.tugas-hal .tab-hidup { flex: 1; min-height: 0; display: flex; }
+.tugas-hal .tab-hidup[hidden] { display: none; }
+:root:root .tugas-hal .panel, :root:root .tugas-hal .papan { position: relative; inset: auto; top: auto; left: auto; right: auto; bottom: auto; width: 100%; max-width: none; height: auto; min-height: 60vh; flex: 1; animation: none; box-shadow: none; backdrop-filter: none; background: var(--panel-solid); border-radius: var(--r-kartu); }
+.tugas-hal .panel-head > .icon-btn, .tugas-hal .pk-saring > .icon-btn { display: none; }
+@media (max-width: 767px) { .tugas-hal { padding: 16px 12px 24px; } .tugas-kepala h2 { display: none; } }

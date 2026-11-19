@@ -1,4 +1,5 @@
 import { catatHalaman, daftarHalaman } from './kantor/kembali';
+import { TugasPage } from './pages/TugasPage';
 import React, { useEffect, useRef, useState } from 'react';
 import { eventBus } from './events';
 import { useKantor } from './kantor/store';
@@ -7,7 +8,6 @@ import { TopBar } from './components/TopBar';
 import { Nav, PageKey, SidePanel, KunciPanel } from './components/Nav';
 import { PapanPanel } from './components/PapanPanel';
 import { OrgPanel } from './components/OrgPanel';
-import { TasksPanel } from './components/TasksPanel';
 import { ChatPage } from './pages/ChatPage';
 import { ActivityPanel } from './components/ActivityPanel';
 import { AgentCard } from './components/AgentCard';
@@ -111,7 +111,6 @@ export function App() {
     }
 
     const closeAgent = () => eventBus.dispatchEvent(new CustomEvent('agent-select', { detail: { id: null } }));
-    const back = () => go('home');
 
     return (
         <>
@@ -132,7 +131,7 @@ export function App() {
                         {k === 'catatan' && <CatatanPage />}
                         {k === 'berkas' && <BerkasPage />}
                         {k === 'kr' && <KnowledgeReelsPage />}
-                        {k === 'tugas' && <TasksPanel onClose={back} />}
+                        {k === 'tugas' && <TugasPage />}
                         {k === 'obrolan' && <ChatPage key={`chat-${prefillKe}`} prefill={prefill} />}
                     </AktifCtx.Provider>
                 </main>

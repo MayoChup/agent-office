@@ -425,6 +425,22 @@ export function pasangSosmed(d: DepsSosmed) {
             res.json({ ok: true });
         });
     });
+    // Skill konten baru (mis. 12 skill Content Skills, 19 Nov 2026) dipasang otomatis ke tim yang SUDAH dibentuk, sekali per versi skill.
+    setTimeout(() => {
+        try {
+            if (!d.roster().some((x) => x.id === ID_SOSMED.kepala)) return;
+            const versi = fs.readdirSync(d.skillDir).sort().join(',') + '|' + d.aturSosmed.length;
+            const fv = path.join(d.dataDir, 'sosmed-skill-versi.txt');
+            if ((() => { try { return fs.readFileSync(fv, 'utf8'); } catch { return ''; } })() === versi) return;
+            const f = path.join(d.dataDir, 'atur-sosmed.sh'); fs.writeFileSync(f, d.aturSosmed);
+            const id = papan.catat({ ai: 'hr', nama: '', judul: 'Memasang skill konten baru ke Divisi Social Media', detail: 'virality, humanizer, reel-analyzer, hook-mining, reel-scripter, caption, kalender, carousel, comment-mining, trend-spotter, repurposer, analytics', sumber: 'tugas', status: 'proses' });
+            d.jalankanBerkas('bash', [f], { timeout: 300_000, env: { ...process.env, HERMES_HOME: d.hermesHome, KANTOR_SKILLS: d.skillDir } }, (err, stdout, stderr) => {
+                d.resetRoster();
+                if (err) { papan.ubah(id, 'gagal', String(stdout || stderr || err.message).trim().split('\n').slice(-2).join(' ').slice(0, 300)); return; }
+                fs.writeFileSync(fv, versi); papan.ubah(id, 'selesai', 'Skill terpasang ke Maya, Tara, Lala, Vino, Dea.');
+            });
+        } catch (e: any) { console.warn('[Sosmed] pasang skill:', e?.message || e); }
+    }, 90_000);
     app.post('/api/kantor/sosmed/jalankan', requireToken, sm((req) => {
         const c = ctxReq(req), jn = String(req.body?.jenis || ''), sb = sambungan(c.a), nm = P.PLATFORM[c.a.platform].nama, arahan = String(req.body?.arahan || '').trim().slice(0, 1500);
         if (jn === 'analisa') return latar(c, 'analisa', () => analisa(c));

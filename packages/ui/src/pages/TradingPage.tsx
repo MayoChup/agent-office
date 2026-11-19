@@ -115,7 +115,19 @@ export function TradingPage() {
     // Menu bawah HP: yang paling sering dipakai di depan, sisanya masuk "Lainnya".
     const IKON: Record<Tab, string> = { pilihan: '🎯', watchlist: '⭐', panas: '🟩', berita: '🪐', pasar: '🌐', penyaring: '🔍', investigasi: '🕵️', posisi: '💼', history: '📜', uji: '🧪' };
     const PENDEK: Partial<Record<Tab, string>> = { pilihan: 'Sinyal', panas: 'Heatmap', berita: 'Berita', posisi: 'Portofolio' };
-    useSubNav((['pilihan', 'watchlist', 'panas', 'berita', 'pasar', 'penyaring', 'investigasi', 'posisi', 'history', 'uji'] as Tab[]).map((k) => ({ k, ico: IKON[k], label: PENDEK[k] || TABS.find((t) => t.k === k)!.label })), tab, (k) => setTab(k as Tab));
+    // 10 tab dikelompokkan jadi 4 supaya tidak membingungkan; isi tiap tab tetap sama.
+    const GRUP: Array<{ g: string; label: string; ico: string; tabs: Tab[] }> = [
+        { g: 'sinyal', label: 'Sinyal', ico: '🎯', tabs: ['pilihan', 'penyaring', 'watchlist'] },
+        { g: 'pasar', label: 'Pasar', ico: '🌐', tabs: ['pasar', 'panas', 'berita'] },
+        { g: 'porto', label: 'Portofolio', ico: '💼', tabs: ['posisi', 'history'] },
+        { g: 'riset', label: 'Riset', ico: '🧪', tabs: ['investigasi', 'uji'] }
+    ];
+    const grupDari = (t: Tab) => GRUP.find((x) => x.tabs.includes(t))!;
+    const grupAktif = grupDari(tab);
+    const terakhirDi = (g: (typeof GRUP)[number]) => { try { const v = localStorage.getItem(`kantor:trading-grup-${g.g}`) as Tab; return g.tabs.includes(v) ? v : g.tabs[0]; } catch { return g.tabs[0]; } };
+    useEffect(() => { try { localStorage.setItem(`kantor:trading-grup-${grupAktif.g}`, tab); } catch { /* */ } }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
+    useSubNav(GRUP.map((g) => ({ k: g.g, ico: g.ico, label: g.label })), grupAktif.g, (k) => { const g = GRUP.find((x) => x.g === k)!; setTab(g.g === grupAktif.g ? tab : terakhirDi(g)); });
+    void IKON; void PENDEK;
     const buka = (s: string) => { setSaham(s); document.querySelector('.page:not([hidden]) .pg')?.scrollTo({ top: 0 }); };
     const perbarui = async () => { try { await apiPost('/api/kantor/screener/perbarui', { jenis: 'teknikal' }); setTimeout(() => sc.reload(), 1500); setTimeout(() => sc.reload(), 6000); } catch (e: any) { alert(`Gagal memulai: ${e?.message || e}`); } };
 
@@ -136,12 +148,17 @@ export function TradingPage() {
                     </div></div>
                 );
             })()}
-            <nav className="sb-nav">
-                {TABS.map((t) => <button key={t.k} className={tab === t.k && !saham ? 'on' : ''} onClick={() => setTab(t.k)}>{t.label}</button>)}
-                <span className="sb-nav-judul">{TABS.find((t) => t.k === tab)?.label}</span>
+            <nav className="sb-nav tr-grup">
+                {GRUP.map((g) => <button key={g.g} className={grupAktif.g === g.g && !saham ? 'on' : ''} onClick={() => setTab(g.g === grupAktif.g ? tab : terakhirDi(g))}>{g.label}</button>)}
+                <span className="sb-nav-judul">{grupAktif.label}</span>
                 <span className="sb-nav-sp" />
                 {sc.data?.sibuk ? <span className="sb-busy"><Ikon e="⏳" /> {sc.data.progres}</span> : <button className="sb-refresh" onClick={() => { perbarui(); reload(); }} title="Ambil data terbaru"><Ikon e="↻" /></button>}
             </nav>
+            {!saham && grupAktif.tabs.length > 1 && (
+                <div className="tr-sub" role="tablist" aria-label={`Bagian ${grupAktif.label}`}>
+                    {grupAktif.tabs.map((k) => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{TABS.find((t) => t.k === k)!.label}</button>)}
+                </div>
+            )}
             {saham && <><HorisonBar h={horison} setH={setHorison} bobot={infoDetail?.bobot} bukti={infoDetail?.bukti ?? (sc.data as any)?.teknikalBukti} /><SahamDetail key={saham} onInfo={setInfoDetail} onMemuat={setDetailMemuat} simbol={saham} H={H} q={qApi} preset={preset} setPreset={setPreset} mode={modeAktif} pd={pd.data} onBack={() => setSaham(null)} /></>}
             {!saham && ['pasar', 'pilihan', 'panas', 'watchlist'].includes(tab) && !sc.data && <div className="fin-empty">{sc.error ? `Gagal memuat: ${sc.error}` : 'Memuat data pasar…'}</div>}
             {!saham && ['pasar', 'pilihan', 'panas'].includes(tab) && sc.data && sc.data.baris.length === 0 && (
