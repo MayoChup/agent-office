@@ -748,3 +748,18 @@ button.hz-tgl.on { background: var(--panel-solid); color: var(--text); }
 .sb-tahan { font-size: 12px; color: var(--warn); background: var(--lb-t-bg); border-radius: var(--r-kontrol); padding: 4px 8px; margin: 4px 0 0; }
 .sb-tahan-ringkas { font-size: 13px; color: var(--muted); border: 1px solid var(--line); border-left: 2px solid var(--warn); border-radius: var(--r-kontrol); padding: 8px 12px; margin: 0 0 12px; }
 .pp-trail { color: var(--warn); font-size: 11px; }
+/* Preset by AI */
+.ai-kartu { margin-top: 12px; padding: 14px 16px; border-radius: var(--r-kartu); border: 1px solid var(--aksen-garis); background: var(--aksen-lembut); display: grid; gap: 10px; }
+.ai-h { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; align-items: baseline; }
+.ai-h b { font-weight: 600; }
+.ai-h small, .ai-kartu small { color: var(--muted); font-size: 12px; }
+.ai-juara, .ai-penantang { display: grid; gap: 4px; }
+.ai-juara ul { margin: 0; padding-left: 18px; }
+.ai-juara li { font-weight: 500; }
+.ai-juara p, .ai-penantang p, .ai-catatan { margin: 0; font-size: 14px; }
+.ai-penantang { padding-top: 10px; border-top: 1px solid var(--line); }
+.ai-catatan { color: var(--muted); }
+.ai-riwayat-b { justify-self: start; border: 0; background: transparent; color: var(--accent); font: inherit; font-size: 13px; padding: 0; cursor: pointer; min-height: 32px; }
+.ai-riwayat { margin: 0; padding-left: 18px; font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
+.ai-riwayat time { color: var(--text); margin-right: 6px; }
+.ai-cara { line-height: 1.5; }

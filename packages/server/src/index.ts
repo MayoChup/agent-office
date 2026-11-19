@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { teksAturan } from './kantor/presetAi';
 import zlib from 'zlib';
 import { MemoriTim } from './kantor/memoriTim';
 import { mulaiRiwayatNotif, daftarNotif, tandaiNotifDibaca } from './kantor/riwayatNotif';
@@ -616,7 +617,7 @@ app.get('/api/kantor/saham-detail/:s', requireToken, (req, res) => {
 app.get('/api/kantor/preset', requireToken, (_req, res) => { res.json({ ok: true, preset: presetInfo(), rekomendasi: REKOMENDASI, rekomendasiUji: rekomendasiUji(fileUji(config.dataDir)), statusUji: statusPreset(fileUji(config.dataDir)) }); });
 // Uji mundur (backtest) — berjalan di latar belakang ±20–40 menit untuk ±500 saham.
 const statusUji: StatusUji = { jalan: false, progres: '', mulai: 0, selesai: 0, galat: '' };
-const UJI_HARI = 30; // uji mundur otomatis tiap ±30 hari
+const UJI_HARI = 7; // uji mundur otomatis tiap minggu (akhir pekan WIB) — sekaligus memperbarui Preset by AI
 function umurUji() { try { return JSON.parse(fs.readFileSync(fileUji(config.dataDir), 'utf8')).at as number; } catch { return 0; } }
 function bacaSaran() { try { return JSON.parse(fs.readFileSync(fileSaran(config.dataDir), 'utf8')); } catch { return null; } }
 /** Setelah uji selesai: rekomendasi per horison (dihitung dari angka) + penjelasan bahasa awam oleh AI gratis. */
@@ -644,11 +645,21 @@ function jalankanUji(sebab: string) {
 setInterval(() => {
     try {
         const hari = new Date(Date.now() + 7 * 3600_000).getUTCDay();
-        if ((hari === 6 || hari === 0) && Date.now() - umurUji() > UJI_HARI * 86400_000 && screener.daftarSimbol().length) jalankanUji('otomatis bulanan');
+        if ((hari === 6 || hari === 0) && Date.now() - umurUji() > (UJI_HARI - 1) * 86400_000 && screener.daftarSimbol().length) jalankanUji('otomatis mingguan');
         else if (umurUji() && (!bacaSaran() || (!bacaSaran().teks && Date.now() - (bacaSaran().dibuat || 0) > 6 * 3600_000))) buatSaran().catch(() => {}); // AI gagal → coba lagi tiap 6 jam
     } catch { /* coba lagi jam berikutnya */ }
 }, 3600_000);
 setTimeout(() => { if (umurUji() && !bacaSaran()) buatSaran().catch(() => {}); }, 60_000);
+// Preset by AI: juara & penantang per gaya posisi (teknikal) dan per 20/60 hari (fundamental).
+app.get('/api/kantor/preset-ai', requireToken, (_req, res) => {
+    const st = screener.presetAi.status();
+    const isi = (jenis: 'teknikal' | 'fundamental') => Object.fromEntries(Object.entries(st[jenis] || {}).map(([H, x]) => [H, {
+        ...x,
+        juara: { ...x.juara, teks: x.juara.aturan ? teksAturan(jenis, x.juara.aturan) : null },
+        penantang: x.penantang ? { ...x.penantang, teks: teksAturan(jenis, x.penantang.aturan) } : null
+    }]));
+    res.json({ ok: true, teknikal: isi('teknikal'), fundamental: isi('fundamental'), ujiTerakhir: umurUji(), berikutnya: umurUji() ? umurUji() + UJI_HARI * 86400_000 : 0, jalan: statusUji.jalan, progres: statusUji.progres });
+});
 app.get('/api/kantor/ujimundur', requireToken, (_req, res) => {
     let hasil = null; try { hasil = JSON.parse(fs.readFileSync(fileUji(config.dataDir), 'utf8')); } catch { /* belum ada */ }
     const at = hasil?.at || 0;

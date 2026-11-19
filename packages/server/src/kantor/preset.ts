@@ -11,6 +11,8 @@ export interface Ind {
     hi52: number; lo52: number; hi20prev: number; lo20: number; rentang20: number;
     rs3: number | null; rs6: number | null; rsi2: number | null; rsi14: number | null; adx: number | null;
     posisiHari: number | null; chg1d: number; volX: number; harga: number; pasarNaik: boolean | null;
+    /** Tambahan untuk Preset by AI (boleh kosong di data lama). */
+    bbPctB?: number | null; bbSqueeze?: boolean | null; stochK?: number | null; mfi?: number | null; gapPct?: number | null; ekorBawah?: boolean | null;
 }
 const avg = (a: number[]) => a.reduce((x, y) => x + y, 0) / Math.max(1, a.length);
 const smaAt = (c: number[], n: number, back = 0) => (c.length - back >= n ? avg(c.slice(c.length - back - n, c.length - back)) : null);
@@ -38,8 +40,9 @@ function adxN(h: number[], l: number[], c: number[], n = 14): number | null {
     for (let i = n; i < dx.length; i++) adx = (adx * (n - 1) + dx[i]) / n;
     return +adx.toFixed(1);
 }
-export function hitungInd(d: { h: number[]; l: number[]; c: number[]; v: number[] }, spy: { c: number[] } | null, pasarNaik: boolean | null): Ind {
+export function hitungInd(d: { h: number[]; l: number[]; c: number[]; v: number[]; o?: number[] }, spy: { c: number[] } | null, pasarNaik: boolean | null): Ind {
     const { h, l, c, v } = d; const n = c.length; const last = c[n - 1];
+    const tambahan = indTambahan(d);
     const e20 = emaSeri(c, 20);
     const ret = (x: number[], k: number) => (x.length > k ? (x[x.length - 1] / x[x.length - 1 - k] - 1) * 100 : null);
     const rs = (k: number) => { const a = ret(c, k), b = spy ? ret(spy.c, k) : null; return a != null && b != null ? +(a - b).toFixed(1) : null; };
@@ -55,8 +58,42 @@ export function hitungInd(d: { h: number[]; l: number[]; c: number[]; v: number[
         hi20prev: hi20, lo20, rentang20: +((Math.max(...h.slice(Math.max(0, n - 20))) / lo20 - 1) * 100).toFixed(1),
         rs3: rs(63), rs6: rs(126), rsi2: rsiN(c.slice(-60), 2), rsi14: rsiN(c, 14), adx: adxN(h, l, c),
         posisiHari: h[n - 1] > l[n - 1] ? +((last - l[n - 1]) / (h[n - 1] - l[n - 1])).toFixed(2) : null,
-        chg1d: +((last / c[n - 2] - 1) * 100).toFixed(2), volX: avgV ? +(v[n - 1] / avgV).toFixed(2) : 0, harga: last, pasarNaik
+        chg1d: +((last / c[n - 2] - 1) * 100).toFixed(2), volX: avgV ? +(v[n - 1] / avgV).toFixed(2) : 0, harga: last, pasarNaik,
+        ...tambahan
     };
+}
+
+/** Bollinger %B & "squeeze", Stochastic %K, MFI, gap pembukaan, ekor bawah candle (untuk Preset by AI). */
+function indTambahan(d: { h: number[]; l: number[]; c: number[]; v: number[]; o?: number[] }) {
+    const { h, l, c, v, o } = d; const n = c.length;
+    const out: { bbPctB: number | null; bbSqueeze: boolean | null; stochK: number | null; mfi: number | null; gapPct: number | null; ekorBawah: boolean | null } = { bbPctB: null, bbSqueeze: null, stochK: null, mfi: null, gapPct: null, ekorBawah: null };
+    const sd = (a: number[]) => { const m = avg(a); return Math.sqrt(avg(a.map((x) => (x - m) ** 2))); };
+    if (n >= 20) {
+        const w = c.slice(-20), m = avg(w), s = sd(w);
+        out.bbPctB = s > 0 ? +((c[n - 1] - (m - 2 * s)) / (4 * s)).toFixed(3) : null;
+        if (n >= 140) {
+            const lebar: number[] = [];
+            for (let k = n - 120; k <= n; k++) { const ww = c.slice(k - 20, k), mm = avg(ww); if (mm > 0) lebar.push((4 * sd(ww)) / mm); }
+            const kini = lebar[lebar.length - 1], urut = [...lebar].sort((a, b) => a - b);
+            out.bbSqueeze = kini <= urut[Math.floor(urut.length * 0.2)];
+        }
+    }
+    if (n >= 16) {
+        const k3: number[] = [];
+        for (let k = n - 3; k < n; k++) { const hh = Math.max(...h.slice(k - 13, k + 1)), ll = Math.min(...l.slice(k - 13, k + 1)); k3.push(hh > ll ? ((c[k] - ll) / (hh - ll)) * 100 : 50); }
+        out.stochK = +avg(k3).toFixed(1);
+    }
+    if (n >= 16) {
+        let pos = 0, neg = 0;
+        for (let k = n - 14; k < n; k++) { const tp = (h[k] + l[k] + c[k]) / 3, tp0 = (h[k - 1] + l[k - 1] + c[k - 1]) / 3, mf = tp * v[k]; if (tp > tp0) pos += mf; else if (tp < tp0) neg += mf; }
+        out.mfi = neg === 0 ? 100 : +(100 - 100 / (1 + pos / neg)).toFixed(1);
+    }
+    if (o && o.length === n && n >= 2) {
+        out.gapPct = +((o[n - 1] / c[n - 2] - 1) * 100).toFixed(2);
+        const rng = h[n - 1] - l[n - 1];
+        out.ekorBawah = rng > 0 ? (Math.min(o[n - 1], c[n - 1]) - l[n - 1]) / rng >= 0.35 && (c[n - 1] - l[n - 1]) / rng >= 0.5 : null;
+    }
+    return out;
 }
 
 /* ── Fundamental (dari Nasdaq; cadangan SEC) ── */

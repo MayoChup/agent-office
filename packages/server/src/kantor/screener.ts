@@ -1,4 +1,5 @@
 import fs from 'fs';
+import { PresetAi, aturanDari, maskTeknikal, maskFundamental } from './presetAi';
 import path from 'path';
 import { Ekstra, Berita, Orang, ekstra, skorTeknikal, skorFundamental, skorBerita, skorWhales, gabung, bobot, proyeksi, Proyeksi, ambilBerita, ambilOrangDalam, bacaLaporanSari, Faktor, label } from './skor';
 
@@ -132,7 +133,7 @@ async function harian(s: string) {
 }
 
 let secGalat = '';
-async function secJson(url: string): Promise<any | null> {
+export async function secJson(url: string): Promise<any | null> {
     try {
         const res = await fetch(url, { headers: { 'User-Agent': SEC_UA, Accept: 'application/json' }, signal: AbortSignal.timeout(30_000) });
         if (!res.ok) { if (res.status !== 404) secGalat = `SEC HTTP ${res.status}${res.status === 403 || res.status === 429 ? ' (server diblokir/dibatasi SEC)' : ''}`; return null; }
@@ -154,7 +155,7 @@ export async function kapNasdaq(): Promise<Map<string, { mcap: number; industri:
     return m;
 }
 /** Satu konsep untuk semua perusahaan dalam satu periode → Map<CIK, nilai>. */
-async function frame(tax: string, konsep: string, unit: string, periode: string): Promise<Map<number, number>> {
+export async function frame(tax: string, konsep: string, unit: string, periode: string): Promise<Map<number, number>> {
     const j = await secJson(`https://data.sec.gov/api/xbrl/frames/${tax}/${konsep}/${unit}/${periode}.json`);
     const m = new Map<number, number>();
     for (const d of j?.data || []) if (Number.isFinite(d.val)) m.set(Number(d.cik), Number(d.val));
@@ -174,6 +175,7 @@ export class Screener {
     terkait?: BeritaTerkait;
     bersihkanCache() { this.cacheData.clear(); }
     constructor(dataDir: string, private watchlist: () => string[], private deskDir = '') {
+        this.presetAi = new PresetAi(dataDir);
         this.fileBobot = path.join(dataDir, 'bobot-teknikal.json');
         const dir = path.join(dataDir, 'screener');
         fs.mkdirSync(path.join(dir, 'spark'), { recursive: true });
@@ -237,8 +239,9 @@ export class Screener {
             whales: skorWhales(b, b.x, this.st.orang?.[b.s], sari.get(b.s) || 0)
         };
         // Preset guru aktif: skor faktor ikut kepatuhan preset (tidak harus lolos semua kriteria).
+        // Tanpa preset guru = "Preset by AI": kombinasi juara dari uji mundur untuk gaya ini (kalau sudah ada).
         for (const [k, id, data] of [['teknikal', pt, b.ind], ['fundamental', pf, b.f]] as const) {
-            const p = id && PRESET.find((x) => x.id === id && x.jenis === k);
+            const p = id ? PRESET.find((x) => x.id === id && x.jenis === k) : this.presetAiUntuk(k, H, b);
             if (!p) continue;
             const ev = evaluasi(p, data);
             if (ev.persen == null) continue;
@@ -275,6 +278,16 @@ export class Screener {
         const sk = +(Math.sign(g.skor) * Math.min(Math.abs(g.skor), 0.14)).toFixed(2);
         return { skor: sk, label: 'Tahan', asli: g.label, kurang, alasan: [`⏸ Sinyal ${g.label} ditahan: data ${kurang.join(', ')} belum siap. Sinyal baru keluar kalau teknikal, fundamental, berita & whales lengkap (skor asli ${g.skor}).`, ...g.alasan] };
     }
+    /** Preset by AI sebagai objek preset biasa (kriteria = aturan kombinasi juara). null = juara masih rumus dasar. */
+    readonly presetAi: PresetAi;
+    private presetAiUntuk(jenis: 'teknikal' | 'fundamental', H: number, b: Baris) {
+        const hm = jenis === 'teknikal' ? hModel(H) : H > 20 ? 60 : 20;
+        const aturan = this.presetAi.aktif(jenis, hm); if (!aturan) return undefined;
+        const A = aturanDari(jenis);
+        const ctx = jenis === 'teknikal' ? (b.ind ? { ind: b.ind, b } : null) : b.f;
+        const kriteria = aturan.map((key) => { const a = A.find((x) => x.k === key)!; return { t: a?.t || key, f: () => (ctx && a ? a.f(ctx as any) : null) }; });
+        return { id: 'ai', jenis, nama: `Preset by AI (${aturan.length} indikator)`, guru: 'AI', ringkas: '', info: '', cocok: [], kriteria } as any;
+    }
     /** Sesi bursa terakhir yang sudah dihitung (tanggal AS). */
     sesi() { return this.st.teknikalSesi || ''; }
     /** Potret sinyal harian lengkap (4 faktor + gabungan) untuk arsip: per saham & per gaya posisi H, plus kepatuhan tiap preset guru. */
@@ -290,7 +303,8 @@ export class Screener {
             }
             const g: Record<string, number> = {};
             for (const p of PRESET) { const e = evaluasi(p, p.jenis === 'teknikal' ? b.ind : b.f); if (e.persen != null) g[p.id] = e.persen; }
-            return { s: b.s, c: b.harga, L, g };
+            // a / fa: aturan Preset by AI yang terpenuhi hari ini (untuk menguji kombinasi di sinyal nyata nanti).
+            return { s: b.s, c: b.harga, L, g, a: maskTeknikal(b.ind, b), fa: b.f ? maskFundamental(b.f as any) : 0 };
         });
         return { tgl: this.st.teknikalSesi, at: Date.now(), spy: this.st.spyC ?? null, baris };
     }

@@ -5,6 +5,9 @@ import { ekstra, proyeksi, skorTeknikal, label } from './skor';
 import { hitungInd, PRESET, evaluasi } from './preset';
 import { hargaPanjang, Bar } from './harga';
 import { fitur, ridge, nilaiMask, keSkor, FITUR, Model, statusModel } from './bobot';
+import { skorFundamental } from './skor';
+import { maskTeknikal, maskFundamental, cariKombinasi, PresetAi, ujiArsip, HasilCari } from './presetAi';
+import { bangunFundHistori } from './fundHistori';
 
 /**
  * Uji mundur (backtest) skor teknikal & preset guru:
@@ -45,6 +48,13 @@ export async function ujiMundur(semesta: string[], file: string, st: StatusUji, 
         // Sampel mentah untuk mencari bobot dari data: tanggal, selisih vs pasar, ciri teknikal (bitmask), skor lama.
         const S: Record<number, { tgl: string[]; ex: number[]; mask: number[]; lama: number[] }> = {};
         for (const H of HS) S[H] = { tgl: [], ex: [], mask: [], lama: [] };
+        // Preset by AI: bitmask aturan teknikal (semua gaya) & fundamental (gaya 20 & 60 hari) + skor rumus fundamental dasar.
+        const SA: Record<number, { tgl: string[]; ex: number[]; mask: number[] }> = {};
+        const SF: Record<number, { tgl: string[]; ex: number[]; mask: number[]; dasar: number[] }> = {};
+        for (const H of HS) SA[H] = { tgl: [], ex: [], mask: [] };
+        for (const H of [20, 60]) SF[H] = { tgl: [], ex: [], mask: [], dasar: [] };
+        let fundPada: Awaited<ReturnType<typeof bangunFundHistori>> = null;
+        try { fundPada = await bangunFundHistori(path.dirname(file), new Date().getUTCFullYear() - Math.ceil(opsi.tahun), (t) => { st.progres = t; }); } catch (e: any) { console.warn('[Uji mundur] fundamental lampau:', e?.message || e); }
         let ok = 0, gagal = 0, sampel = 0, dari = '', sampai = '';
         for (let si = 0; si < semesta.length; si++) {
             const s = semesta[si];
@@ -62,8 +72,12 @@ export async function ujiMundur(semesta: string[], file: string, st: StatusUji, 
                 const b = { sinyal: a.sinyal, rsi: a.rsi, ma200: a.ma200, chg1m: a.chg1m, chg1d: a.chg1d, volX: a.volX, x };
                 const spyS = spy.slice(0, js + 1).map((z) => z.c);
                 const sm50 = spyS.slice(-50).reduce((p, q) => p + q, 0) / 50;
-                const ind = hitungInd({ h: hs, l: ls, c: cs, v: vs }, { c: spyS }, spyS[spyS.length - 1] > sm50);
+                const ind = hitungInd({ h: hs, l: ls, c: cs, v: vs, o: os }, { c: spyS }, spyS[spyS.length - 1] > sm50);
                 const mask = fitur({ ...b, harga: cs[cs.length - 1] }, ind);
+                const maskA = maskTeknikal(ind, b);
+                const rasio = fundPada ? fundPada(s, d[t].t, c[t]) : null;
+                const maskF = rasio ? maskFundamental(rasio) : 0;
+                const dasarF = rasio ? (skorFundamental({ f: rasio, sektor: '' })?.skor ?? 0) : 0;
                 const beta = betaDi(d, t, spy, spyIdx);
                 const evs = PRESET.filter((p) => p.jenis === 'teknikal').map((p) => ({ id: p.id, e: evaluasi(p, ind) }));
                 for (const H of HS) {
@@ -79,6 +93,8 @@ export async function ujiMundur(semesta: string[], file: string, st: StatusUji, 
                     for (const pe of evs) { if (pe.e.persen == null) continue; tambah(r.preset[pe.id][pe.e.persen >= 75 ? 'lolos75' : pe.e.persen >= 50 ? 'lolos50' : 'kurang'], ex); }
                     (skorPerH[H] ||= []).push({ sk: f.skor, ex });
                     const z = S[H]; z.tgl.push(d[t].t); z.ex.push(ex); z.mask.push(mask); z.lama.push(f.skor);
+                    const za = SA[H]; za.tgl.push(d[t].t); za.ex.push(ex); za.mask.push(maskA);
+                    if (rasio && SF[H]) { const zf = SF[H]; zf.tgl.push(d[t].t); zf.ex.push(ex); zf.mask.push(maskF); zf.dasar.push(dasarF); }
                     sampel++;
                 }
                 if (!dari || d[t].t < dari) dari = d[t].t;
@@ -116,6 +132,32 @@ export async function ujiMundur(semesta: string[], file: string, st: StatusUji, 
         const bobotH: Record<number, any> = {};
         for (const H of HS) { const m = latihUji(S[H], H, opsi.langkah); if (m) { model[H] = m; bobotH[H] = ringkasModel(m); } }
         (hasil as any).bobot = { batas: BATAS, H: bobotH };
+        // Preset by AI: cari kombinasi terbaik per gaya, lalu jalankan aturan juara vs penantang.
+        st.progres = 'Preset by AI: mencari kombinasi indikator terbaik…';
+        await new Promise((r) => setImmediate(r));
+        const pai = new PresetAi(path.dirname(file));
+        const ringkasCari = (c: HasilCari | null) => c && { dasar: c.dasar, teratas: c.teratas, terbaik: c.terbaik, juaraLama: c.juaraLama, sampel: c.sampel };
+        const cariT: Record<number, any> = {}, cariF: Record<number, any> = {};
+        for (const H of HS) {
+            const c = cariKombinasi('teknikal', SA[H], H, opsi.langkah, BATAS, pai.aktif('teknikal', H));
+            const m = model[H]; const bk = m?.uji?.baru?.label?.['Beli kuat']?.rataEx, sm = m?.uji?.baru?.semua?.rataEx;
+            const dasarUnggul = m?.lulus && bk != null ? +(bk - Math.max(0, sm ?? 0)).toFixed(3) : 0;
+            pai.perbarui('teknikal', H, c, dasarUnggul, (a) => ujiArsip(path.dirname(file), 'teknikal', a, H));
+            cariT[H] = ringkasCari(c);
+            await new Promise((r) => setImmediate(r));
+        }
+        for (const H of [20, 60]) {
+            const z = SF[H]; if (!z) continue;
+            const c = cariKombinasi('fundamental', z, H, opsi.langkah, BATAS, pai.aktif('fundamental', H));
+            // Rumus fundamental dasar: rata-rata saham berlabel "Beli kuat" (skor ≥ 0,45) di data uji, dibanding rata-rata semua.
+            const u = z.tgl.map((t, i) => (t >= BATAS ? i : -1)).filter((i) => i >= 0);
+            const bk = u.filter((i) => z.dasar[i] >= 0.45);
+            const mean = (ix: number[]) => (ix.length ? (ix.reduce((a, i) => a + z.ex[i], 0) / ix.length) * 100 : 0);
+            const dasarUnggul = bk.length >= 100 ? +(mean(bk) - Math.max(0, mean(u))).toFixed(3) : 0;
+            pai.perbarui('fundamental', H, c, Math.max(0, dasarUnggul), (a) => ujiArsip(path.dirname(file), 'fundamental', a, H));
+            cariF[H] = ringkasCari(c);
+        }
+        (hasil as any).presetAi = { teknikal: cariT, fundamental: cariF, fundamentalSampel: Object.fromEntries(Object.entries(SF).map(([k, v]) => [k, v.tgl.length])) };
         fs.writeFileSync(fileBobot(path.dirname(file)), JSON.stringify(model));
         fs.writeFileSync(file, JSON.stringify(hasil));
         st.selesai = Date.now(); st.progres = `selesai: ${ok} saham, ${sampel.toLocaleString('id-ID')} sampel`;
