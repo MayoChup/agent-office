@@ -246,7 +246,34 @@ export class Screener {
             const sk = Math.max(-1, Math.min(1, 0.55 * (ev.persen / 50 - 1) + 0.45 * base));
             f[k] = { skor: +sk.toFixed(2), label: label(sk), alasan: [`${ev.persen >= 50 ? '+' : '−'} preset ${p.guru} — ${p.nama}: lolos ${ev.lolos}/${ev.dinilai} kriteria (${ev.persen}%), bobot 55% dari skor ini`, ...(f[k]?.alasan || []).map((a) => (/^[+−]/.test(a) ? `${a[0]} ${a.slice(1).trim()}` : a))] };
         }
-        return { semua: gabung(f, H, mode, this.teknikalTerbukti(H, mode).terbukti), ...f };
+        return { semua: this.gerbang(b, gabung(f, H, mode, this.teknikalTerbukti(H, mode).terbukti)), ...f };
+    }
+
+    /**
+     * Kesiapan data 4 indikator untuk satu saham. Sinyal Beli/Jual hanya boleh keluar kalau SEMUA siap
+     * (permintaan Pak Rico, 19 Nov 2026: pernah ada sinyal terkirim padahal data fundamentalnya kosong).
+     *  - teknikal: harga & indikator harian dari sesi bursa ≤5 hari lalu
+     *  - fundamental: minimal 3 dari 6 rasio (ROE, PER, PBV, DER, margin, pertumbuhan pendapatan), data SEC ≤21 hari
+     *  - berita: berita 7 hari sudah diambil ≤4 hari lalu (boleh nol judul = memang sepi berita)
+     *  - whales: aliran dana dari volume (CMF/OBV) tersedia
+     */
+    kesiapan(b: Baris): string[] {
+        const kini = Date.now(), kurang: string[] = [];
+        if (!b.x || !b.harga || b.rsi == null || kini - (this.st.teknikalAt || 0) > 5 * 86400_000) kurang.push('teknikal');
+        const f = b.f as any;
+        const rasio = f ? ['roe', 'per', 'pbv', 'der', 'npm', 'revGrowth'].filter((k) => f[k] != null && Number.isFinite(+f[k])).length : 0;
+        if (rasio < 3 || kini - (this.st.fundamentalAt || 0) > 21 * 86400_000) kurang.push('fundamental');
+        const br = this.st.berita?.[b.s];
+        if (!br || kini - (br.at || 0) > 4 * 86400_000) kurang.push('berita');
+        if (!b.x || !Number.isFinite(b.x.cmf) || !Number.isFinite(b.x.obv)) kurang.push('whales');
+        return kurang;
+    }
+    /** Sinyal Beli/Jual dengan data belum lengkap → ditahan jadi "Tahan" (skor dipersempit ke zona Tahan, label asli disimpan). */
+    private gerbang(b: Baris, g: Faktor): Faktor {
+        const kurang = this.kesiapan(b);
+        if (!kurang.length || g.label === 'Tahan') return { ...g, kurang };
+        const sk = +(Math.sign(g.skor) * Math.min(Math.abs(g.skor), 0.14)).toFixed(2);
+        return { skor: sk, label: 'Tahan', asli: g.label, kurang, alasan: [`⏸ Sinyal ${g.label} ditahan: data ${kurang.join(', ')} belum siap. Sinyal baru keluar kalau teknikal, fundamental, berita & whales lengkap (skor asli ${g.skor}).`, ...g.alasan] };
     }
     /** Sesi bursa terakhir yang sudah dihitung (tanggal AS). */
     sesi() { return this.st.teknikalSesi || ''; }
@@ -285,8 +312,8 @@ export class Screener {
         const pT = PRESET.find((x) => x.id === pt), pF = PRESET.find((x) => x.id === pf);
         const baris = this.st.baris.map((b) => {
             const sk = this.skor(b, sari, H, mode, pt, pf);
-            const ringkas: Record<string, { skor: number; label: string } | null> = {};
-            for (const k of Object.keys(sk)) ringkas[k] = sk[k] ? { skor: sk[k]!.skor, label: sk[k]!.label } : null;
+            const ringkas: Record<string, { skor: number; label: string; kurang?: string[]; asli?: string } | null> = {};
+            for (const k of Object.keys(sk)) ringkas[k] = sk[k] ? { skor: sk[k]!.skor, label: sk[k]!.label, ...(k === 'semua' && sk[k]!.kurang?.length ? { kurang: sk[k]!.kurang, asli: sk[k]!.asli } : {}) } : null;
             const preset: Record<string, { lolos: number; dinilai: number; persen: number | null }> = {};
             if (pT) { const e = evaluasi(pT, b.ind); preset.teknikal = { lolos: e.lolos, dinilai: e.dinilai, persen: e.persen }; }
             if (pF) { const e = evaluasi(pF, b.f); preset.fundamental = { lolos: e.lolos, dinilai: e.dinilai, persen: e.persen }; }
@@ -304,7 +331,11 @@ export class Screener {
         }
         const sektor = Array.from(sek.entries()).map(([k, e]) => ({ nama: k, n: e.n, chg: +(e.s / e.w).toFixed(2) })).sort((a, b) => b.chg - a.chg);
         const pasar = { naik, turun, tetap: baris.length - naik - turun, mcap, sektor, tape: this.st.tape || [] };
-        return { horizon: H, mode, bobot: bobot(H, mode, this.teknikalTerbukti(H, mode).terbukti), teknikalBukti: this.teknikalTerbukti(H, mode), baris, pasar, beritaAt: this.st.beritaAt || 0, teknikalAt: this.st.teknikalAt, teknikalSesi: this.st.teknikalSesi, fundamentalAt: this.st.fundamentalAt, sibuk: this.sibuk, progres: this.progres, gagal: this.st.gagal.length, galat: [statusHarga.galat, ...['fundamental', 'berita', 'kap'].map((k) => (this.st.baris.length ? this.st.status?.[k]?.galat : '') || '')].filter(Boolean).join('\n'), sumber: statusHarga.sumber, status: this.st.status || {} };
+        // Ringkasan sinyal yang ditahan karena data belum lengkap (ditampilkan di tab Sinyal).
+        const perF: Record<string, number> = {}; let nTahan = 0;
+        for (const b of baris) { const k = (b.skor as any)?.semua?.kurang as string[] | undefined; if (!k?.length || !(b.skor as any).semua.asli) continue; nTahan++; for (const x of k) perF[x] = (perF[x] || 0) + 1; }
+        const ditahan = { n: nTahan, per: perF };
+        return { ditahan, horizon: H, mode, bobot: bobot(H, mode, this.teknikalTerbukti(H, mode).terbukti), teknikalBukti: this.teknikalTerbukti(H, mode), baris, pasar, beritaAt: this.st.beritaAt || 0, teknikalAt: this.st.teknikalAt, teknikalSesi: this.st.teknikalSesi, fundamentalAt: this.st.fundamentalAt, sibuk: this.sibuk, progres: this.progres, gagal: this.st.gagal.length, galat: [statusHarga.galat, ...['fundamental', 'berita', 'kap'].map((k) => (this.st.baris.length ? this.st.status?.[k]?.galat : '') || '')].filter(Boolean).join('\n'), sumber: statusHarga.sumber, status: this.st.status || {} };
     }
     /** Detail lengkap satu saham: alasan tiap faktor, berita, orang dalam. */
     detail(s: string, H = 20, mode = '', pt = '', pf = '') {

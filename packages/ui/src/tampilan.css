@@ -744,3 +744,6 @@ button.hz-tgl.on { background: var(--panel-solid); color: var(--text); }
 .tugas-hal .pk-mode::-webkit-scrollbar { display: none; }
 .tugas-hal .pk-mode button { flex: 0 0 auto; }
 @media (max-width: 640px) { .kg-isi { flex-wrap: wrap; } .kg-isi input { flex: 1 1 100%; } }
+/* Sinyal ditahan karena data 4 indikator belum lengkap */
+.sb-tahan { font-size: 12px; color: var(--warn); background: var(--lb-t-bg); border-radius: var(--r-kontrol); padding: 4px 8px; margin: 4px 0 0; }
+.sb-tahan-ringkas { font-size: 13px; color: var(--muted); border: 1px solid var(--line); border-left: 2px solid var(--warn); border-radius: var(--r-kontrol); padding: 8px 12px; margin: 0 0 12px; }

@@ -79,6 +79,7 @@ export function PilihanView({ data, faktor, setFaktor, onOpen, watchlist }: { da
                         <div className="sb-seg scroll"><span className="sb-seg-lbl">Urutkan</span>{URUT.map((u) => <button key={u.k} className={urut === u.k ? 'on' : ''} onClick={() => setUrut(u.k)}>{u.label}</button>)}</div>
                         <div className="sb-seg icons"><button className={mode === 'grid' ? 'on' : ''} onClick={() => setMode('grid')} aria-label="Kartu"><Ikon e="▦" /></button><button className={mode === 'list' ? 'on' : ''} onClick={() => setMode('list')} aria-label="Daftar"><Ikon e="☰" /></button></div>
                     </div>
+                    {faktor === 'semua' && !!data.ditahan?.n && <div className="sb-tahan-ringkas" role="status">{data.ditahan.n} sinyal ditahan karena datanya belum lengkap ({Object.entries(data.ditahan.per).map(([k, n]) => `${k} ${n}`).join(', ')}). Sinyal hanya keluar kalau teknikal, fundamental, berita &amp; whales semuanya siap.</div>}
                     <div className="sb-meta"><b>{list.length} saham</b> · faktor {FAKTOR.find((f) => f.k === faktor)?.label.toLowerCase()} <span>Data per {data.teknikalSesi || '–'}</span></div>
                     <div className={mode === 'grid' ? 'sb-grid' : 'sb-rows'}>
                         {list.slice(0, batas).map((b) => mode === 'grid' ? <Kartu key={b.s} b={b} faktor={faktor} onOpen={onOpen} /> : <BarisKecil key={b.s} b={b} faktor={faktor} onOpen={onOpen} />)}
@@ -117,6 +118,7 @@ export function Kartu({ b, faktor, onOpen }: { b: Baris; faktor: FaktorKey; onOp
                 <div><b className="mono">{b.s}</b><small>{b.nama}</small></div>
                 <div className="kc-r">{sk && <span className={`lb ${kelas(sk.label)}`}>{sk.label.toUpperCase()}</span>}<Bintang s={b.s} /></div>
             </header>
+            {faktor === 'semua' && sk?.asli && <div className="sb-tahan" title="Sinyal hanya keluar kalau teknikal, fundamental, berita & whales lengkap">Sinyal {sk.asli} ditahan · menunggu data {sk.kurang?.join(', ')}</div>}
             <div className="sb-price">
                 <div><small>Penutupan terakhir</small><b className="mono">{usd(b.harga)}</b><em className={`mono ${b.chg1d >= 0 ? 'up' : 'down'}`}>{persen(b.chg1d)}</em></div>
                 {b.x && <Sparkline data={b.x.spark} />}
@@ -157,7 +159,7 @@ function BarisKecil({ b, faktor, onOpen }: { b: Baris; faktor: FaktorKey; onOpen
             <div className="c2 mono">{usd(b.harga)} <em className={b.chg1d >= 0 ? 'up' : 'down'}>{persen(b.chg1d)}</em></div>
             <div className="c3">{b.x && <Sparkline data={b.x.spark} w={90} h={28} />}</div>
             <div className="c4 mono">{best ? <>→ {usd(best.harga)} <small>({best.peluang}%)</small></> : '–'}</div>
-            <div className="c5">{sk && <span className={`lb ${kelas(sk.label)}`}>{sk.label.toUpperCase()}</span>}</div>
+            <div className="c5">{sk && <span className={`lb ${kelas(sk.label)}`} title={sk.asli ? `Sinyal ${sk.asli} ditahan: data ${sk.kurang?.join(', ')} belum siap` : undefined}>{sk.label.toUpperCase()}{sk.asli ? ' ·' : ''}</span>}</div>
         </div>
     );
 }

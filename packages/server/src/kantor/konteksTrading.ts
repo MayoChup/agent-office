@@ -33,7 +33,7 @@ export function konteksTrading(o: { screener: Screener; dataDir: string; H: numb
 
     // Daftar saham
     const baris = d.baris as any[];
-    const satu = (b: any) => `${b.s} ${b.nama} | ${b.sektor || ''} | $${r2(b.harga)} | 1h ${r2(b.chg1d)}% 1b ${r2(b.chg1m)}% 3b ${r2(b.chg3m)}% | gabungan ${sk(b.skor?.semua)} · tek ${sk(b.skor?.teknikal)} · fund ${sk(b.skor?.fundamental)} · berita ${sk(b.skor?.berita)} · whales ${sk(b.skor?.whales)}${b.preset?.teknikal ? ` · preset tek ${b.preset.teknikal.persen}%` : ''}${b.preset?.fundamental ? ` · preset fund ${b.preset.fundamental.persen}%` : ''}`;
+    const satu = (b: any) => `${b.s} ${b.nama} | ${b.sektor || ''} | $${r2(b.harga)} | 1h ${r2(b.chg1d)}% 1b ${r2(b.chg1m)}% 3b ${r2(b.chg3m)}% | gabungan ${sk(b.skor?.semua)}${b.skor?.semua?.asli ? ` [DITAHAN dari ${b.skor.semua.asli}: data ${b.skor.semua.kurang.join(', ')} belum siap — jangan sebut sebagai sinyal]` : ''} · tek ${sk(b.skor?.teknikal)} · fund ${sk(b.skor?.fundamental)} · berita ${sk(b.skor?.berita)} · whales ${sk(b.skor?.whales)}${b.preset?.teknikal ? ` · preset tek ${b.preset.teknikal.persen}%` : ''}${b.preset?.fundamental ? ` · preset fund ${b.preset.fundamental.persen}%` : ''}`;
     const urut = [...baris].filter((b) => b.skor?.semua).sort((a, b) => b.skor.semua.skor - a.skor.semua.skor);
     L.push('', `# Skor gabungan teratas (dari ${baris.length} saham)`, ...urut.slice(0, 15).map(satu));
     L.push('', '# Skor gabungan terbawah', ...urut.slice(-8).reverse().map(satu));

@@ -1,6 +1,6 @@
 export type Label = 'Jual kuat' | 'Jual' | 'Tahan' | 'Beli' | 'Beli kuat';
 export type FaktorKey = 'semua' | 'teknikal' | 'fundamental' | 'berita' | 'whales';
-export interface SkorRingkas { skor: number; label: Label }
+export interface SkorRingkas { skor: number; label: Label; /** data yang belum siap (hanya skor gabungan) */ kurang?: string[]; /** label sebelum ditahan */ asli?: Label }
 export interface Target { nama: 'Konservatif' | 'Moderat' | 'Agresif'; harga: number; pct: number; peluang: number; nilai: number }
 export interface Proyeksi { horizon: number; target: Target[]; stop: { harga: number; pct: number; peluang: number }; peluangNaik: number; terbaik: Target['nama']; rr: number }
 export interface Ekstra { spark: number[]; mom: { w1: number; m1: number; m3: number }; atr: number; cmf: number; obv: number; trenLabel: string; proyeksi: Proyeksi | null }
@@ -18,7 +18,7 @@ export interface Baris {
 }
 export const kapOf = (b: { mcap?: number | null; f: { mcap: number | null } | null }) => b.mcap ?? b.f?.mcap ?? null;
 export interface Pasar { naik: number; turun: number; tetap: number; mcap: number; sektor: Array<{ nama: string; n: number; chg: number }>; tape: Array<{ s: string; nama: string; harga: number; chg: number }> }
-export interface ScreenerData { baris: Baris[]; pasar: Pasar; teknikalAt: number; teknikalSesi: string; fundamentalAt: number; beritaAt: number; sibuk: string; progres: string; gagal: number; galat?: string; sumber?: string }
+export interface ScreenerData { ditahan?: { n: number; per: Record<string, number> }; baris: Baris[]; pasar: Pasar; teknikalAt: number; teknikalSesi: string; fundamentalAt: number; beritaAt: number; sibuk: string; progres: string; gagal: number; galat?: string; sumber?: string }
 
 export const LABELS: Label[] = ['Beli kuat', 'Beli', 'Tahan', 'Jual', 'Jual kuat'];
 export const FAKTOR: Array<{ k: FaktorKey; label: string; ico: string; info: string }> = [
