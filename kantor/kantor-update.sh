@@ -50,6 +50,28 @@ a = [x for x in d.get("assets", []) if x.get("name") == sys.argv[1]]
 print(a[0]["id"] if a else "", a[0]["browser_download_url"] if a else "", (d.get("target_commitish") or "")[:7])
 ' "$ASSET")
 
+# ── FreeLLMAPI (router AI gratis): paket terpisah, hanya diunduh kalau ukurannya berubah (versi baru). ──
+read -r fl_url fl_size < <(printf '%s' "$json" | python3 -c '
+import sys, json
+d = json.load(sys.stdin)
+a = [x for x in d.get("assets", []) if x.get("name") == "freellm-linux-x64.tar.gz"]
+print(a[0]["browser_download_url"] if a else "", a[0]["size"] if a else "")
+')
+if [ -n "${fl_url:-}" ] && [ "$(cat "$DIR/.freellm-size" 2>/dev/null)" != "$fl_size" ]; then
+  log "Memasang FreeLLMAPI versi baru..."
+  fl_tmp="$(mktemp -d)"
+  if curl -fsSL -m 600 "$fl_url" -o "$fl_tmp/fl.tgz" && tar xzf "$fl_tmp/fl.tgz" -C "$fl_tmp" && [ -f "$fl_tmp/freellm/server/dist/index.js" ]; then
+    rm -rf "$DIR/freellm.lama"; [ -d "$DIR/freellm" ] && mv "$DIR/freellm" "$DIR/freellm.lama"
+    mv "$fl_tmp/freellm" "$DIR/freellm" && echo "$fl_size" > "$DIR/.freellm-size"
+    rm -rf "$DIR/freellm.lama"
+    systemctl --user restart kantor-virtual || true
+    log "FreeLLMAPI terpasang."
+  else
+    log "FreeLLMAPI gagal diunduh, coba lagi nanti."
+  fi
+  rm -rf "$fl_tmp"
+fi
+
 if [ -z "${asset_id:-}" ]; then log "Rilis belum punya paket, lewati."; exit 0; fi
 if [ -f "$STATE" ] && [ "$(cat "$STATE")" = "$asset_id" ]; then exit 0; fi
 

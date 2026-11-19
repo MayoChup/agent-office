@@ -205,3 +205,18 @@ export async function balas(s: Sambungan, komentarId: string, pesan: string) {
     throw new Error('Membalas komentar TikTok lewat API belum tersedia.');
 }
 export const bisaKomentar = (p: Platform) => p !== 'tiktok';
+/**
+ * DM balasan pribadi untuk satu komentar (fitur resmi Instagram "private reply": 1 DM per komentar, dalam 7 hari).
+ * Butuh izin pesan (instagram_manage_messages / instagram_business_manage_messages) pada token akun.
+ */
+export async function dmKomentar(s: Sambungan, komentarId: string, pesan: string) {
+    if (s.platform !== 'instagram') throw new Error('DM otomatis baru tersedia untuk Instagram.');
+    const k = kIg(s);
+    const r = await fetch(`${k.host}/${encodeURIComponent(k.igUserId || 'me')}/messages`, {
+        method: 'POST', signal: AbortSignal.timeout(30_000), headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${k.token}` },
+        body: JSON.stringify({ recipient: { comment_id: komentarId }, message: { text: pesan.slice(0, 1000) } })
+    });
+    const j: any = await r.json().catch(() => ({}));
+    if (!r.ok || j?.error) throw new Error(`Instagram DM: ${j?.error?.message || `HTTP ${r.status}`}`);
+    return j;
+}

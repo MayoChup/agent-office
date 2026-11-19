@@ -8,12 +8,15 @@ import { useEffect, useRef } from 'react';
  */
 const lapisan: Array<() => void> = [];
 let abaikan = 0;
+/** history.back() itu asinkron: pushState yang terjadi sebelum popstate-nya tiba harus menunggu, kalau tidak urutannya kacau. */
+let antre: Array<() => void> = [];
+const dorong = (fn: () => void) => { if (abaikan > 0) antre.push(fn); else fn(); };
 type Halaman = (page: string) => void;
 let keHalaman: Halaman | null = null;
 
 if (typeof window !== 'undefined') {
     window.addEventListener('popstate', (e) => {
-        if (abaikan > 0) { abaikan--; return; }
+        if (abaikan > 0) { abaikan--; if (!abaikan) { const a = antre; antre = []; a.forEach((f) => f()); } return; }
         const tutup = lapisan.pop();
         if (tutup) { tutup(); return; }
         const p = (e.state && (e.state as any).kantorHal) || location.hash.replace('#', '');
@@ -29,8 +32,10 @@ export function catatHalaman(page: string, pertama: boolean) {
     const st = { kantorHal: page };
     // Pindah halaman lewat menu: lapisan di halaman lama dilepas (tetap terbuka di sana), Back berikutnya kembali ke halaman itu.
     if (!pertama) lapisan.length = 0;
-    if (pertama || (history.state as any)?.kantorHal === page) history.replaceState(st, '', `#${page}`);
-    else history.pushState(st, '', `#${page}`);
+    dorong(() => {
+        if (pertama || (history.state as any)?.kantorHal === page) history.replaceState(st, '', `#${page}`);
+        else history.pushState(st, '', `#${page}`);
+    });
 }
 
 /** Lapisan yang bisa ditutup dengan Back. Saat ditutup lewat tombol di layar, entri riwayatnya ikut dibuang. */
@@ -39,8 +44,8 @@ export function useKembali(terbuka: boolean, tutup: () => void) {
     useEffect(() => {
         if (!terbuka) return;
         const fn = () => fnTutup.current();
-        history.pushState({ ...(history.state || {}), kantorLapis: lapisan.length + 1 }, '');
         lapisan.push(fn);
+        dorong(() => history.pushState({ ...(history.state || {}), kantorLapis: lapisan.length }, ''));
         return () => {
             const i = lapisan.lastIndexOf(fn);
             if (i >= 0) { lapisan.splice(i, 1); abaikan++; history.back(); }

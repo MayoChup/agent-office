@@ -93,12 +93,15 @@ export function App() {
         eventBus.addEventListener('open-kr', onKr);
         eventBus.addEventListener('open-division', onDivision);
         eventBus.addEventListener('open-chat', onChat);
+        const onGo = (e: Event) => { const pg = (e as CustomEvent).detail?.page; if (PAGES.includes(pg)) { setPanel(null); setPage(pg); } };
+        eventBus.addEventListener('go-page', onGo);
         eventBus.addEventListener('agent-select', onAgent);
         return () => {
             navigator.serviceWorker?.removeEventListener('message', onSw);
             eventBus.removeEventListener('open-kr', onKr);
             eventBus.removeEventListener('open-division', onDivision);
             eventBus.removeEventListener('open-chat', onChat);
+            eventBus.removeEventListener('go-page', onGo);
             eventBus.removeEventListener('agent-select', onAgent);
         };
     }, []);

@@ -78,7 +78,7 @@ export function ChatPage({ prefill }: { prefill?: string }) {
                                     <div className="wa-item-top"><b>{t.nama}{t.peran && !isGrup(t) ? <span className="wa-jabatan"> - {t.peran}</span> : null}</b>{t.terakhir && <span className={unread ? 'unread' : ''}>{tanggal(t.terakhir.at)}</span>}</div>
                                     <div className="wa-item-sub">
                                         {t.menulis.length ? <em>{isGrup(t) ? `${t.menulis.map((id) => threads.find((x) => x.id === id)?.nama || id).join(', ')} mengetik…` : 'mengetik…'}</em>
-                                            : t.terakhir ? <span>{isGrup(t) || t.terakhir.nama === 'Pak Rico' ? `${t.terakhir.nama === 'Pak Rico' ? 'Anda' : namaPeran(threads, t.terakhir.nama)}: ` : ''}{t.terakhir.teks}</span>
+                                            : t.terakhir ? <span>{isGrup(t) || t.terakhir.nama === 'Pak Rico' ? `${t.terakhir.nama === 'Pak Rico' ? 'Anda' : namaPeran(threads, t.terakhir.nama)}: ` : ''}{polos(t.terakhir.teks)}</span>
                                                 : <span className="wa-role">{t.peran}</span>}
                                         {unread && <i className="wa-dot" />}
                                     </div>
@@ -293,6 +293,9 @@ function Bubble({ m, grup, peran }: { m: Pesan; grup: boolean; peran?: string })
         </>
     );
 }
+
+/** Pratinjau pesan di daftar obrolan: tanpa tanda markdown. */
+const polos = (s: string) => s.replace(/```[\s\S]*?```/g, ' [kode] ').replace(/^\s*#{1,4}\s+/gm, '').replace(/\*\*|__|`|^\s*>\s?|^\s*[-*•]\s+/gm, '').replace(/\|/g, ' ').replace(/\s+/g, ' ').trim();
 
 function dayLabel(d: string) {
     const today = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);

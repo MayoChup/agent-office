@@ -529,5 +529,80 @@ export function pasangSosmed(d: DepsSosmed) {
     }));
     /** Gotong royong: ide konten dari berita (Nina) ikut jadi bahan ide semua akun. */
     const setIdeBerita = (teks: string) => { glob.ideBerita = { at: Date.now(), teks }; simpanGlobal(); for (const c of semua()) c.s.insightGlobal = teksInsight(); };
-    return { akun: () => akun, semua, setIdeBerita };
+
+    // ── R9 Autopilot konten (keputusan Pak Rico 19 Nov 2026): posting & DM otomatis lewat API resmi, dengan rem pengaman ──
+    interface Autopilot { aktif: boolean; jedaJam: number; balas: boolean; dm: { aktif: boolean; kata: string[]; pesan: string; perJam: number }; sudahDm: string[]; log: Array<{ at: number; jenis: 'terbit' | 'balas' | 'dm' | 'lewati'; teks: string }> }
+    const fileAuto = path.join(d.dataDir, 'sosmed-autopilot.json');
+    let autoSt: Record<string, Partial<Autopilot>> = {};
+    try { autoSt = JSON.parse(fs.readFileSync(fileAuto, 'utf8')); } catch { /* baru */ }
+    const autoDari = (id: string): Autopilot => { const x = autoSt[id] || {}; return { aktif: false, jedaJam: 2, balas: false, sudahDm: [], log: [], ...x, dm: { aktif: false, kata: [], pesan: '', perJam: 20, ...(x.dm || {}) } } as Autopilot; };
+    const simpanAuto = () => { try { fs.writeFileSync(fileAuto, JSON.stringify(autoSt)); } catch (e: any) { console.warn('[Autopilot] simpan:', e?.message || e); } };
+    const catatAuto = (id: string, jenis: Autopilot['log'][number]['jenis'], teks: string) => { const a = autoDari(id); a.log = [{ at: Date.now(), jenis, teks: teks.slice(0, 200) }, ...a.log].slice(0, 200); autoSt[id] = a; simpanAuto(); };
+    /** Topik yang tidak pernah dibalas/di-DM otomatis: janji untung, harga pasti, data pribadi, keluhan serius. */
+    const TERLARANG = /(pasti untung|cuan pasti|jamin|garansi untung|harga pasti|rekening|no\.? ?rek|password|kata sandi|\bpin\b|\bktp\b|\bnik\b|alamat rumah|penipu|lapor polisi|refund|uang kembali)/i;
+    let autoJalan = false;
+    async function putaranAutopilot() {
+        if (autoJalan) return; autoJalan = true;
+        try {
+            for (const c of semua()) {
+                const cfg = autoDari(c.a.id); if (!cfg.aktif) continue;
+                const { s } = c;
+                // 1) Konten yang medianya sudah siap → disetujui otomatis, terbit paling cepat jedaJam lagi (masih bisa dibatalkan).
+                for (const k of s.st.konten.filter((x) => x.status === 'aset' && !x.disetujui)) {
+                    try { periksaSiapUnggah(c, k); } catch (e: any) { if (k.galat !== String(e?.message || e)) { k.galat = String(e?.message || e).slice(0, 200); s.simpan(); } continue; }
+                    const w = Math.max(s.waktuUnggah(k), Date.now() + Math.max(0.5, cfg.jedaJam) * 3600_000);
+                    const t = new Date(w + 7 * 3600_000).toISOString();
+                    k.tgl = t.slice(0, 10); k.jam = t.slice(11, 16); k.disetujui = Date.now(); k.galat = undefined; k.status = 'terjadwal'; k.diubah = Date.now(); s.simpan();
+                    const pesan = `Autopilot: "${k.judul}" (${label(c.a)}) terbit ${k.tgl} ${k.jam} WIB. Batalkan di menu Konten kalau tidak jadi.`;
+                    catatAuto(c.a.id, 'terbit', pesan);
+                    papan.catat({ ai: ID_SOSMED.produksi, nama: PERAN_SOSMED[ID_SOSMED.produksi] || 'Admin unggah', judul: `Autopilot menjadwalkan: ${k.judul}`, detail: `${k.tgl} ${k.jam} WIB`, sumber: 'tugas', status: 'selesai' });
+                    d.kabari(`🤖 ${pesan}`).catch(() => undefined);
+                }
+                const sb = sambungan(c.a);
+                if (!sb || !P.bisaKomentar(c.a.platform) || (!cfg.balas && !cfg.dm.aktif)) continue;
+                // 2) Ambil komentar baru lebih sering selama autopilot aktif (Dea menyiapkan draf balasannya).
+                if (!s.sibuk) await ambilKomentar(c).catch((e) => console.warn('[Autopilot] komentar:', e?.message || e));
+                // 3) Kirim balasan publik yang sudah didraf Dea.
+                if (cfg.balas) for (const m of s.st.komentar.filter((x) => x.status === 'draf' && x.draf).slice(0, 10)) {
+                    if (TERLARANG.test(`${m.teks} ${m.draf}`)) { if (!m.galat) { m.galat = 'Autopilot melewati: topik sensitif, tunggu Bapak.'; s.simpan(); catatAuto(c.a.id, 'lewati', `@${m.user}: ${m.teks}`); } continue; }
+                    try { await P.balas(sb, m.id, m.draf!); m.status = 'terkirim'; m.galat = undefined; catatAuto(c.a.id, 'balas', `@${m.user}: ${m.draf}`); }
+                    catch (e: any) { m.galat = String(e?.message || e).slice(0, 200); }
+                    s.simpan();
+                }
+                // 4) DM otomatis untuk komentar berkata kunci (balasan pribadi resmi IG), dibatasi per jam.
+                if (cfg.dm.aktif && cfg.dm.kata.length && cfg.dm.pesan.trim()) {
+                    const sejamLalu = Date.now() - 3600_000;
+                    let kuota = Math.max(0, cfg.dm.perJam - cfg.log.filter((x) => x.jenis === 'dm' && x.at > sejamLalu).length);
+                    const kata = cfg.dm.kata.map((x) => x.trim().toLowerCase()).filter(Boolean);
+                    for (const m of s.st.komentar) {
+                        if (!kuota) break;
+                        if (cfg.sudahDm.includes(m.id) || Date.now() - m.at > 6 * 86400_000) continue;
+                        const t = m.teks.toLowerCase();
+                        if (!kata.some((k) => t.includes(k)) || TERLARANG.test(m.teks)) continue;
+                        const isi = cfg.dm.pesan.replace(/\{nama\}|\{user\}/gi, m.user).slice(0, 1000);
+                        try { await P.dmKomentar(sb, m.id, isi); kuota--; catatAuto(c.a.id, 'dm', `@${m.user} (${m.teks.slice(0, 60)})`); }
+                        catch (e: any) { catatAuto(c.a.id, 'lewati', `DM ke @${m.user} gagal: ${String(e?.message || e).slice(0, 120)}`); }
+                        const a = autoDari(c.a.id); a.sudahDm = [m.id, ...a.sudahDm].slice(0, 3000); autoSt[c.a.id] = { ...autoSt[c.a.id], sudahDm: a.sudahDm }; simpanAuto();
+                        cfg.sudahDm = a.sudahDm; cfg.log = autoDari(c.a.id).log;
+                    }
+                }
+            }
+        } finally { autoJalan = false; }
+    }
+    setInterval(() => void putaranAutopilot().catch((e) => console.warn('[Autopilot]', e?.message || e)), 15 * 60_000);
+    app.get('/api/kantor/sosmed/autopilot', requireToken, sm((req) => { const c = ctxReq(req); return { autopilot: autoDari(c.a.id), tersambung: !!sambungan(c.a), platform: c.a.platform }; }));
+    app.post('/api/kantor/sosmed/autopilot', requireToken, sm((req) => {
+        const c = ctxReq(req), b = req.body || {}, lama = autoDari(c.a.id);
+        const kata = Array.isArray(b.dm?.kata) ? b.dm.kata : String(b.dm?.kata ?? lama.dm.kata.join(',')).split(',');
+        autoSt[c.a.id] = {
+            ...autoSt[c.a.id],
+            aktif: b.aktif ?? lama.aktif, balas: b.balas ?? lama.balas,
+            jedaJam: Math.min(24, Math.max(0.5, Number(b.jedaJam ?? lama.jedaJam) || 2)),
+            dm: { aktif: b.dm?.aktif ?? lama.dm.aktif, kata: kata.map((x: any) => String(x).trim()).filter(Boolean).slice(0, 10), pesan: String(b.dm?.pesan ?? lama.dm.pesan).slice(0, 1000), perJam: Math.min(60, Math.max(1, Number(b.dm?.perJam ?? lama.dm.perJam) || 20)) }
+        };
+        simpanAuto();
+        if (autoDari(c.a.id).aktif) setTimeout(() => void putaranAutopilot().catch(() => undefined), 2000);
+        return { autopilot: autoDari(c.a.id) };
+    }));
+    return { akun: () => akun, semua, setIdeBerita, autopilot: (id: string) => autoDari(id) };
 }

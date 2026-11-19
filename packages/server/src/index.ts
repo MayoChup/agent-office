@@ -9,6 +9,7 @@ import { OfficeRoom } from './rooms/OfficeRoom';
 import { loadConfig } from './kantor/config';
 import { KantorAuth } from './kantor/auth';
 import { KategoriAi } from './kantor/kategoriAi';
+import { Rem } from './kantor/rem';
 import { Pencatat, telegramNotifier, ringkasanKeuangan, telegramSebagai, sambilMengetik, kategoriOf } from './kantor/pencatat';
 import { TradingDesk, tradingCli, fetchPrice, marketOpen } from './kantor/trading';
 import { Kalender } from './kantor/kalender';
@@ -436,6 +437,17 @@ percakapan.papan = papan;
 app.get('/api/kantor/chat', requireToken, (_req, res) => { res.json({ ok: true, thread: percakapan.daftar() }); });
 app.get('/api/kantor/chat/:id', requireToken, (req, res) => { res.json({ ok: true, ...percakapan.thread(String(req.params.id)) }); });
 percakapan.berkasRoot = berkas.root;
+// ── Rem otonomi per AI (pemutus sirkuit + anggaran token) ──
+const rem = new Rem(config.dataDir, { jam5: Number(process.env.KANTOR_REM_5JAM) || 200_000, hari: Number(process.env.KANTOR_REM_HARI) || 600_000, minggu: Number(process.env.KANTOR_REM_MINGGU) || 3_000_000 });
+percakapan.rem = rem;
+rem.onUbah = (ai, lama, baru, sebab) => {
+    const nama = roster().find((a) => a.id === ai)?.nama || ai;
+    papan.catat({ ai, nama, judul: `Rem otonomi: ${lama} → ${baru}`, detail: sebab, sumber: 'tugas', status: baru === 'henti' ? 'gagal' : 'selesai' });
+    if (baru === 'henti' || (baru === 'batasi' && lama !== 'henti')) kabariTelegram(`🛑 Rem otonomi: ${nama} ${baru === 'henti' ? 'DIHENTIKAN sementara' : 'dibatasi'} (${sebab}). Buka Kantor → Tim AI untuk melanjutkan.`).catch(() => undefined);
+};
+app.get('/api/kantor/rem', requireToken, (_req, res) => { res.json({ ok: true, ai: roster().map((a) => ({ id: a.id, nama: a.nama, peran: a.peran, ...rem.ringkas(a.id) })) }); });
+app.post('/api/kantor/rem/:ai/lanjutkan', requireToken, (req, res) => { rem.lanjutkan(String(req.params.ai)); res.json({ ok: true }); });
+app.post('/api/kantor/rem/:ai/anggaran', requireToken, (req, res) => { res.json({ ok: true, anggaran: rem.setAnggaran(String(req.params.ai), req.body || {}) }); });
 
 // ── Keuangan × AI (gotong royong: dikerjakan Uang, Kepala Keuangan) ──
 const AI_KEU = () => (roster().some((a) => a.id === 'keuangan') ? 'keuangan' : 'default');
@@ -944,6 +956,30 @@ const sosmedTim = pasangSosmed({
     app, requireToken, dataDir: config.dataDir, hermesHome: config.hermesHome, skillDir: path.join(__dirname, 'hermes-skills'),
     roster, resetRoster: () => { rosterCache.at = 0; }, papan, percakapan, llm: () => OfficeRoom.sharedLlm() as any,
     berkas, kabari: kabariTelegram, idJoni: ID_JONI, namaJoni, aturSosmed: ATUR_SOSMED, jalankanBerkas
+});
+
+// ── Kotak "Perlu keputusan Bapak" (ATM Munder Difflin: satu antrean persetujuan, tiap item bertiket) ──
+const fileKode = path.join(config.dataDir, 'keputusan-kode.json');
+let kodeSt: { n: Record<string, number>; peta: Record<string, string> } = { n: {}, peta: {} };
+try { kodeSt = { ...kodeSt, ...JSON.parse(fs.readFileSync(fileKode, 'utf8')) }; } catch { /* baru */ }
+const kodeUntuk = (awalan: string, kunci: string) => {
+    const k = `${awalan}:${kunci}`;
+    if (!kodeSt.peta[k]) { kodeSt.n[awalan] = (kodeSt.n[awalan] || 0) + 1; kodeSt.peta[k] = `${awalan}-${kodeSt.n[awalan]}`; try { fs.writeFileSync(fileKode, JSON.stringify(kodeSt)); } catch { /* */ } }
+    return kodeSt.peta[k];
+};
+interface Keputusan { kode: string; jenis: 'tugas' | 'posting' | 'balasan' | 'rem'; judul: string; detail: string; dari: string; at: number; buka?: { halaman: string }; setuju?: { url: string; body?: any; label: string }; tolak?: { url: string; body?: any; label: string } }
+app.get('/api/kantor/keputusan', requireToken, (_req, res) => {
+    const out: Keputusan[] = [];
+    const nm = (id: string) => roster().find((a) => a.id === id)?.nama || id;
+    for (const u of hr.st.usulan.filter((x) => x.status === 'menunggu')) out.push({ kode: kodeUntuk('TGS', u.id), jenis: 'tugas', judul: `Tugas untuk ${u.nama}: ${u.judul}`, detail: [u.isi, u.alasan && `Alasan: ${u.alasan}`].filter(Boolean).join('\n'), dari: namaJoni(), at: (u as any).dibuat || Date.now(), setuju: { url: `/api/kantor/hr/usulan/${u.id}`, body: { aksi: 'setuju' }, label: 'Setujui & kirim' }, tolak: { url: `/api/kantor/hr/usulan/${u.id}`, body: { aksi: 'tolak' }, label: 'Tolak' } });
+    for (const c of sosmedTim.semua()) {
+        const ap = sosmedTim.autopilot(c.a.id), akun = encodeURIComponent(c.a.id);
+        if (!ap.aktif) for (const k of c.s.st.konten.filter((x) => x.status === 'aset' && !x.disetujui)) out.push({ kode: kodeUntuk('KON', `${c.a.id}/${k.id}`), jenis: 'posting', judul: `Unggah "${k.judul}"`, detail: `${c.a.nama} · ${k.format} · jadwal ${k.tgl} ${k.jam || ''}`.trim(), dari: 'Vino', at: k.diubah || Date.now(), buka: { halaman: 'sosmed' }, setuju: { url: `/api/kantor/sosmed/konten/${k.id}/setujui?akun=${akun}`, label: 'Setujui unggah' } });
+        if (!ap.aktif || !ap.balas) for (const m of c.s.st.komentar.filter((x) => x.status === 'draf' && x.draf).slice(0, 30)) out.push({ kode: kodeUntuk('KOM', `${c.a.id}/${m.id}`), jenis: 'balasan', judul: `Balas @${m.user}`, detail: `Komentar: ${m.teks}\nDraf: ${m.draf}`, dari: 'Dea', at: m.at, setuju: { url: `/api/kantor/sosmed/komentar/${m.id}/kirim?akun=${akun}`, body: {}, label: 'Kirim balasan' }, tolak: { url: `/api/kantor/sosmed/komentar/${m.id}/abaikan?akun=${akun}`, body: {}, label: 'Abaikan' } });
+    }
+    for (const a of roster()) { const r = rem.ringkas(a.id); if (r.status === 'henti') out.push({ kode: kodeUntuk('REM', `${a.id}/${r.sejak}`), jenis: 'rem', judul: `${a.nama} dihentikan rem otonomi`, detail: r.sebab, dari: 'Rem otonomi', at: r.sejak, setuju: { url: `/api/kantor/rem/${a.id}/lanjutkan`, body: {}, label: 'Lanjutkan' } }); }
+    void nm;
+    res.json({ ok: true, item: out.sort((a, b) => b.at - a.at) });
 });
 
 // ── Knowledge Reels (Kirana + tim, gotong royong): lihat kantor/krRute.ts ──

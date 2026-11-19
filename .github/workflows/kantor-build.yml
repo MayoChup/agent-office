@@ -70,6 +70,38 @@ jobs:
           tar czf kantor-virtual-linux-x64.tar.gz -C release .
           ls -lh kantor-virtual-linux-x64.tar.gz
 
+      # ── FreeLLMAPI (router AI gratis, MIT, github.com/tashfeenahmed/freellmapi) ──
+      # Dibangun sekali per versi yang dipatok (cache), dikirim sebagai paket terpisah. Gagal di sini tidak menghentikan rilis kantor.
+      - name: Cache FreeLLMAPI
+        id: freellm-cache
+        uses: actions/cache@v4
+        with:
+          path: freellm-linux-x64.tar.gz
+          key: freellm-9d2b4b407b12e489ecd35320cd630d5ff97cd666-node22-v1
+
+      - name: Bangun FreeLLMAPI
+        if: steps.freellm-cache.outputs.cache-hit != 'true'
+        continue-on-error: true
+        run: |
+          set -e
+          git clone --filter=blob:none https://github.com/tashfeenahmed/freellmapi.git /tmp/freellm
+          cd /tmp/freellm
+          git checkout 9d2b4b407b12e489ecd35320cd630d5ff97cd666
+          bash $GITHUB_WORKSPACE/kantor/ci-run.sh "freellm npm ci" npm ci --no-audit --no-fund
+          bash $GITHUB_WORKSPACE/kantor/ci-run.sh "freellm build server" npm run build -w server
+          bash $GITHUB_WORKSPACE/kantor/ci-run.sh "freellm build client" npm run build -w client
+          npm prune --omit=dev --no-audit --no-fund
+          node -e "require('better-sqlite3'); console.log('better-sqlite3 siap')"
+          mkdir -p /tmp/freellm-paket/freellm/server /tmp/freellm-paket/freellm/client /tmp/freellm-paket/freellm/desktop
+          cp -a package.json package-lock.json node_modules shared LICENSE /tmp/freellm-paket/freellm/
+          cp -a server/package.json server/dist /tmp/freellm-paket/freellm/server/
+          [ -d server/node_modules ] && cp -a server/node_modules /tmp/freellm-paket/freellm/server/ || true
+          cp -a client/dist /tmp/freellm-paket/freellm/client/
+          cp -a desktop/package.json /tmp/freellm-paket/freellm/desktop/
+          echo "9d2b4b407b12e489ecd35320cd630d5ff97cd666" > /tmp/freellm-paket/freellm/VERSI
+          tar czf $GITHUB_WORKSPACE/freellm-linux-x64.tar.gz -C /tmp/freellm-paket .
+          ls -lh $GITHUB_WORKSPACE/freellm-linux-x64.tar.gz
+
       - name: Uji jalan sebentar (smoke test)
         run: |
           cd release
@@ -94,7 +126,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete kantor-latest --yes --cleanup-tag || true
-          gh release create kantor-latest kantor-virtual-linux-x64.tar.gz \
+          EKSTRA=""; [ -f freellm-linux-x64.tar.gz ] && EKSTRA="freellm-linux-x64.tar.gz"
+          gh release create kantor-latest kantor-virtual-linux-x64.tar.gz $EKSTRA \
             --target "$GITHUB_SHA" \
             --title "Kantor Virtual (terbaru)" \
             --notes "Paket siap pakai untuk VPS Linux x64 (Node 22). Dibangun dari commit $GITHUB_SHA." \

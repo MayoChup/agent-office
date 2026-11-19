@@ -15,6 +15,7 @@ import fs from 'fs';
 import path from 'path';
 import type { RequestHandler, Express } from 'express';
 import { ModelRouter } from './model';
+import { FreeLlmApi } from './freeLlmApi';
 import type { Papan } from './papan';
 import type { Percakapan } from './percakapan';
 
@@ -89,7 +90,7 @@ const rp = (n: number) => `Rp${Math.round(n).toLocaleString('id-ID')}`;
 export function pasangRutin(d: DepsRutin) {
     const { app, requireToken, papan, percakapan } = d;
     // Kunci Gemini/Groq/xAI boleh ada di environment kantor ATAU di .env Hermes (yang diisi Pak Rico). Hanya nama kunci ini yang dibaca; nilainya tidak pernah ditampilkan.
-    const BOLEH = /^(GEMINI_API_KEY|GEMINI_MODEL|GROQ_API_KEY|GROQ_MODEL|XAI_API_KEY|XAI_MODEL)$/;
+    const BOLEH = /^(GEMINI_API_KEY|GEMINI_MODEL|GEMINI_VISION_MODEL|GROQ_API_KEY|GROQ_MODEL|GROQ_VISION_MODEL|XAI_API_KEY|XAI_MODEL|OPENROUTER_API_KEY|CEREBRAS_API_KEY|MISTRAL_API_KEY|NVIDIA_API_KEY|FREELLM_PORT|FREELLM_MODEL)$/;
     const envHermes: Record<string, string> = {};
     try {
         for (const baris of fs.readFileSync(path.join(d.hermesHome, '.env'), 'utf8').split('\n')) {
@@ -98,6 +99,12 @@ export function pasangRutin(d: DepsRutin) {
     } catch { /* tidak ada .env */ }
     const router = new ModelRouter(d.dataDir, d.hermesHome, { ...envHermes, ...Object.fromEntries(Object.entries(process.env).filter(([k, v]) => v && (BOLEH.test(k) || k.startsWith('KANTOR_')))) });
     percakapan.router = router;
+    // FreeLLMAPI: router AI gratis di VPS (hanya localhost). Dipasang otomatis oleh kantor-update.sh.
+    const freellm = new FreeLlmApi(path.dirname(process.argv[1] || '.'), d.dataDir, { ...envHermes, ...Object.fromEntries(Object.entries(process.env).filter(([k, v]) => v && BOLEH.test(k))) });
+    router.freellm = freellm;
+    freellm.start();
+    process.on('exit', () => freellm.stop());
+    app.get('/api/kantor/freellm', requireToken, async (_req, res) => { res.json({ ok: true, terpasang: freellm.terpasang(), port: freellm.port, ...(await freellm.cek().catch(() => freellm.status)) }); });
     const tim = () => d.roster().filter((a) => a.id !== 'sistem');
     const bagi = () => { try { router.aturAwal(tim().map((a) => a.id)); } catch (e: any) { console.warn('[Model] bagi awal:', e?.message || e); } };
     setTimeout(bagi, 20_000); setInterval(bagi, 3600_000);

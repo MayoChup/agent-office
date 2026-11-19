@@ -3,6 +3,7 @@ import path from 'path';
 import { execFile } from 'child_process';
 import { extractJson } from './freeLlm';
 import type { ModelRouter } from './model';
+import type { Rem } from './rem';
 
 /**
  * Chat ala WhatsApp dengan AI Hermes yang ASLI (pakai SOUL, ingatan, dan skill masing-masing).
@@ -267,6 +268,8 @@ export class Percakapan {
     private async jalankanTugas(aiId: string, nama: string, prompt: string, kerja: string | undefined, alat: boolean): Promise<string> {
         const r = this.router;
         if (r && !alat) {
+            const sigT = `tugas:${prompt.replace(/\s+/g, ' ').slice(0, 80)}`;
+            await this.remCek(aiId, sigT, kerja);
             for (const o of r.rute(aiId)) {
                 if (o.cara === 'hermes') break;
                 while (this.langsungJalan >= 4) await new Promise((res) => setTimeout(res, 800));
@@ -274,6 +277,7 @@ export class Percakapan {
                 try {
                     const out = bersihkan(await r.langsung(o, aiId, nama, prompt));
                     r.catat(aiId, o.id, prompt.length, out.length, true);
+                    this.rem?.catat(aiId, prompt.length, out.length, true, sigT);
                     this.papan?.ubah(kerja, 'selesai', `[${o.label}] ${out}`);
                     return out;
                 } catch (e: any) { r.catat(aiId, o.id, prompt.length, 0, false); console.warn(`[Model] ${aiId} via ${o.id} gagal:`, e?.message || e); }
@@ -360,8 +364,23 @@ export class Percakapan {
     }
 
     /** Jalankan Hermes untuk satu AI sambil menampilkan "mengetik…". Mengembalikan teks jawaban. */
+    /** Rem otonomi (pemutus sirkuit) per AI. Diisi index.ts. */
+    rem?: Rem;
+    private async remCek(aiId: string, sig: string, idK?: string) {
+        if (!this.rem) return;
+        const iz = this.rem.izin(aiId, sig);
+        if (!iz.boleh) {
+            const nama = this.roster().find((a) => a.id === aiId)?.nama || aiId;
+            const msg = `Rem otonomi: ${nama} dihentikan sementara (${iz.sebab}). Bapak bisa menekan "Lanjutkan" di Kantor → Tim AI.`;
+            this.papan?.ubah(idK, 'gagal', msg);
+            throw new Error(msg);
+        }
+        if (iz.tundaMs > 0) await new Promise((r) => setTimeout(r, Math.min(iz.tundaMs, 10 * 60_000)));
+    }
     private async jalankanAi(thread: string, aiId: string, prompt: string, berat: boolean, kerja?: string): Promise<string> {
         const idK = kerja ?? this.catatKerja(thread, aiId);
+        const sig = thread.startsWith('kerja-') ? `tugas:${prompt.replace(/\s+/g, ' ').slice(0, 80)}` : `chat:${thread}`;
+        await this.remCek(aiId, sig, idK);
         while (this.jalan >= 3) await new Promise((r) => setTimeout(r, 1500)); // maks 3 AI berpikir bersamaan
         this.jalan++;
         const set = this.menulis.get(thread) || new Set<string>();
@@ -370,10 +389,12 @@ export class Percakapan {
         try {
             const out = await hermesSekali(this.run, this.hermesBin, aiId, prompt, berat ? this.kuota?.model : undefined);
             this.router?.catat(aiId, berat ? 'berat' : 'hermes', prompt.length, out.length, true);
+            this.rem?.catat(aiId, prompt.length, out.length, true, sig);
             this.papan?.ubah(idK, 'selesai', out);
             return out;
         } catch (e: any) {
             this.router?.catat(aiId, berat ? 'berat' : 'hermes', prompt.length, 0, false);
+            this.rem?.catat(aiId, prompt.length, 0, false, sig);
             this.papan?.ubah(idK, 'gagal', String(e?.message || e));
             throw e;
         } finally {

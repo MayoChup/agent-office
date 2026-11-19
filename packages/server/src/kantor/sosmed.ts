@@ -5,7 +5,8 @@
  * analisa hasil setelah terbit, dan draf balasan komentar.
  * Produksi video/suara/edit dilakukan Pak Rico sendiri; hasilnya ditaruh di cloud Berkas,
  * lalu setelah Pak Rico menekan "Setujui", kantor mengunggahnya ke Instagram beserta caption.
- * Tidak ada yang diposting atau dibalas tanpa persetujuan.
+ * Tanpa autopilot: tidak ada yang diposting atau dibalas tanpa persetujuan. Dengan autopilot (diaktifkan Pak Rico per akun):
+ * konten siap terbit otomatis setelah jeda batal, balasan & DM kata kunci terkirim otomatis lewat API resmi, dengan rem topik sensitif.
  */
 import fs from 'fs';
 import path from 'path';

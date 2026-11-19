@@ -5,6 +5,7 @@ import { useTema } from '../kantor/tema';
 import { eventBus } from '../events';
 
 import { Ikon } from './Ikon';
+import { TombolKeputusan } from './Keputusan';
 function useClock() {
     const [now, setNow] = useState(() => new Date());
     useEffect(() => {
@@ -14,6 +15,8 @@ function useClock() {
     return new Intl.DateTimeFormat('id-ID', { timeZone: 'Asia/Jakarta', weekday: 'short', hour: '2-digit', minute: '2-digit' }).format(now) + ' WIB';
 }
 
+const JUDUL: Record<string, string> = { home: 'Beranda', obrolan: 'Chat', kr: 'Knowledge Reels', keuangan: 'Keuangan', trading: 'Trading', sosmed: 'Konten', catatan: 'Catatan', berkas: 'Berkas', tugas: 'Tugas', jadwal: 'Jadwal', kantor: 'Kantor' };
+
 export function TopBar() {
     const officeName = useKantor((s) => s.officeName);
     const owner = useKantor((s) => s.owner);
@@ -22,6 +25,9 @@ export function TopBar() {
     const clock = useClock();
     const [showQuota, setShowQuota] = useState(false);
     const [tema, gantiTema] = useTema();
+    // Di HP bilah atas menampilkan nama halaman yang sedang dibuka.
+    const [judul, setJudul] = useState('');
+    useEffect(() => { const f = (e: Event) => setJudul(JUDUL[(e as CustomEvent).detail?.page] || ''); eventBus.addEventListener('page-change', f); return () => eventBus.removeEventListener('page-change', f); }, []);
 
     const dotClass = status === 'connected' ? 'ok' : status === 'connecting' || status === 'checking' ? 'wait' : 'bad';
     const statusText = status === 'connected' ? 'Terhubung' : status === 'connecting' || status === 'checking' ? 'Menyambung…' : status === 'login' ? 'Belum masuk' : 'Terputus';
@@ -34,7 +40,7 @@ export function TopBar() {
             <div className="brand">
                 <div className="brand-logo"><Ikon e="🏢" /></div>
                 <div style={{ minWidth: 0 }}>
-                    <div className="brand-name">{officeName}</div>
+                    <div className="brand-name"><span className="nama-kantor">{officeName}</span>{judul && <span className="nama-halaman">{judul}</span>}</div>
                     <div className="brand-sub">Milik {owner} · tersambung ke Hermes</div>
                 </div>
             </div>
@@ -56,9 +62,27 @@ export function TopBar() {
                     )}
                 </div>
             )}
-            <div className="pill"><span className={`dot ${dotClass}`} /><span className="hide-sm">{statusText}</span></div>
-            <button className="icon-btn tema-btn" title={tema === 'dark' ? 'Ganti ke tampilan terang' : 'Ganti ke tampilan gelap'} aria-label="Ganti tema" onClick={gantiTema}>{tema === 'dark' ? <Ikon e="☀" /> : <Ikon e="☾" />}</button>
-            {status !== 'login' && <button className="icon-btn" title="Keluar dari kantor" aria-label="Keluar" onClick={() => { if (confirm('Keluar dari Kantor Virtual? Nanti perlu masukkan kata sandi lagi.')) logout(); }}><Ikon e="🚪" /></button>}
+            <div className="pill hide-hp" title={statusText}><span className={`dot ${dotClass}`} /><span className="hide-sm">{statusText}</span></div>
+            {status !== 'login' && <TombolKeputusan />}
+            <MenuProfil tema={tema} gantiTema={gantiTema} owner={owner} statusText={statusText} dotClass={dotClass} bisaKeluar={status !== 'login'} />
+        </div>
+    );
+}
+
+/** Menu profil: tema & keluar dipindah ke sini supaya tidak salah pencet (dulu tombol Keluar persis di samping tombol tema). */
+function MenuProfil({ tema, gantiTema, owner, statusText, dotClass, bisaKeluar }: { tema: string; gantiTema: () => void; owner: string; statusText: string; dotClass: string; bisaKeluar: boolean }) {
+    const [buka, setBuka] = useState(false);
+    useEffect(() => { if (!buka) return; const f = () => setBuka(false); setTimeout(() => document.addEventListener('click', f), 0); return () => document.removeEventListener('click', f); }, [buka]);
+    return (
+        <div className="mp">
+            <button className="mp-btn" aria-haspopup="menu" aria-expanded={buka} aria-label="Menu profil" onClick={() => setBuka((b) => !b)}>{(owner || 'R').replace(/^Pak\s+/i, '').slice(0, 1).toUpperCase()}</button>
+            {buka && (
+                <div className="mp-menu" role="menu" onClick={(e) => e.stopPropagation()}>
+                    <div className="mp-kepala"><b>{owner}</b><small><span className={`dot ${dotClass}`} /> {statusText}</small></div>
+                    <button role="menuitem" onClick={() => { gantiTema(); }}>{tema === 'dark' ? <><Ikon e="☀" /> Tampilan terang</> : <><Ikon e="☾" /> Tampilan gelap</>}</button>
+                    {bisaKeluar && <button role="menuitem" className="mp-keluar" onClick={() => { if (confirm('Keluar dari Kantor Virtual? Nanti perlu masukkan kata sandi lagi.')) logout(); }}><Ikon e="🚪" /> Keluar</button>}
+                </div>
+            )}
         </div>
     );
 }

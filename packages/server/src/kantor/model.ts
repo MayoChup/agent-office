@@ -10,7 +10,9 @@
 import fs from 'fs';
 import path from 'path';
 
-export type Cara = 'hermes' | 'gemini' | 'groq' | 'xai';
+export type Cara = 'hermes' | 'gemini' | 'groq' | 'xai' | 'freellm';
+/** AI yang memegang data pribadi Pak Rico: tidak pernah dialihkan ke penyedia gratis pihak ketiga (FreeLLM). */
+export const AI_PRIVAT = /^(default|hr|sekretaris|keuangan.*|eca.*)$/;
 export interface Opsi { id: string; label: string; cara: Cara; model: string; biaya: 'gratis' | 'berbayar'; batasHari: number; alat: boolean; ket: string; ada: boolean }
 export interface Atur { opsi: string; oleh: 'awal' | 'hr' | 'rico'; alasan: string; at: number; kunci: boolean }
 interface Hitung { n: number; masuk: number; keluar: number; gagal: number }
@@ -18,15 +20,17 @@ interface St { atur: Record<string, Atur>; hari: string; pakai: Record<string, H
 
 const hariWib = () => new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
 const kosong = (): Hitung => ({ n: 0, masuk: 0, keluar: 0, gagal: 0 });
-const BASE: Record<Exclude<Cara, 'hermes'>, string> = { gemini: 'https://generativelanguage.googleapis.com/v1beta/openai', groq: 'https://api.groq.com/openai/v1', xai: 'https://api.x.ai/v1' };
-const KUNCI: Record<Exclude<Cara, 'hermes'>, string> = { gemini: 'GEMINI_API_KEY', groq: 'GROQ_API_KEY', xai: 'XAI_API_KEY' };
-const PILIH: Record<Exclude<Cara, 'hermes'>, { prefer: RegExp[]; avoid: RegExp }> = {
+const BASE: Record<Exclude<Cara, 'hermes' | 'freellm'>, string> = { gemini: 'https://generativelanguage.googleapis.com/v1beta/openai', groq: 'https://api.groq.com/openai/v1', xai: 'https://api.x.ai/v1' };
+const KUNCI: Record<Exclude<Cara, 'hermes' | 'freellm'>, string> = { gemini: 'GEMINI_API_KEY', groq: 'GROQ_API_KEY', xai: 'XAI_API_KEY' };
+const PILIH: Record<Exclude<Cara, 'hermes' | 'freellm'>, { prefer: RegExp[]; avoid: RegExp }> = {
     gemini: { prefer: [/^gemini-2\.5-flash$/, /flash(?!.*(lite|preview|image|tts))/, /flash-lite/, /flash/], avoid: /image|tts|audio|live|embed|vision|thinking|learnlm|aqa|imagen|veo|robotics|computer/i },
     groq: { prefer: [/^llama-3\.3-70b/, /gpt-oss-120b/, /llama-4/, /qwen/, /llama/], avoid: /whisper|tts|guard|playai|vision|compound|distil|orpheus/i },
     xai: { prefer: [/grok-3-mini/, /mini/, /grok/], avoid: /image|vision/i }
 };
 
 export class ModelRouter {
+    /** Router FreeLLMAPI di VPS (opsional). */
+    freellm?: { siap(): boolean; chat(sistem: string, prompt: string, maks?: number): Promise<{ teks: string; model: string }> };
     private file: string;
     st: St = { atur: {}, hari: '', pakai: {}, aiHari: {}, riwayat: [], review: null, modelAuto: {} };
     private dingin = new Map<string, number>();
@@ -47,7 +51,8 @@ export class ModelRouter {
             { id: 'hermes', label: 'Hermes (bawaan profil)', cara: 'hermes', model: 'sesuai config profil (OpenRouter gratis)', biaya: 'gratis', batasHari: n('KANTOR_HERMES_PER_HARI', 400), alat: true, ket: 'Bisa memakai alat & skill. Kuota OpenRouter dipakai bersama chat — jangan dibebani tugas teks rutin.', ada: true },
             { id: 'gemini', label: 'Gemini Flash (langsung)', cara: 'gemini', model: this.env.GEMINI_MODEL || this.st.modelAuto.gemini?.model || 'otomatis (flash)', biaya: 'gratis', batasHari: n('KANTOR_GEMINI_PER_HARI', 250), alat: false, ket: 'Gratis, cepat, rapi untuk JSON & ringkasan. Tanpa alat.', ada: !!this.env.GEMINI_API_KEY },
             { id: 'groq', label: 'Groq Llama (langsung)', cara: 'groq', model: this.env.GROQ_MODEL || this.st.modelAuto.groq?.model || 'otomatis (llama 70B)', biaya: 'gratis', batasHari: n('KANTOR_GROQ_PER_HARI', 300), alat: false, ket: 'Gratis & sangat cepat. Cocok untuk teks pendek, game, tata desain.', ada: !!this.env.GROQ_API_KEY },
-            { id: 'grok', label: 'Grok (xAI, langsung)', cara: 'xai', model: this.env.XAI_MODEL || this.st.modelAuto.xai?.model || 'otomatis (grok mini)', biaya: 'berbayar', batasHari: n('KANTOR_XAI_PER_HARI', 30), alat: false, ket: 'Berbayar per token. Hanya Pak Rico yang bisa memilih ini.', ada: !!this.env.XAI_API_KEY }
+            { id: 'grok', label: 'Grok (xAI, langsung)', cara: 'xai', model: this.env.XAI_MODEL || this.st.modelAuto.xai?.model || 'otomatis (grok mini)', biaya: 'berbayar', batasHari: n('KANTOR_XAI_PER_HARI', 30), alat: false, ket: 'Berbayar per token. Hanya Pak Rico yang bisa memilih ini.', ada: !!this.env.XAI_API_KEY },
+            { id: 'freellm', label: 'FreeLLM (ratusan model gratis)', cara: 'freellm', model: 'otomatis (router)', biaya: 'gratis', batasHari: n('KANTOR_FREELLM_PER_HARI', 2000), alat: false, ket: 'Router gratis di VPS: pindah otomatis antar penyedia kalau kena limit. Hanya untuk tugas non-pribadi (berita, konten, Reels, riset).', ada: !!this.freellm?.siap() }
         ];
     }
     private cari(id: string) { return this.opsi().find((o) => o.id === id); }
@@ -61,7 +66,8 @@ export class ModelRouter {
             // Yang dulu terpaksa ke Hermes karena kunci Gemini/Groq belum ada → dibagi ulang begitu kuncinya tersedia.
             if (a && this.cari(a.opsi)?.ada && !(a.oleh === 'awal' && a.opsi === 'hermes' && langsung.length)) continue;
             if (a && a.kunci) continue;
-            const pilih = langsung.length ? langsung[i++ % langsung.length].id : 'hermes';
+            const boleh = langsung.filter((o) => o.cara !== 'freellm' || !AI_PRIVAT.test(id));
+            const pilih = boleh.length ? boleh[i++ % boleh.length].id : 'hermes';
             this.st.atur[id] = { opsi: pilih, oleh: 'awal', alasan: 'Pembagian awal supaya kuota tersebar.', at: Date.now(), kunci: false };
             ubah = true;
         }
@@ -69,8 +75,8 @@ export class ModelRouter {
     }
     /** Urutan opsi untuk satu tugas teks: pilihan AI itu dulu, lalu opsi gratis lain yang masih longgar, terakhir Hermes. */
     rute(aiId: string): Opsi[] {
-        const semua = this.opsi().filter((o) => o.ada);
-        const utama = this.cari(this.st.atur[aiId]?.opsi || 'hermes');
+        const semua = this.opsi().filter((o) => o.ada && (o.cara !== 'freellm' || !AI_PRIVAT.test(aiId)));
+        const utama = semua.find((o) => o.id === (this.st.atur[aiId]?.opsi || 'hermes')) || this.cari('hermes');
         const longgar = (o: Opsi) => this.terpakai(o.id) < o.batasHari && (this.dingin.get(o.id) || 0) < Date.now();
         const urut: Opsi[] = [];
         if (utama?.ada && longgar(utama)) urut.push(utama);
@@ -94,7 +100,7 @@ export class ModelRouter {
         return [baca('SOUL.md', 3000), mem ? `\nINGATANMU (dari otak kantor di VPS):${mem.slice(0, 5000)}` : ''].filter(Boolean).join('\n');
     }
     private async modelUntuk(o: Opsi): Promise<string> {
-        const cara = o.cara as Exclude<Cara, 'hermes'>;
+        const cara = o.cara as Exclude<Cara, 'hermes' | 'freellm'>;
         const tetap = cara === 'gemini' ? this.env.GEMINI_MODEL : cara === 'groq' ? this.env.GROQ_MODEL : this.env.XAI_MODEL;
         if (tetap) return tetap;
         const c = this.st.modelAuto[cara]; if (c && Date.now() - c.at < 12 * 3600_000) return c.model;
@@ -107,7 +113,14 @@ export class ModelRouter {
     }
     /** Panggil satu opsi langsung (OpenAI-compatible). */
     async langsung(o: Opsi, aiId: string, nama: string, prompt: string, maks = 4000): Promise<string> {
-        const cara = o.cara as Exclude<Cara, 'hermes'>;
+        if (o.cara === 'freellm') {
+            if (AI_PRIVAT.test(aiId)) throw new Error('AI ini memegang data pribadi; tidak lewat FreeLLM.');
+            if (!this.freellm?.siap()) throw new Error('FreeLLM belum siap.');
+            const sistem = [`Kamu ${nama}, anggota tim AI di Kantor Virtual milik Pak Rico. Ikuti format keluaran yang diminta persis (kalau diminta JSON, keluarkan JSON saja).`, this.otak(aiId)].filter(Boolean).join('\n\n');
+            try { return (await this.freellm.chat(sistem, prompt, maks)).teks; }
+            catch (e) { this.dingin.set(o.id, Date.now() + 3 * 60_000); throw e; }
+        }
+        const cara = o.cara as Exclude<Cara, 'hermes' | 'freellm'>;
         const kunci = this.env[KUNCI[cara]]; if (!kunci) throw new Error(`${o.label} belum diatur.`);
         const model = await this.modelUntuk(o);
         const sistem = [`Kamu ${nama}, anggota tim AI di Kantor Virtual milik Pak Rico. Ikuti format keluaran yang diminta persis (kalau diminta JSON, keluarkan JSON saja).`, this.otak(aiId)].filter(Boolean).join('\n\n');
@@ -134,7 +147,7 @@ export class ModelRouter {
      */
     async lihat(aiId: string, nama: string, prompt: string, gambar: Array<{ mime: string; data: Buffer }>, maks = 1500): Promise<{ teks: string; model: string }> {
         if (!gambar.length) throw new Error('Tidak ada gambar.');
-        const urut: Array<Exclude<Cara, 'hermes'>> = ['gemini', 'groq', 'xai'];
+        const urut: Array<Exclude<Cara, 'hermes' | 'freellm'>> = ['gemini', 'groq', 'xai'];
         const galat: string[] = [];
         for (const cara of urut) {
             const kunci = this.env[KUNCI[cara]]; if (!kunci) continue;
@@ -164,6 +177,7 @@ export class ModelRouter {
     setAtur(aiId: string, opsi: string, oleh: 'hr' | 'rico', alasan = '', kunci?: boolean) {
         const o = this.cari(opsi); if (!o) throw new Error('Opsi model tidak dikenal.'); if (!o.ada) throw new Error(`${o.label} belum diatur di server (kunci API belum ada).`);
         const lama = this.st.atur[aiId];
+        if (o.cara === 'freellm' && AI_PRIVAT.test(aiId)) throw new Error('AI ini memegang data pribadi Pak Rico; tidak boleh memakai penyedia gratis pihak ketiga.');
         if (oleh === 'hr') { if (o.biaya !== 'gratis') throw new Error('HR hanya boleh memilih opsi gratis.'); if (lama?.kunci) throw new Error('Dikunci Pak Rico.'); }
         this.st.atur[aiId] = { opsi, oleh, alasan: alasan.slice(0, 200), at: Date.now(), kunci: oleh === 'rico' ? kunci !== false : false };
         this.simpan(); return this.st.atur[aiId];

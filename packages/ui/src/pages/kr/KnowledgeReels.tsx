@@ -422,7 +422,7 @@ function PanelCatatan({ p, ctx, ganti, tutup }: { p: KPost; ctx: Ctx; ganti: (p:
             )}
             {balas && <div className="kr-balas-ke">Membalas {balas.dari && balas.dari !== 'rico' ? balas.nama : 'komentar Bapak'} <button onClick={() => setBalas(null)}>batal</button></div>}
             <div className="kr-cat-tulis baris">
-                <textarea ref={masuk} value={t} onChange={(e) => setT(e.target.value)} placeholder="Tambahkan komentar… (ketik @ untuk tag tim)" rows={1} maxLength={3000}
+                <textarea ref={masuk} value={t} onChange={(e) => setT(e.target.value)} placeholder={ctx.hp ? 'Tambahkan komentar…' : 'Tambahkan komentar… (ketik @ untuk tag tim)'} rows={1} maxLength={3000}
                     onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !saran.length) { e.preventDefault(); tambah(); } }} />
                 <button className="kr-kirim" disabled={kirim || !t.trim()} onClick={tambah}>Kirim</button>
             </div>

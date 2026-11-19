@@ -613,6 +613,51 @@ function Balas({ kabar }: { kabar: (m: string) => void }) {
 
 const SKILL: Record<string, string> = { sosmed: '/ig-plan · /ig-profile · /ig-audit', 'sosmed-riset': '/ig-viral · /ig-audit', 'sosmed-penulis': '/reels-cepat · /ig-reel · /ig-caption · /ig-carousel · /ig-story · /ig-repurpose · /ig-human', 'sosmed-produksi': '/video-edit · /ig-human + prompt per gaya', 'sosmed-komunitas': '/ig-reply · /ig-comment · /ig-dm' };
 const TUGAS: Record<string, string> = { sosmed: 'Strategi, jadwal format, kalender, evaluasi hasil & pelajaran', 'sosmed-riset': 'Analisa niche: masalah penonton, pola yang berhasil, celah, akun acuan', 'sosmed-penulis': '3 sudut + skor, hook, naskah, voiceover, shot list, subtitle, caption per platform', 'sosmed-produksi': 'Prompt video/gambar sesuai gaya, daftar rekam & prompt edit (real), prompt suara ElevenLabs, unggah', 'sosmed-komunitas': 'Draf balasan komentar & DM' };
+/** R9 Autopilot: posting & DM otomatis untuk akun ini (API resmi), dengan rem pengaman. */
+interface Autopilot { aktif: boolean; jedaJam: number; balas: boolean; dm: { aktif: boolean; kata: string[]; pesan: string; perJam: number }; log: Array<{ at: number; jenis: string; teks: string }> }
+function KartuAutopilot() {
+    const r = useApi<{ autopilot: Autopilot; tersambung: boolean; platform: string }>(`/api/kantor/sosmed/autopilot?akun=${encodeURIComponent(AKUN)}`, 60_000);
+    const [ubah, setUbah] = useState<Partial<Autopilot> & { kata?: string } | null>(null);
+    const [busy, setBusy] = useState(false); const [err, setErr] = useState('');
+    const a = r.data?.autopilot;
+    if (!a) return null;
+    const v = { ...a, ...(ubah || {}), dm: { ...a.dm, ...((ubah as any)?.dm || {}) } } as Autopilot;
+    const kata = ubah?.kata ?? a.dm.kata.join(', ');
+    const simpan = async (patch: any) => {
+        setBusy(true); setErr('');
+        try { await post('/api/kantor/sosmed/autopilot', patch); setUbah(null); r.reload(); } catch (e: any) { setErr(String(e.message || e)); }
+        setBusy(false);
+    };
+    const set = (patch: any) => setUbah((u) => ({ ...(u || {}), ...patch, dm: { ...((u as any)?.dm || {}), ...(patch.dm || {}) } }));
+    return (
+        <section className={`sb-card ap ${a.aktif ? 'on' : ''}`}>
+            <div className="ap-kepala">
+                <div><h3>Autopilot</h3><p className="sb-note">{a.aktif ? 'Menyala. Konten yang medianya siap terbit sendiri; balasan & DM berjalan sesuai aturan di bawah.' : 'Mati. Semua posting & balasan menunggu Bapak menekan Setujui/Kirim.'}</p></div>
+                <button role="switch" aria-checked={a.aktif} className={`ap-saklar ${a.aktif ? 'on' : ''}`} disabled={busy || (!a.aktif && !r.data?.tersambung)} onClick={() => simpan({ aktif: !a.aktif })}><span /></button>
+            </div>
+            {!r.data?.tersambung && <p className="fin-alert">Sambungkan akun Instagram Profesional di bawah dulu. Autopilot hanya memakai API resmi Meta.</p>}
+            <div className="ap-grid">
+                <label>Jeda sebelum terbit<select className="select" value={v.jedaJam} onChange={(e) => set({ jedaJam: Number(e.target.value) })}>{[0.5, 1, 2, 4, 8, 12, 24].map((j) => <option key={j} value={j}>{j < 1 ? '30 menit' : `${j} jam`}</option>)}</select><small>Waktu Bapak untuk membatalkan dari menu Konten.</small></label>
+                <label className="ap-cek"><input type="checkbox" checked={v.balas} onChange={(e) => set({ balas: e.target.checked })} /> Kirim balasan komentar yang sudah didraf Dea</label>
+                <label className="ap-cek"><input type="checkbox" checked={v.dm.aktif} onChange={(e) => set({ dm: { aktif: e.target.checked } })} /> DM otomatis untuk komentar berkata kunci</label>
+                {v.dm.aktif && (<>
+                    <label>Kata kunci (pisahkan dengan koma)<input className="input" value={kata} placeholder="mis. AGENCY, LINK, MAU" onChange={(e) => set({ kata: e.target.value })} /></label>
+                    <label>Isi DM<textarea className="textarea" rows={3} value={v.dm.pesan} maxLength={1000} placeholder="Hai {nama}! Ini link yang kamu minta: …" onChange={(e) => set({ dm: { pesan: e.target.value } })} /><small>{'{nama}'} diganti username yang berkomentar.</small></label>
+                    <label>Maksimal DM per jam<input className="input" type="number" min={1} max={60} value={v.dm.perJam} onChange={(e) => set({ dm: { perJam: Number(e.target.value) } })} /></label>
+                </>)}
+            </div>
+            <p className="sb-note">Rem pengaman: komentar soal janji untung, harga pasti, rekening, kata sandi, KTP, atau keluhan serius tidak pernah dibalas otomatis. Satu komentar maksimal satu DM. DM butuh izin pesan Instagram pada token akun.</p>
+            {err && <div className="error">{err}</div>}
+            {ubah && <div className="sm-aksi"><button className="btn primary" disabled={busy} onClick={() => simpan({ jedaJam: v.jedaJam, balas: v.balas, dm: { aktif: v.dm.aktif, kata: kata.split(','), pesan: v.dm.pesan, perJam: v.dm.perJam } })}>{busy ? 'Menyimpan…' : 'Simpan aturan'}</button><button className="btn" onClick={() => setUbah(null)}>Batal</button></div>}
+            {!!a.log.length && (
+                <details className="ap-log"><summary>Aktivitas autopilot ({a.log.length})</summary>
+                    {a.log.slice(0, 30).map((l, i) => <div key={i}><small>{new Date(l.at).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</small><b>{l.jenis === 'terbit' ? 'Jadwal' : l.jenis === 'balas' ? 'Balas' : l.jenis === 'dm' ? 'DM' : 'Dilewati'}</b><span>{l.teks}</span></div>)}
+                </details>
+            )}
+        </section>
+    );
+}
+
 function TabAkun({ x, aksi, kabar, muat, keBeranda, bukaKuis }: P & { muat: () => void; keBeranda: () => void; bukaKuis: () => void }) {
     const [p, setP] = useState<Profil>(x.profil);
     const [pasang, setPasang] = useState(false);
@@ -624,6 +669,7 @@ function TabAkun({ x, aksi, kabar, muat, keBeranda, bukaKuis }: P & { muat: () =
     const [pk, setPk] = useState('');
     const pkAkhir = x.pengikut.length ? x.pengikut[x.pengikut.length - 1] : null;
     return (<>
+        <KartuAutopilot />
         <section className="sb-card">
             <div className="sd-h"><h3><Ikon e={pi?.ikon} /> Akun ini <small>{pi?.nama}</small></h3></div>
             <div className="sm-form">
