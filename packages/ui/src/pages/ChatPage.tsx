@@ -9,6 +9,7 @@ import { Avatar } from '../components/Avatar';
 import { RichText, pecahBalasan } from '../components/common/RichText';
 
 import { Ikon } from '../components/Ikon';
+import { konfirmasi } from '../components/Konfirmasi';
 interface ThreadInfo { id: string; nama: string; peran: string; terakhir: { nama: string; teks: string; at: number } | null; menulis: string[]; grup?: boolean; ikon?: string; anggota?: string[] }
 interface Lampiran { rel: string; nama: string; ukuran: number; jenis: 'gambar' | 'berkas' }
 interface Pesan { id: string; dari: string; nama: string; teks: string; at: number; status?: 'gagal'; berat?: boolean; lampiran?: Lampiran[] }
@@ -116,6 +117,7 @@ function Thread({ info, threads, skin, onBack, onSeen, onInfo }: { info: ThreadI
     const [err, setErr] = useState('');
     const endRef = useRef<HTMLDivElement>(null);
     const bodyRef = useRef<HTMLDivElement>(null);
+    useEffect(() => { const f = (e: Event) => { const t = String((e as CustomEvent).detail?.teks || ''); setText((x) => (x.startsWith('>') ? x.replace(/^(>.*\n)+/, '') : x).replace(/^/, t)); inputRef.current?.focus(); }; eventBus.addEventListener('chat-balas', f); return () => eventBus.removeEventListener('chat-balas', f); }, []); // eslint-disable-line react-hooks/exhaustive-deps
     const diBawah = useRef(true);
     const [baru, setBaru] = useState(0);
     const keBawah = (halus = false) => { const b = bodyRef.current; if (b) b.scrollTo({ top: b.scrollHeight, behavior: halus ? 'smooth' : 'auto' }); setBaru(0); };
@@ -259,6 +261,12 @@ function namaPeran(threads: ThreadInfo[], nama: string) { const t = threads.find
 function Bubble({ m, grup, peran }: { m: Pesan; grup: boolean; peran?: string }) {
     const me = m.dari === 'owner';
     const [salin, setSalin] = useState(false);
+    // Tekan lama (HP) / klik kanan (laptop) = menu Balas & Salin, seperti WA.
+    const [menu, setMenu] = useState(false);
+    const tekan = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const mulaiTekan = () => { tekan.current = setTimeout(() => { setMenu(true); try { navigator.vibrate?.(10); } catch { /* */ } }, 450); };
+    const batalTekan = () => { if (tekan.current) clearTimeout(tekan.current); };
+    const balas = () => { eventBus.dispatchEvent(new CustomEvent('chat-balas', { detail: { teks: `> ${me ? 'Saya' : m.nama}: ${(m.teks || '').replace(/\s+/g, ' ').slice(0, 140)}${(m.teks || '').length > 140 ? '…' : ''}\n` } })); setMenu(false); };
     const gagal = m.status === 'gagal' || (!me && /^\W*\S+ gagal membalas:/.test(m.teks || ''));
     if (gagal) {
         const sebab = (m.teks || '').replace(/^\W*\S+ gagal membalas:\s*/, '');
@@ -277,10 +285,11 @@ function Bubble({ m, grup, peran }: { m: Pesan; grup: boolean; peran?: string })
             {bagian.map((teks, i) => {
                 const akhir = i === bagian.length - 1;
                 return (
-                    <div key={i} className={`wa-bubble ${me ? 'me' : 'them'} ${i ? 'lanjut' : ''}`}>
+                    <div key={i} className={`wa-bubble ${me ? 'me' : 'them'} ${i ? 'lanjut' : ''}`} onTouchStart={mulaiTekan} onTouchEnd={batalTekan} onTouchMove={batalTekan} onContextMenu={(e) => { e.preventDefault(); setMenu(true); }}>
+                        {menu && akhir && <div className="wa-menu" onClick={(e) => e.stopPropagation()}><button onClick={balas}>Balas</button><button onClick={() => { copy(); setMenu(false); }}>Salin</button><button onClick={() => setMenu(false)}>Tutup</button></div>}
                         {i === 0 && grup && !me && <div className="wa-name" style={{ color: warna(m.dari) }}>{m.nama}{peran ? <span className="wa-jabatan"> - {peran}</span> : null}</div>}
                         {i === 0 && !!m.lampiran?.length && <div className="wa-lamp">{m.lampiran.map((l) => <LampiranView key={l.rel} l={l} />)}</div>}
-                        {teks && <div className="wa-text">{me ? teks : <RichText text={teks} />}</div>}
+                        {teks && <div className="wa-text">{me && !/^>/m.test(teks) ? teks : <RichText text={teks} />}</div>}
                         {akhir && (
                             <div className="wa-time">
                                 {!me && m.teks && m.teks.length > 80 && <button type="button" className="wa-salin" onClick={copy} aria-label="Salin pesan">{salin ? 'Tersalin' : 'Salin'}</button>}
@@ -405,7 +414,7 @@ function FormGrup({ awal, threads, tutup, selesai }: { awal: ThreadInfo | null; 
         catch (e: any) { setErr(String(e.message || e)); }
         setKirim(false);
     };
-    const hapus = async () => { if (!awal || !confirm(`Hapus grup "${awal.nama}" beserta isi chatnya?`)) return; await apiPost(`/api/kantor/chat-grup/${awal.id}/hapus`, {}); selesai(null); };
+    const hapus = async () => { if (!awal || !(await konfirmasi(`Hapus grup "${awal.nama}" beserta isi chatnya?`))) return; await apiPost(`/api/kantor/chat-grup/${awal.id}/hapus`, {}); selesai(null); };
     const daftar = ai.filter((a) => !q || `${a.nama} ${a.peran}`.toLowerCase().includes(q.toLowerCase()));
     return (
         <div className="wa-modal-bg" onClick={tutup}>

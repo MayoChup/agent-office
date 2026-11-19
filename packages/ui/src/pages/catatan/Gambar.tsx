@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { Ikon } from '../../components/Ikon';
+import { konfirmasi } from '../../components/Konfirmasi';
 /** Coretan disimpan sebagai SVG (vektor, tajam di semua layar). Data goresan ikut disimpan di <desc> supaya bisa diedit lagi. */
 interface Gores { c: string; w: number; hl: boolean; p: number[] } // p = [x,y,tekanan, x,y,tekanan, ...]
 const WARNA = ['#111827', '#2563eb', '#dc2626', '#16a34a', '#f59e0b', '#7c3aed', '#ffffff'];
@@ -85,7 +86,7 @@ export function Gambar({ awal, onSimpan, onTutup }: { awal?: string; onSimpan: (
                 <div className="gb-group">
                     <button onClick={undo} disabled={!gores.length} title="Batal (Ctrl+Z)"><Ikon e="↶" /></button>
                     <button onClick={ulang} disabled={!redo.length} title="Ulangi"><Ikon e="↷" /></button>
-                    <button onClick={() => { if (confirm('Hapus semua coretan?')) { setGores([]); setRedo([]); } }} title="Bersihkan"><Ikon e="🗑" /></button>
+                    <button onClick={async () => { if ((await konfirmasi('Hapus semua coretan?'))) { setGores([]); setRedo([]); } }} title="Bersihkan"><Ikon e="🗑" /></button>
                     <select value={latar} onChange={(e) => setLatar(e.target.value as any)}><option value="#ffffff">Polos</option><option value="garis">Bergaris</option><option value="kotak">Kotak</option></select>
                 </div>
                 <button className="btn primary gb-save" disabled={busy} onClick={async () => { setBusy(true); try { await onSimpan(keSvg(gores, '#ffffff')); } finally { setBusy(false); } }}>{busy ? 'Menyimpan…' : 'Simpan'}</button>

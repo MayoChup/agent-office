@@ -5,6 +5,7 @@ import { FaktorKey, ScreenerData } from './types';
 import { Kartu } from './PilihanView';
 
 import { Ikon } from '../../components/Ikon';
+import { konfirmasi } from '../../components/Konfirmasi';
 export interface Folder { id: string; nama: string; ikon: string; simbol: string[] }
 export interface FolderData { folders: Folder[]; utama: string[] }
 const IKON = ['📁', '⭐', '💰', '🚀', '🏦', '🤖', '⚡', '🛢️', '💊', '🛒', '👀', '🎯'];
@@ -60,7 +61,7 @@ export function WatchlistView({ data, faktor, onOpen }: { data: ScreenerData; fa
                 {cur && (
                     <>
                         <button className="btn" onClick={() => { const n = prompt('Nama baru folder', cur.nama); if (n) kirim({ aksi: 'ubah', id: cur.id, nama: n }); }}>Ganti nama</button>
-                        <button className="btn" onClick={() => { if (confirm(`Hapus folder "${cur.nama}"? Sahamnya tidak terhapus dari data.`)) { kirim({ aksi: 'hapus', id: cur.id }); setAktif('utama'); } }}>Hapus folder</button>
+                        <button className="btn" onClick={async () => { if ((await konfirmasi(`Hapus folder "${cur.nama}"? Sahamnya tidak terhapus dari data.`))) { kirim({ aksi: 'hapus', id: cur.id }); setAktif('utama'); } }}>Hapus folder</button>
                     </>
                 )}
             </div>

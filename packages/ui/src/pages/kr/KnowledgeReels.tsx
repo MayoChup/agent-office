@@ -9,6 +9,7 @@ import { eventBus } from '../../events';
 import { LembarKr, SampulKr, lembarDari, type KPost, type KTema, type KCatatan } from './Slide';
 
 import { Ikon } from '../../components/Ikon';
+import { konfirmasi } from '../../components/Konfirmasi';
 interface Status {
     per: Record<string, { total: number; baru: number }>; folder: Array<{ id: string; nama: string; n: number; sampul: string | null }>;
     hariIni: number; dibaca: number; skor: { main: number; benar: number }; tema: Record<string, KTema>; segmen: Array<[string, string]>;
@@ -178,19 +179,22 @@ function Pos({ p, ctx, ganti, diModal }: { p: KPost; ctx: Ctx; ganti: (p: KPost)
             </div>
         </div>
     );
+    const hati = (isi: boolean) => <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden><path d="M12 20.5s-7.5-4.6-9.3-9.2C1.6 8.4 3.4 5 6.8 5c2 0 3.4 1.1 4.2 2.4C11.8 6.1 13.2 5 15.2 5c3.4 0 5.2 3.4 4.1 6.3-1.8 4.6-7.3 9.2-7.3 9.2Z" fill={isi ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" /></svg>;
     const aksi = (
-        <div className="kr-aksi">
-            <button className={`kr-baca ${p.baca ? 'on' : ''}`} onClick={() => baca()} aria-pressed={!!p.baca} title={p.baca ? 'Batalkan sudah baca' : 'Tandai sudah baca'}>
-                <span className="kr-ico">✓</span><span className="kr-lbl">Sudah baca</span>
+        <div className="kr-aksi ig-aksi">
+            <button className={`kr-baca ${p.baca ? 'on' : ''}`} onClick={() => baca()} aria-pressed={!!p.baca} aria-label={p.baca ? 'Batalkan sudah baca' : 'Tandai sudah baca'} title={p.baca ? 'Batalkan sudah baca' : 'Sudah baca (atau ketuk dua kali gambarnya)'}>
+                {hati(!!p.baca)}<span className="kr-lbl">{p.baca ? 'Sudah dibaca' : 'Sudah baca'}</span>
             </button>
-            <button className={buka === 'catatan' ? 'on' : ''} onClick={() => setBuka(buka === 'catatan' ? '' : 'catatan')} title="Komentar">
-                <span className="kr-ico"><Ikon e="💬" /></span><span className="kr-lbl">{p.catatan?.length ? `${p.catatan.length} komentar` : 'Komentar'}</span>
+            <button className={buka === 'catatan' ? 'on' : ''} onClick={() => setBuka(buka === 'catatan' ? '' : 'catatan')} aria-label="Komentar" title="Komentar">
+                <Ikon e="💬" size={24} />{!!p.catatan?.length && <span className="kr-jml">{p.catatan.length}</span>}<span className="kr-lbl">Komentar</span>
             </button>
-            <button className={`kr-simpan ${p.folder?.length ? 'on' : ''}`} onClick={() => setBuka(buka === 'simpan' ? '' : 'simpan')} title="Simpan ke folder">
-                <span className="kr-ico">{p.folder?.length ? '★' : '☆'}</span><span className="kr-lbl">{p.folder?.length ? 'Tersimpan' : 'Simpan'}</span>
+            <span className="kr-aksi-sp" />
+            <button className={`kr-simpan ${p.folder?.length ? 'on' : ''}`} onClick={() => setBuka(buka === 'simpan' ? '' : 'simpan')} aria-label={p.folder?.length ? 'Tersimpan' : 'Simpan ke folder'} title="Simpan ke folder">
+                <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden><path d="M6 3.8h12v16.6l-6-4.4-6 4.4Z" fill={p.folder?.length ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" /></svg><span className="kr-lbl">{p.folder?.length ? 'Tersimpan' : 'Simpan'}</span>
             </button>
         </div>
     );
+
     const keterangan = (
         <div className="kr-ket">
             <p><button className="kr-akun" onClick={() => ctx.bukaTema(p.kat)}>{tema?.nama}</button> {p.judul}{p.sub ? ` — ${p.sub}` : ''}</p>
@@ -501,7 +505,7 @@ function ProfilTema({ ctx, kat, kembali }: { ctx: Ctx; kat: string; kembali: () 
 function Tersimpan({ ctx, folder, setFolder }: { ctx: Ctx; folder: string; setFolder: (f: string) => void }) {
     const r = useApi<{ folder: { id: string; nama: string }; post: KPost[] }>(`/api/kantor/kr/tersimpan?folder=${folder}`, 60_000);
     const ubah = async (id: string, lama: string) => { const n = prompt('Nama folder', lama); if (!n?.trim()) return; try { await apiPost(`/api/kantor/kr/folder/${id}/ubah`, { nama: n }); ctx.muatStatus(); } catch (e: any) { ctx.pesan(String(e?.message || e)); } };
-    const hapus = async (id: string) => { if (!confirm('Hapus folder ini? Postingannya tidak ikut terhapus.')) return; try { await apiPost(`/api/kantor/kr/folder/${id}/hapus`, {}); ctx.muatStatus(); setFolder('umum'); } catch (e: any) { ctx.pesan(String(e?.message || e)); } };
+    const hapus = async (id: string) => { if (!(await konfirmasi('Hapus folder ini? Postingannya tidak ikut terhapus.'))) return; try { await apiPost(`/api/kantor/kr/folder/${id}/hapus`, {}); ctx.muatStatus(); setFolder('umum'); } catch (e: any) { ctx.pesan(String(e?.message || e)); } };
     const f = ctx.folder.find((x) => x.id === folder);
     return (
         <div className="kr-hal">

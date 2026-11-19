@@ -533,3 +533,62 @@
 :root:root .tugas-hal .panel, :root:root .tugas-hal .papan { position: relative; inset: auto; top: auto; left: auto; right: auto; bottom: auto; width: 100%; max-width: none; height: auto; min-height: 60vh; flex: 1; animation: none; box-shadow: none; backdrop-filter: none; background: var(--panel-solid); border-radius: var(--r-kartu); }
 .tugas-hal .panel-head > .icon-btn, .tugas-hal .pk-saring > .icon-btn { display: none; }
 @media (max-width: 767px) { .tugas-hal { padding: 16px 12px 24px; } .tugas-kepala h2 { display: none; } }
+
+/* Lembar konfirmasi dalam aplikasi */
+.kf-latar { position: fixed; inset: 0; z-index: 120; background: rgba(4, 6, 12, 0.55); display: flex; align-items: center; justify-content: center; padding: 16px; animation: lembar-latar 0.15s ease; }
+.kf { width: min(420px, 100%); background: var(--panel-solid); border: 1px solid var(--line-strong); border-radius: 16px; padding: 20px; box-shadow: var(--angkat); animation: kf-masuk 0.2s var(--kurva); }
+.kf p { margin: 0 0 20px; font-size: 15px; line-height: 22px; color: var(--text); }
+.kf-aksi { display: flex; justify-content: flex-end; gap: 8px; }
+:root:root .btn.bahaya { background: var(--down); border-color: transparent; color: #fff; }
+:root:root .btn.bahaya:hover { background: color-mix(in srgb, var(--down) 88%, #000); }
+@keyframes kf-masuk { from { transform: scale(0.97); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (max-width: 767px) { .kf-latar { align-items: flex-end; padding: 0; } .kf { border-radius: 16px 16px 0 0; padding: 20px 16px max(20px, env(safe-area-inset-bottom)); width: 100%; } .kf-aksi .btn { flex: 1; height: 44px; } }
+
+/* Reels: bar aksi ala IG */
+:root:root .ig-aksi { display: flex; align-items: center; gap: 4px; padding: 6px 8px; }
+:root:root .ig-aksi > button { display: inline-flex; align-items: center; gap: 6px; min-width: 44px; height: 44px; padding: 0 8px; border: none; background: none; color: var(--text); border-radius: 10px; cursor: pointer; font: inherit; font-size: 13px; }
+:root:root .ig-aksi > button:hover { background: var(--naik); }
+:root:root .ig-aksi .kr-baca.on { color: #e5484d; }
+:root:root .ig-aksi .kr-simpan.on { color: var(--accent); }
+:root:root .ig-aksi > button:active svg { transform: scale(0.88); }
+.ig-aksi svg { transition: transform 0.15s var(--kurva); }
+.kr-aksi-sp { flex: 1; }
+.kr-jml { font-size: 13px; font-variant-numeric: tabular-nums; }
+@media (max-width: 767px) { :root:root .ig-aksi .kr-lbl { display: none; } }
+
+/* HP: area sentuh minimal 44px */
+@media (max-width: 767px) {
+  :root:root .btn { height: 44px; }
+  :root:root .btn.small { height: 40px; }
+  :root:root .icon-btn { width: 40px; height: 40px; }
+  :root:root .chip { min-height: 36px; }
+  :root:root .sb-seg button { height: 36px; }
+  :root:root select.select, :root:root .input { min-height: 44px; }
+}
+/* Tugas: pilih penerima dari foto AI */
+.tp-penerima { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; flex: 1; min-width: 0; padding-bottom: 2px; }
+.tp-penerima::-webkit-scrollbar { display: none; }
+.tp-penerima button { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 12px 0 6px; border-radius: 99px; border: 1px solid var(--line-strong); background: var(--naik); color: var(--text); font: inherit; font-size: 13px; cursor: pointer; }
+.tp-penerima button.on { border-color: var(--aksen-garis); background: var(--aksen-lembut); color: var(--accent); }
+.tp-inisial { width: 28px; height: 28px; border-radius: 50%; background: var(--naik-2); display: inline-grid; place-items: center; font-weight: 600; }
+
+/* Pencarian global */
+.cari-latar { position: fixed; inset: 0; z-index: 110; background: rgba(4, 6, 12, 0.55); display: flex; justify-content: center; align-items: flex-start; padding: 12vh 16px 16px; animation: lembar-latar 0.15s ease; }
+.cari { width: min(620px, 100%); max-height: 70vh; display: flex; flex-direction: column; background: var(--panel-solid); border: 1px solid var(--line-strong); border-radius: 16px; box-shadow: var(--angkat); overflow: hidden; animation: kf-masuk 0.18s var(--kurva); }
+.cari-masuk { display: flex; align-items: center; gap: 10px; padding: 0 16px; height: 56px; border-bottom: 1px solid var(--line); color: var(--muted); }
+.cari-masuk input { flex: 1; border: none; background: none; outline: none; color: var(--text); font: inherit; font-size: 16px; box-shadow: none !important; }
+.cari-masuk kbd { font-family: var(--mono); font-size: 11px; color: var(--faint); border: 1px solid var(--line-strong); border-radius: 4px; padding: 1px 5px; }
+.cari-daftar { overflow-y: auto; padding: 6px; }
+.cari-grup { font-size: 12px; color: var(--faint); padding: 10px 10px 4px; }
+.cari-daftar > button { width: 100%; display: flex; align-items: center; gap: 12px; padding: 8px 10px; min-height: 44px; border: none; background: none; color: var(--text); font: inherit; text-align: left; border-radius: 8px; cursor: pointer; }
+.cari-daftar > button.on { background: var(--naik); }
+.cari-daftar > button span { display: flex; flex-direction: column; min-width: 0; } .cari-daftar b { font-weight: 500; font-size: 14px; }
+.cari-daftar small { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cari-kosong { padding: 24px; text-align: center; color: var(--muted); font-size: 14px; }
+@media (max-width: 767px) { .cari-latar { padding: 0; align-items: stretch; } .cari { max-height: none; height: 100%; border-radius: 0; border: none; } }
+/* Chat: menu tekan lama */
+:root:root .wa-bubble { position: relative; -webkit-touch-callout: none; }
+.wa-menu { position: absolute; bottom: calc(100% + 4px); right: 0; z-index: 5; display: flex; gap: 2px; padding: 4px; background: var(--panel-solid); border: 1px solid var(--line-strong); border-radius: 10px; box-shadow: var(--angkat); }
+.wa-bubble.them .wa-menu { right: auto; left: 0; }
+.wa-menu button { height: 36px; padding: 0 12px; border: none; background: none; color: var(--text); font: inherit; font-size: 13px; border-radius: 8px; cursor: pointer; }
+.wa-menu button:hover { background: var(--naik); }

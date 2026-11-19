@@ -46,18 +46,28 @@ export async function apiGet<T = any>(pathAndQuery: string): Promise<T> {
     const res = await fetch(`${server}${pathAndQuery}`, { headers: { Authorization: `Bearer ${token}` } });
     const data = await res.json().catch(() => ({}));
     if (res.status === 401) { safeSet(LS_TOKEN, ''); setStatus('login'); }
-    if (!res.ok || data?.ok === false) throw new Error(data?.error || `HTTP ${res.status}`);
+    if (!res.ok || data?.ok === false) throw new Error(manusiawi(data?.error || `HTTP ${res.status}`, res.status));
     return data as T;
 }
 /** Panggil API kantor yang butuh login (POST JSON). */
-export async function apiPost<T = any>(pathAndQuery: string, body: unknown): Promise<T> {
+async function apiPostAsli<T = any>(pathAndQuery: string, body: unknown): Promise<T> {
     const server = currentServer();
     const token = safeGet(LS_TOKEN);
     const res = await fetch(`${server}${pathAndQuery}`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const data = await res.json().catch(() => ({}));
     if (res.status === 401) { safeSet(LS_TOKEN, ''); setStatus('login'); }
-    if (!res.ok || data?.ok === false) throw new Error(data?.error || `HTTP ${res.status}`);
+    if (!res.ok || data?.ok === false) throw new Error(manusiawi(data?.error || `HTTP ${res.status}`, res.status));
     return data as T;
+}
+
+/** Klik dobel / kirim dua kali tidak mengirim permintaan yang sama dua kali selama yang pertama belum selesai. */
+const sedangKirim = new Map<string, Promise<any>>();
+export function apiPost<T = any>(pathAndQuery: string, body: unknown): Promise<T> {
+    let kunci = '';
+    try { kunci = `${pathAndQuery}|${JSON.stringify(body)}`; } catch { return apiPostAsli<T>(pathAndQuery, body); }
+    const ada = sedangKirim.get(kunci); if (ada) return ada as Promise<T>;
+    const p = apiPostAsli<T>(pathAndQuery, body).finally(() => sedangKirim.delete(kunci));
+    sedangKirim.set(kunci, p); return p;
 }
 /** Alamat server kantor & token, untuk unggah berkas besar (XHR dengan progres). */
 export function serverBase() { return currentServer(); }
@@ -67,7 +77,7 @@ export function tokenLogin() { return safeGet(LS_TOKEN); }
 export async function apiBlob(pathAndQuery: string): Promise<Blob> {
     const res = await fetch(`${currentServer()}${pathAndQuery}`, { headers: { Authorization: `Bearer ${safeGet(LS_TOKEN)}` } });
     if (res.status === 401) { safeSet(LS_TOKEN, ''); setStatus('login'); }
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) throw new Error(manusiawi(`HTTP ${res.status}`, res.status));
     return res.blob();
 }
 export function getStatus() { return status; }
@@ -128,6 +138,7 @@ export async function login(serverInput: string, password: string): Promise<{ ok
 }
 
 export function logout() {
+    try { Object.keys(localStorage).filter((k) => k.startsWith('kantor:api:') || k.startsWith('kantor:draf:')).forEach((k) => localStorage.removeItem(k)); } catch { /* */ }
     safeSet(LS_TOKEN, '');
     try { room?.leave(true); } catch { /* */ }
     room = undefined;
@@ -182,4 +193,21 @@ export async function connect() {
 export async function startConnection() {
     sameOriginServer = await detectSameOrigin();
     await connect();
+}
+
+/** Pesan galat teknis → kalimat yang bisa dipahami + langkah perbaikan (detail teknis tetap disebut singkat di akhir). */
+export function manusiawi(pesan: string, status = 0): string {
+    const p = String(pesan || '');
+    const atur: Array<[RegExp, string]> = [
+        [/pencatat\.spreadsheetId kosong|Pencatat belum diatur/i, 'Keuangan belum disambungkan ke Google Sheets. Minta Joni di Chat: "sambungkan pencatat keuangan ke Google Sheets".'],
+        [/spawn hermes ENOENT|hermes: not found/i, 'AI belum bisa dijalankan: Hermes belum terpasang atau tidak ditemukan di server.'],
+        [/Izin Google belum ada|google_token\.json/i, 'Akun Google belum disambungkan. Minta Joni: "pasang skill google-workspace".'],
+        [/GEMINI_API_KEY|GROQ_API_KEY/i, 'Fitur baca gambar butuh kunci Gemini atau Groq di .env Hermes di server.'],
+        [/Failed to fetch|NetworkError|Load failed/i, 'Tidak tersambung ke kantor. Periksa internet, lalu coba lagi.'],
+        [/timeout|timed out|AbortError/i, 'Kantor terlalu lama menjawab. Coba lagi sebentar lagi.']
+    ];
+    for (const [re, teks] of atur) if (re.test(p)) return p.length > 80 || teks.includes(p) ? teks : `${teks} (${p.slice(0, 80)})`;
+    if (status >= 500) return `Server kantor sedang bermasalah (${p.slice(0, 80)}). Coba lagi sebentar lagi.`;
+    if (status === 404) return 'Data yang dicari tidak ditemukan. Mungkin sudah dihapus — muat ulang halaman.';
+    return p;
 }

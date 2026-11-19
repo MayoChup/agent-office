@@ -1,7 +1,9 @@
+import { eventBus } from '../events';
 import React, { useEffect, useRef, useState } from 'react';
 import { apiGet, apiPost, serverBase, tokenLogin } from '../kantor/connection';
 
 import { Ikon } from '../components/Ikon';
+import { konfirmasi } from '../components/Konfirmasi';
 interface Item { nama: string; path: string; folder: boolean; size: number; mtime: number; jenis: string }
 interface Daftar { path: string; items: Item[]; terpakai: number; kuota: number; disk: { bebas: number; total: number } | null }
 interface Unggah { id: string; nama: string; persen: number; error?: string; selesai?: boolean }
@@ -12,6 +14,7 @@ const tgl = (ms: number) => new Date(ms).toLocaleDateString('id-ID', { day: 'num
 
 export function BerkasPage() {
     const [p, setP] = useState<string>(() => { try { return localStorage.getItem('kantor:berkas-p') || ''; } catch { return ''; } });
+    useEffect(() => { const f = (e: Event) => { const d = (e as CustomEvent).detail?.dir; if (typeof d === 'string') setP(d); }; eventBus.addEventListener('buka-berkas', f); return () => eventBus.removeEventListener('buka-berkas', f); }, []);
     const [d, setD] = useState<Daftar | null>(null);
     const [err, setErr] = useState('');
     const [mode, setMode] = useState<'grid' | 'list'>(() => { try { return (localStorage.getItem('kantor:berkas-mode') as any) || 'grid'; } catch { return 'grid'; } });
@@ -110,7 +113,7 @@ export function BerkasPage() {
                                 {!it.folder && <button onClick={() => { setMenu(null); unduh(it); }}><Ikon e="⬇" /> Unduh</button>}
                                 <button onClick={() => { const n = prompt('Nama baru', it.nama); if (n && n !== it.nama) aksi(() => apiPost('/api/kantor/berkas/pindah', { dari: it.path, ke: it.path.split('/').slice(0, -1).join('/'), nama: n })); }}><Ikon e="✏" /> Ganti nama</button>
                                 <button onClick={() => { const k = prompt('Pindah ke folder (kosongkan = Berkas saya), mis. Dokumen/Pajak', ''); if (k !== null) aksi(() => apiPost('/api/kantor/berkas/pindah', { dari: it.path, ke: k })); }}><Ikon e="📂" /> Pindahkan</button>
-                                <button onClick={() => { if (confirm(`Hapus "${it.nama}"? (Disimpan di sampah 30 hari di VPS)`)) aksi(() => apiPost('/api/kantor/berkas/hapus', { p: it.path })); }}><Ikon e="🗑" /> Hapus</button>
+                                <button onClick={async () => { if ((await konfirmasi(`Hapus "${it.nama}"? (Disimpan di sampah 30 hari di VPS)`))) aksi(() => apiPost('/api/kantor/berkas/hapus', { p: it.path })); }}><Ikon e="🗑" /> Hapus</button>
                             </div>
                         )}
                     </div>

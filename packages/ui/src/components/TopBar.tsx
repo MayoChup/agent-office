@@ -6,6 +6,8 @@ import { eventBus } from '../events';
 
 import { Ikon } from './Ikon';
 import { TombolKeputusan } from './Keputusan';
+import { TombolCari } from './Cari';
+import { konfirmasi } from './Konfirmasi';
 function useClock() {
     const [now, setNow] = useState(() => new Date());
     useEffect(() => {
@@ -63,6 +65,7 @@ export function TopBar() {
                 </div>
             )}
             <div className="pill hide-hp" title={statusText}><span className={`dot ${dotClass}`} /><span className="hide-sm">{statusText}</span></div>
+            {status !== 'login' && <TombolCari />}
             {status !== 'login' && <TombolKeputusan />}
             <MenuProfil tema={tema} gantiTema={gantiTema} owner={owner} statusText={statusText} dotClass={dotClass} bisaKeluar={status !== 'login'} />
         </div>
@@ -80,7 +83,7 @@ function MenuProfil({ tema, gantiTema, owner, statusText, dotClass, bisaKeluar }
                 <div className="mp-menu" role="menu" onClick={(e) => e.stopPropagation()}>
                     <div className="mp-kepala"><b>{owner}</b><small><span className={`dot ${dotClass}`} /> {statusText}</small></div>
                     <button role="menuitem" onClick={() => { gantiTema(); }}>{tema === 'dark' ? <><Ikon e="☀" /> Tampilan terang</> : <><Ikon e="☾" /> Tampilan gelap</>}</button>
-                    {bisaKeluar && <button role="menuitem" className="mp-keluar" onClick={() => { if (confirm('Keluar dari Kantor Virtual? Nanti perlu masukkan kata sandi lagi.')) logout(); }}><Ikon e="🚪" /> Keluar</button>}
+                    {bisaKeluar && <button role="menuitem" className="mp-keluar" onClick={async () => { if ((await konfirmasi('Keluar dari Kantor Virtual? Nanti perlu masukkan kata sandi lagi.'))) logout(); }}><Ikon e="🚪" /> Keluar</button>}
                 </div>
             )}
         </div>

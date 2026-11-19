@@ -7,6 +7,7 @@ import { eventBus } from '../../events';
 import { SampulKr, type KPost, type KTema } from '../kr/Slide';
 
 import { Ikon } from '../../components/Ikon';
+import { konfirmasi } from '../../components/Konfirmasi';
 interface Simpul { nama: string; path: string; folder: boolean; mtime: number; size?: number; anak?: Simpul[] }
 interface Pohon { pohon: Simpul; sinkron: { pushAt: number; error: string } }
 const WARNA_BUKU = ['#7c3aed', '#2563eb', '#059669', '#d97706', '#dc2626', '#db2777', '#0891b2', '#4f46e5'];
@@ -49,7 +50,9 @@ export function CatatanPage() {
         if (parts.length > 1) setBuku(parts[0]);
         setBagian(parts.length > 2 ? parts.slice(0, -1).join('/') : '');
         setLayar('editor');
-    };
+    };    // Dari pencarian global (Ctrl/⌘K).
+    useEffect(() => { const f = (e: Event) => { const p = (e as CustomEvent).detail?.path; if (p) bukaHal(p); }; eventBus.addEventListener('buka-catatan', f); return () => eventBus.removeEventListener('buka-catatan', f); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
     const halBaru = async () => {
         const nama = prompt('Judul halaman baru', `Catatan ${new Date().toLocaleDateString('id-ID')}`);
         if (!nama) return;
@@ -214,7 +217,7 @@ function Editor({ path, cariFile, bukaHal, onBack, onBerubah, onHapus }: { path:
                 <details className="cat-more"><summary>⋯</summary><div>
                     <button onClick={async () => { const n = prompt('Ganti judul', nama); if (n && n !== nama) { const ke = [folder, `${n.replace(/[\\/:*?"<>|#^[\]]/g, '').trim()}.md`].filter(Boolean).join('/'); try { await apiPost('/api/kantor/catatan/pindah', { dari: path, ke }); onBerubah(); bukaHal(ke); } catch (e: any) { setStatus(String(e.message || e)); } } }}><Ikon e="✏" /> Ganti judul</button>
                     <button onClick={() => { muat(); }}><Ikon e="↻" /> Muat ulang</button>
-                    <button onClick={async () => { if (confirm(`Pindahkan "${nama}" ke Sampah?`)) { await apiPost('/api/kantor/catatan/buang', { p: path }); onHapus(); } }}><Ikon e="🗑" /> Pindah ke Sampah</button>
+                    <button onClick={async () => { if ((await konfirmasi(`Pindahkan "${nama}" ke Sampah?`))) { await apiPost('/api/kantor/catatan/buang', { p: path }); onHapus(); } }}><Ikon e="🗑" /> Pindah ke Sampah</button>
                 </div></details>
             </div>
             <div className="cat-tools">

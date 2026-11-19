@@ -1,5 +1,6 @@
 import { useAktif } from '../kantor/aktif';
 import { useKembali } from '../kantor/kembali';
+import { eventBus } from '../events';
 import React, { useState, useRef, useEffect } from 'react';
 import { useSubNav } from '../kantor/subnav';
 import { Horison, HorisonBar, nilaiH, paramH, MODE_LAMA } from './trading/Horison';
@@ -60,6 +61,7 @@ export function TradingPage() {
     const simpanHidup = (k: Tab, isi: React.ReactNode) => (pernah.has(k) ? <div key={`hidup-${k}`} className="tab-hidup" hidden={!!saham || tab !== k}>{isi}</div> : null);
     const [saham, setSaham] = useState<string | null>(null);
     useKembali(!!saham, () => setSaham(null));
+    useEffect(() => { const f = (e: Event) => { const sym = (e as CustomEvent).detail?.s; if (sym) setSaham(String(sym).toUpperCase()); }; eventBus.addEventListener('buka-saham', f); return () => eventBus.removeEventListener('buka-saham', f); }, []);
     const [faktor, setFaktor] = useState<FaktorKey>(() => { try { return (localStorage.getItem('kantor:faktor') as FaktorKey) || 'semua'; } catch { return 'semua'; } });
     const setF = (f: FaktorKey) => { setFaktor(f); try { localStorage.setItem('kantor:faktor', f); } catch { /* */ } };
     const [horison, setHorisonS] = useState<Horison>(() => { try { const v = JSON.parse(localStorage.getItem('kantor:horison') || ''); if (v?.mode === 'tanggal' && !(v.tanggal > new Date().toISOString().slice(0, 10))) return { mode: 'swingpendek' }; if (v?.mode && MODE_LAMA[v.mode]) return { mode: MODE_LAMA[v.mode] }; return v?.mode ? v : { mode: 'swingpendek' }; } catch { return { mode: 'swingpendek' }; } });
@@ -128,7 +130,11 @@ export function TradingPage() {
     useEffect(() => { try { localStorage.setItem(`kantor:trading-grup-${grupAktif.g}`, tab); } catch { /* */ } }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
     useSubNav(GRUP.map((g) => ({ k: g.g, ico: g.ico, label: g.label })), grupAktif.g, (k) => { const g = GRUP.find((x) => x.g === k)!; setTab(g.g === grupAktif.g ? tab : terakhirDi(g)); });
     void IKON; void PENDEK;
-    const buka = (s: string) => { setSaham(s); document.querySelector('.page:not([hidden]) .pg')?.scrollTo({ top: 0 }); };
+    // Buka detail saham: posisi gulir daftar diingat dan dikembalikan saat kembali (tombol Back atau ‹).
+    const gulirDaftar = useRef(0);
+    const pgEl = () => { const pg = pgRef.current; if (pg && pg.scrollHeight > pg.clientHeight + 4) return pg; return (pg?.closest('.page') as HTMLElement | null) || pg; };
+    const buka = (s: string) => { if (!saham) gulirDaftar.current = pgEl()?.scrollTop || 0; setSaham(s); pgEl()?.scrollTo({ top: 0 }); };
+    useEffect(() => { if (!saham && gulirDaftar.current) { const y = gulirDaftar.current; requestAnimationFrame(() => pgEl()?.scrollTo({ top: y })); } }, [saham]); // eslint-disable-line react-hooks/exhaustive-deps
     const perbarui = async () => { try { await apiPost('/api/kantor/screener/perbarui', { jenis: 'teknikal' }); setTimeout(() => sc.reload(), 1500); setTimeout(() => sc.reload(), 6000); } catch (e: any) { alert(`Gagal memulai: ${e?.message || e}`); } };
 
     return (

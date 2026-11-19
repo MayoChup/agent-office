@@ -3,6 +3,7 @@ import { useKantor } from '../kantor/store';
 import { fullName } from '../kantor/store';
 import { getRoom } from '../kantor/connection';
 import { Panel } from './Panel';
+import { Avatar } from './Avatar';
 
 import { Ikon } from './Ikon';
 const STATUS: Record<string, { icon: string; label: string; color: string }> = {
@@ -44,10 +45,13 @@ export function TasksPanel({ onClose }: { onClose: () => void }) {
                 <form onSubmit={submit}>
                     <input className="input" placeholder="Tulis tugas baru, misal: rekap pengeluaran minggu ini" value={title} onChange={(e) => setTitle(e.target.value)} />
                     <div className="row" style={{ marginTop: 8 }}>
-                        <select className="select" value={target} onChange={(e) => setTarget(e.target.value)}>
-                            {sortedAgents.length === 0 && <option value="default">Kepala Kantor</option>}
-                            {sortedAgents.map((a) => <option key={a.id} value={a.id}>{fullName(a)}</option>)}
-                        </select>
+                        <div className="tp-penerima" role="radiogroup" aria-label="Kirim ke">
+                            {(sortedAgents.length ? sortedAgents : [{ id: 'default', name: 'Kepala Kantor' } as any]).map((a) => (
+                                <button type="button" role="radio" aria-checked={target === a.id} key={a.id} className={target === a.id ? 'on' : ''} onClick={() => setTarget(a.id)} title={fullName(a)}>
+                                    {a.skin !== undefined ? <Avatar skin={a.skin} size={28} /> : <span className="tp-inisial">{(a.name || '?').slice(0, 1)}</span>}<span>{a.name}</span>
+                                </button>
+                            ))}
+                        </div>
                         <button className="btn primary" type="submit" disabled={!title.trim()}>Kirim</button>
                     </div>
                     {sent && <div style={{ fontSize: 12, color: 'var(--good)', marginTop: 8 }}>{sent}</div>}

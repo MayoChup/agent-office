@@ -11,6 +11,7 @@ import { Tx, rp, rpk, ikon, warnaDari, periode, dalam, keluar, masuk, sum, kelom
 
 import { Ikon } from '../../components/Ikon';
 import { Hidup } from '../../components/Hidup';
+import { konfirmasi } from '../../components/Konfirmasi';
 interface Report { transaksi: Tx[]; sheetUrl: string; pencatat: { lastRun: number; lastError: string } }
 interface Anggaran { mulai: number; batas: Record<string, number>; akun: string[]; kategori: string[]; saldo?: Record<string, { nilai: number; tanggal: string; sumber: string }> }
 type Tab = 'beranda' | 'pengeluaran' | 'anggaran' | 'transaksi' | 'chat';
@@ -311,7 +312,7 @@ function Detail({ t, all, mulai, onClose, lihat, onUbah, onHapus }: { t: Tx; all
                     <div className="k-det-act">
                         <button className="btn" onClick={onUbah}><Ikon e="✏" /> Ubah</button>
                         <button className="btn danger" disabled={busy} onClick={async () => {
-                            if (!confirm(`Hapus transaksi ${rp(t.n)} (${t.pihak || t.kat}, ${tglPendek(t.d)})? Salinannya tetap disimpan di VPS.`)) return;
+                            if (!(await konfirmasi(`Hapus transaksi ${rp(t.n)} (${t.pihak || t.kat}, ${tglPendek(t.d)})? Salinannya tetap disimpan di VPS.`))) return;
                             setBusy(true); setHapusErr('');
                             try { await onHapus(); } catch (e: any) { setHapusErr(String(e?.message || e)); setBusy(false); }
                         }}>{busy ? 'Menghapus…' : <><Ikon e="🗑" /> {'Hapus'}</>}</button>

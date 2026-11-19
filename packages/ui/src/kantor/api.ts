@@ -4,8 +4,27 @@ import { useAktif } from './aktif';
 
 /** Simpanan jawaban terakhir per alamat: kembali ke kombinasi yang pernah dibuka (preset/horison) tampil seketika. */
 const SIMPAN = new Map<string, { at: number; d: any }>();
-export function simpanApi<T>(path: string): T | null { return (SIMPAN.get(path)?.d as T) ?? null; }
-export function taruhApi(path: string, d: any) { SIMPAN.set(path, { at: Date.now(), d }); if (SIMPAN.size > 80) SIMPAN.delete(SIMPAN.keys().next().value as string); }
+/** Juga disimpan di perangkat (localStorage) supaya membuka aplikasi lagi langsung tampil isi terakhir, lalu disegarkan diam-diam. Dibersihkan saat keluar. */
+const LS = 'kantor:api:';
+function dariPerangkat(path: string): { at: number; d: any } | null { try { const v = localStorage.getItem(LS + path); return v ? JSON.parse(v) : null; } catch { return null; } }
+export function simpanApi<T>(path: string): T | null {
+    let c = SIMPAN.get(path);
+    if (!c) { const p = dariPerangkat(path); if (p) { c = { ...p, at: 0 }; SIMPAN.set(path, c); } }
+    return (c?.d as T) ?? null;
+}
+export function taruhApi(path: string, d: any) {
+    SIMPAN.set(path, { at: Date.now(), d }); if (SIMPAN.size > 80) SIMPAN.delete(SIMPAN.keys().next().value as string);
+    try {
+        const isi = JSON.stringify({ at: Date.now(), d });
+        if (isi.length < 200_000) {
+            localStorage.setItem(LS + path, isi);
+            const urut = (JSON.parse(localStorage.getItem(LS + '_urut') || '[]') as string[]).filter((x) => x !== path); urut.push(path);
+            while (urut.length > 40) localStorage.removeItem(LS + urut.shift()!);
+            localStorage.setItem(LS + '_urut', JSON.stringify(urut));
+        }
+    } catch { /* penyimpanan penuh / dimatikan: abaikan */ }
+}
+export function bersihkanSimpanan() { SIMPAN.clear(); try { Object.keys(localStorage).filter((k) => k.startsWith(LS)).forEach((k) => localStorage.removeItem(k)); } catch { /* */ } }
 /** Ambil lewat simpanan: kalau masih segar (< maksMs) tidak perlu ke server. */
 export async function apiGetSimpan<T>(path: string, maksMs = 60_000): Promise<T> {
     const c = SIMPAN.get(path);
@@ -23,6 +42,7 @@ export function useApi<T>(path: string, refreshMs = 0) {
     const aktif = useAktif();
     const load = useCallback(async (extra = '', cepat = false) => {
         if (!path) return;
+        if (!SIMPAN.has(path)) simpanApi(path);
         const c = SIMPAN.get(path);
         if (cepat && c && !extra) {
             setData(c.d); terakhir.current = c.at;

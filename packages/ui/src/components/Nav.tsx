@@ -11,6 +11,8 @@ export type SidePanel = 'org' | 'activity' | 'papan' | null;
 export type KunciPanel = 'org' | 'activity' | 'papan';
 const PANEL = new Set(['org', 'activity', 'papan']);
 
+/** Ketuk menu yang sedang dibuka sekali lagi = kembali ke paling atas (seperti IG). */
+const keAtas = () => document.querySelectorAll<HTMLElement>('.page:not([hidden]), .page:not([hidden]) .pg, .page:not([hidden]) .kr-feed, .page:not([hidden]) .wa-items').forEach((el) => el.scrollTo({ top: 0, behavior: 'smooth' }));
 /** Menu bawah di HP: halaman yang paling sering dibuka. */
 const BAWAH = ['home', 'obrolan', 'kr', 'trading'] as const;
 const ALL: Array<{ key: PageKey | KunciPanel; ico: string; label: string; ket?: string }> = [
@@ -93,7 +95,7 @@ export function Nav({ page, panel, onGo, hidup = [] }: { page: PageKey; panel: S
             {/* HP: menu bawah = menu utama (satu ketukan), sisanya di "Menu" */}
             <nav className="dock dock-utama interactive" aria-label="Menu utama">
                 {BAWAH.map((k) => { const it = ALL.find((x) => x.key === k)!; return (
-                    <button key={k} className={`dock-btn ${page === k ? 'active' : ''}`} aria-current={page === k ? 'page' : undefined} onClick={() => onGo(k)}>
+                    <button key={k} className={`dock-btn ${page === k ? 'active' : ''}`} aria-current={page === k ? 'page' : undefined} onClick={() => (page === k ? keAtas() : onGo(k))}>
                         <span className="ico"><Ikon e={it.ico} /></span><span className="dock-lbl">{k === 'kr' ? 'Reels' : it.label}</span>
                         {badge(k) > 0 && <span className="badge">{N(badge(k))}</span>}
                     </button>

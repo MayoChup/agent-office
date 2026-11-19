@@ -10,6 +10,7 @@ import { Starter, type JawabanStarter } from './sosmed/Starter';
 
 import { Ikon } from '../components/Ikon';
 import { Hidup } from '../components/Hidup';
+import { konfirmasi } from '../components/Konfirmasi';
 type Format = 'feed' | 'reel' | 'carousel' | 'story' | 'video';
 type Status = 'rencana' | 'sketsa' | 'naskah' | 'prompt' | 'aset' | 'terjadwal' | 'mengunggah' | 'terbit' | 'manual' | 'gagal';
 type Adegan = AdeganS;
@@ -334,7 +335,7 @@ function TabAntre({ x, aksi, kabar, setTab }: P) {
         </section>
         <section className="sb-card">
             <div className="sd-h"><h3>2 · Siap disetujui <small>{siap.length}</small></h3>
-                <button className="btn primary" disabled={!dipilih.length} onClick={() => { if (confirm(`Setujui ${dipilih.length} konten? Masing-masing ${x.ig ? 'terbit otomatis' : 'diingatkan lewat Telegram'} pada tanggal & jamnya.`)) aksi(post<{ dijadwalkan: number; masalah: string[] }>('/api/kantor/sosmed/setujui-semua', { ids: dipilih.map((k) => k.id) }).then((r) => { if (r.masalah.length) kabar(`${r.dijadwalkan} dijadwalkan. Belum bisa: ${r.masalah.join(' · ')}`); return r; }), `✓ ${dipilih.length} konten dijadwalkan.`); }}>✓ Setujui semua ({dipilih.length})</button></div>
+                <button className="btn primary" disabled={!dipilih.length} onClick={async () => { if ((await konfirmasi(`Setujui ${dipilih.length} konten? Masing-masing ${x.ig ? 'terbit otomatis' : 'diingatkan lewat Telegram'} pada tanggal & jamnya.`))) aksi(post<{ dijadwalkan: number; masalah: string[] }>('/api/kantor/sosmed/setujui-semua', { ids: dipilih.map((k) => k.id) }).then((r) => { if (r.masalah.length) kabar(`${r.dijadwalkan} dijadwalkan. Belum bisa: ${r.masalah.join(' · ')}`); return r; }), `✓ ${dipilih.length} konten dijadwalkan.`); }}>✓ Setujui semua ({dipilih.length})</button></div>
             {!siap.length && <div className="fin-empty">Belum ada konten yang berkasnya sudah masuk.</div>}
             <div className="sm-ablist">{siap.map((k) => <label key={k.id} className="sm-ab-c"><input type="checkbox" checked={pilih[k.id] !== false} onChange={(e) => setPilih({ ...pilih, [k.id]: e.target.checked })} /><Baris k={k} kanan={<em className="sm-ab-s"><Ikon e="📁" /> {k.aset?.nama}{k.asetLain?.length ? ` +${k.asetLain.length}` : ''}</em>} /></label>)}</div>
             {siap.length > 0 && <p className="sb-note">Caption ikut terunggah apa adanya; periksa dulu di tab Caption pada kartunya bila perlu. Jam bisa diubah di kartu konten.</p>}
@@ -487,7 +488,7 @@ function TabGaya({ x, aksi, kabar, gambarGaya }: P) {
             <div className="sm-aksi kecil">
                 {x.profil.gayaVideo !== g.id && <button className="btn small" onClick={() => aksi(post('/api/kantor/sosmed/profil', { gayaVideo: g.id }), `${g.nama} jadi gaya utama.`)}>Jadikan utama</button>}
                 {!g.bawaan && <><button className="btn small" disabled={naik === g.id} onClick={() => { target.current = g.id; ref.current?.click(); }}>{naik === g.id ? 'Mengunggah…' : g.contoh ? 'Ganti gambar acuan' : <><Ikon e="⬆" /> {'Gambar acuan'}</>}</button>
-                    <button className="btn small" onClick={() => { if (confirm(`Hapus gaya "${g.nama}"?`)) aksi(post(`/api/kantor/sosmed/gaya/${g.id}/hapus`, {}), 'Gaya dihapus.'); }}><Ikon e="🗑" /></button></>}
+                    <button className="btn small" onClick={async () => { if ((await konfirmasi(`Hapus gaya "${g.nama}"?`))) aksi(post(`/api/kantor/sosmed/gaya/${g.id}/hapus`, {}), 'Gaya dihapus.'); }}><Ikon e="🗑" /></button></>}
             </div>
         </div>
     );
@@ -592,7 +593,7 @@ function KartuKomentar({ c, ig, aksi }: { c: Komentar; ig: boolean; aksi: Aksi }
             {c.status === 'baru' && !c.draf ? <div className="sm-aksi"><button className="btn small" onClick={() => aksi(post(url('draf'), {}), 'Draf balasan dibuat.')}>Buatkan draf</button><button className="btn small" onClick={() => aksi(post(url('abaikan'), {}))}>Abaikan</button></div> : (<>
                 <textarea rows={2} value={v} onChange={(e) => setV(e.target.value)} aria-label="Draf balasan" />
                 {c.galat && <div className="error">{c.galat}</div>}
-                <div className="sm-aksi">{ig ? <button className="btn small primary" disabled={!v.trim()} onClick={() => { if (confirm(`Kirim balasan ke @${c.user}?`)) aksi(post(url('kirim'), { draf: v }), '✓ Balasan terkirim.'); }}>Kirim balasan</button> : <Salin teks={v} label="Salin balasan" />}
+                <div className="sm-aksi">{ig ? <button className="btn small primary" disabled={!v.trim()} onClick={async () => { if ((await konfirmasi(`Kirim balasan ke @${c.user}?`))) aksi(post(url('kirim'), { draf: v }), '✓ Balasan terkirim.'); }}>Kirim balasan</button> : <Salin teks={v} label="Salin balasan" />}
                     {v !== (c.draf || '') && <button className="btn small" onClick={() => aksi(post(url('ubah'), { draf: v }), 'Draf disimpan.')}>Simpan draf</button>}
                     <button className="btn small" onClick={() => aksi(post(url('abaikan'), {}))}>Abaikan</button></div>
             </>)}
@@ -678,7 +679,7 @@ function TabAkun({ x, aksi, kabar, muat, keBeranda, bukaKuis }: P & { muat: () =
             </div>
             <div className="sm-aksi">
                 <button className="btn" disabled={nama === a.nama && handle === a.handle} onClick={() => aksi(apiPost(`/api/kantor/sosmed/akun/${a.id}/ubah`, { nama, handle }), 'Akun diperbarui.')}>Simpan nama</button>
-                {a.id !== 'utama' && <button className="btn small" onClick={() => { if (confirm(`Hapus akun "${a.nama}" dari kantor? Kalender & konten akun ini disimpan sebagai cadangan di VPS, kunci sambungannya dihapus.`)) apiPost(`/api/kantor/sosmed/akun/${a.id}/hapus`, {}).then(() => { kabar('Akun dihapus.'); keBeranda(); }).catch((e) => kabar(String(e.message || e))); }}><Ikon e="🗑" /> Hapus akun</button>}
+                {a.id !== 'utama' && <button className="btn small" onClick={async () => { if ((await konfirmasi(`Hapus akun "${a.nama}" dari kantor? Kalender & konten akun ini disimpan sebagai cadangan di VPS, kunci sambungannya dihapus.`))) apiPost(`/api/kantor/sosmed/akun/${a.id}/hapus`, {}).then(() => { kabar('Akun dihapus.'); keBeranda(); }).catch((e) => kabar(String(e.message || e))); }}><Ikon e="🗑" /> Hapus akun</button>}
             </div>
         </section>
         <section className="sb-card">
@@ -691,7 +692,7 @@ function TabAkun({ x, aksi, kabar, muat, keBeranda, bukaKuis }: P & { muat: () =
                         <input type={f.rahasia ? 'password' : 'text'} autoComplete="off" spellCheck={false} value={kunci[f.k] || ''} placeholder={x.kunciTerisi.includes(f.k) ? '••••••••' : ''} onChange={(e) => setKunci({ ...kunci, [f.k]: e.target.value })} /></label>
                 ))}
                 <div className="lebar sm-aksi"><button className="btn primary" disabled={uji || !Object.values(kunci).some((v) => String(v).trim())}>{uji ? 'Menguji…' : 'Simpan & uji sambungan'}</button>
-                    {x.ig && <button type="button" className="btn small" onClick={() => { if (confirm('Putuskan sambungan akun ini? Kunci di VPS dihapus.')) aksi(apiPost(`/api/kantor/sosmed/akun/${a.id}/putus`, {}), 'Sambungan diputus.'); }}>Putuskan</button>}</div>
+                    {x.ig && <button type="button" className="btn small" onClick={async () => { if ((await konfirmasi('Putuskan sambungan akun ini? Kunci di VPS dihapus.'))) aksi(apiPost(`/api/kantor/sosmed/akun/${a.id}/putus`, {}), 'Sambungan diputus.'); }}>Putuskan</button>}</div>
                 <small className="sb-note lebar" style={{ margin: 0 }}><Ikon e="🔒" /> Kunci disimpan hanya di VPS Bapak (berkas khusus, izin terbatas), tidak pernah ditampilkan lagi, dan tidak pernah dibaca AI. Jangan kirim kunci lewat chat.{a.id === 'utama' && a.platform === 'instagram' ? ' Akun utama juga tetap bisa memakai INSTAGRAM_USER_ID / INSTAGRAM_TOKEN di .env.' : ''}</small>
             </form>
         </section>
@@ -770,7 +771,7 @@ function KartuKonten({ k, x, buka, onBuka, aksi, kabar, gambarGaya }: { k: Konte
                         <div className="sm-aksi"><button className="btn primary" disabled={sibuk} onClick={() => { aksi(post(url('kembangkan'), { ulang: true, arahan }), 'Sedang ditulis ulang dengan arahan Bapak.'); setUlang(false); }}>Tulis ulang semua sketsa/naskah</button><button className="btn small" onClick={() => setUlang(false)}>Batal</button></div></div>}
                     <div className="sm-aksi kecil">
                         {k.status !== 'rencana' && k.status !== 'terbit' && k.status !== 'mengunggah' && <button className="btn small" disabled={sibuk} onClick={() => setUlang(!ulang)} aria-expanded={ulang}><Ikon e="↻" /> Tulis ulang…</button>}
-                        {k.status !== 'terbit' && k.status !== 'mengunggah' && <button className="btn small" onClick={() => { if (confirm(`Hapus "${k.judul}" dari kalender?`)) aksi(post(url('hapus'), {}), 'Dihapus dari kalender.'); }}><Ikon e="🗑" /> Hapus</button>}
+                        {k.status !== 'terbit' && k.status !== 'mengunggah' && <button className="btn small" onClick={async () => { if ((await konfirmasi(`Hapus "${k.judul}" dari kalender?`))) aksi(post(url('hapus'), {}), 'Dihapus dari kalender.'); }}><Ikon e="🗑" /> Hapus</button>}
                     </div>
                 </div>
             )}
@@ -797,7 +798,7 @@ function PilihSketsa({ k, x, aksi, tutup }: { k: Konten; x: Data; aksi: Aksi; tu
                 <details className="sm-sk-d"><summary><Ikon e="🎙" /> Prompt voiceover {y.jumlahKata ? `· ${y.jumlahKata} kata` : ''}</summary><pre>{y.promptSuara?.teks || y.voiceover || '–'}</pre>{y.promptSuara && <small className="sb-note">{y.promptSuara.gaya} · {y.promptSuara.pengaturan}</small>}</details>
                 {y.galat && <div className="error">Prompt sketsa ini terkendala: {y.galat}</div>}
                 <button className="btn small" onClick={() => setEdit(edit === y.no ? null : y.no)} aria-expanded={edit === y.no}>{edit === y.no ? 'Tutup editor' : <><Ikon e="✏" /> {'Edit / revisi sketsa ini'}</>}</button>
-                <button className={`btn ${k.pilih === y.no ? '' : 'primary'}`} disabled={k.pilih === y.no} onClick={() => { if (!k.aset || confirm('Berkas yang sudah diunggah untuk sketsa sebelumnya akan dilepas. Lanjut?')) { aksi(post(`/api/kantor/sosmed/konten/${k.id}/pilih`, { no: y.no }), `Sketsa #${y.no} dipilih. Kode berkasnya ${k.kode}-${y.no}.`); tutup?.(); } }}>{k.pilih === y.no ? '✓ Sketsa ini dipakai' : `Pilih sketsa #${y.no}`}</button>
+                <button className={`btn ${k.pilih === y.no ? '' : 'primary'}`} disabled={k.pilih === y.no} onClick={async () => { if (!k.aset || (await konfirmasi('Berkas yang sudah diunggah untuk sketsa sebelumnya akan dilepas. Lanjut?'))) { aksi(post(`/api/kantor/sosmed/konten/${k.id}/pilih`, { no: y.no }), `Sketsa #${y.no} dipilih. Kode berkasnya ${k.kode}-${y.no}.`); tutup?.(); } }}>{k.pilih === y.no ? '✓ Sketsa ini dipakai' : `Pilih sketsa #${y.no}`}</button>
             </div>
         ))}</div>
         {edit != null && <EditPaket key={edit} k={k} x={x} no={edit} aksi={aksi} tutup={() => setEdit(null)} />}
@@ -959,9 +960,9 @@ function Produksi({ k, x, aksi, kabar }: { k: Konten; x: Data; aksi: Aksi; kabar
                     {k.status !== 'terbit' && k.status !== 'mengunggah' && <button className="btn" disabled={naik != null} onClick={() => input.current?.click()}>{naik != null ? `Mengunggah ${naik}…` : k.aset ? <><Ikon e="↻" /> {'Ganti berkas'}</> : banyak ? <><Ikon e="⬆" /> {'Unggah semua slide (urut)'}</> : <><Ikon e="⬆" /> {'Unggah berkas'}</>}</button>}
                     {['aset', 'gagal'].includes(k.status) && k.aset && (nanti
                         ? <button className="btn primary" onClick={() => aksi(post(url('setujui'), {}), `Disetujui — ${x.ig ? 'terbit otomatis' : 'Bapak diingatkan lewat Telegram'} ${kapan(k, x)} WIB.`)}>✓ Setujui · terbit {kapan(k, x)}</button>
-                        : <button className="btn primary" onClick={() => { if (confirm(x.ig ? `Unggah "${k.judul}" (${FMT[k.format].label}) ke ${PLAT_NAMA} sekarang, beserta captionnya?` : `${PLAT_NAMA} belum tersambung. Tandai "${k.judul}" siap diunggah manual?`)) aksi(post(url('setujui'), { sekarang: true }), x.ig ? `Disetujui — sedang diunggah ke ${PLAT_NAMA}.` : 'Siap diunggah manual: salin caption di tab Caption.'); }}>✓ Setujui{x.ig ? ' & unggah sekarang' : ''}</button>)}
-                    {['aset', 'gagal'].includes(k.status) && k.aset && nanti && <button className="btn small" onClick={() => { if (confirm(`Unggah "${k.judul}" sekarang, tidak menunggu jadwal?`)) aksi(post(url('setujui'), { sekarang: true }), 'Disetujui — diunggah sekarang.'); }}>Unggah sekarang</button>}
-                    {k.status === 'terjadwal' && <><span className="sm-terjadwal"><Ikon e="⏰" /> Terjadwal {kapan(k, x)} WIB{x.ig ? '' : ' (pengingat)'}</span><button className="btn small" onClick={() => { if (confirm(`Unggah "${k.judul}" sekarang?`)) aksi(post(url('setujui'), { sekarang: true }), 'Diunggah sekarang.'); }}>Unggah sekarang</button><button className="btn small" onClick={() => aksi(post(url('batal'), {}), 'Jadwal dibatalkan.')}>Batalkan jadwal</button></>}
+                        : <button className="btn primary" onClick={async () => { if ((await konfirmasi(x.ig ? `Unggah "${k.judul}" (${FMT[k.format].label}) ke ${PLAT_NAMA} sekarang, beserta captionnya?` : `${PLAT_NAMA} belum tersambung. Tandai "${k.judul}" siap diunggah manual?`))) aksi(post(url('setujui'), { sekarang: true }), x.ig ? `Disetujui — sedang diunggah ke ${PLAT_NAMA}.` : 'Siap diunggah manual: salin caption di tab Caption.'); }}>✓ Setujui{x.ig ? ' & unggah sekarang' : ''}</button>)}
+                    {['aset', 'gagal'].includes(k.status) && k.aset && nanti && <button className="btn small" onClick={async () => { if ((await konfirmasi(`Unggah "${k.judul}" sekarang, tidak menunggu jadwal?`))) aksi(post(url('setujui'), { sekarang: true }), 'Disetujui — diunggah sekarang.'); }}>Unggah sekarang</button>}
+                    {k.status === 'terjadwal' && <><span className="sm-terjadwal"><Ikon e="⏰" /> Terjadwal {kapan(k, x)} WIB{x.ig ? '' : ' (pengingat)'}</span><button className="btn small" onClick={async () => { if ((await konfirmasi(`Unggah "${k.judul}" sekarang?`))) aksi(post(url('setujui'), { sekarang: true }), 'Diunggah sekarang.'); }}>Unggah sekarang</button><button className="btn small" onClick={() => aksi(post(url('batal'), {}), 'Jadwal dibatalkan.')}>Batalkan jadwal</button></>}
                     {k.status === 'mengunggah' && <span className="pk-jalan"><i /> sedang diunggah ke {PLAT_NAMA}…</span>}
                     {k.status === 'terbit' && <span className="sm-terbit"><Ikon e="✅" /> Terbit{k.ig?.tautan && <> · <a href={k.ig.tautan} target="_blank" rel="noreferrer">lihat di {PLAT_NAMA}</a></>}</span>}
                 </div>

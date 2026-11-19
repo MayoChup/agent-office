@@ -7,6 +7,7 @@ import { usd } from './types';
 import { SimulasiSinyal } from './SimulasiSinyal';
 
 import { Ikon } from '../../components/Ikon';
+import { konfirmasi } from '../../components/Konfirmasi';
 type Res = 'harian' | 'mingguan' | 'bulanan';
 interface Pos { masa?: { H: number; hari: number; sisa: number; status: 'jalan' | 'terakhir' | 'lewat' } | null; symbol: string; shares: number; entry: number; target: number; stop: number; openedAt: string; closedAt?: string; exit?: number; pnl: number | null; pnlPct: number | null; modal: number; harga?: number | null; nilai?: number | null; keTarget?: number | null; keStop?: number | null; hari: number | null; profil?: string; ai?: { label?: string; mode?: string; pt?: string }; catatan?: string; notified?: { target?: string; stop?: string } }
 interface Dana { id: string; tgl: string; jenis: 'awal' | 'setor' | 'tarik'; jumlah: number; catatan?: string }
@@ -129,7 +130,7 @@ export function Portofolio({ onBuka }: { onBuka?: (s: string) => void }) {
                     <div key={`${p.symbol}${p.openedAt}${p.closedAt}`} className="porto-rw">
                         <div><b className="mono">{p.symbol}</b><small>{p.shares} lbr · {usd(p.entry)} → {usd(p.exit)} · {tglId(p.openedAt)} – {tglId(p.closedAt!)} ({p.hari} hari){p.ai?.label ? ` · sinyal ${p.ai.label}` : ''}</small></div>
                         <div className="pp-pnl"><b className={`mono ${kls(p.pnl)}`}>{tanda(p.pnl)}</b><small className={kls(p.pnlPct)}>{pc(p.pnlPct)}</small></div>
-                        <button className="icon-btn kecil" title="Hapus catatan (salah input)" onClick={() => { if (confirm(`Hapus catatan transaksi ${p.symbol}? Untung/rugi ikut hilang dari hitungan.`)) apiPost('/api/kantor/portofolio/hapus', { jenis: 'riwayat', symbol: p.symbol, openedAt: p.openedAt, closedAt: p.closedAt }).then(() => selesai(`Catatan ${p.symbol} dihapus.`)).catch((e) => setMsg(String(e.message || e))); }}><Ikon e="🗑" /></button>
+                        <button className="icon-btn kecil" title="Hapus catatan (salah input)" onClick={async () => { if ((await konfirmasi(`Hapus catatan transaksi ${p.symbol}? Untung/rugi ikut hilang dari hitungan.`))) apiPost('/api/kantor/portofolio/hapus', { jenis: 'riwayat', symbol: p.symbol, openedAt: p.openedAt, closedAt: p.closedAt }).then(() => selesai(`Catatan ${p.symbol} dihapus.`)).catch((e) => setMsg(String(e.message || e))); }}><Ikon e="🗑" /></button>
                     </div>
                 ))}
             </section>
@@ -140,7 +141,7 @@ export function Portofolio({ onBuka }: { onBuka?: (s: string) => void }) {
                     <div key={x.id} className="porto-rw">
                         <div><b>{x.jenis === 'awal' ? <><Ikon e="🏁" /> {'Modal awal'}</> : x.jenis === 'setor' ? <><Ikon e="➕" /> {'Suntik dana'}</> : <><Ikon e="➖" /> {'Tarik dana'}</>}</b><small>{tglId(x.tgl)}{x.catatan ? ` · ${x.catatan}` : ''}</small></div>
                         <b className={`mono ${x.jenis === 'tarik' ? 'down' : 'up'}`}>{x.jenis === 'tarik' ? '−' : '+'}{usd(x.jumlah)}</b>
-                        {x.id !== 'otomatis' && <button className="icon-btn kecil" title="Hapus" onClick={() => { if (confirm('Hapus catatan dana ini?')) apiPost('/api/kantor/portofolio/dana', { aksi: 'hapus', id: x.id }).then(() => selesai('Catatan dana dihapus.')).catch((e) => setMsg(String(e.message || e))); }}><Ikon e="🗑" /></button>}
+                        {x.id !== 'otomatis' && <button className="icon-btn kecil" title="Hapus" onClick={async () => { if ((await konfirmasi('Hapus catatan dana ini?'))) apiPost('/api/kantor/portofolio/dana', { aksi: 'hapus', id: x.id }).then(() => selesai('Catatan dana dihapus.')).catch((e) => setMsg(String(e.message || e))); }}><Ikon e="🗑" /></button>}
                     </div>
                 ))}
             </section>
@@ -235,7 +236,7 @@ function LembarJual({ p, onTutup, onSelesai }: { p: Pos; onTutup: () => void; on
             </div>
             {err && <div className="error">{err}</div>}
             <button className="btn primary pp-simpan" disabled={!(h > 0 && n > 0 && n <= p.shares)} onClick={() => apiPost('/api/kantor/portofolio/tutup', { symbol: p.symbol, harga: h, shares: n, tgl }).then(() => onSelesai(`✓ Penjualan ${p.symbol} tercatat: ${tanda(pnl)}.`)).catch((e) => setErr(String(e.message || e)))}>Simpan penjualan</button>
-            <button className="btn pp-hapus" onClick={() => { if (confirm(`Hapus posisi ${p.symbol} tanpa mencatat penjualan? (untuk salah input)`)) apiPost('/api/kantor/portofolio/hapus', { jenis: 'posisi', symbol: p.symbol, openedAt: p.openedAt }).then(() => onSelesai(`Posisi ${p.symbol} dihapus.`)).catch((e) => setErr(String(e.message || e))); }}><Ikon e="🗑" /> Hapus posisi (salah input)</button>
+            <button className="btn pp-hapus" onClick={async () => { if ((await konfirmasi(`Hapus posisi ${p.symbol} tanpa mencatat penjualan? (untuk salah input)`))) apiPost('/api/kantor/portofolio/hapus', { jenis: 'posisi', symbol: p.symbol, openedAt: p.openedAt }).then(() => onSelesai(`Posisi ${p.symbol} dihapus.`)).catch((e) => setErr(String(e.message || e))); }}><Ikon e="🗑" /> Hapus posisi (salah input)</button>
         </Lembar>
     );
 }

@@ -1,5 +1,6 @@
 import { catatHalaman, daftarHalaman } from './kantor/kembali';
 import { TugasPage } from './pages/TugasPage';
+import { KonfirmasiHost } from './components/Konfirmasi';
 import React, { useEffect, useRef, useState } from 'react';
 import { eventBus } from './events';
 import { useKantor } from './kantor/store';
@@ -46,6 +47,14 @@ export function App() {
     const [hidup, setHidup] = useState<PageKey[]>(() => (initialPage() === 'kantor' ? [] : [initialPage()]));
     useEffect(() => { if (page !== 'kantor') setHidup((h) => [page, ...h.filter((x) => x !== page)].slice(0, MAKS_HIDUP)); }, [page]);
 
+    // HP: geser dari tepi kiri layar = Back (berguna di iPhone/PWA yang tidak punya tombol Back).
+    useEffect(() => {
+        let x0 = -1, y0 = 0;
+        const mulai = (e: TouchEvent) => { const t = e.touches[0]; x0 = t.clientX <= 20 && window.innerWidth < 768 ? t.clientX : -1; y0 = t.clientY; };
+        const akhir = (e: TouchEvent) => { if (x0 < 0) return; const t = e.changedTouches[0]; if (t.clientX - x0 > 90 && Math.abs(t.clientY - y0) < 60) history.back(); x0 = -1; };
+        window.addEventListener('touchstart', mulai, { passive: true }); window.addEventListener('touchend', akhir, { passive: true });
+        return () => { window.removeEventListener('touchstart', mulai); window.removeEventListener('touchend', akhir); };
+    }, []);
     // Tombol Back: kembali ke halaman sebelumnya (bukan menutup aplikasi).
     const sedangKembali = useRef(false), halPertama = useRef(true);
     useEffect(() => { daftarHalaman((p) => { if (PAGES.includes(p as PageKey) || p === 'kantor') { setPanel(null); setPage((cur) => { if (cur !== p) sedangKembali.current = true; return p as PageKey; }); } }); }, []);
@@ -95,6 +104,8 @@ export function App() {
         eventBus.addEventListener('open-chat', onChat);
         const onGo = (e: Event) => { const pg = (e as CustomEvent).detail?.page; if (PAGES.includes(pg)) { setPanel(null); setPage(pg); } };
         eventBus.addEventListener('go-page', onGo);
+        const onBukaChat = (e: Event) => bukaChat(String((e as CustomEvent).detail?.id || ''));
+        eventBus.addEventListener('buka-chat-global', onBukaChat);
         eventBus.addEventListener('agent-select', onAgent);
         return () => {
             navigator.serviceWorker?.removeEventListener('message', onSw);
@@ -102,6 +113,7 @@ export function App() {
             eventBus.removeEventListener('open-division', onDivision);
             eventBus.removeEventListener('open-chat', onChat);
             eventBus.removeEventListener('go-page', onGo);
+            eventBus.removeEventListener('buka-chat-global', onBukaChat);
             eventBus.removeEventListener('agent-select', onAgent);
         };
     }, []);
@@ -115,6 +127,7 @@ export function App() {
     return (
         <>
             <TopBar />
+            <KonfirmasiHost />
             {(status === 'disconnected' || status === 'connecting') && (
                 <div className="banner interactive">{status === 'connecting' ? 'Menghubungkan ke kantor…' : error || 'Koneksi terputus.'}</div>
             )}
