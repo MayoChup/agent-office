@@ -138,7 +138,7 @@ export function pasangRutin(d: DepsRutin) {
     const otakFile = path.join(d.dataDir, 'otak-freellm.json');
     const otak = (): { nyala: boolean; at: number; hasil: string } => { try { return JSON.parse(fs.readFileSync(otakFile, 'utf8')); } catch { return { nyala: false, at: 0, hasil: '' }; } };
     let otakSibuk = false;
-    app.get('/api/kantor/freellm/otak', requireToken, (_req, res) => { res.json({ ok: true, ...otak(), sibuk: otakSibuk, siap: freellm.siap() }); });
+    app.get('/api/kantor/freellm/otak', requireToken, async (_req, res) => { if (!freellm.siap()) await freellm.cek().catch(() => undefined); res.json({ ok: true, ...otak(), sibuk: otakSibuk, siap: freellm.siap() }); });
     app.post('/api/kantor/freellm/otak', requireToken, (req, res) => {
         const nyala = !!req.body?.nyala;
         if (otakSibuk) { res.status(409).json({ ok: false, error: 'Sedang mengatur, tunggu sebentar.' }); return; }

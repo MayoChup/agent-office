@@ -735,3 +735,11 @@ button.hz-tgl.on { background: var(--panel-solid); color: var(--text); }
 .kg-aksi a { font-size: 13px; color: var(--accent); text-decoration: none; }
 .kg-isi { display: flex; gap: 8px; flex: 1 1 320px; }
 .kg-isi input { flex: 1; min-width: 0; height: 36px; padding: 0 12px; border-radius: var(--r-kontrol); border: 1px solid var(--line-strong); background: var(--naik); color: var(--text); font: inherit; }
+/* Tugas di HP: tidak boleh melebar ke samping */
+.tugas-hal { width: 100%; min-width: 0; }
+.tugas-hal .tab-hidup, .tugas-hal .papan, .tugas-hal .panel { min-width: 0; box-sizing: border-box; max-width: 100%; }
+.tugas-hal .pk-saring { flex-wrap: wrap; min-width: 0; }
+.tugas-hal .pk-saring select { min-width: 0; max-width: 100%; }
+.tugas-hal .pk-mode { overflow-x: auto; scrollbar-width: none; max-width: 100%; }
+.tugas-hal .pk-mode::-webkit-scrollbar { display: none; }
+.tugas-hal .pk-mode button { flex: 0 0 auto; }
