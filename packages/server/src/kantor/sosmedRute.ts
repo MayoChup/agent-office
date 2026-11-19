@@ -17,6 +17,7 @@ import type { Percakapan } from './percakapan';
 import type { Berkas } from './berkas';
 
 export const PERAN_SOSMED: Record<string, string> = { [ID_SOSMED.kepala]: 'Maya (Kepala Sosmed)', [ID_SOSMED.riset]: 'Tara (Riset & analisa)', [ID_SOSMED.penulis]: 'Lala (Penulis)', [ID_SOSMED.produksi]: 'Vino (Produksi & unggah)', [ID_SOSMED.komunitas]: 'Dea (Komunitas)' };
+export interface Autopilot { aktif: boolean; jedaJam: number; balas: boolean; dm: { aktif: boolean; kata: string[]; pesan: string; perJam: number }; sudahDm: string[]; log: Array<{ at: number; jenis: 'terbit' | 'balas' | 'dm' | 'lewati'; teks: string }> }
 export interface AkunSosmed { id: string; nama: string; platform: P.Platform; handle: string; warna: string; dibuat: number }
 interface Global { ideBerita?: { at: number; teks: string }; ringkasan: { at: number; teks: string; arahNiche: string; poin: string[]; ide: string[]; perAkun: Array<{ id: string; saran: string }> } | null; mingguKe: string }
 export interface DepsSosmed {
@@ -531,7 +532,6 @@ export function pasangSosmed(d: DepsSosmed) {
     const setIdeBerita = (teks: string) => { glob.ideBerita = { at: Date.now(), teks }; simpanGlobal(); for (const c of semua()) c.s.insightGlobal = teksInsight(); };
 
     // ── R9 Autopilot konten (keputusan Pak Rico 19 Nov 2026): posting & DM otomatis lewat API resmi, dengan rem pengaman ──
-    interface Autopilot { aktif: boolean; jedaJam: number; balas: boolean; dm: { aktif: boolean; kata: string[]; pesan: string; perJam: number }; sudahDm: string[]; log: Array<{ at: number; jenis: 'terbit' | 'balas' | 'dm' | 'lewati'; teks: string }> }
     const fileAuto = path.join(d.dataDir, 'sosmed-autopilot.json');
     let autoSt: Record<string, Partial<Autopilot>> = {};
     try { autoSt = JSON.parse(fs.readFileSync(fileAuto, 'utf8')); } catch { /* baru */ }
