@@ -743,3 +743,4 @@ button.hz-tgl.on { background: var(--panel-solid); color: var(--text); }
 .tugas-hal .pk-mode { overflow-x: auto; scrollbar-width: none; max-width: 100%; }
 .tugas-hal .pk-mode::-webkit-scrollbar { display: none; }
 .tugas-hal .pk-mode button { flex: 0 0 auto; }
+@media (max-width: 640px) { .kg-isi { flex-wrap: wrap; } .kg-isi input { flex: 1 1 100%; } }
