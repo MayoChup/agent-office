@@ -747,3 +747,4 @@ button.hz-tgl.on { background: var(--panel-solid); color: var(--text); }
 /* Sinyal ditahan karena data 4 indikator belum lengkap */
 .sb-tahan { font-size: 12px; color: var(--warn); background: var(--lb-t-bg); border-radius: var(--r-kontrol); padding: 4px 8px; margin: 4px 0 0; }
 .sb-tahan-ringkas { font-size: 13px; color: var(--muted); border: 1px solid var(--line); border-left: 2px solid var(--warn); border-radius: var(--r-kontrol); padding: 8px 12px; margin: 0 0 12px; }
+.pp-trail { color: var(--warn); font-size: 11px; }

@@ -10,7 +10,7 @@ import { SimulasiSinyal } from './SimulasiSinyal';
 import { Ikon } from '../../components/Ikon';
 import { konfirmasi } from '../../components/Konfirmasi';
 type Res = 'harian' | 'mingguan' | 'bulanan';
-interface Pos { masa?: { H: number; hari: number; sisa: number; status: 'jalan' | 'terakhir' | 'lewat' } | null; symbol: string; shares: number; entry: number; target: number; stop: number; openedAt: string; closedAt?: string; exit?: number; pnl: number | null; pnlPct: number | null; modal: number; harga?: number | null; nilai?: number | null; keTarget?: number | null; keStop?: number | null; hari: number | null; profil?: string; ai?: { label?: string; mode?: string; pt?: string }; catatan?: string; notified?: { target?: string; stop?: string } }
+interface Pos { masa?: { H: number; hari: number; sisa: number; status: 'jalan' | 'terakhir' | 'lewat' } | null; symbol: string; shares: number; entry: number; target: number; stop: number; openedAt: string; closedAt?: string; exit?: number; pnl: number | null; pnlPct: number | null; modal: number; harga?: number | null; nilai?: number | null; keTarget?: number | null; keStop?: number | null; hari: number | null; profil?: string; ai?: { label?: string; mode?: string; pt?: string }; catatan?: string; notified?: { target?: string; stop?: string }; stopAwal?: number; trail?: { at: string; n: number; puncak: number; atr: number; mult: number } }
 interface Dana { id: string; tgl: string; jenis: 'awal' | 'setor' | 'tarik'; jumlah: number; catatan?: string }
 interface Data {
     ringkasan: { nilaiTotal: number; untung: number; untungPct: number | null; terealisasi: number; berjalan: number; kas: number; nilaiSaham: number; modalTerpakai: number; totalDana: number; disetor: number; ditarik: number; spyUntung: number | null; spyUntungPct: number | null; mulai: string; danaOtomatis: boolean };
@@ -158,7 +158,7 @@ export function Portofolio({ onBuka }: { onBuka?: (s: string) => void }) {
 
 function Rentang({ p }: { p: Pos }) {
     const h = p.harga ?? p.entry;
-    const lo = Math.min(p.stop, h), hi = Math.max(p.target, h);
+    const lo = Math.min(p.stop, h, p.entry), hi = Math.max(p.target, h);
     const x = (v: number) => `${((v - lo) / Math.max(0.0001, hi - lo)) * 100}%`;
     return (
         <div className="tr-range">
@@ -168,7 +168,7 @@ function Rentang({ p }: { p: Pos }) {
                 <span className="tr-mark entry" style={{ left: x(p.entry) }} />
                 {p.harga != null && <span className="tr-mark now" style={{ left: x(p.harga) }}><i>{usd(p.harga)}</i></span>}
             </div>
-            <div className="tr-range-labels"><span><Ikon e="🔴" /> {usd(p.stop)}</span><span>beli {usd(p.entry)}</span><span><Ikon e="🟢" /> {usd(p.target)}</span></div>
+            <div className="tr-range-labels"><span title={p.stopAwal != null ? `Trailing stop: dinaikkan ${p.trail?.n || 1}× dari ${usd(p.stopAwal)} (tertinggi ${usd(p.trail?.puncak ?? 0)} − ${p.trail?.mult}×ATR)` : undefined}><Ikon e={p.stop >= p.entry ? '🟡' : '🔴'} /> {usd(p.stop)}{p.stopAwal != null && <small className="pp-trail"> · naik dari {usd(p.stopAwal)}</small>}</span><span>beli {usd(p.entry)}</span><span><Ikon e="🟢" /> {usd(p.target)}</span></div>
         </div>
     );
 }

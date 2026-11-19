@@ -55,6 +55,9 @@ export interface Position {
     openedAt: string;
     planId?: number;
     notified?: { stop?: string; target?: string; durasi?: string };
+    /** Trailing stop: stop awal saat beli, dan catatan kenaikan terakhir. */
+    stopAwal?: number;
+    trail?: { at: string; n: number; puncak: number; atr: number; mult: number };
     closedAt?: string;
     exit?: number;
     pnl?: number;
@@ -79,6 +82,7 @@ export interface TradingState {
     history: Position[];
     dana?: Dana[];
     lastPlansDate?: string;
+    lastTrailDate?: string;
 }
 
 const DEFAULT_STATE: TradingState = {
@@ -163,6 +167,22 @@ export async function fetchPrice(symbol: string): Promise<number> {
     try { const r = await yahooChart(symbol, '1d', '1m'); p = Number(r?.meta?.regularMarketPrice); } catch { const h = await hargaHarian(symbol); p = h.rows[h.rows.length - 1].c; }
     if (!p) throw new Error(`Harga ${symbol} kosong`);
     return p;
+}
+
+/** Hitungan trailing stop (lihat TradingDesk.trailing). null = stop belum perlu dinaikkan. */
+export function hitungTrailing(p: Pick<Position, 'entry' | 'stop' | 'openedAt' | 'ai'>, candles: Candle[], harga: number) {
+    const sejak = Date.parse(p.openedAt) / 1000 - 12 * 3600;
+    const pasca = candles.filter((k) => k.t >= sejak);
+    const a = atr(candles, 14);
+    if (!pasca.length || !(a > 0)) return null;
+    const H = p.ai?.H || 20, mult = H <= 5 ? 2 : H <= 20 ? 2.5 : 3;
+    const puncak = Math.max(...pasca.map((k) => k.h));
+    if (puncak < p.entry + a) return null;
+    let calon = puncak - mult * a;
+    if (puncak >= p.entry + 1.5 * a) calon = Math.max(calon, p.entry);
+    calon = r2(Math.min(calon, harga - 0.5 * a));
+    if (calon <= p.stop + Math.max(0.25 * a, p.entry * 0.005)) return null;
+    return { calon, puncak, a, mult };
 }
 
 export function atr(candles: Candle[], n = 14): number {
@@ -379,7 +399,8 @@ export class TradingDesk {
                 await this.notify(`🟢 TARGET ${p.symbol} tercapai: $${r2(price)} (target $${p.target})${plTxt}\nKalau sudah jual, balas: "jual ${p.symbol} di ${r2(price)}"`);
             } else if (price <= p.stop && !p.notified.stop) {
                 p.notified.stop = new Date().toISOString(); rang++;
-                await this.notify(`🔴 STOP LOSS ${p.symbol} kena: $${r2(price)} (stop $${p.stop})${plTxt}\nKalau sudah jual, balas: "jual ${p.symbol} di ${r2(price)}"`);
+                if (p.stop >= p.entry) await this.notify(`🟡 TRAILING STOP ${p.symbol} kena: $${r2(price)} (stop $${p.stop}, di atas harga beli $${p.entry})${plTxt}. Untung yang sudah dikunci terpakai.\nKalau sudah jual, balas: "jual ${p.symbol} di ${r2(price)}"`);
+                else await this.notify(`🔴 STOP LOSS ${p.symbol} kena: $${r2(price)} (stop $${p.stop})${plTxt}\nKalau sudah jual, balas: "jual ${p.symbol} di ${r2(price)}"`);
             }
             const mp = masaPegang(p);
             if (mp?.status === 'lewat' && !p.notified.durasi && !p.notified.target && !p.notified.stop) {
@@ -400,7 +421,55 @@ export class TradingDesk {
         return rang;
     }
 
+    /**
+     * Trailing stop berbasis ATR (gaya Chandelier), sekali sehari setelah bursa AS tutup:
+     *  stop baru = harga tertinggi sejak beli − k × ATR-14 (k: 2 untuk ≤5 hari, 2,5 untuk ≤20 hari, 3 untuk lebih lama).
+     *  - Baru mulai mengikuti setelah harga sempat naik ≥1 ATR dari harga beli (supaya tidak terlempar oleh goyangan biasa).
+     *  - Setelah naik ≥1,5 ATR, stop minimal di harga beli (impas): posisi tidak bisa rugi lagi.
+     *  - Stop hanya NAIK, tidak pernah turun; jarak minimal 0,5 ATR di bawah harga terakhir.
+     * Stop di catatan kantor diperbarui + Bapak dikabari untuk mengubah order stop di broker (kantor tidak pernah jual-beli).
+     */
+    async trailing(): Promise<number> {
+        const st = this.load();
+        const ubah: Array<{ symbol: string; openedAt: string; lama: number; baru: number; trail: NonNullable<Position['trail']>; stopAwal: number }> = [];
+        for (const p of st.positions) {
+            if (p.notified?.stop || p.notified?.target) continue;
+            let d: { candles: Candle[]; price: number };
+            try { d = await fetchDaily(p.symbol); } catch { continue; }
+            const t = hitungTrailing(p, d.candles, d.price);
+            if (!t) continue;
+            const { calon, puncak, a, mult } = t, harga = d.price;
+            ubah.push({ symbol: p.symbol, openedAt: p.openedAt, lama: p.stop, baru: calon, stopAwal: p.stopAwal ?? p.stop, trail: { at: new Date().toISOString(), n: (p.trail?.n || 0) + 1, puncak: r2(puncak), atr: r2(a), mult } });
+            const kunci = p.shares ? (calon - p.entry) * p.shares : 0;
+            await this.notify([
+                `📈 Naikkan stop ${p.symbol}: $${p.stop} → $${calon}`,
+                `Harga $${r2(harga)}, tertinggi sejak beli $${r2(puncak)}. Stop baru = tertinggi − ${mult}×ATR ($${r2(a)}).`,
+                calon >= p.entry ? `Posisi ini sekarang tidak bisa rugi lagi${kunci > 0 ? `: minimal untung ±$${r2(kunci)}` : ' (stop di harga beli)'}.` : `Risiko kalau kena stop turun dari ±$${r2((p.entry - p.stop) * (p.shares || 0))} jadi ±$${r2((p.entry - calon) * (p.shares || 0))}.`,
+                'Stop di kantor sudah diperbarui. Ubah juga order stop di broker Bapak. Bukan saran keuangan.'
+            ].join('\n'));
+            await new Promise((r) => setTimeout(r, 400));
+        }
+        // Simpan tanpa menimpa perubahan lain: hanya kalau stop di catatan belum diubah orang lain sejak dibaca.
+        const fresh = this.load();
+        for (const u of ubah) {
+            const p = fresh.positions.find((x) => x.symbol === u.symbol && x.openedAt === u.openedAt);
+            if (!p || p.stop !== u.lama) continue;
+            p.stopAwal = u.stopAwal; p.stop = u.baru; p.trail = u.trail;
+        }
+        fresh.lastTrailDate = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
+        this.save(fresh);
+        return ubah.length;
+    }
+
+    /** Pembungkus pekerjaan rutin supaya tercatat di Papan kerja atas nama Dito (diisi index.ts). */
+    bungkus?: <T>(judul: string, kerja: () => Promise<T>) => Promise<T>;
     start(strategyHourWib = -1) {
+        // Trailing stop: sekali sehari, Selasa–Sabtu pukul ≥05.00 WIB (bursa AS sudah tutup, candle harian sudah final).
+        setInterval(() => {
+            const wib = new Date(Date.now() + 7 * 3600_000), hari = wib.getUTCDay();
+            if (hari < 2 || wib.getUTCHours() < 5 || this.load().lastTrailDate === wib.toISOString().slice(0, 10) || !this.load().positions.length) return;
+            (this.bungkus ? this.bungkus('Menaikkan trailing stop posisi (ATR)', () => this.trailing()) : this.trailing()).catch((e) => console.error('[Trading] trailing:', e?.message || e));
+        }, 30 * 60_000);
         console.log('[Trading] Pemantau harga aktif (tiap 5 menit saat bursa AS buka).');
         setInterval(() => this.check().catch((e) => console.error('[Trading]', e?.message || e)), 5 * 60_000);
         // Strategi harian: hari kerja, jam 20.00 WIB (sebelum bursa AS buka), hanya kalau watchlist tidak kosong.
@@ -443,6 +512,7 @@ export async function tradingCli(desk: TradingDesk, args: string[]): Promise<str
         case 'modal': return desk.modal(num(rest[0]), num(rest[1]));
         case 'watchlist': return desk.watchlist((rest[0] as any) || 'lihat', rest.slice(1));
         case 'cek': { const n = await desk.check(true); return n ? `${n} alert terkirim.` : 'Belum ada target/stop yang tersentuh.'; }
+        case 'trail': { const n = await desk.trailing(); return n ? `${n} stop dinaikkan.` : 'Belum ada stop yang perlu dinaikkan.'; }
         default: return 'Perintah: strategi | rencana | eksekusi | pasang | jual | posisi | modal | watchlist | cek';
     }
 }

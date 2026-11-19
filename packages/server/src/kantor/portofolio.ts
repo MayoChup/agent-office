@@ -50,7 +50,8 @@ export function ubah(desk: TradingDesk, symbol: string, x: Partial<Pick<Position
     if (x.stop != null && +x.stop > 0) { p.stop = r2(+x.stop); if (p.notified) delete p.notified.stop; }
     if (x.catatan != null) p.catatan = String(x.catatan).slice(0, 300);
     if (x.tgl && /^\d{4}-\d{2}-\d{2}$/.test(x.tgl)) p.openedAt = new Date(`${x.tgl}T15:00:00Z`).toISOString();
-    if (!(p.stop < p.entry && p.target > p.entry)) throw new Error('Harus: stop < harga beli < target.');
+    // Stop boleh di atas harga beli kalau sudah dinaikkan (trailing stop mengunci untung).
+    if (!(p.stop < p.target && p.target > p.entry)) throw new Error('Harus: stop < target, dan target > harga beli.');
     desk.save(st);
     return p;
 }

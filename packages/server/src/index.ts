@@ -1264,6 +1264,7 @@ gameServer.listen(config.port, config.host).then(async () => {
     // Kantor langsung dibuka, walau belum ada yang menonton, supaya agen tetap "hidup".
     await matchMaker.createRoom('office', {});
     pencatat.start();
+    tradingDesk.bungkus = (judul, kerja) => papan.jalankan({ ai: 'trading', judul, detail: 'Stop dinaikkan mengikuti harga tertinggi sejak beli dikurangi kelipatan ATR; tidak pernah diturunkan.', sumber: 'trading' }, kerja);
     tradingDesk.start();
     kalender.start();
     investigasi.start(() => !marketOpen());
