@@ -16,9 +16,9 @@ function sapaan() {
 }
 export const jamAcara = (e: Acara) => (e.seharian ? 'Seharian' : e.mulai.slice(11, 16));
 
-function Card({ title, ico, onOpen, children, accent }: { title: string; ico: string; onOpen: () => void; children: React.ReactNode; accent: string }) {
+function Card({ title, ico, onOpen, children, accent, ringkas }: { title: string; ico: string; onOpen: () => void; children: React.ReactNode; accent: string; ringkas?: boolean }) {
     return (
-        <section className="home-card" style={{ ['--c' as any]: accent }}>
+        <section className={`home-card${ringkas ? ' ringkas' : ''}`} style={{ ['--c' as any]: accent }}>
             <button className="home-card-head" onClick={onOpen}>
                 <span><Ikon e={ico} /> {title}</span><span className="home-more">Buka ›</span>
             </button>
@@ -62,7 +62,7 @@ export function HomePage({ go }: { go: (p: PageKey) => void }) {
             </div>
 
             <div className="home-grid">
-                <Card title="Jadwal" ico="📅" accent="#0ea5e9" onOpen={() => go('jadwal')}>
+                <Card title="Jadwal" ico="📅" accent="#0ea5e9" ringkas={!!cal.error} onOpen={() => go('jadwal')}>
                     {cal.error && <div className="home-empty">Kalender belum tersambung.</div>}
                     {!cal.error && agenda.length === 0 && <div className="home-empty">{cal.data ? 'Tidak ada agenda 3 hari ke depan.' : 'Memuat…'}</div>}
                     {agenda.map((e) => (
@@ -73,7 +73,7 @@ export function HomePage({ go }: { go: (p: PageKey) => void }) {
                     ))}
                 </Card>
 
-                <Card title="Keuangan bulan ini" ico="💰" accent="#f43f5e" onOpen={() => go('keuangan')}>
+                <Card title="Keuangan bulan ini" ico="💰" accent="#f43f5e" ringkas={!r && !!fin.error} onOpen={() => go('keuangan')}>
                     {!r && <div className="home-empty">{fin.error ? 'Data keuangan belum tersedia.' : 'Memuat…'}</div>}
                     {r && (
                         <>
@@ -122,6 +122,7 @@ export function HomePage({ go }: { go: (p: PageKey) => void }) {
 
             <section className="home-card wide" style={{ ['--c' as any]: '#818cf8' }}>
                 <button className="home-card-head" onClick={() => go('kantor')}><span><Ikon e="👥" /> Tim</span><span className="home-more">Lihat kantor ›</span></button>
+                <StatusTim go={go} />
                 <div className="home-team">
                     {[{ id: 'default', name: 'Kepala', icon: '👑', color: '#818cf8', memberIds: ['default'] }, ...divisions].map((dv) => (
                         <div key={dv.id} className="home-div">
@@ -151,6 +152,43 @@ export function HomePage({ go }: { go: (p: PageKey) => void }) {
                     <div key={h.id} className="home-row"><span className="home-text"><b>{h.title}</b> <small>{h.body}</small></span></div>
                 ))}
             </section>
+        </div>
+    );
+}
+
+type StatusAi = { id: string; nama: string; peran: string; sedang: { judul: string; sejak: number } | null; antre: number; terakhir: { judul: string; status: string; at: number; galat?: string } | null; model: { label?: string; nama?: string } | string | null; rem: { status: string; sebab: string; hari: number }; bertanya: boolean };
+const REM_LABEL: Record<string, string> = { tegur: 'Ditegur', batasi: 'Dibatasi', henti: 'Dihentikan' };
+const lalu = (t: number) => { const m = Math.round((Date.now() - t) / 60_000); return m < 1 ? 'baru saja' : m < 60 ? `${m} mnt lalu` : m < 1440 ? `${Math.round(m / 60)} jam lalu` : `${Math.round(m / 1440)} hr lalu`; };
+/** R4 · Kartu status tim: siapa mengerjakan apa sekarang, galat terakhir, rem otonomi, siapa menunggu jawaban Bapak. */
+export function StatusTim({ go, onPilih }: { go: (p: PageKey) => void; onPilih?: (id: string) => void }) {
+    const st = useApi<{ ai: StatusAi[] }>('/api/kantor/tim-status', 20_000);
+    const ai = st.data?.ai || [];
+    if (!ai.length) return null;
+    const urut = [...ai].sort((a, b) => Number(!!b.sedang) - Number(!!a.sedang) || Number(b.rem.status !== 'normal') - Number(a.rem.status !== 'normal'));
+    const sibuk = ai.filter((a) => a.sedang).length;
+    return (
+        <div className="ts">
+            <div className="ts-ringkas">{sibuk ? `${sibuk} dari ${ai.length} sedang bekerja` : 'Semua santai'}{ai.some((a) => a.bertanya) && ' · ada yang menunggu jawaban Bapak'}</div>
+            <ul className="ts-daftar">
+                {urut.map((a) => {
+                    const model = typeof a.model === 'string' ? a.model : a.model?.label || a.model?.nama || '';
+                    const gagal = a.terakhir?.status === 'gagal' && !a.sedang;
+                    return (
+                        <li key={a.id} className={`ts-baris${gagal ? ' gagal' : ''}${onPilih ? ' bisa' : ''}`} onClick={onPilih ? () => onPilih(a.id) : undefined}>
+                            <span className={`ts-titik ${a.sedang ? 'kerja' : gagal ? 'galat' : ''}`} aria-hidden />
+                            <div className="ts-isi">
+                                <div className="ts-atas"><b>{a.nama}</b><small>{a.peran}</small>
+                                    {a.rem.status !== 'normal' && <em className={`ts-rem ${a.rem.status}`} title={a.rem.sebab}>{REM_LABEL[a.rem.status]}</em>}
+                                    {a.bertanya && <button className="ts-tanya" onClick={(e) => { e.stopPropagation(); go('tugas'); }}>Menunggu jawaban Bapak</button>}
+                                </div>
+                                <div className="ts-kini">{a.sedang ? a.sedang.judul : a.terakhir ? `Terakhir: ${a.terakhir.judul} · ${lalu(a.terakhir.at)}` : 'Santai'}{a.antre > 0 && ` · ${a.antre} antre`}</div>
+                                {gagal && a.terakhir?.galat && <div className="ts-galat">{a.terakhir.galat}</div>}
+                            </div>
+                            <div className="ts-kanan">{model && <small className="ts-model">{model}</small>}<small className="mono">{a.rem.hari}% hari ini</small></div>
+                        </li>
+                    );
+                })}
+            </ul>
         </div>
     );
 }

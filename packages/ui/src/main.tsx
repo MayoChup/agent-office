@@ -6,6 +6,8 @@ import { App } from './App';
 import { setupPhaser } from './game/Game';
 import { startConnection } from './kantor/connection';
 import { mulaiPasang } from './kantor/pasang';
+import { mulaiGetar } from './kantor/getar';
+import './kantor/antrean';
 
 const rootElement = document.getElementById('ui-root');
 if (rootElement) {
@@ -15,3 +17,4 @@ if (rootElement) {
 setupPhaser('phaser-container');
 startConnection();
 mulaiPasang();
+mulaiGetar();

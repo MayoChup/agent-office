@@ -1,8 +1,12 @@
-import { catatHalaman, daftarHalaman } from './kantor/kembali';
+import { catatHalaman, daftarHalaman, useKembali } from './kantor/kembali';
+import { createPortal } from 'react-dom';
+import { Ikon } from './components/Ikon';
 import { TugasPage } from './pages/TugasPage';
 import { KonfirmasiHost } from './components/Konfirmasi';
+import { useLuring } from './kantor/antrean';
 import React, { useEffect, useRef, useState } from 'react';
 import { eventBus } from './events';
+import { apiGet } from './kantor/connection';
 import { useKantor } from './kantor/store';
 import { useSubNav } from './kantor/subnav';
 import { TopBar } from './components/TopBar';
@@ -17,7 +21,7 @@ import { LoginScreen } from './components/LoginScreen';
 import { KeuanganApp } from './pages/keuangan/KeuanganApp';
 import { CatatanPage } from './pages/catatan/CatatanPage';
 import { BerkasPage } from './pages/BerkasPage';
-import { HomePage } from './pages/HomePage';
+import { HomePage, StatusTim } from './pages/HomePage';
 import { TradingPage } from './pages/TradingPage';
 import { SchedulePage } from './pages/SchedulePage';
 import { SosmedPage } from './pages/SosmedPage';
@@ -26,6 +30,7 @@ import { AktifCtx } from './kantor/aktif';
 
 const LS_PAGE = 'kantor:page';
 const MAKS_HIDUP = 4; // halaman yang tetap hidup di belakang layar (paling lama tidak dibuka ditutup otomatis)
+const JUDUL_HAL: Partial<Record<PageKey, string>> = { home: 'Beranda', keuangan: 'Keuangan', trading: 'Trading', sosmed: 'Konten', tugas: 'Tugas', jadwal: 'Jadwal', obrolan: 'Chat', catatan: 'Catatan', berkas: 'Berkas', kr: 'Knowledge Reels' };
 const PAGES: PageKey[] = ['home', 'kantor', 'keuangan', 'trading', 'sosmed', 'tugas', 'jadwal', 'obrolan', 'catatan', 'berkas', 'kr'];
 
 function initialPage(): PageKey {
@@ -126,15 +131,17 @@ export function App() {
 
     return (
         <>
+            <a href="#isi" className="lewati interactive" onClick={(e) => { e.preventDefault(); const m = document.querySelector<HTMLElement>('main.page:not([hidden])'); if (m) { m.tabIndex = -1; m.focus(); } }}>Lewati ke isi</a>
             <TopBar />
             <KonfirmasiHost />
+            <PitaLuring />
             {(status === 'disconnected' || status === 'connecting') && (
                 <div className="banner interactive">{status === 'connecting' ? 'Menghubungkan ke kantor…' : error || 'Koneksi terputus.'}</div>
             )}
 
             {/* Halaman yang pernah dibuka tetap hidup (maks. 4) → pindah menu tanpa memuat ulang; posisi gulir & isi tetap. */}
             {PAGES.filter((k) => k !== 'kantor' && (hidup.includes(k) || k === page)).map((k) => (
-                <main key={k} className={`page interactive page-${k}`} hidden={k !== page}>
+                <main key={k} className={`page interactive page-${k}`} hidden={k !== page} aria-label={JUDUL_HAL[k] || k}>
                     <AktifCtx.Provider value={k === page}>
                         {k === 'home' && <HomePage go={(p) => go(p)} />}
                         {k === 'keuangan' && <KeuanganApp />}
@@ -161,6 +168,8 @@ export function App() {
                 />
             )}
             {page === 'kantor' && <KantorSub panel={panel} go={go} />}
+            {page === 'kantor' && !panel && !agentId && <KendaliPeta go={go} />}
+            {page === 'kantor' && <PengamatAmplop />}
             <Toasts />
             <Nav page={page} panel={panel} onGo={go} hidup={hidup} />
         </>
@@ -169,5 +178,56 @@ export function App() {
 
 function KantorSub({ panel, go }: { panel: SidePanel; go: (k: PageKey | KunciPanel) => void }) {
     useSubNav([{ k: 'kantor', ico: '🏢', label: 'Kantor' }, { k: 'papan', ico: '🗂️', label: 'Papan kerja' }, { k: 'org', ico: '🧭', label: 'Bagan' }, { k: 'activity', ico: '⚡', label: 'Aktivitas' }], panel || 'kantor', (k) => { if (k !== (panel || 'kantor')) go(k === 'kantor' ? 'kantor' : (k as KunciPanel)); });
+    return null;
+}
+
+function PitaLuring() {
+    const { luring, antre } = useLuring();
+    if (!luring && !antre) return null;
+    return <div className="luring" role="status">{luring ? `Tidak ada sinyal${antre ? ` · ${antre} pesan menunggu dikirim` : '. Pesan yang Bapak tulis akan dikirim begitu tersambung.'}` : `Mengirim ${antre} pesan yang tertunda…`}</div>;
+}
+
+/** U21/U37 · peta kantor di HP: tombol "Pas layar" dan lembar daftar tim (ketuk nama = kamera menuju meja AI itu). */
+function KendaliPeta({ go }: { go: (k: PageKey | KunciPanel) => void }) {
+    const [buka, setBuka] = useState(false);
+    useKembali(buka, () => setBuka(false));
+    const pilih = (id: string) => { setBuka(false); eventBus.dispatchEvent(new CustomEvent('focus-agent', { detail: { id } })); };
+    return (
+        <>
+            <div className="peta-kendali interactive">
+                <button className="btn" onClick={() => eventBus.dispatchEvent(new CustomEvent('camera-fit'))} aria-label="Pas layar"><Ikon n="maximize" /> Pas layar</button>
+                <button className="btn" onClick={() => setBuka(true)}><Ikon e="👥" /> Tim</button>
+            </div>
+            {buka && createPortal(
+                <div className="peta-latar" onClick={() => setBuka(false)}>
+                    <div className="peta-lembar" role="dialog" aria-label="Status tim" onClick={(e) => e.stopPropagation()}>
+                        <div className="peta-pegangan" aria-hidden />
+                        <StatusTim go={(p) => { setBuka(false); go(p); }} onPilih={pilih} />
+                    </div>
+                </div>, document.body)}
+        </>
+    );
+}
+
+/** R8 · amati status tim; tugas baru = amplop dari Kepala ke AI itu, tugas selesai = amplop laporan kembali ke Kepala. */
+function PengamatAmplop() {
+    const lalu = useRef<Record<string, string>>({});
+    useEffect(() => {
+        let hidup = true;
+        const cek = () => apiGet<{ ai: Array<{ id: string; sedang: { judul: string } | null; terakhir: { status: string } | null }> }>('/api/kantor/tim-status').then((d) => {
+            if (!hidup) return;
+            const awal = !Object.keys(lalu.current).length;
+            let jeda = 0;
+            for (const a of d.ai) {
+                const kini = a.sedang?.judul || '', dulu = lalu.current[a.id];
+                lalu.current[a.id] = kini;
+                if (awal || a.id === 'default' || dulu === undefined || kini === dulu) continue;
+                const detail = kini ? { dari: 'default', ke: a.id } : a.terakhir?.status === 'selesai' ? { dari: a.id, ke: 'default' } : null;
+                if (detail) { setTimeout(() => eventBus.dispatchEvent(new CustomEvent('amplop', { detail })), jeda); jeda += 350; }
+            }
+        }).catch(() => undefined);
+        cek(); const t = setInterval(cek, 10_000);
+        return () => { hidup = false; clearInterval(t); };
+    }, []);
     return null;
 }

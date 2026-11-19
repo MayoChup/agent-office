@@ -108,6 +108,8 @@ export class OfficeScene extends Phaser.Scene {
         const onFocusAgent = (e: Event) => this.focusAgent((e as CustomEvent).detail?.id);
         const onFit = () => this.fitCamera(true);
         const onSelect = (e: Event) => this.markSelected((e as CustomEvent).detail?.id || null);
+        const onAmplop = (e: Event) => { const d = (e as CustomEvent).detail || {}; this.terbangkanAmplop(d.dari, d.ke); };
+        eventBus.addEventListener('amplop', onAmplop);
         eventBus.addEventListener('office-layout', onLayout);
         eventBus.addEventListener('room-ready', onRoom);
         eventBus.addEventListener('focus-division', onFocusDivision);
@@ -121,6 +123,7 @@ export class OfficeScene extends Phaser.Scene {
             eventBus.removeEventListener('focus-agent', onFocusAgent);
             eventBus.removeEventListener('camera-fit', onFit);
             eventBus.removeEventListener('agent-select', onSelect);
+            eventBus.removeEventListener('amplop', onAmplop);
         });
 
         const existing = lastDetail<OfficeLayout>('office-layout');
@@ -199,6 +202,24 @@ export class OfficeScene extends Phaser.Scene {
         const w = room.w * T, h = room.h * T;
         const zoom = Phaser.Math.Clamp(Math.min((this.scale.width * 0.5) / w, (this.scale.height * 0.55) / h), 1.2, 4);
         this.panTo(room.x * T + w / 2, room.y * T + h / 2, zoom);
+    }
+
+    /** R8 · amplop kecil terbang antarmeja: tugas diserahkan (Joni → AI) atau laporan diantar (AI → Joni). */
+    private terbangkanAmplop(dari: string, ke: string) {
+        const a = this.agents.get(dari), b = this.agents.get(ke);
+        if (!a || !b || a === b) return;
+        const g = this.add.graphics();
+        g.fillStyle(0xf4f6fb, 1).fillRect(-5, -3.5, 10, 7);
+        g.lineStyle(1, 0x2f6bf0, 1).strokeRect(-5, -3.5, 10, 7).beginPath().moveTo(-5, -3.5).lineTo(0, 0.5).lineTo(5, -3.5).strokePath();
+        const c = this.add.container(a.container.x, a.container.y - 18, [g]).setDepth(9999).setScale(0.4).setAlpha(0);
+        const x0 = a.container.x, y0 = a.container.y - 18, x1 = b.container.x, y1 = b.container.y - 18;
+        const tinggi = Math.min(60, Phaser.Math.Distance.Between(x0, y0, x1, y1) * 0.35);
+        this.tweens.add({ targets: c, scale: 1, alpha: 1, duration: 180, ease: 'Back.easeOut' });
+        this.tweens.addCounter({
+            from: 0, to: 1, delay: 180, duration: Phaser.Math.Clamp(Phaser.Math.Distance.Between(x0, y0, x1, y1) * 6, 700, 1600), ease: 'Sine.easeInOut',
+            onUpdate: (tw) => { const t = tw.getValue() ?? 0; c.setPosition(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t - Math.sin(Math.PI * t) * tinggi); c.setRotation(Math.sin(Math.PI * 2 * t) * 0.15); },
+            onComplete: () => this.tweens.add({ targets: c, scale: 0.3, alpha: 0, duration: 200, onComplete: () => c.destroy() })
+        });
     }
 
     private focusAgent(id: string) {

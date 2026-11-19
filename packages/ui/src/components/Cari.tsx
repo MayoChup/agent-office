@@ -7,7 +7,7 @@ import { eventBus } from '../events';
 import { Ikon } from './Ikon';
 
 /** Pencarian global (Ctrl/⌘K atau ikon cari): menu, chat, saham, catatan, berkas — satu kotak. */
-type Hasil = { jenis: 'Menu' | 'Chat' | 'Saham' | 'Catatan' | 'Berkas'; judul: string; sub?: string; ikon: string; buka: () => void };
+type Hasil = { jenis: 'Menu' | 'Chat' | 'Saham' | 'Catatan' | 'Berkas' | 'Ingatan tim'; judul: string; sub?: string; ikon: string; buka: () => void };
 const MENU: Array<[string, string, string]> = [['home', 'Beranda', '🏠'], ['obrolan', 'Chat', '💬'], ['kr', 'Knowledge Reels', '🧠'], ['keuangan', 'Keuangan', '💰'], ['trading', 'Trading', '📈'], ['sosmed', 'Konten', '🎬'], ['catatan', 'Catatan', '📓'], ['berkas', 'Berkas', '☁'], ['tugas', 'Tugas', '📋'], ['jadwal', 'Jadwal', '📅'], ['kantor', 'Kantor', '🏢']];
 const ke = (page: string) => eventBus.dispatchEvent(new CustomEvent('go-page', { detail: { page } }));
 
@@ -58,12 +58,14 @@ function Palet({ tutup }: { tutup: () => void }) {
     useEffect(() => {
         const k = q.trim(); setJauh([]); if (k.length < 2) return;
         const t = setTimeout(async () => {
-            const [c, b] = await Promise.all([
+            const [c, b, m] = await Promise.all([
                 apiGet<{ hasil: Array<{ path: string; cuplikan: string }> }>(`/api/kantor/catatan/cari?q=${encodeURIComponent(k)}`).catch(() => ({ hasil: [] })),
-                apiGet<{ items: Array<{ nama: string; path: string; folder: boolean }> }>(`/api/kantor/berkas/cari?q=${encodeURIComponent(k)}`).catch(() => ({ items: [] }))
+                apiGet<{ items: Array<{ nama: string; path: string; folder: boolean }> }>(`/api/kantor/berkas/cari?q=${encodeURIComponent(k)}`).catch(() => ({ items: [] })),
+                apiGet<{ hasil: Array<{ ai: string; nama: string; berkas: string; cuplikan: string }> }>(`/api/kantor/memori/cari?q=${encodeURIComponent(k)}`).catch(() => ({ hasil: [] }))
             ]);
             setJauh([
                 ...c.hasil.slice(0, 6).map((h): Hasil => ({ jenis: 'Catatan', judul: h.path.split('/').pop()!.replace(/\.md$/, ''), sub: h.cuplikan, ikon: '📓', buka: () => { ke('catatan'); setTimeout(() => eventBus.dispatchEvent(new CustomEvent('buka-catatan', { detail: { path: h.path } })), 80); } })),
+                ...m.hasil.slice(0, 6).map((h): Hasil => ({ jenis: 'Ingatan tim', judul: `${h.nama} ingat`, sub: h.cuplikan, ikon: '🧠', buka: () => eventBus.dispatchEvent(new CustomEvent('buka-chat-global', { detail: { id: h.ai } })) })),
                 ...b.items.slice(0, 6).map((h): Hasil => ({ jenis: 'Berkas', judul: h.nama, sub: h.path, ikon: h.folder ? '📁' : '📄', buka: () => { ke('berkas'); setTimeout(() => eventBus.dispatchEvent(new CustomEvent('buka-berkas', { detail: { dir: h.folder ? h.path : h.path.split('/').slice(0, -1).join('/') } })), 80); } }))
             ]);
         }, 250);
@@ -78,7 +80,7 @@ function Palet({ tutup }: { tutup: () => void }) {
             <div className="cari" role="dialog" aria-label="Cari" onClick={(e) => e.stopPropagation()}>
                 <div className="cari-masuk">
                     <Ikon e="🔍" size={18} />
-                    <input ref={masuk} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari menu, chat, saham, catatan, berkas…" aria-label="Kata pencarian"
+                    <input ref={masuk} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari menu, chat, saham, catatan, berkas, ingatan tim…" aria-label="Kata pencarian"
                         onKeyDown={(e) => { if (e.key === 'ArrowDown') { e.preventDefault(); setPilih((p) => Math.min(semua.length - 1, p + 1)); } else if (e.key === 'ArrowUp') { e.preventDefault(); setPilih((p) => Math.max(0, p - 1)); } else if (e.key === 'Enter') jalankan(semua[pilih]); else if (e.key === 'Escape') tutup(); }} />
                     <kbd>Esc</kbd>
                 </div>

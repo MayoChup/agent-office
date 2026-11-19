@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { apiGet, apiPost } from '../../kantor/connection';
 import { usd } from './types';
 import { Info } from './InfoI';
@@ -26,7 +26,8 @@ export function HistorySinyal({ onOpen }: { onOpen: (s: string) => void }) {
     const AWAL = { profil: 'M', H: '', status: '', dari: '', sampai: '', urut: 'terbaru', q: '' };
     const [f, setFRaw] = useState<typeof AWAL>(() => { try { return { ...AWAL, ...JSON.parse(localStorage.getItem('kantor:history:f') || '{}') }; } catch { return AWAL; } });
     const setF = (v: typeof AWAL) => { setFRaw(v); try { localStorage.setItem('kantor:history:f', JSON.stringify(v)); } catch { /* */ } };
-    const [hal, setHalRaw] = useState(() => { try { return Number(sessionStorage.getItem('kantor:history:hal')) || 1; } catch { return 1; } });
+    const hp = useMemo(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 640px)').matches, []);
+    const [hal, setHalRaw] = useState(() => { if (hp) return 1; try { return Number(sessionStorage.getItem('kantor:history:hal')) || 1; } catch { return 1; } });
     const setHal = (n: number) => { setHalRaw(n); try { sessionStorage.setItem('kantor:history:hal', String(n)); } catch { /* */ } };
     const [lompat, setLompat] = useState('');
     const [d, setD] = useState<Data | null>(null);
@@ -35,8 +36,17 @@ export function HistorySinyal({ onOpen }: { onOpen: (s: string) => void }) {
     useEffect(() => {
         const p = new URLSearchParams({ hal: String(hal), n: '20' });
         for (const [k, v] of Object.entries(f)) if (v) p.set(k, String(v));
-        apiGet<Data>(`/api/kantor/history-sinyal?${p}`).then((r) => { setD(r); setErr(''); }).catch((e) => setErr(String(e.message || e)));
-    }, [f, hal, segar]);
+        const sambung = tambah.current; tambah.current = false;
+        apiGet<Data>(`/api/kantor/history-sinyal?${p}`).then((r) => { setD((lama) => (sambung && lama && hp ? { ...r, item: [...lama.item, ...r.item] } : r)); setErr(''); }).catch((e) => setErr(String(e.message || e)));
+    }, [f, hal, segar]); // eslint-disable-line react-hooks/exhaustive-deps
+    // U38 · di HP: gulir terus (muat halaman berikut otomatis), bukan tombol halaman.
+    const tambah = useRef(false);
+    const ujung = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (!hp || !ujung.current || !d || d.hal >= d.halaman) return;
+        const io = new IntersectionObserver((es) => { if (es[0]?.isIntersecting) { tambah.current = true; setHal(d.hal + 1); io.disconnect(); } }, { rootMargin: '400px' });
+        io.observe(ujung.current); return () => io.disconnect();
+    }, [hp, d]); // eslint-disable-line react-hooks/exhaustive-deps
     useEffect(() => { if (!d?.jalan) return; const t = setTimeout(() => setSegar((x) => x + 1), 8000); return () => clearTimeout(t); }, [d]);
     const set = (x: Partial<typeof f>) => { setF({ ...f, ...x }); setHal(1); };
     const preset = (k: string) => { const v = k === 'hari' ? [hariIni(), hariIni()] : k === 'kemarin' ? [mundur(1), mundur(1)] : k === '7' ? [mundur(6), ''] : k === '30' ? [mundur(29), ''] : ['', '']; set({ dari: v[0], sampai: v[1] }); };
@@ -113,7 +123,8 @@ export function HistorySinyal({ onOpen }: { onOpen: (s: string) => void }) {
                     })}
                 </div>
             )}
-            {d && d.halaman > 1 && (
+            {hp && d && d.hal < d.halaman && <div ref={ujung} className="hs-ujung" aria-hidden>Memuat lagi…</div>}
+            {!hp && d && d.halaman > 1 && (
                 <nav className="dr-hal" aria-label="Halaman">
                     <button disabled={d.hal <= 1} onClick={() => setHal(d.hal - 1)}>‹ Sebelumnya</button>
                     {nomor.map((x, i) => x === '…' ? <span key={`e${i}`}>…</span> : <button key={x} className={x === d.hal ? 'on' : ''} aria-current={x === d.hal ? 'page' : undefined} onClick={() => setHal(x)}>{x}</button>)}

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useKembali } from '../kantor/kembali';
 import { apiGet, apiPost, getRoom, serverBase, tokenLogin } from '../kantor/connection';
+import { antrekan, galatJaringan, isiAntrean, luring } from '../kantor/antrean';
 import { eventBus } from '../events';
 import { statusNotif, aktifkanNotif, matikanNotif, laporLihat, iosBrowser } from '../kantor/notif';
 import { useAktif } from '../kantor/aktif';
@@ -156,12 +157,14 @@ function Thread({ info, threads, skin, onBack, onSeen, onInfo }: { info: ThreadI
     const load = async () => {
         try {
             const d = await apiGet<{ pesan: Pesan[]; menulis: string[] }>(`/api/kantor/chat/${encodeURIComponent(info.id)}`);
-            setPesan(d.pesan); setMenulis(d.menulis); setErr('');
+            const tunda = isiAntrean(`/api/kantor/chat/${encodeURIComponent(info.id)}`).map((it) => ({ id: it.id, dari: 'owner', nama: 'Pak Rico', teks: String((it.body as any)?.teks || ''), at: it.at, tertunda: true } as any as Pesan));
+            setPesan([...d.pesan, ...tunda]); setMenulis(d.menulis); setErr('');
             const last = d.pesan[d.pesan.length - 1];
             if (last) onSeen(last.at);
         } catch (e: any) { setErr(String(e.message || e)); }
     };
     const aktif = useAktif();
+    useEffect(() => { const f = () => void load(); eventBus.addEventListener('antrean-terkirim', f); return () => eventBus.removeEventListener('antrean-terkirim', f); }, [info.id]); // eslint-disable-line react-hooks/exhaustive-deps
     useEffect(() => {
         if (!aktif) return;
         load();
@@ -184,12 +187,17 @@ function Thread({ info, threads, skin, onBack, onSeen, onInfo }: { info: ThreadI
         const t = text.trim();
         if ((!t && !lamp.length) || sending || unggah.some((u) => !u.error)) return;
         setSending(true);
+        const jalur = `/api/kantor/chat/${encodeURIComponent(info.id)}`;
+        const tunda = () => { const it = antrekan(jalur, { teks: t, lampiran: lamp }); setPesan((p) => [...p, { id: it.id, dari: 'owner', nama: 'Pak Rico', teks: t, at: it.at, lampiran: lamp.length ? lamp : undefined, tertunda: true } as any]); setText(''); setLamp([]); setUnggah([]); };
         try {
-            const d = await apiPost<{ pesan: Pesan }>(`/api/kantor/chat/${encodeURIComponent(info.id)}`, { teks: t, lampiran: lamp });
-            setPesan((p) => [...p, d.pesan]);
-            setText(''); setLamp([]); setUnggah([]);
-            setTimeout(load, 800);
-        } catch (e: any) { setErr(String(e.message || e)); }
+            if (luring()) tunda();
+            else {
+                const d = await apiPost<{ pesan: Pesan }>(jalur, { teks: t, lampiran: lamp });
+                setPesan((p) => [...p, d.pesan]);
+                setText(''); setLamp([]); setUnggah([]);
+                setTimeout(load, 800);
+            }
+        } catch (e: any) { if (galatJaringan(e)) tunda(); else setErr(String(e.message || e)); }
         setSending(false);
         inputRef.current?.focus();
     };
@@ -266,7 +274,7 @@ function Bubble({ m, grup, peran }: { m: Pesan; grup: boolean; peran?: string })
     const tekan = useRef<ReturnType<typeof setTimeout> | null>(null);
     const mulaiTekan = () => { tekan.current = setTimeout(() => { setMenu(true); try { navigator.vibrate?.(10); } catch { /* */ } }, 450); };
     const batalTekan = () => { if (tekan.current) clearTimeout(tekan.current); };
-    const balas = () => { eventBus.dispatchEvent(new CustomEvent('chat-balas', { detail: { teks: `> ${me ? 'Saya' : m.nama}: ${(m.teks || '').replace(/\s+/g, ' ').slice(0, 140)}${(m.teks || '').length > 140 ? '…' : ''}\n` } })); setMenu(false); };
+    const balas = () => { const p = polos(m.teks || ''); eventBus.dispatchEvent(new CustomEvent('chat-balas', { detail: { teks: `> ${me ? 'Saya' : m.nama}: ${p.slice(0, 140)}${p.length > 140 ? '…' : ''}\n` } })); setMenu(false); };
     const gagal = m.status === 'gagal' || (!me && /^\W*\S+ gagal membalas:/.test(m.teks || ''));
     if (gagal) {
         const sebab = (m.teks || '').replace(/^\W*\S+ gagal membalas:\s*/, '');
@@ -293,7 +301,7 @@ function Bubble({ m, grup, peran }: { m: Pesan; grup: boolean; peran?: string })
                         {akhir && (
                             <div className="wa-time">
                                 {!me && m.teks && m.teks.length > 80 && <button type="button" className="wa-salin" onClick={copy} aria-label="Salin pesan">{salin ? 'Tersalin' : 'Salin'}</button>}
-                                {m.berat && <span className="wa-berat" title="Dikerjakan dengan model berbayar (Claude) atas keputusan Joni"><Ikon e="⚡" /> Claude</span>}{jam(m.at)}{me && <span className="wa-ticks">✓✓</span>}
+                                {m.berat && <span className="wa-berat" title="Dikerjakan dengan model berbayar (Claude) atas keputusan Joni"><Ikon e="⚡" /> Claude</span>}{jam(m.at)}{me && ((m as any).tertunda ? <span className="wa-ticks" title="Menunggu sinyal, dikirim otomatis"><Ikon n="clock" size={12} /></span> : <span className="wa-ticks">✓✓</span>)}
                             </div>
                         )}
                     </div>

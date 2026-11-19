@@ -445,6 +445,43 @@ rem.onUbah = (ai, lama, baru, sebab) => {
     papan.catat({ ai, nama, judul: `Rem otonomi: ${lama} → ${baru}`, detail: sebab, sumber: 'tugas', status: baru === 'henti' ? 'gagal' : 'selesai' });
     if (baru === 'henti' || (baru === 'batasi' && lama !== 'henti')) kabariTelegram(`🛑 Rem otonomi: ${nama} ${baru === 'henti' ? 'DIHENTIKAN sementara' : 'dibatasi'} (${sebab}). Buka Kantor → Tim AI untuk melanjutkan.`).catch(() => undefined);
 };
+/** R4 · Kartu status AI satu baris (ATM Munder Difflin): sedang apa, model, rem/kuota, galat terakhir, bertanya ke Bapak. */
+app.get('/api/kantor/tim-status', requireToken, (_req, res) => {
+    const kerja = papan.daftar();
+    const keputusan = new Set(hr.st.usulan.filter((u) => u.status === 'menunggu').map(() => ID_JONI));
+    res.json({ ok: true, ai: roster().map((a) => {
+        const milik = kerja.filter((k) => k.ai === a.id);
+        const jalan = milik.filter((k) => k.status === 'proses').sort((x, y) => (y.mulai || y.dibuat) - (x.mulai || x.dibuat))[0];
+        const antre = milik.filter((k) => k.status === 'todo').length;
+        const akhir = milik.filter((k) => k.status === 'selesai' || k.status === 'gagal').sort((x, y) => (y.selesai || 0) - (x.selesai || 0))[0];
+        const r = rem.ringkas(a.id);
+        return {
+            id: a.id, nama: a.nama, peran: a.peran,
+            sedang: jalan ? { judul: jalan.judul, sejak: jalan.mulai || jalan.dibuat } : null, antre,
+            terakhir: akhir ? { judul: akhir.judul, status: akhir.status, at: akhir.selesai || akhir.dibuat, galat: akhir.status === 'gagal' ? String(akhir.hasil || '').slice(0, 140) : undefined } : null,
+            model: percakapan.router?.opsiAi(a.id) || null, rem: { status: r.status, sebab: r.sebab, hari: r.persen.hari },
+            bertanya: keputusan.has(a.id)
+        };
+    }) });
+});
+/** R5 · Ingatan tim yang bisa dicari: memories/*.md + SOUL.md semua profil Hermes (hanya dibaca). */
+app.get('/api/kantor/memori/cari', requireToken, (req, res) => {
+    const q = String(req.query.q || '').trim().toLowerCase();
+    if (q.length < 2) { res.json({ ok: true, hasil: [] }); return; }
+    const hasil: Array<{ ai: string; nama: string; berkas: string; cuplikan: string }> = [];
+    for (const a of roster()) {
+        const dir = a.id === 'default' ? config.hermesHome : path.join(config.hermesHome, 'profiles', a.id);
+        const daftar: string[] = [];
+        try { for (const f of fs.readdirSync(path.join(dir, 'memories'))) if (f.endsWith('.md')) daftar.push(path.join('memories', f)); } catch { /* */ }
+        for (const rel of daftar) {
+            if (hasil.length >= 30) break;
+            let isi = ''; try { isi = fs.readFileSync(path.join(dir, rel), 'utf8'); } catch { continue; }
+            const i = isi.toLowerCase().indexOf(q); if (i < 0) continue;
+            hasil.push({ ai: a.id, nama: a.nama, berkas: rel, cuplikan: isi.slice(Math.max(0, i - 80), i + 160).replace(/\s+/g, ' ').trim() });
+        }
+    }
+    res.json({ ok: true, hasil });
+});
 app.get('/api/kantor/rem', requireToken, (_req, res) => { res.json({ ok: true, ai: roster().map((a) => ({ id: a.id, nama: a.nama, peran: a.peran, ...rem.ringkas(a.id) })) }); });
 app.post('/api/kantor/rem/:ai/lanjutkan', requireToken, (req, res) => { rem.lanjutkan(String(req.params.ai)); res.json({ ok: true }); });
 app.post('/api/kantor/rem/:ai/anggaran', requireToken, (req, res) => { res.json({ ok: true, anggaran: rem.setAnggaran(String(req.params.ai), req.body || {}) }); });

@@ -182,6 +182,8 @@ export class ModelRouter {
         this.st.atur[aiId] = { opsi, oleh, alasan: alasan.slice(0, 200), at: Date.now(), kunci: oleh === 'rico' ? kunci !== false : false };
         this.simpan(); return this.st.atur[aiId];
     }
+    /** Opsi model yang sedang dipakai satu AI (untuk kartu status). */
+    opsiAi(aiId: string) { const o = this.cari(this.st.atur[aiId]?.opsi || 'hermes'); return o ? { id: o.id, label: o.label, biaya: o.biaya } : null; }
     lepasKunci(aiId: string) { const a = this.st.atur[aiId]; if (a) { a.kunci = false; this.simpan(); } }
     /** Rekap beban kerja 7 hari per AI & per opsi (untuk HR dan tampilan). */
     rekap(hari = 7) {

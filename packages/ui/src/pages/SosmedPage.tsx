@@ -143,6 +143,7 @@ export function SosmedPage() {
             {kepala}
             {tabs}
             {msg && <div className="fin-alert">{msg}</div>}
+            {x.siap && <AngkaUtama x={x} setTab={setTab} />}
             {x.sibuk && <div className="hz-bukti ok"><span className="pk-jalan"><i /></span><span>{SIBUK[x.sibuk] || 'Tim sedang bekerja…'}</span></div>}
             {x.setup && (!x.setup.selesai || Date.now() - x.setup.at < 86400_000) && <ProgresSetup x={x} />}
             {(kuis || (!x.strategi && !x.starter && !x.setup)) && tab !== 'akun' ? <Starter key={x.akunAktif} platform={x.platformInfo[x.platform]} formatPlatform={x.platformInfo[x.platform]?.format || []} labelFormat={x.platformInfo[x.platform]?.label || {}}
@@ -1054,4 +1055,25 @@ function EditTeks({ nilai, baris, onSimpan }: { nilai: string; baris: number; on
     const [v, setV] = useState(nilai);
     useEffect(() => setV(nilai), [nilai]);
     return <div className="sm-edit"><textarea value={v} rows={baris} onChange={(e) => setV(e.target.value)} />{v !== nilai && <button className="btn small primary" onClick={() => onSimpan(v)}>Simpan perubahan</button>}</div>;
+}
+
+/** U20 · empat angka utama akun ini di atas tab: yang perlu Bapak lakukan dulu, lalu yang sudah jalan. */
+function AngkaUtama({ x, setTab }: { x: Data; setTab: (k: string) => void }) {
+    const minggu = Date.now() - 7 * 86400_000;
+    const setuju = x.semua.filter((k) => k.status === 'aset').length;
+    const buat = x.semua.filter((k) => k.tgl >= x.hari && ['prompt', 'manual'].includes(k.status)).length;
+    const komentar = (x.komentar || []).filter((c) => c.status === 'draf' || c.status === 'baru').length;
+    const terbit = x.terbit.filter((k) => (k.ig?.at || 0) >= minggu);
+    const tayang = terbit.reduce((s, k) => s + (k.hasil?.[k.hasil.length - 1]?.tayang || 0), 0);
+    const kotak: Array<[string, string | number, string, string]> = [
+        ['Perlu disetujui', setuju, 'antre', setuju ? 'perlu' : ''],
+        ['Perlu Bapak buat', buat, 'hari', buat ? 'perlu' : ''],
+        ['Komentar menunggu', komentar, 'komentar', ''],
+        ['Tayang 7 hari', tayang ? tayang.toLocaleString('id-ID') : terbit.length ? `${terbit.length} post` : '0', 'kinerja', '']
+    ];
+    return (
+        <div className="sm-angka" role="list">
+            {kotak.map(([l, v, t, k]) => <button key={l} role="listitem" className={k} onClick={() => setTab(t)}><b className="mono">{v}</b><small>{l}</small></button>)}
+        </div>
+    );
 }
