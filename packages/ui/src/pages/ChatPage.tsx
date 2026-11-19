@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useKembali } from '../kantor/kembali';
 import { apiGet, apiPost, getRoom, serverBase, tokenLogin } from '../kantor/connection';
 import { eventBus } from '../events';
 import { statusNotif, aktifkanNotif, matikanNotif, laporLihat, iosBrowser } from '../kantor/notif';
 import { useAktif } from '../kantor/aktif';
 import { useKantor, setChatOpen } from '../kantor/store';
 import { Avatar } from '../components/Avatar';
-import { RichText } from '../components/common/RichText';
+import { RichText, pecahBalasan } from '../components/common/RichText';
 
 import { Ikon } from '../components/Ikon';
 interface ThreadInfo { id: string; nama: string; peran: string; terakhir: { nama: string; teks: string; at: number } | null; menulis: string[]; grup?: boolean; ikon?: string; anggota?: string[] }
@@ -29,6 +30,7 @@ export function ChatPage({ prefill }: { prefill?: string }) {
     const agents = useKantor((s) => s.agents);
     const [threads, setThreads] = useState<ThreadInfo[]>([]);
     const [open, setOpen] = useState<string | null>(() => { try { const c = sessionStorage.getItem('kantor:buka-chat'); if (c) { sessionStorage.removeItem('kantor:buka-chat'); return c; } } catch { /* */ } return window.innerWidth >= 768 ? 'grup' : null; });
+    useKembali(!!open && window.innerWidth < 768, () => setOpen(null));
     const [grupForm, setGrupForm] = useState<ThreadInfo | 'baru' | null>(null);
     useEffect(() => { const f = (e: Event) => { const id = (e as CustomEvent).detail?.id; if (id) { setOpen(id); try { sessionStorage.removeItem('kantor:buka-chat'); } catch { /* */ } } }; eventBus.addEventListener('buka-chat', f); return () => eventBus.removeEventListener('buka-chat', f); }, []);
     const [seen, setSeen] = useState<Record<string, number>>(readSeen);
@@ -52,7 +54,9 @@ export function ChatPage({ prefill }: { prefill?: string }) {
         return n;
     });
     const skin = (id: string) => agents.find((a) => a.id === id)?.skin;
-    const list = threads.filter((t) => !q || `${t.nama} ${t.peran}`.toLowerCase().includes(q.toLowerCase()));
+    // Seperti WA: obrolan dengan pesan terbaru naik ke atas.
+    const list = threads.filter((t) => !q || `${t.nama} ${t.peran}`.toLowerCase().includes(q.toLowerCase()))
+        .map((t, i) => ({ t, i })).sort((a, b) => (b.t.terakhir?.at || 0) - (a.t.terakhir?.at || 0) || a.i - b.i).map((x) => x.t);
     const cur = threads.find((t) => t.id === open);
 
     return (
@@ -104,10 +108,17 @@ export function ChatPage({ prefill }: { prefill?: string }) {
 function Thread({ info, threads, skin, onBack, onSeen, onInfo }: { info: ThreadInfo; threads: ThreadInfo[]; skin: (id: string) => number | undefined; onBack: () => void; onSeen: (at: number) => void; onInfo: () => void }) {
     const [pesan, setPesan] = useState<Pesan[]>([]);
     const [menulis, setMenulis] = useState<string[]>([]);
-    const [text, setText] = useState('');
+    // Draf per obrolan: pindah thread lalu kembali, tulisan tidak hilang.
+    const kunciDraf = `kantor:draf:${info.id}`;
+    const [text, setTextRaw] = useState(() => { try { return sessionStorage.getItem(kunciDraf) || ''; } catch { return ''; } });
+    const setText = (v: string | ((t: string) => string)) => setTextRaw((t) => { const n = typeof v === 'function' ? v(t) : v; try { if (n) sessionStorage.setItem(kunciDraf, n); else sessionStorage.removeItem(kunciDraf); } catch { /* */ } return n; });
     const [sending, setSending] = useState(false);
     const [err, setErr] = useState('');
     const endRef = useRef<HTMLDivElement>(null);
+    const bodyRef = useRef<HTMLDivElement>(null);
+    const diBawah = useRef(true);
+    const [baru, setBaru] = useState(0);
+    const keBawah = (halus = false) => { const b = bodyRef.current; if (b) b.scrollTo({ top: b.scrollHeight, behavior: halus ? 'smooth' : 'auto' }); setBaru(0); };
     const inputRef = useRef<HTMLTextAreaElement>(null);
     const grup = isGrup(info), kustom = grup && info.id !== 'grup';
     const anggota = threads.filter((t) => !isGrup(t) && (!kustom || info.anggota?.includes(t.id)));
@@ -155,7 +166,16 @@ function Thread({ info, threads, skin, onBack, onSeen, onInfo }: { info: ThreadI
         const t = setInterval(load, 2500);
         return () => clearInterval(t);
     }, [info.id, aktif]);
-    useEffect(() => { endRef.current?.scrollIntoView({ block: 'end' }); }, [pesan.length, menulis.length]);
+    // Seperti WA: pesan baru → turun otomatis kalau Bapak memang di bawah; kalau sedang membaca ke atas, muncul tombol "pesan baru".
+    const jumlahLalu = useRef(0);
+    useEffect(() => {
+        const tambah = pesan.length - jumlahLalu.current; const pertama = jumlahLalu.current === 0;
+        jumlahLalu.current = pesan.length;
+        const terakhirSaya = pesan[pesan.length - 1]?.dari === 'owner';
+        if (pertama || diBawah.current || terakhirSaya) requestAnimationFrame(() => keBawah(!pertama));
+        else if (tambah > 0) setBaru((n) => n + tambah);
+    }, [pesan.length]);
+    useEffect(() => { if (diBawah.current) requestAnimationFrame(() => keBawah(true)); }, [menulis.length]);
 
     const send = async (e?: React.FormEvent) => {
         e?.preventDefault();
@@ -196,7 +216,7 @@ function Thread({ info, threads, skin, onBack, onSeen, onInfo }: { info: ThreadI
                 </div>
                 {kustom && <button className="icon-btn" onClick={onInfo} aria-label="Info grup" title="Info grup">⋮</button>}
             </header>
-            <div className="wa-body">
+            <div className="wa-body" ref={bodyRef} onScroll={(e) => { const b = e.currentTarget; diBawah.current = b.scrollHeight - b.scrollTop - b.clientHeight < 80; if (diBawah.current && baru) setBaru(0); }}>
                 {pesan.length === 0 && (
                     <div className="wa-note">{kustom ? `Grup ini berisi ${anggota.map((a) => a.nama).join(', ')}. Tulis @Nama untuk memanggil orang tertentu; tanpa tag, yang paling relevan yang menjawab.` : grup ? 'Semua AI kantor ada di grup ini. Tulis @Nama untuk memanggil orang tertentu, atau @semua untuk para kepala divisi.' : `Chat langsung dengan ${info.nama}. Balasan bisa butuh 10–60 detik karena ${info.nama} benar-benar bekerja (pakai skill & ingatannya).`}</div>
                 )}
@@ -206,6 +226,7 @@ function Thread({ info, threads, skin, onBack, onSeen, onInfo }: { info: ThreadI
                 {menulis.map((id) => <div key={`t-${id}`} className="wa-bubble them typing">{grup && <div className="wa-name" style={{ color: warna(id) }}>{nama(id)}</div>}<span className="dots"><i /><i /><i /></span></div>)}
                 <div ref={endRef} />
             </div>
+            {baru > 0 && <button type="button" className="wa-baru" onClick={() => keBawah(true)}>↓ {baru} pesan baru</button>}
             {err && <div className="error" style={{ margin: '0 12px 6px' }}>{err}</div>}
             {grup && (
                 <div className="wa-mentions">
@@ -237,13 +258,39 @@ function namaPeran(threads: ThreadInfo[], nama: string) { const t = threads.find
 
 function Bubble({ m, grup, peran }: { m: Pesan; grup: boolean; peran?: string }) {
     const me = m.dari === 'owner';
+    const [salin, setSalin] = useState(false);
+    const gagal = m.status === 'gagal' || (!me && /^\W*\S+ gagal membalas:/.test(m.teks || ''));
+    if (gagal) {
+        const sebab = (m.teks || '').replace(/^\W*\S+ gagal membalas:\s*/, '');
+        return (
+            <div className="wa-gagal" role="status">
+                <Ikon e="⚠" /> <span><b>{m.nama} belum bisa membalas.</b> Kirim pesan lagi sebentar lagi.{sebab && <small title={sebab}>Detail teknis: {sebab.slice(0, 120)}</small>}</span>
+                <span className="wa-time">{jam(m.at)}</span>
+            </div>
+        );
+    }
+    // Balasan AI yang panjang dipecah jadi beberapa gelembung (seperti orang mengetik beberapa pesan).
+    const bagian = me || !m.teks ? [m.teks] : pecahBalasan(m.teks);
+    const copy = () => { try { void navigator.clipboard.writeText(m.teks); setSalin(true); setTimeout(() => setSalin(false), 1500); } catch { /* */ } };
     return (
-        <div className={`wa-bubble ${me ? 'me' : 'them'} ${m.status === 'gagal' ? 'fail' : ''}`}>
-            {grup && !me && <div className="wa-name" style={{ color: warna(m.dari) }}>{m.nama}{peran ? <span className="wa-jabatan"> - {peran}</span> : null}</div>}
-            {!!m.lampiran?.length && <div className="wa-lamp">{m.lampiran.map((l) => <LampiranView key={l.rel} l={l} />)}</div>}
-            {m.teks && <div className="wa-text">{me ? m.teks : <RichText text={m.teks} />}</div>}
-            <div className="wa-time">{m.berat && <span className="wa-berat" title="Dikerjakan dengan model berbayar (Claude) atas keputusan Joni"><Ikon e="⚡" /> Claude</span>}{jam(m.at)}{me && <span className="wa-ticks">✓✓</span>}</div>
-        </div>
+        <>
+            {bagian.map((teks, i) => {
+                const akhir = i === bagian.length - 1;
+                return (
+                    <div key={i} className={`wa-bubble ${me ? 'me' : 'them'} ${i ? 'lanjut' : ''}`}>
+                        {i === 0 && grup && !me && <div className="wa-name" style={{ color: warna(m.dari) }}>{m.nama}{peran ? <span className="wa-jabatan"> - {peran}</span> : null}</div>}
+                        {i === 0 && !!m.lampiran?.length && <div className="wa-lamp">{m.lampiran.map((l) => <LampiranView key={l.rel} l={l} />)}</div>}
+                        {teks && <div className="wa-text">{me ? teks : <RichText text={teks} />}</div>}
+                        {akhir && (
+                            <div className="wa-time">
+                                {!me && m.teks && m.teks.length > 80 && <button type="button" className="wa-salin" onClick={copy} aria-label="Salin pesan">{salin ? 'Tersalin' : 'Salin'}</button>}
+                                {m.berat && <span className="wa-berat" title="Dikerjakan dengan model berbayar (Claude) atas keputusan Joni"><Ikon e="⚡" /> Claude</span>}{jam(m.at)}{me && <span className="wa-ticks">✓✓</span>}
+                            </div>
+                        )}
+                    </div>
+                );
+            })}
+        </>
     );
 }
 

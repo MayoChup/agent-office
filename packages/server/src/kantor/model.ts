@@ -126,6 +126,40 @@ export class ModelRouter {
         if (!out) throw new Error(`${o.label}: jawaban kosong.`);
         return out;
     }
+    /** Model yang bisa MELIHAT gambar (visi). Urutan: Gemini → Groq (Llama 4) → xAI. Hanya penyedia yang kuncinya ada. */
+    visiAda() { return (['gemini', 'groq', 'xai'] as const).some((c) => !!this.env[KUNCI[c]]); }
+    /**
+     * Baca gambar dengan model visi atas nama satu AI (gotong royong: dicatat ke AI itu).
+     * gambar = berkas lokal (dibaca dari disk, dikirim sebagai data URL); tidak disimpan di penyedia oleh kantor.
+     */
+    async lihat(aiId: string, nama: string, prompt: string, gambar: Array<{ mime: string; data: Buffer }>, maks = 1500): Promise<{ teks: string; model: string }> {
+        if (!gambar.length) throw new Error('Tidak ada gambar.');
+        const urut: Array<Exclude<Cara, 'hermes'>> = ['gemini', 'groq', 'xai'];
+        const galat: string[] = [];
+        for (const cara of urut) {
+            const kunci = this.env[KUNCI[cara]]; if (!kunci) continue;
+            const kunciDingin = `visi-${cara}`; if ((this.dingin.get(kunciDingin) || 0) > Date.now()) continue;
+            let model = cara === 'gemini' ? (this.env.GEMINI_VISION_MODEL || 'gemini-2.5-flash') : cara === 'groq' ? (this.env.GROQ_VISION_MODEL || 'meta-llama/llama-4-scout-17b-16e-instruct') : (this.env.XAI_VISION_MODEL || 'grok-2-vision-1212');
+            const isi: any[] = [{ type: 'text', text: prompt }, ...gambar.slice(0, 4).map((g) => ({ type: 'image_url', image_url: { url: `data:${g.mime};base64,${g.data.toString('base64')}` } }))];
+            try {
+                const r = await fetch(`${BASE[cara]}/chat/completions`, {
+                    method: 'POST', signal: AbortSignal.timeout(90_000), headers: { Authorization: `Bearer ${kunci}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ model, messages: [{ role: 'system', content: `Kamu ${nama}, anggota tim AI di Kantor Virtual milik Pak Rico. Kamu sedang melihat gambar. Jawab dalam Bahasa Indonesia; kalau diminta JSON, keluarkan JSON saja.` }, { role: 'user', content: isi }], temperature: 0.2, max_tokens: maks })
+                });
+                if (!r.ok) {
+                    const t = (await r.text()).slice(0, 160);
+                    this.dingin.set(kunciDingin, Date.now() + (r.status === 429 ? 10 * 60_000 : 3 * 60_000));
+                    throw new Error(`HTTP ${r.status} ${t}`);
+                }
+                const j: any = await r.json();
+                const out = String(j?.choices?.[0]?.message?.content || '').trim();
+                if (!out) throw new Error('jawaban kosong');
+                this.catat(aiId, `visi-${cara}`, prompt.length + 1000 * gambar.length, out.length, true);
+                return { teks: out, model: `${cara}:${model}` };
+            } catch (e: any) { galat.push(`${cara}: ${e?.message || e}`); this.catat(aiId, `visi-${cara}`, prompt.length, 0, false); }
+        }
+        throw new Error(galat.length ? `Model visi gagal (${galat.join(' · ')})` : 'Belum ada model visi: isi GEMINI_API_KEY atau GROQ_API_KEY di server.');
+    }
     /** Pak Rico / HR mengatur opsi satu AI. HR hanya boleh opsi gratis & tidak boleh mengubah yang dikunci Pak Rico. */
     setAtur(aiId: string, opsi: string, oleh: 'hr' | 'rico', alasan = '', kunci?: boolean) {
         const o = this.cari(opsi); if (!o) throw new Error('Opsi model tidak dikenal.'); if (!o.ada) throw new Error(`${o.label} belum diatur di server (kunci API belum ada).`);

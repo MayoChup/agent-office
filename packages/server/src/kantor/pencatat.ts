@@ -415,11 +415,44 @@ export class Pencatat {
         return (this.labelId = made.id);
     }
 
+    /** Diisi index.ts: kategori dari ingatan tenant (koreksi Pak Rico) & tebakan AI (Uang) untuk yang jatuh ke "Lainnya". */
+    ingatan?: (pihak: string) => string | null;
+    tebakKategori?: (pihak: string[]) => Promise<Record<string, string>>;
+    /** Terapkan ingatan + tebakan AI ke baris baru (hanya pengeluaran). Gagal = biarkan "Lainnya". */
+    async lengkapiKategori<T extends { jenis: string; pihak: string; kategori: string }>(rows: T[]): Promise<T[]> {
+        for (const r of rows) { if (r.jenis !== 'Keluar' || !r.pihak) continue; const k = this.ingatan?.(r.pihak); if (k) r.kategori = k; }
+        const sisa = rows.filter((r) => r.jenis === 'Keluar' && r.pihak && (!r.kategori || r.kategori === 'Lainnya'));
+        if (sisa.length && this.tebakKategori) {
+            try { const t = await this.tebakKategori([...new Set(sisa.map((r) => r.pihak))]); for (const r of sisa) if (t[r.pihak]) r.kategori = t[r.pihak]; }
+            catch (e: any) { console.warn('[Pencatat] kategori AI:', e?.message || e); }
+        }
+        return rows;
+    }
+    /** Rapikan transaksi LAMA berkategori "Lainnya" (pengeluaran) dengan ingatan + AI. Maks 80 tenant per putaran. */
+    async rapikanKategori(): Promise<{ dicek: number; diubah: number }> {
+        if (!this.cfg.spreadsheetId) return { dicek: 0, diubah: 0 };
+        const rows = await this.existingRows();
+        const calon = rows.map((r, i) => ({ row: i + 2, jenis: String(r[3] || ''), pihak: String(r[5] || ''), kategori: String(r[6] || '') }))
+            .filter((x) => x.jenis === 'Keluar' && x.pihak && (!x.kategori || x.kategori === 'Lainnya'));
+        if (!calon.length) return { dicek: 0, diubah: 0 };
+        const unik = [...new Set(calon.map((x) => x.pihak))].slice(0, 80);
+        const pakai = calon.filter((x) => unik.includes(x.pihak));
+        const awal = pakai.map((x) => x.kategori);
+        await this.lengkapiKategori(pakai);
+        const data = pakai.filter((x, i) => x.kategori && x.kategori !== 'Lainnya' && x.kategori !== awal[i]).map((x) => ({ range: `'${this.cfg.sheetName}'!G${x.row}`, values: [[x.kategori]] }));
+        if (data.length) {
+            await this.g.call(`https://sheets.googleapis.com/v4/spreadsheets/${this.cfg.spreadsheetId}/values:batchUpdate`, { method: 'POST', body: JSON.stringify({ valueInputOption: 'USER_ENTERED', data }) });
+            this.reportCache = null;
+        }
+        return { dicek: pakai.length, diubah: data.length };
+    }
+
     async runOnce(): Promise<number> {
         if (this.running) return 0;
         this.running = true;
         try {
             const { rows } = await this.collect(false);
+            if (rows.length) await this.lengkapiKategori(rows);
             if (rows.length) {
                 rows.sort((a, b) => (a.tanggal + a.jam).localeCompare(b.tanggal + b.jam));
                 const values = rows.map((r) => [r.tanggal, r.jam, r.bank, r.jenis, r.nominal ?? '', r.pihak, r.kategori, r.keterangan, r.idEmail, r.status]);

@@ -22,8 +22,12 @@ const ATURAN = 'Strategi lahir saat sinyal sebuah saham jadi Beli kuat/Beli untu
 
 /** Tab History: semua strategi beli yang pernah dikeluarkan kantor beserta hasilnya. */
 export function HistorySinyal({ onOpen }: { onOpen: (s: string) => void }) {
-    const [f, setF] = useState({ profil: 'M', H: '', status: '', dari: '', sampai: '', urut: 'terbaru', q: '' });
-    const [hal, setHal] = useState(1);
+    // Filter & halaman diingat (pindah tab, refresh, atau buka lagi besok tetap sama).
+    const AWAL = { profil: 'M', H: '', status: '', dari: '', sampai: '', urut: 'terbaru', q: '' };
+    const [f, setFRaw] = useState<typeof AWAL>(() => { try { return { ...AWAL, ...JSON.parse(localStorage.getItem('kantor:history:f') || '{}') }; } catch { return AWAL; } });
+    const setF = (v: typeof AWAL) => { setFRaw(v); try { localStorage.setItem('kantor:history:f', JSON.stringify(v)); } catch { /* */ } };
+    const [hal, setHalRaw] = useState(() => { try { return Number(sessionStorage.getItem('kantor:history:hal')) || 1; } catch { return 1; } });
+    const setHal = (n: number) => { setHalRaw(n); try { sessionStorage.setItem('kantor:history:hal', String(n)); } catch { /* */ } };
     const [lompat, setLompat] = useState('');
     const [d, setD] = useState<Data | null>(null);
     const [err, setErr] = useState('');

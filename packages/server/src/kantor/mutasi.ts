@@ -2,7 +2,8 @@ import crypto from 'crypto';
 
 /**
  * Impor PDF mutasi / e-statement rekening (BCA, Mandiri, BRI, BNI, Jago, dll.).
- * Dibaca di VPS dengan pdf.js — TIDAK dikirim ke AI mana pun (isinya data rekening pribadi).
+ * Dibaca di VPS dengan pdf.js — PDF/isinya TIDAK dikirim ke AI mana pun (data rekening pribadi).
+ * Pengecualian yang disetujui Pak Rico (19 Nov 2026): hanya NAMA TENANT pengeluaran berkategori "Lainnya" yang ditanyakan ke Uang untuk ditebak kategorinya.
  * Cara membaca dibuat umum: tiap baris yang diawali tanggal = satu transaksi; nominal & saldo diambil dari angka uang di baris itu;
  * arah (masuk/keluar) dari penanda DB/CR, posisi kolom Debet/Kredit, atau selisih saldo berjalan.
  */

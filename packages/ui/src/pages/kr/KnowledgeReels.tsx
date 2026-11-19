@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useKembali } from '../../kantor/kembali';
 import { useApi } from '../../kantor/api';
 import { apiGet, apiPost } from '../../kantor/connection';
 import { useSubNav } from '../../kantor/subnav';
@@ -112,13 +114,22 @@ function Feed({ ctx, segmen, setSegmen, st }: { ctx: Ctx; segmen: string; setSeg
     }, [aktif, list.length]);
     const ganti = (p: KPost) => setList((l) => l.map((x) => (x.id === p.id ? p : x)));
     const segmenList = st?.segmen || [['semua', 'All']];
+    // Tarik ke bawah untuk memuat ulang (seperti IG). Hanya aktif kalau feed sudah di paling atas.
+    const [tarik, setTarik] = useState(0);
+    const tarikAwal = useRef<number | null>(null);
+    const segarkan = async () => { wadah.current?.scrollTo({ top: 0 }); await ambil(true); ctx.muatStatus(); };
+    const onTouchStart = (e: React.TouchEvent) => { tarikAwal.current = (wadah.current?.scrollTop || 0) <= 0 ? e.touches[0].clientY : null; };
+    const onTouchMove = (e: React.TouchEvent) => { if (tarikAwal.current == null) return; const d = e.touches[0].clientY - tarikAwal.current; setTarik(d > 0 ? Math.min(110, d * 0.5) : 0); };
+    const onTouchEnd = () => { if (tarik > 64 && !muat) { setTarik(48); segarkan().finally(() => setTarik(0)); } else setTarik(0); tarikAwal.current = null; };
 
     return (
         <div className="kr-feed-wrap">
             <div className="kr-tabs" role="tablist">
-                {segmenList.map(([k, label]) => <button key={k} role="tab" aria-selected={segmen === k} className={segmen === k ? 'on' : ''} onClick={() => setSegmen(k)}>{label}</button>)}
+                {segmenList.map(([k, label]) => <button key={k} role="tab" aria-selected={segmen === k} className={segmen === k ? 'on' : ''} onClick={() => (segmen === k ? segarkan() : setSegmen(k))}>{label}</button>)}
+                <button className="kr-segar" onClick={() => void segarkan()} disabled={muat} aria-label="Muat ulang feed" title="Muat ulang feed"><Ikon e="↻" size={16} /></button>
             </div>
-            <div className="kr-feed" ref={wadah}>
+            <div className={`kr-tarik ${tarik > 64 ? 'siap' : ''}`} style={{ height: tarik }} aria-hidden={!tarik}>{tarik > 0 && <span><Ikon e="↻" size={18} />{muat ? 'Memuat…' : tarik > 64 ? 'Lepas untuk memuat ulang' : 'Tarik untuk memuat ulang'}</span>}</div>
+            <div className="kr-feed" ref={wadah} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
                 {st?.sibuk && <div className="kr-sibuk"><Ikon e="✍" /> Redaksi sedang menyiapkan postingan{st.progres ? ` · ${st.progres}` : ''}</div>}
                 {list.map((p) => <Pos key={p.id} p={p} ctx={ctx} ganti={ganti} />)}
                 <div ref={ujung} />
@@ -148,6 +159,7 @@ function Habis({ ctx, kosong, segmen, st, muatUlang }: { ctx: Ctx; kosong: boole
 /* ── Satu postingan ── */
 function Pos({ p, ctx, ganti, diModal }: { p: KPost; ctx: Ctx; ganti: (p: KPost) => void; diModal?: boolean }) {
     const [buka, setBuka] = useState<'' | 'catatan' | 'simpan'>('');
+    useKembali(!!buka && ctx.hp, () => setBuka(''));
     const tema = ctx.tema[p.kat];
     const baca = async (paksa?: boolean) => {
         const ya = paksa ?? !p.baca; if (ya === !!p.baca) return; ganti({ ...p, baca: ya });
@@ -195,7 +207,9 @@ function Pos({ p, ctx, ganti, diModal }: { p: KPost; ctx: Ctx; ganti: (p: KPost)
             <small className="kr-tgl">{tglId(p.tgl)}</small>
         </div>
     );
-    const panel = buka === 'catatan' ? <PanelCatatan p={p} ctx={ctx} ganti={ganti} tutup={() => setBuka('')} /> : buka === 'simpan' ? <PanelSimpan p={p} ctx={ctx} ganti={ganti} tutup={() => setBuka('')} /> : null;
+    const isiPanel = buka === 'catatan' ? <PanelCatatan p={p} ctx={ctx} ganti={ganti} tutup={() => setBuka('')} /> : buka === 'simpan' ? <PanelSimpan p={p} ctx={ctx} ganti={ganti} tutup={() => setBuka('')} /> : null;
+    // Di HP komentar & simpan terbuka sebagai lembar bawah (seperti IG), bukan mendorong isi feed.
+    const panel = isiPanel && ctx.hp ? createPortal(<div className="kr-lembar" onClick={() => setBuka('')}><div className="kr-lembar-in" onClick={(e) => e.stopPropagation()}><span className="kr-lembar-pegangan" aria-hidden />{isiPanel}</div></div>, document.body) : isiPanel;
 
     return (
         <article className="kr-pos ig" data-id={p.id}>
@@ -340,7 +354,9 @@ function PanelCatatan({ p, ctx, ganti, tutup }: { p: KPost; ctx: Ctx; ganti: (p:
         if (!t.trim()) return; setKirim(true);
         try {
             const r = await apiPost<{ catatan: KCatatan; menunggu: KCatatan[]; vault: string }>('/api/kantor/kr/catatan', { postId: p.id, teks: t, induk: balas?.id });
-            ganti({ ...p, catatan: [...semua, r.catatan, ...(r.menunggu || [])] }); setT(''); setBalas(null);
+            ganti({ ...p, catatan: [...semua, r.catatan, ...(r.menunggu || [])] }); setT('');
+            const akarId = balas ? (balas.induk ? (semua.find((x) => x.id === balas.induk)?.id || balas.id) : balas.id) : r.catatan.id;
+            setBukaBalasan((s0) => new Set([...s0, akarId])); setBalas(null);
             if (r.menunggu?.length) ctx.pesan(`${r.menunggu.map((x) => x.nama).join(' & ')} sedang menyiapkan jawaban…`);
         } catch (e: any) { ctx.pesan(String(e?.message || e)); }
         setKirim(false);
@@ -355,18 +371,29 @@ function PanelCatatan({ p, ctx, ganti, tutup }: { p: KPost; ctx: Ctx; ganti: (p:
     const mulaiBalas = (c: KCatatan) => { setBalas(c); if (c.dari && c.dari !== 'rico') { const tg = ctx.tag.find((x) => x.id === c.dari)?.tag; if (tg && !t.includes(`@${tg}`)) setT(`@${tg} `); } masuk.current?.focus(); };
     const teksTag = (s: string) => s.split(/(@[a-z0-9]+)/gi).map((bag, i) => (/^@[a-z0-9]+$/i.test(bag) && ctx.tag.some((x) => `@${x.tag}` === bag.toLowerCase()) ? <b key={i} className="kr-tag">{bag}</b> : <React.Fragment key={i}>{bag}</React.Fragment>));
     const akar = semua.filter((c) => !c.induk || !semua.some((x) => x.id === c.induk));
-    const anak = (id: string) => semua.filter((c) => c.induk === id);
+    // Semua turunan sebuah komentar (balasan dari balasan ikut), urut waktu — ditampilkan satu tingkat seperti IG.
+    const turunan = (id: string): KCatatan[] => { const out: KCatatan[] = []; const cari = (pid: string) => semua.filter((c) => c.induk === pid).forEach((c) => { out.push(c); cari(c.id); }); cari(id); return out.sort((a, b) => a.at - b.at); };
+    const [bukaBalasan, setBukaBalasan] = useState<Set<string>>(() => new Set(semua.filter((c) => c.status === 'menunggu' && c.induk).map((c) => c.induk!)));
+    const suka = async (c: KCatatan) => {
+        const ya = !c.suka; ganti({ ...p, catatan: semua.map((x) => (x.id === c.id ? { ...x, suka: ya } : x)) });
+        try { await apiPost(`/api/kantor/kr/catatan/${c.id}/suka`, { ya }); } catch (e: any) { ganti(p); ctx.pesan(String(e?.message || e)); }
+    };
     const kom = (c: KCatatan, kecil?: boolean) => {
         const ai = c.dari && c.dari !== 'rico';
         return (
-            <div key={c.id} className={`kr-kom ${kecil ? 'balasan' : ''}`}>
+            <div key={c.id} className={`kr-kom ${kecil ? 'balasan' : ''}`} onDoubleClick={() => c.status !== 'menunggu' && !c.suka && suka(c)}>
                 <span className={`kr-kom-ava ${ai ? 'ai' : ''}`}>{ai ? (c.nama || '?').slice(0, 1) : 'R'}</span>
                 <div className="kr-kom-isi">
                     <p><b>{ai ? c.nama : 'Pak Rico'}</b> {c.status === 'menunggu' ? <em className="kr-ketik">sedang mencari & mengetik<span>…</span></em> : teksTag(c.teks)}</p>
                     {c.status !== 'menunggu' && (
-                        <div className="kr-kom-meta"><small>{jamId(c.at)}</small><button onClick={() => mulaiBalas(c)}>Balas</button><button onClick={() => hapus(c)}>Hapus</button>{c.status === 'gagal' && <small className="gagal">gagal</small>}</div>
+                        <div className="kr-kom-meta"><small>{jamId(c.at)}</small>{c.suka && <small>Disukai</small>}<button onClick={() => mulaiBalas(c.induk ? semua.find((x) => x.id === c.induk) || c : c)}>Balas</button><button onClick={() => hapus(c)}>Hapus</button>{c.status === 'gagal' && <small className="gagal">gagal</small>}</div>
                     )}
                 </div>
+                {c.status !== 'menunggu' && (
+                    <button className={`kr-suka ${c.suka ? 'on' : ''}`} onClick={() => suka(c)} aria-pressed={!!c.suka} aria-label={c.suka ? 'Batal suka' : 'Suka komentar'}>
+                        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden><path d="M12 20.5s-7.5-4.6-9.3-9.2C1.6 8.4 3.4 5 6.8 5c2 0 3.4 1.1 4.2 2.4C11.8 6.1 13.2 5 15.2 5c3.4 0 5.2 3.4 4.1 6.3-1.8 4.6-7.3 9.2-7.3 9.2Z" fill={c.suka ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" /></svg>
+                    </button>
+                )}
             </div>
         );
     };
@@ -374,12 +401,22 @@ function PanelCatatan({ p, ctx, ganti, tutup }: { p: KPost; ctx: Ctx; ganti: (p:
         <div className="kr-panel kr-komentar">
             <div className="kr-panel-h"><b>Komentar</b><small>Tag @nama tim redaksi untuk bertanya · tersimpan juga di Catatan</small><button onClick={tutup} aria-label="Tutup">×</button></div>
             {!semua.length && <p className="kr-kom-kosong">Belum ada komentar. Tulis catatan Bapak, atau tanya tim, misalnya “@{ctx.tag.find((x) => x.id === p.oleh[0]?.id)?.tag || 'kirana'} kelanjutannya bagaimana?”</p>}
-            {akar.map((c) => (
-                <div key={c.id}>
-                    {kom(c)}
-                    {anak(c.id).map((x) => kom(x, true))}
-                </div>
-            ))}
+            <div className="kr-kom-daftar">
+                {akar.map((c) => {
+                    const bal = turunan(c.id), terbuka = bukaBalasan.has(c.id);
+                    return (
+                        <div key={c.id}>
+                            {kom(c)}
+                            {!!bal.length && (
+                                <button className="kr-lihat-balasan" onClick={() => setBukaBalasan((s0) => { const n = new Set(s0); if (n.has(c.id)) n.delete(c.id); else n.add(c.id); return n; })}>
+                                    <span />{terbuka ? 'Sembunyikan balasan' : `Lihat ${bal.length} balasan`}
+                                </button>
+                            )}
+                            {terbuka && bal.map((x) => kom(x, true))}
+                        </div>
+                    );
+                })}
+            </div>
             {!!saran.length && (
                 <div className="kr-saran-tag">{saran.map((x) => <button key={x.id} onClick={() => pilihTag(x.tag)}><b>@{x.tag}</b><small>{x.peran}</small></button>)}</div>
             )}

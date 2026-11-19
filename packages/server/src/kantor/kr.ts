@@ -33,7 +33,7 @@ export interface Post {
     desain: { t: string; p: string }; oleh: Array<{ id: string; nama: string; peran: string }>; dibuat: number; tgl: string; kunci: string;
 }
 /** Komentar di postingan. dari = 'rico' (Pak Rico) atau id AI redaksi yang membalas; induk = komentar yang dibalas. */
-export interface CatatanKr { id: string; postId: string; teks: string; at: number; berkas?: string; dari?: string; nama?: string; induk?: string; status?: 'menunggu' | 'gagal' }
+export interface CatatanKr { id: string; postId: string; teks: string; at: number; berkas?: string; dari?: string; nama?: string; induk?: string; status?: 'menunggu' | 'gagal'; suka?: boolean }
 export interface Folder { id: string; nama: string; post: string[]; dibuat: number }
 interface St {
     post: Post[]; dilihat: Record<string, number>; baca: Record<string, number>; catatan: CatatanKr[]; folder: Folder[];
@@ -243,6 +243,8 @@ export class KnowledgeReels {
         if (!c.teks && !c.status) throw new Error('Komentar kosong.'); this.st.catatan.push(c); this.simpan(); return c;
     }
     ubahCatatan(id: string, teks: string, status?: CatatanKr['status']) { const c = this.st.catatan.find((x) => x.id === id); if (!c) return; c.teks = teks.trim().slice(0, 4000); c.status = status; c.at = Date.now(); this.simpan(); return c; }
+    /** Hati (suka) di komentar, seperti Instagram. Komentar AI yang disukai jadi sinyal selera untuk redaksi. */
+    sukaCatatan(id: string, ya: boolean) { const c = this.st.catatan.find((x) => x.id === id); if (!c) throw new Error('Komentar tidak ditemukan.'); c.suka = ya || undefined; this.simpan(); return c; }
     /** Hapus komentar beserta balasan-balasannya. */
     hapusCatatan(id: string) {
         const c = this.st.catatan.find((x) => x.id === id); if (!c) return;

@@ -1,14 +1,16 @@
 import { useInterval } from '../../kantor/aktif';
+import { useKembali } from '../../kantor/kembali';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSubNav } from '../../kantor/subnav';
 import { useApi } from '../../kantor/api';
-import { apiGet, apiPost } from '../../kantor/connection';
+import { apiGet, apiPost, serverBase, tokenLogin } from '../../kantor/connection';
 import { ImporMutasi } from './ImporMutasi';
 import { RichText } from '../../components/common/RichText';
 import { Batang, Donat } from './Grafik';
 import { Tx, rp, rpk, ikon, warnaDari, periode, dalam, keluar, masuk, sum, kelompok, hariIni, tglPanjang, tglPendek } from './util';
 
 import { Ikon } from '../../components/Ikon';
+import { Hidup } from '../../components/Hidup';
 interface Report { transaksi: Tx[]; sheetUrl: string; pencatat: { lastRun: number; lastError: string } }
 interface Anggaran { mulai: number; batas: Record<string, number>; akun: string[]; kategori: string[]; saldo?: Record<string, { nilai: number; tanggal: string; sumber: string }> }
 type Tab = 'beranda' | 'pengeluaran' | 'anggaran' | 'transaksi' | 'chat';
@@ -28,6 +30,8 @@ export function KeuanganApp() {
     const [ubah, setUbah] = useState<Tx | null>(null);
     const [impor, setImpor] = useState(false);
     const [detail, setDetail] = useState<Tx | null>(null);
+    useKembali(tambah, () => setTambah(false));
+    useKembali(!!detail, () => setDetail(null));
     const [filter, setFilter] = useState<{ jenis?: string; kat?: string; akun?: string; pihak?: string }>({});
     const tx = rep.data?.transaksi || [];
     const mulai = ang.data?.mulai || 1;
@@ -72,7 +76,7 @@ export function KeuanganApp() {
             {rep.data && tab === 'pengeluaran' && <Pengeluaran tx={tx} mulai={mulai} geser={geser} lihat={bukaTransaksi} />}
             {rep.data && tab === 'anggaran' && <AnggaranView tx={diP} p={p} ang={ang.data} simpan={async (x) => { await apiPost('/api/kantor/keuangan/anggaran', x); ang.reload(); }} lihat={bukaTransaksi} />}
             {rep.data && tab === 'transaksi' && <Transaksi tx={tx} filter={filter} setFilter={setFilter} onTx={setDetail} />}
-            {tab === 'chat' && <ChatUang ang={ang.data} onSaved={muat} />}
+            <Hidup aktif={tab === 'chat'}><ChatUang ang={ang.data} onSaved={muat} /></Hidup>
 
             <button className="k-fab" onClick={() => setTambah(true)} aria-label="Tambah transaksi">＋</button>
             {tambah && <Tambah ang={ang.data} onClose={() => setTambah(false)} onSaved={() => { setTambah(false); muat(); }} />}
@@ -319,6 +323,18 @@ function Detail({ t, all, mulai, onClose, lihat, onUbah, onHapus }: { t: Tx; all
     );
 }
 
+/** Perkecil foto (sisi terpanjang 1600 px, JPEG) supaya unggah struk cepat di data seluler. */
+async function kecilkanGambar(f: File): Promise<Blob> {
+    try {
+        const bmp = await createImageBitmap(f);
+        const k = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+        const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+        c.getContext('2d')!.drawImage(bmp, 0, 0, c.width, c.height);
+        const b = await new Promise<Blob | null>((r) => c.toBlob(r, 'image/jpeg', 0.85));
+        return b || f;
+    } catch { return f; }
+}
+
 /* ── Tambah manual ───────────────────────────────────────── */
 function Tambah({ ang, onClose, onSaved, awal, id }: { ang: Anggaran | null; onClose: () => void; onSaved: () => void; awal?: any; id?: string }) {
     const [jenis, setJenis] = useState<string>(awal?.jenis || 'Keluar');
@@ -330,7 +346,24 @@ function Tambah({ ang, onClose, onSaved, awal, id }: { ang: Anggaran | null; onC
     const [tgl, setTgl] = useState<string>(awal?.tanggal || hariIni());
     const [err, setErr] = useState('');
     const [busy, setBusy] = useState(false);
+    const [struk, setStruk] = useState<{ busy: boolean; info: string; berkas?: string }>({ busy: false, info: '' });
     const nominal = Number(n.replace(/\D/g, ''));
+    const kemarin = new Date(Date.now() + 7 * 3600_000 - 86400_000).toISOString().slice(0, 10);
+    const katCepat = Array.from(new Set([kat, ...(ang?.kategori || [])])).filter((k) => k !== 'Pendapatan').slice(0, 6);
+    const bacaStruk = async (f?: File | null) => {
+        if (!f) return;
+        setStruk({ busy: true, info: '' }); setErr('');
+        try {
+            const blob = await kecilkanGambar(f);
+            const res = await fetch(`${serverBase()}/api/kantor/keuangan/struk`, { method: 'POST', headers: { Authorization: `Bearer ${tokenLogin()}`, 'Content-Type': blob.type }, body: blob });
+            const j: any = await res.json().catch(() => ({}));
+            if (!res.ok || !j.ok) throw new Error(j.error || `HTTP ${res.status}`);
+            const d = j.draf;
+            setJenis('Keluar'); setN(String(d.nominal)); if (d.pihak) setPihak(d.pihak); if (d.keterangan) setKet(d.keterangan);
+            if (d.kategori) setKat(d.kategori); if (d.tanggal) setTgl(d.tanggal); if (d.akun) setAkun(d.akun);
+            setStruk({ busy: false, info: `${j.oleh || 'Uang'} membaca struk${d.item?.length ? ` (${d.item.length} item)` : ''}. Cek lalu simpan.`, berkas: d.berkas });
+        } catch (e: any) { setStruk({ busy: false, info: '' }); setErr(String(e.message || e)); }
+    };
     const simpan = async () => {
         setBusy(true); setErr('');
         const isi = { jenis, nominal, akun, kategori: jenis === 'Masuk' ? (id ? kat : 'Pendapatan') : kat, pihak, keterangan: ket, tanggal: tgl };
@@ -342,11 +375,25 @@ function Tambah({ ang, onClose, onSaved, awal, id }: { ang: Anggaran | null; onC
         <div className="k-sheet" onClick={onClose}>
             <div className="k-sheet-in" onClick={(e) => e.stopPropagation()}>
                 <div className="k-sheet-h"><b>{id ? 'Ubah transaksi' : 'Tambah transaksi'}</b><button onClick={onClose}>✕</button></div>
+                {!id && (
+                    <label className={`k-struk ${struk.busy ? 'busy' : ''}`}>
+                        <input type="file" accept="image/*" capture="environment" hidden disabled={struk.busy} onChange={(e) => { void bacaStruk(e.target.files?.[0]); e.target.value = ''; }} />
+                        <Ikon e="🧾" size={18} />
+                        <span><b>{struk.busy ? 'Uang sedang membaca struk…' : 'Foto struk'}</b><small>{struk.busy ? 'Biasanya 5–15 detik' : 'Toko, total, tanggal & kategori terisi otomatis'}</small></span>
+                    </label>
+                )}
+                {struk.info && <div className="k-struk-ok"><Ikon e="✅" /> {struk.info}</div>}
                 <div className="k-seg full">{[['Keluar', 'Pengeluaran'], ['Masuk', 'Pemasukan'], ['Antar Rekening', 'Transfer']].map(([k, l]) => <button key={k} className={jenis === k ? 'on' : ''} onClick={() => setJenis(k)}>{l}</button>)}</div>
-                <label className="k-amount"><span>Rp</span><input inputMode="numeric" autoFocus placeholder="0" value={nominal ? nominal.toLocaleString('id-ID') : ''} onChange={(e) => setN(e.target.value)} /></label>
-                <input className="input" type="date" value={tgl} max={hariIni()} onChange={(e) => setTgl(e.target.value)} />
+                <label className="k-amount"><span>Rp</span><input inputMode="numeric" autoFocus={!struk.busy} placeholder="0" value={nominal ? nominal.toLocaleString('id-ID') : ''} onChange={(e) => setN(e.target.value)} /></label>
+                <div className="k-cepat">{[10_000, 25_000, 50_000, 100_000].map((v) => <button key={v} type="button" onClick={() => setN(String(v))}>{v >= 1e6 ? `${v / 1e6}jt` : `${v / 1e3}rb`}</button>)}</div>
+                <div className="k-tgl">
+                    <button type="button" className={tgl === hariIni() ? 'on' : ''} onClick={() => setTgl(hariIni())}>Hari ini</button>
+                    <button type="button" className={tgl === kemarin ? 'on' : ''} onClick={() => setTgl(kemarin)}>Kemarin</button>
+                    <label className={tgl !== hariIni() && tgl !== kemarin ? 'on' : ''}>{tgl !== hariIni() && tgl !== kemarin ? new Date(`${tgl}T00:00:00Z`).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', timeZone: 'UTC' }) : 'Tanggal lain'}<input type="date" value={tgl} max={hariIni()} onChange={(e) => e.target.value && setTgl(e.target.value)} /></label>
+                </div>
                 <div className="k-akun">{Array.from(new Set([...(ang?.akun || ['Cash']), akun])).map((a) => <button key={a} className={akun === a ? 'on' : ''} onClick={() => setAkun(a)}>{a === 'Cash' ? <Ikon e="💵" /> : <Ikon e="🏦" />} {a}</button>)}</div>
-                {(jenis === 'Keluar' || id) && <select className="select" value={kat} onChange={(e) => setKat(e.target.value)}>{Array.from(new Set([...(ang?.kategori || ['Lainnya']), 'Pendapatan', kat])).map((k) => <option key={k} value={k}>{ikon(k)} {k}</option>)}</select>}
+                {(jenis === 'Keluar' || id) && <div className="k-kat">{katCepat.map((k) => <button key={k} type="button" className={kat === k ? 'on' : ''} onClick={() => setKat(k)}>{ikon(k)} {k}</button>)}</div>}
+                {(jenis === 'Keluar' || id) && <select className="select" aria-label="Semua kategori" value={kat} onChange={(e) => setKat(e.target.value)}>{Array.from(new Set([...(ang?.kategori || ['Lainnya']), 'Pendapatan', kat])).map((k) => <option key={k} value={k}>{ikon(k)} {k}</option>)}</select>}
                 <input className="input" placeholder={jenis === 'Masuk' ? 'Dari siapa? (mis. gaji kantor)' : 'Di mana? (mis. warung, Fore Coffee)'} value={pihak} onChange={(e) => setPihak(e.target.value)} />
                 <input className="input" placeholder="Beli apa / catatan (mis. nasi kuning)" value={ket} onChange={(e) => setKet(e.target.value)} />
                 {err && <div className="error">{err}</div>}

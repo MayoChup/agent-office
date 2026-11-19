@@ -38,6 +38,9 @@ export interface DepsRutin {
 const NAMA_CADANG: Record<string, string> = { default: 'Joni', hr: 'Hana', kurator: 'Kirana', keuangan: 'Uang', 'keuangan-budget': 'Bima', 'keuangan-proyeksi': 'Prita', 'keuangan-penasihat': 'Laras', eca: 'Eca', 'eca-sheets': 'Sasa', 'eca-docs': 'Dodi', 'eca-slides': 'Putri', sekretaris: 'Sekar', trading: 'Dito', 'trading-berita': 'Nina', 'trading-fundamental': 'Raka', 'trading-smartmoney': 'Sari', sosmed: 'Maya', 'sosmed-riset': 'Tara', 'sosmed-penulis': 'Lala', 'sosmed-produksi': 'Vino', 'sosmed-komunitas': 'Dea' };
 /** Peta gotong royong: tiap fitur dikerjakan bersama beberapa AI. kunci = potongan judul di Papan kerja (kosong = pekerjaan apa pun dari AI itu). */
 export const GOTONG: Array<{ fitur: string; ikon: string; ai: string; tugas: string; jadwal: string; kunci: string }> = [
+    { fitur: 'Keuangan', ikon: '💰', ai: 'keuangan', tugas: 'Merapikan kategori transaksi "Lainnya" dari nama tenant (QRIS)', jadwal: 'Tiap 3 jam + tiap transaksi baru', kunci: 'Merapikan kategori transaksi' },
+    { fitur: 'Keuangan', ikon: '💰', ai: 'keuangan', tugas: 'Membaca struk belanja jadi draf transaksi', jadwal: 'Saat Bapak memotret struk', kunci: 'Membaca struk belanja' },
+    { fitur: 'Chat', ikon: '💬', ai: 'default', tugas: 'Melihat gambar yang Bapak kirim (dikerjakan AI yang diajak bicara)', jadwal: 'Saat Bapak mengirim gambar', kunci: 'Melihat' },
     { fitur: 'Beranda', ikon: '🏠', ai: 'default', tugas: 'Ringkasan pagi dari berita hari ini (Telegram)', jadwal: 'Tiap hari 07.15', kunci: 'Ringkasan pagi' },
     { fitur: 'Kantor', ikon: '🏢', ai: 'default', tugas: 'Usulan tugas untuk anggota yang menganggur', jadwal: 'Senin', kunci: 'usulan tugas' },
     { fitur: 'Kantor', ikon: '🏢', ai: 'hr', tugas: 'Review kinerja tim', jadwal: 'Tiap 2 minggu', kunci: 'Review kinerja' },

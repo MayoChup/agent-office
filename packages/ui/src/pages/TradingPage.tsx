@@ -1,4 +1,5 @@
 import { useAktif } from '../kantor/aktif';
+import { useKembali } from '../kantor/kembali';
 import React, { useState, useRef, useEffect } from 'react';
 import { useSubNav } from '../kantor/subnav';
 import { Horison, HorisonBar, nilaiH, paramH, MODE_LAMA } from './trading/Horison';
@@ -53,7 +54,12 @@ export function TradingPage() {
     type Tab = 'pasar' | 'pilihan' | 'panas' | 'berita' | 'watchlist' | 'penyaring' | 'investigasi' | 'posisi' | 'uji' | 'history';
     const TABS: Array<{ k: Tab; label: string }> = [{ k: 'pasar', label: 'Pasar' }, { k: 'pilihan', label: 'Pilihan sinyal' }, { k: 'panas', label: 'Peta panas' }, { k: 'berita', label: 'Peta berita' }, { k: 'watchlist', label: 'Watchlist' }, { k: 'penyaring', label: 'Penyaring' }, { k: 'investigasi', label: 'Investigasi' }, { k: 'posisi', label: 'Portofolio' }, { k: 'history', label: 'History' }, { k: 'uji', label: 'Uji mundur' }];
     const [tab, setTabState] = useState<Tab>(() => { try { const v = localStorage.getItem(LS_TAB) as Tab; return TABS.some((t) => t.k === v) ? v : 'pilihan'; } catch { return 'pilihan'; } });
+    // Tab yang pernah dibuka tetap hidup (disembunyikan, bukan dibongkar): pindah tab tidak memuat ulang & filter tidak hilang.
+    const [pernah, setPernah] = useState<Set<Tab>>(() => new Set([tab]));
+    useEffect(() => { setPernah((p) => (p.has(tab) ? p : new Set([...p, tab]))); }, [tab]);
+    const simpanHidup = (k: Tab, isi: React.ReactNode) => (pernah.has(k) ? <div key={`hidup-${k}`} className="tab-hidup" hidden={!!saham || tab !== k}>{isi}</div> : null);
     const [saham, setSaham] = useState<string | null>(null);
+    useKembali(!!saham, () => setSaham(null));
     const [faktor, setFaktor] = useState<FaktorKey>(() => { try { return (localStorage.getItem('kantor:faktor') as FaktorKey) || 'semua'; } catch { return 'semua'; } });
     const setF = (f: FaktorKey) => { setFaktor(f); try { localStorage.setItem('kantor:faktor', f); } catch { /* */ } };
     const [horison, setHorisonS] = useState<Horison>(() => { try { const v = JSON.parse(localStorage.getItem('kantor:horison') || ''); if (v?.mode === 'tanggal' && !(v.tanggal > new Date().toISOString().slice(0, 10))) return { mode: 'swingpendek' }; if (v?.mode && MODE_LAMA[v.mode]) return { mode: MODE_LAMA[v.mode] }; return v?.mode ? v : { mode: 'swingpendek' }; } catch { return { mode: 'swingpendek' }; } });
@@ -164,12 +170,11 @@ export function TradingPage() {
             )}
             {!saham && tab === 'pilihan' && sc.data && sc.data.baris.length > 0 && <PilihanView data={sc.data} faktor={faktor} setFaktor={setF} onOpen={buka} watchlist={[...(data?.watchlist || []), ...(data?.positions || []).map((p) => p.symbol)]} />}
             {!saham && tab === 'panas' && sc.data && sc.data.baris.length > 0 && <PetaPanas data={sc.data} onOpen={buka} watch={[...(data?.watchlist || []), ...(data?.positions || []).map((p) => p.symbol)]} />}
-            {!saham && tab === 'berita' && <BeritaTerkaitKartu onUbah={() => sc.reload()} />}
-            {!saham && tab === 'berita' && <PetaBerita onOpen={buka} />}
+            {simpanHidup('berita', <><BeritaTerkaitKartu onUbah={() => sc.reload()} /><PetaBerita onOpen={buka} /></>)}
             {!saham && tab === 'watchlist' && sc.data && <WatchlistView data={sc.data} faktor={faktor} onOpen={buka} />}
-            {!saham && tab === 'investigasi' && <InvestigasiView />}
-            {!saham && tab === 'uji' && <UjiMundur />}
-            {!saham && tab === 'history' && <HistorySinyal onOpen={buka} />}
+            {simpanHidup('investigasi', <InvestigasiView />)}
+            {simpanHidup('uji', <UjiMundur />)}
+            {simpanHidup('history', <HistorySinyal onOpen={buka} />)}
             {!saham && tab === 'penyaring' && <><HorisonBar h={horison} setH={setHorison} bobot={(sc.data as any)?.bobot} bukti={(sc.data as any)?.teknikalBukti} />{presetPanel}<ScreenerView onOpen={buka} q={qApi} presetAktif={preset} pd={pd.data} sumber={sc} /></>}
             {!saham && tab === 'posisi' && error && <div className="error">Gagal memuat: {error}</div>}
             {!saham && tab === 'posisi' && data && (

@@ -153,6 +153,42 @@ export class Percakapan {
         if (!l?.length || !this.berkasRoot) return '';
         return `\nLampiran dari ${this.ownerName} (bisa kamu buka/baca di komputer ini${l.some((x) => x.jenis === 'gambar') ? '; gambar bisa kamu lihat dengan alat visi bila ada' : ''}):\n${l.map((x) => `- ${path.join(this.berkasRoot!, x.rel)} (${x.nama})`).join('\n')}`;
     }
+    /** Hasil baca gambar per berkas (supaya gambar yang sama tidak dibaca ulang tiap balasan). */
+    private cacheGambar = new Map<string, string>();
+    /**
+     * Gambar dari Pak Rico dibaca dulu dengan model visi ATAS NAMA AI yang menjawab (gotong royong, tercatat di papan),
+     * lalu isinya dimasukkan ke prompt — jadi AI mana pun (termasuk lewat Hermes) bisa "melihat" gambarnya.
+     */
+    private async bacaGambar(aiId: string, nama: string, l?: Lampiran[]): Promise<string> {
+        const gb = (l || []).filter((x) => x.jenis === 'gambar').slice(0, 3);
+        const root = this.berkasRoot, router = this.router;
+        if (!gb.length || !router?.visiAda() || !root) return '';
+        const hasil: string[] = [];
+        const belum = gb.filter((x) => !this.cacheGambar.has(x.rel));
+        if (belum.length) {
+            const kerja = this.papan?.catat({ ai: aiId, nama, judul: `Melihat ${belum.length} gambar dari ${this.ownerName}`, detail: belum.map((x) => x.nama).join(', '), sumber: 'chat', status: 'proses' });
+            try {
+                const data = belum.map((x) => {
+                    const abs = path.join(root, x.rel);
+                    if (!abs.startsWith(root) || x.ukuran > 8 * 1024 * 1024) throw new Error(`${x.nama} terlalu besar (maks 8 MB).`);
+                    const ext = path.extname(x.nama).toLowerCase();
+                    const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : ext === '.gif' ? 'image/gif' : 'image/jpeg';
+                    return { mime, data: fs.readFileSync(abs) };
+                });
+                const r = await router.lihat(aiId, nama, `Jelaskan isi ${belum.length > 1 ? 'tiap gambar (beri nomor sesuai urutan)' : 'gambar ini'} selengkap mungkin untuk rekan kerja yang tidak bisa melihatnya: teks yang terbaca (salin persis angka, nama, tanggal), objek, grafik (judul, sumbu, tren, nilai penting), tabel. Jangan menebak hal yang tidak terlihat.`, data);
+                const bagian = r.teks;
+                for (const x of belum) this.cacheGambar.set(x.rel, belum.length > 1 ? `(gabungan ${belum.map((y) => y.nama).join(', ')}) ${bagian}` : bagian);
+                if (this.cacheGambar.size > 200) this.cacheGambar.delete(this.cacheGambar.keys().next().value as string);
+                this.papan?.ubah(kerja, 'selesai', `[${r.model}] ${r.teks.slice(0, 300)}`);
+            } catch (e: any) {
+                this.papan?.ubah(kerja, 'gagal', String(e?.message || e));
+                return `\n(Gambar dari ${this.ownerName} belum bisa dibaca otomatis: ${String(e?.message || e).slice(0, 160)}. Kalau kamu punya alat visi, buka berkasnya langsung.)`;
+            }
+        }
+        const sudah = new Set<string>();
+        for (const x of gb) { const t = this.cacheGambar.get(x.rel); if (t && !sudah.has(t)) { sudah.add(t); hasil.push(`- ${x.nama}: ${t.slice(0, 3000)}`); } }
+        return hasil.length ? `\nISI GAMBAR yang dikirim ${this.ownerName} (sudah kamu lihat dengan model visi):\n${hasil.join('\n')}` : '';
+    }
     private petunjukKirimFile(aiNama: string) {
         if (!this.berkasRoot) return '';
         const dir = path.join(this.berkasRoot, 'Dari AI', aiNama.replace(/[^\w .-]+/g, ''));
@@ -352,6 +388,7 @@ export class Percakapan {
         const grup = thread === 'grup' || !!this.grupCari(thread);
         const info = this.infoThread(thread);
         const lampOwner = [...this.baca(thread)].reverse().find((m) => m.dari === 'owner')?.lampiran;
+        const isiGambar = await this.bacaGambar(aiId, ai.nama, lampOwner);
         const berat = Boolean(opts.berat && this.kuota?.ambil());
         const prompt = opts.data ? [
             opts.aturan || '',
@@ -370,6 +407,7 @@ export class Percakapan {
             grup ? 'Jawab hanya bagian yang sesuai keahlianmu; jangan mengulang jawaban anggota lain. Kalau perlu orang lain, sebut namanya.' : '',
             'Kalau diminta mengerjakan sesuatu, kerjakan dengan alat/skill-mu seperti biasa, lalu laporkan hasilnya di sini.',
             this.teksLampiran(lampOwner),
+            isiGambar,
             this.petunjukKirimFile(ai.nama)
         ].filter(Boolean).join('\n');
         try {

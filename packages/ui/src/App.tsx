@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import { catatHalaman, daftarHalaman } from './kantor/kembali';
+import React, { useEffect, useRef, useState } from 'react';
 import { eventBus } from './events';
 import { useKantor } from './kantor/store';
 import { useSubNav } from './kantor/subnav';
@@ -45,6 +46,9 @@ export function App() {
     const [hidup, setHidup] = useState<PageKey[]>(() => (initialPage() === 'kantor' ? [] : [initialPage()]));
     useEffect(() => { if (page !== 'kantor') setHidup((h) => [page, ...h.filter((x) => x !== page)].slice(0, MAKS_HIDUP)); }, [page]);
 
+    // Tombol Back: kembali ke halaman sebelumnya (bukan menutup aplikasi).
+    const sedangKembali = useRef(false), halPertama = useRef(true);
+    useEffect(() => { daftarHalaman((p) => { if (PAGES.includes(p as PageKey) || p === 'kantor') { setPanel(null); setPage((cur) => { if (cur !== p) sedangKembali.current = true; return p as PageKey; }); } }); }, []);
     const go = (k: PageKey | KunciPanel) => {
         if (k === 'org' || k === 'activity' || k === 'papan') {
             setPage('kantor');
@@ -59,7 +63,8 @@ export function App() {
 
     useEffect(() => {
         try { localStorage.setItem(LS_PAGE, page); } catch { /* */ }
-        if (location.hash !== `#${page}`) history.replaceState(null, '', `#${page}`);
+        if (sedangKembali.current) sedangKembali.current = false;
+        else { catatHalaman(page, halPertama.current); halPertama.current = false; }
         document.body.classList.toggle('no-office', page !== 'kantor');
         eventBus.dispatchEvent(new CustomEvent('page-change', { detail: { page } }));
         if (page !== 'kantor') setAgentId(null);

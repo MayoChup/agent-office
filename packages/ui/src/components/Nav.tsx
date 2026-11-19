@@ -1,4 +1,5 @@
 import { TombolPasang } from '../kantor/pasang';
+import { useKembali } from '../kantor/kembali';
 import React, { useEffect, useState } from 'react';
 import { useKantor } from '../kantor/store';
 import { useSubNavState } from '../kantor/subnav';
@@ -35,6 +36,7 @@ export function Nav({ page, panel, onGo, hidup = [] }: { page: PageKey; panel: S
     const activeTasks = tasks.filter((t) => t.status === 'in_progress' || t.status === 'blocked').length;
     const sub = useSubNavState();
     const [laci, setLaci] = useState(false);
+    useKembali(laci, () => setLaci(false));
     const [kecil, setKecilS] = useState(() => { try { return localStorage.getItem('kantor:menu-kecil') === '1'; } catch { return false; } });
     const setKecil = (v: boolean) => { setKecilS(v); try { localStorage.setItem('kantor:menu-kecil', v ? '1' : '0'); } catch { /* */ } };
     useEffect(() => { document.body.classList.toggle('menu-kecil', kecil); }, [kecil]);

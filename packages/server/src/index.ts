@@ -8,6 +8,7 @@ import { createServer } from 'http';
 import { OfficeRoom } from './rooms/OfficeRoom';
 import { loadConfig } from './kantor/config';
 import { KantorAuth } from './kantor/auth';
+import { KategoriAi } from './kantor/kategoriAi';
 import { Pencatat, telegramNotifier, ringkasanKeuangan, telegramSebagai, sambilMengetik, kategoriOf } from './kantor/pencatat';
 import { TradingDesk, tradingCli, fetchPrice, marketOpen } from './kantor/trading';
 import { Kalender } from './kantor/kalender';
@@ -346,7 +347,10 @@ app.post('/api/kantor/keuangan/tambah', requireToken, async (req, res) => {
 });
 const keuErr = (res: express.Response, e: any) => res.status(400).json({ ok: false, error: String(e?.message || e), butuhSandi: Boolean(e?.butuhSandi) });
 app.post('/api/kantor/keuangan/ubah', requireToken, async (req, res) => {
-    try { res.json({ ok: true, ...(await pencatat.ubah(String(req.body?.id || ''), req.body || {})) }); } catch (e) { keuErr(res, e); }
+    try {
+        if (req.body?.kategori && req.body?.pihak && req.body?.jenis !== 'Masuk') kategoriAi.koreksi(String(req.body.pihak), String(req.body.kategori));
+        res.json({ ok: true, ...(await pencatat.ubah(String(req.body?.id || ''), req.body || {})) });
+    } catch (e) { keuErr(res, e); }
 });
 app.post('/api/kantor/keuangan/hapus', requireToken, async (req, res) => {
     try {
@@ -370,7 +374,7 @@ app.post('/api/kantor/keuangan/mutasi', requireToken, express.raw({ type: () => 
         const rules = config.pencatat.kategori;
         res.json({
             ok: true, ...hasil,
-            transaksi: c.hasil.map((t) => ({ ...t, kategori: t.jenis === 'Masuk' ? 'Pendapatan' : kategoriOf(`${t.pihak} ${t.ket}`, rules) })),
+            transaksi: await pencatat.lengkapiKategori(c.hasil.map((t) => ({ ...t, kategori: t.jenis === 'Masuk' ? 'Pendapatan' : kategoriOf(`${t.pihak} ${t.ket}`, rules) }))),
             lebih: c.lebih,
             saldoTercatat: anggaran.get().saldo?.[akun] || null
         });
@@ -432,6 +436,69 @@ percakapan.papan = papan;
 app.get('/api/kantor/chat', requireToken, (_req, res) => { res.json({ ok: true, thread: percakapan.daftar() }); });
 app.get('/api/kantor/chat/:id', requireToken, (req, res) => { res.json({ ok: true, ...percakapan.thread(String(req.params.id)) }); });
 percakapan.berkasRoot = berkas.root;
+
+// ── Keuangan × AI (gotong royong: dikerjakan Uang, Kepala Keuangan) ──
+const AI_KEU = () => (roster().some((a) => a.id === 'keuangan') ? 'keuangan' : 'default');
+const namaAiKeu = () => roster().find((a) => a.id === AI_KEU())?.nama || 'Uang';
+const daftarKategori = () => Object.keys(config.pencatat.kategori).concat(['Lainnya']);
+/** Kategori dari nama tenant (QRIS dll.). Yang dikirim ke AI hanya nama tenant. */
+const kategoriAi = new KategoriAi(config.dataDir, (prompt, judul, detail) => percakapan.tugas(AI_KEU(), judul, prompt, detail));
+pencatat.ingatan = (p) => kategoriAi.dariIngatan(p);
+pencatat.tebakKategori = (ps) => kategoriAi.tebak(ps, daftarKategori());
+let rapikanJalan = false;
+async function rapikanKategori() {
+    if (rapikanJalan || !config.pencatat.spreadsheetId) return null;
+    rapikanJalan = true;
+    try {
+        return await papan.jalankan({ ai: AI_KEU(), nama: namaAiKeu(), judul: 'Merapikan kategori transaksi "Lainnya"', detail: 'Menebak kategori dari nama tenant (QRIS/transfer) dan mengingat koreksi Pak Rico.', sumber: 'tugas' },
+            () => pencatat.rapikanKategori(), (r) => `${r.diubah} dari ${r.dicek} transaksi dipindah dari "Lainnya".`);
+    } catch (e: any) { console.warn('[Kategori AI]', e?.message || e); return null; } finally { rapikanJalan = false; }
+}
+setTimeout(() => void rapikanKategori(), 6 * 60_000); setInterval(() => void rapikanKategori(), 3 * 3600_000);
+app.post('/api/kantor/keuangan/rapikan-kategori', requireToken, async (_req, res) => {
+    const r = await rapikanKategori(); res.json({ ok: true, hasil: r, ingatan: kategoriAi.jumlah() });
+});
+/** Baca struk: foto → draf transaksi (Uang memakai model visi). Foto disimpan di Berkas/Keuangan/Struk/. */
+app.post('/api/kantor/keuangan/struk', requireToken, express.raw({ type: () => true, limit: '10mb' }), async (req, res) => {
+    try {
+        const buf = req.body as Buffer;
+        const mime = String(req.headers['content-type'] || '').split(';')[0].trim();
+        if (!Buffer.isBuffer(buf) || buf.length < 500 || !/^image\/(jpeg|png|webp)$/.test(mime)) throw new Error('Kirim foto struk (JPG/PNG/WebP).');
+        if (!percakapan.router?.visiAda()) throw new Error('Belum ada model yang bisa membaca gambar. Isi GEMINI_API_KEY atau GROQ_API_KEY di server.');
+        const a = anggaran.get();
+        const bulan = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 7);
+        const dir = path.join(berkas.root, 'Keuangan', 'Struk', bulan); fs.mkdirSync(dir, { recursive: true });
+        const nama = `struk-${new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 19).replace(/[:T]/g, '-')}.${mime.split('/')[1].replace('jpeg', 'jpg')}`;
+        fs.writeFileSync(path.join(dir, nama), buf);
+        const ai = AI_KEU(), aiNama = namaAiKeu();
+        const hasil = await papan.jalankan({ ai, nama: aiNama, judul: 'Membaca struk belanja', detail: nama, sumber: 'tugas' }, async () => {
+            const hariIni = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
+            const r = await percakapan.router!.lihat(ai, aiNama, [
+                'Ini foto struk/nota belanja. Baca dan jawab HANYA JSON:',
+                `{"struk":true/false,"pihak":"nama toko/tenant","tanggal":"YYYY-MM-DD","jam":"HH:MM","total":angka rupiah yang dibayar,"metode":"tunai/QRIS/debit/kartu kredit/e-wallet/tidak tahu","item":[{"nama":"...","jumlah":1,"harga":angka}],"kategori":"salah satu: ${daftarKategori().join(', ')}"}`,
+                `Total = jumlah akhir yang dibayar (setelah diskon & pajak). Angka tanpa titik/koma. Tanggal tidak terbaca → ${hariIni}. Bukan struk → {"struk":false}.`
+            ].join('\n'), [{ mime, data: buf }], 1200);
+            const m = r.teks.match(/\{[\s\S]*\}/); if (!m) throw new Error('Struk tidak terbaca. Coba foto lebih terang dan lurus.');
+            const j = JSON.parse(m[0]);
+            if (j.struk === false) throw new Error('Foto ini sepertinya bukan struk.');
+            const total = Math.round(Number(String(j.total ?? '').replace(/[^\d.]/g, '')) || 0);
+            if (!(total > 0)) throw new Error('Total belanja tidak terbaca. Isi nominalnya manual.');
+            const pihak = String(j.pihak || '').slice(0, 80);
+            let kategori = daftarKategori().find((k) => k.toLowerCase() === String(j.kategori || '').toLowerCase()) || 'Lainnya';
+            const ing = kategoriAi.dariIngatan(pihak); if (ing) kategori = ing;
+            const metode = String(j.metode || '');
+            const akun = /qris|debit|e-?wallet|kartu/i.test(metode) ? (a.akun.find((x: string) => x !== 'Cash') || 'Cash') : 'Cash';
+            const item = (Array.isArray(j.item) ? j.item : []).slice(0, 30).map((x: any) => ({ nama: String(x?.nama || '').slice(0, 60), jumlah: Number(x?.jumlah) || 1, harga: Math.round(Number(x?.harga) || 0) }));
+            return {
+                jenis: 'Keluar', nominal: total, pihak, kategori, akun,
+                tanggal: /^\d{4}-\d{2}-\d{2}$/.test(String(j.tanggal || '')) ? j.tanggal : hariIni, jam: /^\d{2}:\d{2}$/.test(String(j.jam || '')) ? j.jam : '',
+                keterangan: [metode && metode !== 'tidak tahu' ? metode : '', item.length ? item.slice(0, 4).map((x: any) => x.nama).join(', ') : ''].filter(Boolean).join(' · ').slice(0, 200),
+                item, berkas: `Keuangan/Struk/${bulan}/${nama}`, model: r.model
+            };
+        }, (d: any) => `${d.pihak || 'Struk'} · Rp${d.nominal.toLocaleString('id-ID')} · ${d.kategori}`);
+        res.json({ ok: true, draf: hasil, oleh: aiNama });
+    } catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
+});
 /** Lampiran yang dikirim harus benar-benar berkas di Berkas (cloud pribadi). */
 const lampiranValid = (x: any): Lampiran[] => (Array.isArray(x) ? x : []).slice(0, 10).map((l: any) => {
     try { const abs = berkas.lokasi(String(l?.rel || '')); const st = fs.statSync(abs); return { rel: path.relative(berkas.root, abs).split(path.sep).join('/'), nama: path.basename(abs), ukuran: st.size, jenis: /\.(png|jpe?g|gif|webp)$/i.test(abs) ? 'gambar' : 'berkas' } as Lampiran; } catch { return null; }

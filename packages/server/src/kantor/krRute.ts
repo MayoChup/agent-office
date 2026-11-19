@@ -329,6 +329,7 @@ export function pasangKr(d: DepsKr) {
         let vault = ''; try { await tulisVault(kr.cari(c.postId)); vault = c.berkas || fileCatatan(kr.cari(c.postId)); } catch (e: any) { console.warn('[KR] tulis vault:', e?.message || e); }
         return { catatan: kr.st.catatan.find((x) => x.id === c.id), menunggu: tunggu, vault };
     }));
+    app.post('/api/kantor/kr/catatan/:id/suka', requireToken, r((req) => ({ catatan: kr.sukaCatatan(String(req.params.id), req.body?.ya !== false) })));
     app.post('/api/kantor/kr/catatan/:id/hapus', requireToken, r(async (req) => {
         const c = kr.hapusCatatan(String(req.params.id));
         if (c) try { await tulisVault(kr.cari(c.postId)); } catch { /* postingan sudah tidak ada */ }

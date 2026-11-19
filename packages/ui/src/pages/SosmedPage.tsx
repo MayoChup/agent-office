@@ -9,6 +9,7 @@ import { GaleriPilih, PratinjauGaya } from './sosmed/Pratinjau';
 import { Starter, type JawabanStarter } from './sosmed/Starter';
 
 import { Ikon } from '../components/Ikon';
+import { Hidup } from '../components/Hidup';
 type Format = 'feed' | 'reel' | 'carousel' | 'story' | 'video';
 type Status = 'rencana' | 'sketsa' | 'naskah' | 'prompt' | 'aset' | 'terjadwal' | 'mengunggah' | 'terbit' | 'manual' | 'gagal';
 type Adegan = AdeganS;
@@ -147,16 +148,16 @@ export function SosmedPage() {
                 gaya={x.gaya.map((g) => ({ ...g, ket: g.deskripsi }))} katalog={x.katalog} sibuk={!!x.sibuk} gambarGaya={gambarGaya} batal={x.strategi || x.starter ? () => setKuis(false) : undefined}
                 kirim={(jw: JawabanStarter) => { aksi(post('/api/kantor/sosmed/starter', { jawaban: jw }), 'Brief diterima. Tim mulai bekerja — progresnya terlihat di atas.'); setKuis(false); }} />
             : !x.siap && tab !== 'akun' && tab !== 'gaya' && <Mulai x={x} setTab={setTab} />}
-            {tab === 'hari' && x.siap && <TabHari {...p} />}
-            {tab === 'antre' && x.siap && <TabAntre {...p} />}
-            {tab === 'kalender' && x.siap && <TabKalender {...p} />}
-            {tab === 'analisa' && x.siap && <TabAnalisa {...p} />}
-            {tab === 'strategi' && x.siap && <TabStrategi {...p} />}
-            {tab === 'gaya' && <TabGaya {...p} />}
-            {tab === 'profil' && x.siap && <TabProfil {...p} />}
-            {tab === 'kinerja' && x.siap && <TabKinerja {...p} />}
-            {tab === 'komentar' && x.siap && <TabKomentar {...p} />}
-            {tab === 'akun' && <TabAkun {...p} muat={() => d.reload()} keBeranda={() => pilihAkun('beranda')} bukaKuis={() => { setKuis(true); setTab('hari'); }} />}
+            {x.siap && <Hidup key={`${akunId}-hari`} aktif={tab === 'hari'}><TabHari {...p} /></Hidup>}
+            {x.siap && <Hidup key={`${akunId}-antre`} aktif={tab === 'antre'}><TabAntre {...p} /></Hidup>}
+            {x.siap && <Hidup key={`${akunId}-kalender`} aktif={tab === 'kalender'}><TabKalender {...p} /></Hidup>}
+            {x.siap && <Hidup key={`${akunId}-analisa`} aktif={tab === 'analisa'}><TabAnalisa {...p} /></Hidup>}
+            {x.siap && <Hidup key={`${akunId}-strategi`} aktif={tab === 'strategi'}><TabStrategi {...p} /></Hidup>}
+            <Hidup key={`${akunId}-gaya`} aktif={tab === 'gaya'}><TabGaya {...p} /></Hidup>
+            {x.siap && <Hidup key={`${akunId}-profil`} aktif={tab === 'profil'}><TabProfil {...p} /></Hidup>}
+            {x.siap && <Hidup key={`${akunId}-kinerja`} aktif={tab === 'kinerja'}><TabKinerja {...p} /></Hidup>}
+            {x.siap && <Hidup key={`${akunId}-komentar`} aktif={tab === 'komentar'}><TabKomentar {...p} /></Hidup>}
+            <Hidup key={`${akunId}-akun`} aktif={tab === 'akun'}><TabAkun {...p} muat={() => d.reload()} keBeranda={() => pilihAkun('beranda')} bukaKuis={() => { setKuis(true); setTab('hari'); }} /></Hidup>
         </div>
     );
 }
