@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { TanggalInput } from '../../components/Tanggal';
 import { createPortal } from 'react-dom';
 import { apiPost } from '../../kantor/connection';
 import { usd } from './types';
@@ -67,7 +68,7 @@ export function PegangPosisi({ simbol, harga, proyeksi, ai, kas, onTutup, onSele
 
                 <div className="pp-grid">
                     <label>Harga beli (USD)<input inputMode="decimal" value={entry} onChange={(x) => setEntry(x.target.value)} /></label>
-                    <label>Tanggal beli<input type="date" value={tgl} max={hariIni()} onChange={(x) => setTgl(x.target.value)} /></label>
+                    <label>Tanggal beli<TanggalInput bisaKosong={false} value={tgl} max={hariIni()} onChange={(v) => setTgl(v)} /></label>
                     <label>Target jual <small className="up">+{pctDari(tg)}%</small><input inputMode="decimal" value={target} onChange={(x) => { setTarget(x.target.value); setProfil('kustom'); }} /></label>
                     <label>Stop loss <small className="down">{pctDari(sl)}%</small><input inputMode="decimal" value={stop} onChange={(x) => { setStop(x.target.value); setProfil('kustom'); }} /></label>
                 </div>

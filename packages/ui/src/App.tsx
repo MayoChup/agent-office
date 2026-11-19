@@ -209,24 +209,19 @@ function KendaliPeta({ go }: { go: (k: PageKey | KunciPanel) => void }) {
     );
 }
 
-/** R8 · amati status tim; tugas baru = amplop dari Kepala ke AI itu, tugas selesai = amplop laporan kembali ke Kepala. */
+/** R8 · amplop di peta = serah-terima nyata dari server: Joni menugaskan anggota (amplop ke meja anggota), anggota selesai melapor (amplop kembali). */
 function PengamatAmplop() {
-    const lalu = useRef<Record<string, string>>({});
+    const akhir = useRef<number | null>(null);
     useEffect(() => {
         let hidup = true;
-        const cek = () => apiGet<{ ai: Array<{ id: string; sedang: { judul: string } | null; terakhir: { status: string } | null }> }>('/api/kantor/tim-status').then((d) => {
+        const cek = () => apiGet<{ serah: Array<{ id: number; dari: string; ke: string }>; akhir: number }>(`/api/kantor/serah?sejak=${akhir.current ?? 0}`).then((d) => {
             if (!hidup) return;
-            const awal = !Object.keys(lalu.current).length;
-            let jeda = 0;
-            for (const a of d.ai) {
-                const kini = a.sedang?.judul || '', dulu = lalu.current[a.id];
-                lalu.current[a.id] = kini;
-                if (awal || a.id === 'default' || dulu === undefined || kini === dulu) continue;
-                const detail = kini ? { dari: 'default', ke: a.id } : a.terakhir?.status === 'selesai' ? { dari: a.id, ke: 'default' } : null;
-                if (detail) { setTimeout(() => eventBus.dispatchEvent(new CustomEvent('amplop', { detail })), jeda); jeda += 350; }
-            }
+            const pertama = akhir.current === null || d.akhir < akhir.current; // server baru menyala → nomor mulai dari awal
+            akhir.current = d.akhir;
+            if (pertama) return; // yang lama tidak diputar ulang
+            d.serah.forEach((x, i) => setTimeout(() => eventBus.dispatchEvent(new CustomEvent('amplop', { detail: { dari: x.dari, ke: x.ke } })), i * 400));
         }).catch(() => undefined);
-        cek(); const t = setInterval(cek, 10_000);
+        cek(); const t = setInterval(cek, 5_000);
         return () => { hidup = false; clearInterval(t); };
     }, []);
     return null;

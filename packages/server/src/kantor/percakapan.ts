@@ -75,6 +75,15 @@ export class Percakapan {
         return this.papan.catat({ ai: aiId, nama: ai?.nama || aiId, judul: trading ? 'Konsultasi di halaman Trading' : thread === 'grup' || this.grupCari(thread) ? `Membalas di grup ${this.infoThread(thread).nama}` : 'Membalas chat pribadi', detail: terakhir, sumber: trading ? 'trading' : 'chat', status: 'todo' });
     }
 
+    /** R8 · catatan serah-terima nyata (Joni menugaskan → anggota melapor balik), untuk amplop di peta kantor. */
+    serah: Array<{ id: number; dari: string; ke: string; judul: string; jenis: 'tugas' | 'laporan'; at: number }> = [];
+    private serahSeq = 0;
+    catatSerah(dari: string, ke: string, judul: string, jenis: 'tugas' | 'laporan') {
+        this.serah.push({ id: ++this.serahSeq, dari, ke, judul: judul.replace(/\s+/g, ' ').slice(0, 100), jenis, at: Date.now() });
+        this.serah = this.serah.slice(-100);
+    }
+    /** R5 · potongan ingatan rekan setim yang relevan dengan pesan terakhir (diisi index.ts). */
+    ingatanRekan?: (aiId: string, teks: string) => string;
     constructor(
         dataDir: string,
         private hermesBin: string,
@@ -86,6 +95,10 @@ export class Percakapan {
     ) {
         this.dir = path.join(dataDir, 'percakapan');
         fs.mkdirSync(this.dir, { recursive: true });
+    }
+
+    private rekanUntuk(aiId: string, thread: string) {
+        try { const t = [...this.baca(thread)].reverse().find((m) => m.dari === 'owner')?.teks || ''; return t ? this.ingatanRekan?.(aiId, t) || '' : ''; } catch { return ''; }
     }
 
     /* ── Penyimpanan ── */
@@ -348,7 +361,8 @@ export class Percakapan {
         }
         const nama = (id: string) => roster.find((a) => a.id === id)?.nama || id;
         this.tambah(thread, { dari: joni.id, nama: joni.nama, teks: String(j.pesan || '').trim() || `${tugas.map((t) => nama(t.id)).join(' & ')}, tolong ditangani ya.`, at: Date.now() });
-        for (const t of tugas) await this.balas(thread, t.id, { instruksi: t.instruksi, berat: t.berat });
+        for (const t of tugas) this.catatSerah(joni.id, t.id, t.instruksi, 'tugas');
+        for (const t of tugas) { await this.balas(thread, t.id, { instruksi: t.instruksi, berat: t.berat }); this.catatSerah(t.id, joni.id, t.instruksi, 'laporan'); }
     }
 
     /** Minta satu AI membalas di thread tertentu. */
@@ -431,6 +445,7 @@ export class Percakapan {
             'Kalau diminta mengerjakan sesuatu, kerjakan dengan alat/skill-mu seperti biasa, lalu laporkan hasilnya di sini.',
             this.teksLampiran(lampOwner),
             isiGambar,
+            this.rekanUntuk(aiId, thread),
             this.petunjukKirimFile(ai.nama)
         ].filter(Boolean).join('\n');
         try {

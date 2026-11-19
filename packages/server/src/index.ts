@@ -1,4 +1,6 @@
 import zlib from 'zlib';
+import { MemoriTim } from './kantor/memoriTim';
+import { mulaiRiwayatNotif, daftarNotif, tandaiNotifDibaca } from './kantor/riwayatNotif';
 import fs from 'fs';
 import path from 'path';
 import { cekHargaCli } from './kantor/harga';
@@ -55,6 +57,7 @@ import { spawn } from 'child_process';
 import os from 'os';
 
 const config = loadConfig();
+mulaiRiwayatNotif(config.dataDir);
 // Dua AI bernama Hana → penasihat keuangan jadi Laras (HR tetap Hana).
 gantiNamaPenasihat(config.hermesHome, process.env.KANTOR_CONFIG || path.join(process.env.KANTOR_ROOT || process.cwd(), 'kantor.config.json'), config.agents as any);
 
@@ -433,6 +436,8 @@ app.get('/api/kantor/trading', requireToken, async (_req, res) => {
 const papan = new Papan(config.dataDir);
 papan.namaAi = (id) => roster().find((a) => a.id === id)?.nama;
 const percakapan = new Percakapan(config.dataDir, config.hermesBin, config.ownerName, roster, () => OfficeRoom.sharedLlm(), kuotaBerat);
+const memoriTim = new MemoriTim(config.hermesHome, () => roster().map((a) => ({ id: a.id, nama: a.nama })));
+percakapan.ingatanRekan = (ai, teks) => memoriTim.rekan(ai, teks);
 percakapan.papan = papan;
 app.get('/api/kantor/chat', requireToken, (_req, res) => { res.json({ ok: true, thread: percakapan.daftar() }); });
 app.get('/api/kantor/chat/:id', requireToken, (req, res) => { res.json({ ok: true, ...percakapan.thread(String(req.params.id)) }); });
@@ -465,23 +470,8 @@ app.get('/api/kantor/tim-status', requireToken, (_req, res) => {
     }) });
 });
 /** R5 · Ingatan tim yang bisa dicari: memories/*.md + SOUL.md semua profil Hermes (hanya dibaca). */
-app.get('/api/kantor/memori/cari', requireToken, (req, res) => {
-    const q = String(req.query.q || '').trim().toLowerCase();
-    if (q.length < 2) { res.json({ ok: true, hasil: [] }); return; }
-    const hasil: Array<{ ai: string; nama: string; berkas: string; cuplikan: string }> = [];
-    for (const a of roster()) {
-        const dir = a.id === 'default' ? config.hermesHome : path.join(config.hermesHome, 'profiles', a.id);
-        const daftar: string[] = [];
-        try { for (const f of fs.readdirSync(path.join(dir, 'memories'))) if (f.endsWith('.md')) daftar.push(path.join('memories', f)); } catch { /* */ }
-        for (const rel of daftar) {
-            if (hasil.length >= 30) break;
-            let isi = ''; try { isi = fs.readFileSync(path.join(dir, rel), 'utf8'); } catch { continue; }
-            const i = isi.toLowerCase().indexOf(q); if (i < 0) continue;
-            hasil.push({ ai: a.id, nama: a.nama, berkas: rel, cuplikan: isi.slice(Math.max(0, i - 80), i + 160).replace(/\s+/g, ' ').trim() });
-        }
-    }
-    res.json({ ok: true, hasil });
-});
+app.get('/api/kantor/memori/cari', requireToken, (req, res) => { res.json({ ok: true, hasil: memoriTim.cari(String(req.query.q || '')) }); });
+app.get('/api/kantor/serah', requireToken, (req, res) => { const sejak = Number(req.query.sejak) || 0; res.json({ ok: true, serah: percakapan.serah.filter((x) => x.id > sejak), akhir: percakapan.serah[percakapan.serah.length - 1]?.id || 0 }); });
 app.get('/api/kantor/rem', requireToken, (_req, res) => { res.json({ ok: true, ai: roster().map((a) => ({ id: a.id, nama: a.nama, peran: a.peran, ...rem.ringkas(a.id) })) }); });
 app.post('/api/kantor/rem/:ai/lanjutkan', requireToken, (req, res) => { rem.lanjutkan(String(req.params.ai)); res.json({ ok: true }); });
 app.post('/api/kantor/rem/:ai/anggaran', requireToken, (req, res) => { res.json({ ok: true, anggaran: rem.setAnggaran(String(req.params.ai), req.body || {}) }); });
@@ -584,6 +574,8 @@ percakapan.onPesan = (thread, p) => {
     const judul = info.grup ? `${info.ikon} ${info.nama}` : `${p.nama}${peran ? ` - ${peran}` : ''}`;
     notif.kirim(thread, judul, info.grup ? `${p.nama}: ${isi}` : isi).catch((e) => console.warn('[Push]', e?.message || e));
 };
+app.get('/api/kantor/notifikasi', requireToken, (req, res) => { res.json({ ok: true, ...daftarNotif(Math.min(400, Number(req.query.n) || 100), String(req.query.jenis || '')) }); });
+app.post('/api/kantor/notifikasi/baca', requireToken, (_req, res) => { tandaiNotifDibaca(); res.json({ ok: true }); });
 app.get('/api/kantor/push/kunci', requireToken, (_req, res) => { res.json({ ok: !!notif, kunci: notif?.kunciPublik() || null, langganan: notif?.jumlah() || 0 }); });
 app.post('/api/kantor/push/langgan', requireToken, (req, res) => {
     try { if (!notif) throw new Error('Notifikasi belum tersedia di server.'); notif.langgan(req.body?.langganan, String(req.headers['user-agent'] || '')); res.json({ ok: true }); }

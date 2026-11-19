@@ -7,6 +7,7 @@ import { eventBus } from '../events';
 import { Ikon } from './Ikon';
 import { TombolKeputusan } from './Keputusan';
 import { TombolCari } from './Cari';
+import { TombolLonceng } from './Lonceng';
 import { konfirmasi } from './Konfirmasi';
 function useClock() {
     const [now, setNow] = useState(() => new Date());
@@ -66,6 +67,7 @@ export function TopBar() {
             )}
             <div className="pill hide-hp" title={statusText}><span className={`dot ${dotClass}`} /><span className="hide-sm">{statusText}</span></div>
             {status !== 'login' && <TombolCari />}
+            {status !== 'login' && <TombolLonceng />}
             {status !== 'login' && <TombolKeputusan />}
             <MenuProfil tema={tema} gantiTema={gantiTema} owner={owner} statusText={statusText} dotClass={dotClass} bisaKeluar={status !== 'login'} />
         </div>

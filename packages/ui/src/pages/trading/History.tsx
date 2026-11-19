@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { TanggalInput } from '../../components/Tanggal';
 import { apiGet, apiPost } from '../../kantor/connection';
 import { usd } from './types';
 import { Info } from './InfoI';
@@ -73,8 +74,8 @@ export function HistorySinyal({ onOpen }: { onOpen: (s: string) => void }) {
                     const on = k === 'semua' ? !f.dari && !f.sampai : k === 'hari' ? f.dari === hariIni() && f.sampai === hariIni() : k === 'kemarin' ? f.dari === mundur(1) && f.sampai === mundur(1) : k === '7' ? f.dari === mundur(6) && !f.sampai : f.dari === mundur(29) && !f.sampai;
                     return <button key={k} className={on ? 'on' : ''} onClick={() => preset(k)}>{l}</button>;
                 })}</div>
-                <label>Dari<input type="date" value={f.dari} max={hariIni()} onChange={(e) => set({ dari: e.target.value })} /></label>
-                <label>Sampai<input type="date" value={f.sampai} min={f.dari || undefined} max={hariIni()} onChange={(e) => set({ sampai: e.target.value })} /></label>
+                <label>Dari<TanggalInput value={f.dari} max={hariIni()} onChange={(v) => set({ dari: v })} /></label>
+                <label>Sampai<TanggalInput value={f.sampai} min={f.dari || undefined} max={hariIni()} onChange={(v) => set({ sampai: v })} /></label>
                 <label>Status<select value={f.status} onChange={(e) => set({ status: e.target.value })}><option value="">Semua status</option>{(Object.keys(STATUS) as Status[]).map((k) => <option key={k} value={k}>{STATUS[k].t}</option>)}</select></label>
                 <label>Urutkan<select value={f.urut} onChange={(e) => set({ urut: e.target.value })}><option value="terbaru">Terbaru</option><option value="cuan">Cuan terbesar</option><option value="rugi">Rugi terbesar</option></select></label>
                 <label className="dr-cari">Saham<input type="search" placeholder="mis. NVDA" value={f.q} onChange={(e) => set({ q: e.target.value })} /></label>

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { TanggalInput } from '../../components/Tanggal';
 import { apiGet } from '../../kantor/connection';
 
 interface Item { id: string; judul: string; ringkas: string; tgl: string; topik: string; artikel: Array<{ t: string; sumber: string; tgl: string; url: string }>; dampak: Array<{ jenis: string; nama: string; arah: number; alasan: string }>; oleh: string }
@@ -33,8 +34,8 @@ export function DaftarRelated() {
                     const on = k === 'semua' ? !f.dari && !f.sampai : k === 'hari' ? f.dari === hariIni() && f.sampai === hariIni() : k === 'kemarin' ? f.dari === mundur(1) && f.sampai === mundur(1) : k === '7' ? f.dari === mundur(6) && !f.sampai : f.dari === mundur(29) && !f.sampai;
                     return <button key={k} className={on ? 'on' : ''} onClick={() => preset(k)}>{l}</button>;
                 })}</div>
-                <label>Dari<input type="date" value={f.dari} min={d?.pilihan.tanggal.min || undefined} max={hariIni()} onChange={(e) => set({ dari: e.target.value })} /></label>
-                <label>Sampai<input type="date" value={f.sampai} min={f.dari || undefined} max={hariIni()} onChange={(e) => set({ sampai: e.target.value })} /></label>
+                <label>Dari<TanggalInput value={f.dari} min={d?.pilihan.tanggal.min || undefined} max={hariIni()} onChange={(v) => set({ dari: v })} /></label>
+                <label>Sampai<TanggalInput value={f.sampai} min={f.dari || undefined} max={hariIni()} onChange={(v) => set({ sampai: v })} /></label>
                 <label>Tema<select value={f.topik} onChange={(e) => set({ topik: e.target.value })}><option value="">Semua tema</option>{d?.pilihan.topik.map((t) => <option key={t.nama} value={t.nama}>{t.nama} ({t.jumlah})</option>)}</select></label>
                 <label>Industri / sektor<select value={f.industri} onChange={(e) => set({ industri: e.target.value })}><option value="">Semua industri</option>{d?.pilihan.industri.map((t) => <option key={t.nama} value={t.nama}>{t.nama} ({t.jumlah})</option>)}</select></label>
                 <label className="dr-cari">Cari<input type="search" placeholder="kata kunci…" value={f.q} onChange={(e) => set({ q: e.target.value })} /></label>

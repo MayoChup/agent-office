@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { TanggalInput } from '../components/Tanggal';
 import { useApi } from '../kantor/api';
 import { apiPost, serverBase, tokenLogin } from '../kantor/connection';
 import { useSubNav } from '../kantor/subnav';
@@ -976,7 +977,7 @@ function Produksi({ k, x, aksi, kabar }: { k: Konten; x: Data; aksi: Aksi; kabar
 function JamUnggah({ k, x, aksi }: { k: Konten; x: Data; aksi: Aksi }) {
     return (
         <div className="sm-jamk">
-            <label>Tanggal<input type="date" value={k.tgl} min={x.hari} onChange={(e) => e.target.value && aksi(post(`/api/kantor/sosmed/konten/${k.id}/ubah`, { tgl: e.target.value }), 'Tanggal diubah.')} /></label>
+            <label>Tanggal<TanggalInput bisaKosong={false} value={k.tgl} min={x.hari} onChange={(v) => v && aksi(post(`/api/kantor/sosmed/konten/${k.id}/ubah`, { tgl: v }), 'Tanggal diubah.')} /></label>
             <label>Jam (WIB)<input type="time" value={jamK(k, x)} onChange={(e) => e.target.value && aksi(post(`/api/kantor/sosmed/konten/${k.id}/ubah`, { jam: e.target.value }))} /></label>
             {k.jam && <button className="btn small" onClick={() => aksi(post(`/api/kantor/sosmed/konten/${k.id}/ubah`, { jam: '' }), `Kembali ke jam umum ${x.strategi?.jam || '19:00'}.`)}>Pakai jam umum</button>}
         </div>

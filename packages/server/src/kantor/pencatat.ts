@@ -10,6 +10,7 @@
  * tidak pernah mengikuti isi/link email, satu-satunya perubahan di Gmail adalah
  * menambah label "Tercatat".
  */
+import { catatNotif } from './riwayatNotif';
 import fs from 'fs';
 import path from 'path';
 import { EventEmitter } from 'events';
@@ -648,6 +649,7 @@ export class Pencatat {
 /** Kirim pesan Telegram lewat bot Hermes (token & chat dari ~/.hermes/.env). */
 export function telegramNotifier(hermesHome: string) {
     return async (text: string) => {
+        catatNotif({ saluran: 'telegram', isi: text });
         try {
             const env = fs.readFileSync(path.join(hermesHome, '.env'), 'utf8');
             const get = (k: string) => (env.match(new RegExp(`^${k}=(.*)$`, 'm'))?.[1] || '').trim().replace(/^["']|["']$/g, '');

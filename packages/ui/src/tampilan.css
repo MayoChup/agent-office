@@ -669,3 +669,48 @@
 .lewati { position: fixed; left: 16px; top: -48px; z-index: 200; background: var(--aksen-isi); color: #fff; padding: 8px 16px; border-radius: var(--r-kontrol); text-decoration: none; }
 .lewati:focus { top: 8px; }
 main.page:focus { outline: none; }
+
+/* U30 · pemilih tanggal */
+.tgl-tombol { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 12px; border-radius: var(--r-kontrol); border: 1px solid var(--line-strong); background: var(--naik); color: var(--text); font: inherit; font-size: 14px; cursor: pointer; white-space: nowrap; }
+.tgl-tombol:hover { border-color: var(--aksen-garis); }
+.tgl-tombol.kosong span { color: var(--faint); }
+.tgl-tombol .ikon { color: var(--muted); flex: 0 0 auto; }
+label > .tgl-tombol { width: 100%; justify-content: flex-start; }
+button.hz-tgl { border: 0; background: transparent; font: inherit; color: inherit; }
+button.hz-tgl.on { background: var(--panel-solid); color: var(--text); }
+.tgl-kal { z-index: 210; width: 288px; background: var(--panel-solid); border: 1px solid var(--line-strong); border-radius: var(--r-panel); box-shadow: var(--angkat); padding: 12px; }
+.tgl-kal.hp { width: 100%; max-width: 560px; border-radius: var(--r-panel) var(--r-panel) 0 0; border-bottom: 0; padding: 8px 16px calc(16px + env(safe-area-inset-bottom)); }
+.tgl-kepala { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.tgl-kepala b { font-weight: 600; font-size: 14px; }
+.tgl-kepala button { width: 36px; height: 36px; display: grid; place-items: center; border-radius: var(--r-kontrol); border: 0; background: transparent; color: var(--text); cursor: pointer; }
+.tgl-kepala button:hover:not(:disabled) { background: var(--naik); }
+.tgl-kepala button:disabled { opacity: 0.3; cursor: default; }
+.tgl-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.tgl-hari { text-align: center; font-size: 11px; color: var(--faint); padding: 4px 0; }
+.tgl-grid button { aspect-ratio: 1; min-height: 36px; border: 0; border-radius: var(--r-kontrol); background: transparent; color: var(--text); font: inherit; font-size: 13px; font-variant-numeric: tabular-nums; cursor: pointer; }
+.tgl-kal.hp .tgl-grid button { min-height: 44px; font-size: 15px; }
+.tgl-grid button:hover:not(:disabled) { background: var(--naik); }
+.tgl-grid button.kini { box-shadow: inset 0 0 0 1px var(--aksen-garis); }
+.tgl-grid button.pilih { background: var(--aksen-isi); color: #fff; }
+.tgl-grid button:disabled { color: var(--faint); opacity: 0.4; cursor: default; }
+.tgl-kaki { display: flex; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
+.tgl-sp { flex: 1; }
+
+/* U18 · riwayat notifikasi */
+.ln-filter { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 12px 20px 4px; }
+.ln-filter::-webkit-scrollbar { display: none; }
+.ln-filter button { flex: 0 0 auto; height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line-strong); background: transparent; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; }
+.ln-filter button.on { background: var(--aksen-lembut); border-color: var(--aksen-garis); color: var(--accent); }
+.ln-hari { font-size: 12px; color: var(--faint); margin: 16px 0 8px; }
+.ln-hari:first-child { margin-top: 0; }
+.ln-item { padding: 12px 14px; border-radius: var(--r-kartu); background: var(--naik); margin-bottom: 8px; border: 1px solid transparent; }
+.ln-item.baru { border-color: var(--aksen-garis); }
+.ln-atas { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.ln-atas b { font-weight: 600; font-size: 14px; overflow-wrap: anywhere; }
+.ln-atas time { font-size: 12px; color: var(--faint); font-variant-numeric: tabular-nums; flex: 0 0 auto; }
+.ln-item p { margin: 6px 0 0; font-size: 13px; color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; }
+.ln-item p.ringkas { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.ln-aksi { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+.ln-aksi small { font-size: 11px; color: var(--faint); margin-right: auto; }
+.ln-aksi button { border: 0; background: transparent; color: var(--accent); font: inherit; font-size: 13px; cursor: pointer; padding: 4px 0; min-height: 32px; }
+.ln-kosong { color: var(--muted); font-size: 14px; padding: 24px 0; text-align: center; }

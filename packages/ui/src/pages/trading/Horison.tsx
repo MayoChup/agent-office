@@ -1,5 +1,6 @@
 import React from 'react';
 
+import { TanggalInput } from '../../components/Tanggal';
 import { Ikon } from '../../components/Ikon';
 /**
  * Horison posisi: sinyal dihitung khusus untuk berapa lama posisi mau dipegang.
@@ -72,10 +73,7 @@ export function HorisonBar({ h, setH, bobot, bukti }: { h: Horison; setH: (h: Ho
                 <span className="hz-l">Rencana pegang posisi</span>
                 <div className="sb-seg scroll">
                     {PRESET.map((p) => <button key={p.k} title={p.info} className={h.mode === p.k ? 'on' : ''} onClick={() => setH({ mode: p.k })}>{p.label} <small>{p.ket}</small></button>)}
-                    <label className={`hz-tgl ${h.mode === 'tanggal' ? 'on' : ''}`}>
-                        <Ikon e="📅" /> {h.mode === 'tanggal' && h.tanggal ? `s/d ${fmtTgl(h.tanggal)}` : 'Pilih tanggal'}
-                        <input type="date" min={min} max={max} value={h.tanggal || ''} onClick={(e) => { try { (e.currentTarget as any).showPicker?.(); } catch { /* */ } }} onChange={(e) => e.target.value && setH({ mode: 'tanggal', tanggal: e.target.value })} />
-                    </label>
+                    <TanggalInput className={`hz-tgl ${h.mode === 'tanggal' ? 'on' : ''}`} min={min} max={max} value={h.tanggal || ''} bisaKosong={false} ariaLabel="Tanggal akhir" onChange={(v) => v && setH({ mode: 'tanggal', tanggal: v })} tampil={<><Ikon e="📅" /> {h.mode === 'tanggal' && h.tanggal ? `s/d ${fmtTgl(h.tanggal)}` : 'Pilih tanggal'}</>} />
                 </div>
             </div>
             <p className="hz-ket">

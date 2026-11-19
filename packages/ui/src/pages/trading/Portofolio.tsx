@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { TanggalInput } from '../../components/Tanggal';
 import { createPortal } from 'react-dom';
 import { createChart, ColorType, CrosshairMode, LineStyle } from 'lightweight-charts';
 import { useApi } from '../../kantor/api';
@@ -231,7 +232,7 @@ function LembarJual({ p, onTutup, onSelesai }: { p: Pos; onTutup: () => void; on
             <div className="pp-grid">
                 <label>Harga jual (USD)<input inputMode="decimal" value={harga} onChange={(e) => setHarga(e.target.value)} /></label>
                 <label>Lembar dijual <small>dari {p.shares}</small><input inputMode="decimal" value={lembar} onChange={(e) => setLembar(e.target.value)} /></label>
-                <label>Tanggal jual<input type="date" value={tgl} max={hariIni()} onChange={(e) => setTgl(e.target.value)} /></label>
+                <label>Tanggal jual<TanggalInput bisaKosong={false} value={tgl} max={hariIni()} onChange={(v) => setTgl(v)} /></label>
                 <div className="pp-hasil"><small>Hasil</small><b className={`mono ${kls(pnl)}`}>{Number.isFinite(pnl) ? tanda(pnl) : '–'}</b><small className={kls(h - p.entry)}>{pc((h / p.entry - 1) * 100)}</small></div>
             </div>
             {err && <div className="error">{err}</div>}
@@ -251,7 +252,7 @@ function LembarUbah({ p, onTutup, onSelesai }: { p: Pos; onTutup: () => void; on
                 <label>Stop loss<input inputMode="decimal" value={f.stop} onChange={set('stop')} /></label>
                 <label>Harga beli<input inputMode="decimal" value={f.entry} onChange={set('entry')} /></label>
                 <label>Lembar<input inputMode="decimal" value={f.shares} onChange={set('shares')} /></label>
-                <label>Tanggal beli<input type="date" value={f.tgl} max={hariIni()} onChange={set('tgl')} /></label>
+                <label>Tanggal beli<TanggalInput bisaKosong={false} value={f.tgl} max={hariIni()} onChange={(v) => (set('tgl'))({ target: { value: v } } as any)} /></label>
                 <label>Catatan<input value={f.catatan} maxLength={300} onChange={set('catatan')} /></label>
             </div>
             {err && <div className="error">{err}</div>}
@@ -271,7 +272,7 @@ function LembarDana({ awal, onTutup, onSelesai }: { awal: Dana['jenis']; onTutup
             <p className="sb-note">{jenis === 'awal' ? 'Dana pertama yang Bapak siapkan untuk trading (mengganti modal awal sebelumnya).' : jenis === 'setor' ? 'Tambahan dana ke rekening broker — tidak dihitung sebagai untung.' : 'Dana yang Bapak tarik dari rekening broker — tidak dihitung sebagai rugi.'}</p>
             <div className="pp-grid">
                 <label>Jumlah (USD)<input inputMode="decimal" placeholder="mis. 500" value={jumlah} onChange={(e) => setJumlah(e.target.value)} /></label>
-                <label>Tanggal<input type="date" value={tgl} max={hariIni()} onChange={(e) => setTgl(e.target.value)} /></label>
+                <label>Tanggal<TanggalInput bisaKosong={false} value={tgl} max={hariIni()} onChange={(v) => setTgl(v)} /></label>
                 <label className="pp-full">Catatan (opsional)<input value={catatan} maxLength={120} onChange={(e) => setCatatan(e.target.value)} /></label>
             </div>
             {err && <div className="error">{err}</div>}

@@ -1,4 +1,5 @@
 import { useInterval } from '../../kantor/aktif';
+import { TanggalInput } from '../../components/Tanggal';
 import { useKembali } from '../../kantor/kembali';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSubNav } from '../../kantor/subnav';
@@ -395,7 +396,7 @@ function Tambah({ ang, onClose, onSaved, awal, id }: { ang: Anggaran | null; onC
                 <div className="k-tgl">
                     <button type="button" className={tgl === hariIni() ? 'on' : ''} onClick={() => setTgl(hariIni())}>Hari ini</button>
                     <button type="button" className={tgl === kemarin ? 'on' : ''} onClick={() => setTgl(kemarin)}>Kemarin</button>
-                    <label className={tgl !== hariIni() && tgl !== kemarin ? 'on' : ''}>{tgl !== hariIni() && tgl !== kemarin ? new Date(`${tgl}T00:00:00Z`).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', timeZone: 'UTC' }) : 'Tanggal lain'}<input type="date" value={tgl} max={hariIni()} onChange={(e) => e.target.value && setTgl(e.target.value)} /></label>
+                    <TanggalInput className={tgl !== hariIni() && tgl !== kemarin ? 'on' : ''} value={tgl} max={hariIni()} bisaKosong={false} ariaLabel="Tanggal transaksi" onChange={(v) => v && setTgl(v)} tampil={tgl !== hariIni() && tgl !== kemarin ? new Date(`${tgl}T00:00:00Z`).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', timeZone: 'UTC' }) : 'Tanggal lain'} />
                 </div>
                 <div className="k-akun">{Array.from(new Set([...(ang?.akun || ['Cash']), akun])).map((a) => <button key={a} className={akun === a ? 'on' : ''} onClick={() => setAkun(a)}>{a === 'Cash' ? <Ikon e="💵" /> : <Ikon e="🏦" />} {a}</button>)}</div>
                 {(jenis === 'Keluar' || id) && <div className="k-kat">{katCepat.map((k) => <button key={k} type="button" className={kat === k ? 'on' : ''} onClick={() => setKat(k)}>{ikon(k)} {k}</button>)}</div>}

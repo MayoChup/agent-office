@@ -8,6 +8,7 @@
 import fs from 'fs';
 import path from 'path';
 import webpush from 'web-push';
+import { catatNotif } from './riwayatNotif';
 
 export interface Langganan { endpoint: string; keys: { p256dh: string; auth: string }; ua?: string; at?: number }
 
@@ -37,6 +38,7 @@ export class Notifikasi {
     totalBelum() { return Object.values(this.belum).reduce((s, n) => s + n, 0); }
     async kirim(thread: string, judul: string, isi: string) {
         if (this.aktif.thread === thread && Date.now() - this.aktif.at < 25_000) return;
+        if (thread !== '__uji') catatNotif({ saluran: 'hp', judul, isi, url: `/?chat=${encodeURIComponent(thread)}` });
         this.belum[thread] = (this.belum[thread] || 0) + 1;
         const n = this.belum[thread];
         const payload = JSON.stringify({ title: judul, body: n > 1 ? `${n} pesan baru · ${isi}` : isi, tag: `chat-${thread}`, url: `/?chat=${encodeURIComponent(thread)}`, badge: this.totalBelum() });
