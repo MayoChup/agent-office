@@ -170,17 +170,23 @@ export async function fetchPrice(symbol: string): Promise<number> {
 }
 
 /** Hitungan trailing stop (lihat TradingDesk.trailing). null = stop belum perlu dinaikkan. */
-export function hitungTrailing(p: Pick<Position, 'entry' | 'stop' | 'openedAt' | 'ai'>, candles: Candle[], harga: number) {
+export function hitungTrailing(p: Pick<Position, 'entry' | 'stop' | 'openedAt' | 'ai'> & { target?: number }, candles: Candle[], harga: number) {
     const sejak = Date.parse(p.openedAt) / 1000 - 12 * 3600;
     const pasca = candles.filter((k) => k.t >= sejak);
     const a = atr(candles, 14);
     if (!pasca.length || !(a > 0)) return null;
     const H = p.ai?.H || 20, mult = H <= 5 ? 2 : H <= 20 ? 2.5 : 3;
     const puncak = Math.max(...pasca.map((k) => k.h));
-    if (puncak < p.entry + a) return null;
+    // Sudah 70% jalan ke target = sama kuatnya dengan naik 1,5 ATR: stop minimal di harga beli.
+    const jarakT = p.target && p.target > p.entry ? p.target - p.entry : Infinity;
+    if (puncak < p.entry + Math.min(a, 0.7 * jarakT)) return null;
     let calon = puncak - mult * a;
-    if (puncak >= p.entry + 1.5 * a) calon = Math.max(calon, p.entry);
-    calon = r2(Math.min(calon, harga - 0.5 * a));
+    const impas = puncak >= p.entry + Math.min(1.5 * a, 0.7 * jarakT);
+    if (impas) calon = Math.max(calon, p.entry);
+    calon = Math.min(calon, harga - 0.5 * a);
+    // Impas tetap dipasang selama harga masih di atas harga beli (walau jaraknya < 0,5 ATR).
+    if (impas && harga > p.entry) calon = Math.max(calon, p.entry);
+    calon = r2(calon);
     if (calon <= p.stop + Math.max(0.25 * a, p.entry * 0.005)) return null;
     return { calon, puncak, a, mult };
 }
@@ -230,6 +236,9 @@ export function buildPlan(symbol: string, candles: Candle[], price: number, st: 
 
 export class TradingDesk {
     private file: string;
+    /** Selain Telegram, kabar posisi juga masuk ke chat pribadi Dito di aplikasi (diisi index.ts). */
+    keChat?: (text: string) => void;
+    private async kabar(text: string) { try { this.keChat?.(text); } catch { /* */ } await this.notify(text); }
     constructor(dataDir: string, private notify: (text: string) => Promise<void>, private deskDir = '') {
         this.file = path.join(dataDir, 'trading.json');
     }
@@ -388,6 +397,7 @@ export class TradingDesk {
         if (!force && !marketOpen()) return 0;
         const st = this.load();
         let rang = 0;
+        const impas: Array<{ symbol: string; openedAt: string; lama: number }> = [];
         for (const p of st.positions) {
             let price: number;
             try { price = await fetchPrice(p.symbol); } catch { continue; }
@@ -396,16 +406,27 @@ export class TradingDesk {
             const plTxt = p.shares ? ` · ${pl >= 0 ? 'untung' : 'rugi'} ±$${Math.abs(r2(pl))}` : '';
             if (price >= p.target && !p.notified.target) {
                 p.notified.target = new Date().toISOString(); rang++;
-                await this.notify(`🟢 TARGET ${p.symbol} tercapai: $${r2(price)} (target $${p.target})${plTxt}\nKalau sudah jual, balas: "jual ${p.symbol} di ${r2(price)}"`);
+                await this.kabar(`🟢 TARGET ${p.symbol} tercapai: $${r2(price)} (target $${p.target})${plTxt}\nKalau sudah jual, balas: "jual ${p.symbol} di ${r2(price)}"`);
             } else if (price <= p.stop && !p.notified.stop) {
                 p.notified.stop = new Date().toISOString(); rang++;
-                if (p.stop >= p.entry) await this.notify(`🟡 TRAILING STOP ${p.symbol} kena: $${r2(price)} (stop $${p.stop}, di atas harga beli $${p.entry})${plTxt}. Untung yang sudah dikunci terpakai.\nKalau sudah jual, balas: "jual ${p.symbol} di ${r2(price)}"`);
-                else await this.notify(`🔴 STOP LOSS ${p.symbol} kena: $${r2(price)} (stop $${p.stop})${plTxt}\nKalau sudah jual, balas: "jual ${p.symbol} di ${r2(price)}"`);
+                if (p.stop >= p.entry) await this.kabar(`🟡 TRAILING STOP ${p.symbol} kena: $${r2(price)} (stop $${p.stop}, di atas harga beli $${p.entry})${plTxt}. Untung yang sudah dikunci terpakai.\nKalau sudah jual, balas: "jual ${p.symbol} di ${r2(price)}"`);
+                else await this.kabar(`🔴 STOP LOSS ${p.symbol} kena: $${r2(price)} (stop $${p.stop})${plTxt}\nKalau sudah jual, balas: "jual ${p.symbol} di ${r2(price)}"`);
+            }
+            // Sudah 70% jalan ke target → stop langsung dinaikkan ke harga beli (tidak menunggu pagi), supaya tidak balik jadi rugi.
+            const jarakT = p.target - p.entry;
+            if (!p.notified.target && !p.notified.stop && p.stop < p.entry && jarakT > 0 && price >= p.entry + 0.7 * jarakT) {
+                impas.push({ symbol: p.symbol, openedAt: p.openedAt, lama: p.stop });
+                p.stopAwal ??= p.stop; p.stop = p.entry; rang++;
+                await this.kabar([
+                    `🟡 ${p.symbol} sudah 70% jalan ke target: $${r2(price)} (beli $${p.entry}, target $${p.target}).`,
+                    `Stop dinaikkan dari $${impas[impas.length - 1].lama} ke harga beli $${p.entry}: kalau harga balik turun, posisi ini paling buruk impas, tidak rugi.`,
+                    'Ubah juga order stop di broker Bapak. Bukan saran keuangan.'
+                ].join('\n'));
             }
             const mp = masaPegang(p);
             if (mp?.status === 'lewat' && !p.notified.durasi && !p.notified.target && !p.notified.stop) {
                 p.notified.durasi = new Date().toISOString(); rang++;
-                await this.notify(`🟠 ${p.symbol} LEWAT DURASI: sudah ${mp.hari} hari bursa (rencana ${mp.H} hari) tanpa kena target/stop. Harga $${r2(price)}${plTxt}.\nSesuai rencana: tutup posisi, atau cek sinyal terbaru — kalau masih Beli boleh dianggap strategi baru; stop awal tetap dipakai. Bukan saran keuangan.`);
+                await this.kabar(`🟠 ${p.symbol} LEWAT DURASI: sudah ${mp.hari} hari bursa (rencana ${mp.H} hari) tanpa kena target/stop. Harga $${r2(price)}${plTxt}.\nSesuai rencana: tutup posisi, atau cek sinyal terbaru — kalau masih Beli boleh dianggap strategi baru; stop awal tetap dipakai. Bukan saran keuangan.`);
             }
             await new Promise((r) => setTimeout(r, 500));
         }
@@ -415,6 +436,8 @@ export class TradingDesk {
             for (const p of fresh.positions) {
                 const mine = st.positions.find((x) => x.symbol === p.symbol && x.openedAt === p.openedAt);
                 if (mine) p.notified = mine.notified;
+                const im = impas.find((x) => x.symbol === p.symbol && x.openedAt === p.openedAt);
+                if (im && mine && p.stop === im.lama) { p.stopAwal ??= im.lama; p.stop = mine.stop; }
             }
             this.save(fresh);
         }
@@ -441,7 +464,7 @@ export class TradingDesk {
             const { calon, puncak, a, mult } = t, harga = d.price;
             ubah.push({ symbol: p.symbol, openedAt: p.openedAt, lama: p.stop, baru: calon, stopAwal: p.stopAwal ?? p.stop, trail: { at: new Date().toISOString(), n: (p.trail?.n || 0) + 1, puncak: r2(puncak), atr: r2(a), mult } });
             const kunci = p.shares ? (calon - p.entry) * p.shares : 0;
-            await this.notify([
+            await this.kabar([
                 `📈 Naikkan stop ${p.symbol}: $${p.stop} → $${calon}`,
                 `Harga $${r2(harga)}, tertinggi sejak beli $${r2(puncak)}. Stop baru = tertinggi − ${mult}×ATR ($${r2(a)}).`,
                 calon >= p.entry ? `Posisi ini sekarang tidak bisa rugi lagi${kunci > 0 ? `: minimal untung ±$${r2(kunci)}` : ' (stop di harga beli)'}.` : `Risiko kalau kena stop turun dari ±$${r2((p.entry - p.stop) * (p.shares || 0))} jadi ±$${r2((p.entry - calon) * (p.shares || 0))}.`,
