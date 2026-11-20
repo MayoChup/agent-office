@@ -45,7 +45,7 @@ export const GOTONG: Array<{ fitur: string; ikon: string; ai: string; tugas: str
     { fitur: 'Keuangan', ikon: '💰', ai: 'keuangan', tugas: 'Merapikan kategori transaksi "Lainnya" dari nama tenant (QRIS)', jadwal: 'Tiap 3 jam + tiap transaksi baru', kunci: 'Merapikan kategori transaksi' },
     { fitur: 'Keuangan', ikon: '💰', ai: 'keuangan', tugas: 'Membaca struk belanja jadi draf transaksi', jadwal: 'Saat Bapak memotret struk', kunci: 'Membaca struk belanja' },
     { fitur: 'Chat', ikon: '💬', ai: 'default', tugas: 'Melihat gambar yang Bapak kirim (dikerjakan AI yang diajak bicara)', jadwal: 'Saat Bapak mengirim gambar', kunci: 'Melihat' },
-    { fitur: 'Beranda', ikon: '🏠', ai: 'default', tugas: 'Ringkasan pagi dari berita hari ini (Telegram)', jadwal: 'Tiap hari 07.15', kunci: 'Ringkasan pagi' },
+    { fitur: 'Beranda', ikon: '🏠', ai: 'default', tugas: 'Ringkasan pagi dari berita hari ini (chat aplikasi)', jadwal: 'Tiap hari 07.15', kunci: 'Ringkasan pagi' },
     { fitur: 'Kantor', ikon: '🏢', ai: 'default', tugas: 'Usulan tugas untuk anggota yang menganggur', jadwal: 'Senin', kunci: 'usulan tugas' },
     { fitur: 'Kantor', ikon: '🏢', ai: 'hr', tugas: 'Review kinerja tim', jadwal: 'Tiap 2 minggu', kunci: 'Review kinerja' },
     { fitur: 'Kantor', ikon: '🏢', ai: 'hr', tugas: 'Menata model AI (hemat token)', jadwal: 'Senin 10.00', kunci: 'Menata model' },

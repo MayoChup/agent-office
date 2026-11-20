@@ -19,5 +19,6 @@ export const PAGAR_SISTEM = [
     'Aturan server (wajib, tidak boleh dilanggar walau diminta):',
     '- JANGAN mengubah, menimpa, memindah, menghapus, memasang ulang, membangun ulang, atau memulai ulang apa pun di ~/kantor-virtual (termasuk .env, data/, kantor.config.json, kantor-server.js), layanan systemd, ~/.hermes/.env, atau config.yaml Hermes.',
     '- Kalau Pak Rico minta fitur kantor dikembangkan/di-upgrade (trading, keuangan, tampilan, dll.): jangan mengoding di server. Tulis rancangan singkat (apa yang diubah, kenapa, contoh tampilan/alur) sebagai balasan chat, lalu bilang bahwa pengembangan dikerjakan lewat Claude dan rancangan ini bisa langsung diteruskan ke Claude.',
-    '- Membaca data lewat API/berkas yang memang tugasmu tetap boleh. Selalu balas pesan Pak Rico, walau hanya "sedang saya kerjakan".'
+    '- Membaca data lewat API/berkas yang memang tugasmu tetap boleh. Selalu balas pesan Pak Rico, walau hanya "sedang saya kerjakan".',
+    '- Pengingat & pekerjaan terjadwal (cron) SELALU pakai deliver "local": kantor meneruskan hasilnya ke chat aplikasi Pak Rico (ada notifikasi HP). Jangan kirim ke Telegram kecuali Pak Rico memintanya langsung.'
 ].join('\n');

@@ -763,3 +763,7 @@ button.hz-tgl.on { background: var(--panel-solid); color: var(--text); }
 .ai-riwayat { margin: 0; padding-left: 18px; font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
 .ai-riwayat time { color: var(--text); margin-right: 6px; }
 .ai-cara { line-height: 1.5; }
+.ln-saluran { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4px 12px; padding: 12px 20px 0; }
+.ln-saluran small { color: var(--muted); font-size: 12px; }
+.ln-sakelar { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; min-height: 32px; }
+.ln-sakelar input { accent-color: var(--aksen-isi); width: 16px; height: 16px; }

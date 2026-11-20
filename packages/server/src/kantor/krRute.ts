@@ -3,7 +3,7 @@
  *   05:00 WIB  edisi pagi: semua kategori (berita, saham, fun fact, buku, tips, brain games) → Putri menata desain → Eca memeriksa.
  *   12:00/18:00 tambahan berita (lokal, dunia, bisnis) supaya feed selalu segar.
  *   Senin      Maya menyusun rencana topik mingguan; Laras menyumbang tips keuangan; Sari menyumbang edukasi smart money.
- *   07:15      Joni membuat ringkasan pagi dari berita hari ini (dikirim ke Telegram Pak Rico).
+ *   07:15      Joni membuat ringkasan pagi dari berita hari ini (dikirim ke chat Joni di aplikasi).
  * Komentar seperti kolom komentar Instagram → juga ditulis ke Catatan (folder "Knowledge Reels/").
  * Tag @nama anggota redaksi (mis. @nina) → AI itu membalas di bawah komentar, boleh mencari info terbaru di web lewat Hermes.
  */

@@ -18,6 +18,7 @@ BLOK = """<!-- pagar-kantor:mulai -->
 - JANGAN mengubah, menimpa, memindah, menghapus, memasang ulang, membangun ulang, atau memulai ulang apa pun di ~/kantor-virtual (termasuk .env, data/, kantor.config.json, kantor-server.js), layanan systemd, ~/.hermes/.env, atau config.yaml Hermes.
 - Permintaan mengembangkan/meng-upgrade fitur kantor (trading, keuangan, tampilan, dll.): JANGAN mengoding di server. Tulis rancangan singkat lalu sampaikan bahwa pengembangan dikerjakan lewat Claude.
 - Selalu balas pesan Pak Rico, walau hanya "sedang saya kerjakan".
+- Pengingat & pekerjaan terjadwal (cron): SELALU deliver "local". Kantor meneruskan hasilnya ke chat aplikasi Pak Rico (dengan notifikasi HP). Jangan kirim ke Telegram kecuali Pak Rico memintanya langsung.
 <!-- pagar-kantor:selesai -->"""
 POLA = ['.env', '.env-cadangan', 'kantor.config.json', 'kantor-server.js', '*.service', 'kantor-password.txt', 'kantor-secret.key']
 homes = [home] + sorted(p for p in glob.glob(os.path.join(home, 'profiles', '*')) if os.path.isdir(p))

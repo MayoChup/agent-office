@@ -48,7 +48,8 @@ function Lembar({ item, dibacaAt, memuat, tutup }: { item: Notif[]; dibacaAt: nu
     return (
         <div className="kp-latar" onClick={tutup}>
             <aside className="kp-lembar" role="dialog" aria-label="Riwayat notifikasi" onClick={(e) => e.stopPropagation()}>
-                <header className="kp-h"><div><h2>Notifikasi</h2><small>Kabar dari tim yang dikirim ke Telegram & HP</small></div><button className="icon-btn" aria-label="Tutup" onClick={tutup}>✕</button></header>
+                <header className="kp-h"><div><h2>Notifikasi</h2><small>Semua kabar dari tim, dari chat aplikasi & HP</small></div><button className="icon-btn" aria-label="Tutup" onClick={tutup}>✕</button></header>
+                <SalinTelegram />
                 <div className="ln-filter" role="tablist">{JENIS.map(([k, l]) => <button key={k} role="tab" aria-selected={jenis === k} className={jenis === k ? 'on' : ''} onClick={() => setJenis(k)}>{l}</button>)}</div>
                 <div className="kp-isi">
                     {memuat && <div className="pg-skel" style={{ height: 120 }} />}
@@ -73,6 +74,20 @@ function Lembar({ item, dibacaAt, memuat, tutup }: { item: Notif[]; dibacaAt: nu
                     })}
                 </div>
             </aside>
+        </div>
+    );
+}
+
+/** Semua kabar masuk chat aplikasi. Telegram hanya salinan kalau Bapak menyalakannya. */
+function SalinTelegram() {
+    const r = useApi<{ telegram: boolean }>('/api/kantor/saluran-kabar', 0);
+    const [sibuk, setSibuk] = useState(false);
+    const nyala = !!r.data?.telegram;
+    const ubah = async () => { setSibuk(true); try { await apiPost('/api/kantor/saluran-kabar', { telegram: !nyala }); r.reload(); } finally { setSibuk(false); } };
+    return (
+        <div className="ln-saluran">
+            <small>Kabar & pengingat masuk ke chat tiap AI di aplikasi.</small>
+            <label className="ln-sakelar"><input type="checkbox" role="switch" checked={nyala} disabled={sibuk || !r.data} onChange={ubah} /> Salin juga ke Telegram</label>
         </div>
     );
 }

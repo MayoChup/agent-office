@@ -1,4 +1,6 @@
 import crypto from 'crypto';
+import { bacaSaluran, simpanSaluran, kabarAntre, ambilAntre, pengamatCron } from './kantor/pusatKabar';
+import ATUR_CRON_LOKAL from './kantor/skrip/atur-cron-lokal.sh';
 import { teksAturan } from './kantor/presetAi';
 import zlib from 'zlib';
 import { MemoriTim } from './kantor/memoriTim';
@@ -93,7 +95,7 @@ if (process.argv.includes('--cek-fundamental')) {
     cekHargaCli((process.argv[i + 1] || 'AAPL').toUpperCase()).then(() => process.exit(0));
 } else if (tradingArg >= 0) {
     // Dipanggil oleh Hermes (AI) atau pemilik: node kantor-server.js --trading <perintah> ...
-    const desk = new TradingDesk(config.dataDir, telegramNotifier(config.hermesHome), tradingDeskDir);
+    const desk = new TradingDesk(config.dataDir, kabarAntre(config.dataDir, 'trading'), tradingDeskDir);
     tradingCli(desk, process.argv.slice(tradingArg + 1))
         .then((out) => { console.log(out); process.exit(0); })
         .catch((e) => { console.error('GAGAL:', e?.message || e); process.exit(1); });
@@ -151,8 +153,8 @@ if (process.argv.includes('--cek-fundamental')) {
         .then((out) => { console.log(out); process.exit(0); })
         .catch((e) => { console.error('GAGAL:', e?.message || e); process.exit(1); });
 } else if (process.argv.includes('--wa-reader')) {
-    // Proses terpisah untuk WhatsApp: kalau modul WhatsApp crash, kantor tetap jalan.
-    const notify = telegramNotifier(config.hermesHome);
+    // Proses terpisah untuk WhatsApp: kalau modul WhatsApp crash, kantor tetap jalan. Kabarnya lewat antrean → chat aplikasi.
+    const notify = kabarAntre(config.dataDir);
     const llm = new FreeLlm({
         apiKey: config.openRouterApiKey, baseUrl: config.openRouterBaseUrl, model: config.model,
         dailyLimit: 60, perMinuteLimit: 4, dataDir: path.join(config.dataDir, 'wa'), backups: config.llmBackups
@@ -293,9 +295,23 @@ app.get('/api/kantor/status', requireToken, (_req, res) => {
     res.json({ ok: true, ...room.statusPayload() });
 });
 
+// ── Pusat kabar: pemberitahuan masuk ke chat AI yang bersangkutan di aplikasi (notifikasi HP), Telegram hanya salinan opsional ──
+const teleAsli = telegramNotifier(config.hermesHome);
+/** AI pengirim ditebak dari nama di awal pesan ("💰 Uang: …"); kalau tidak ada nama, Joni. */
+function tebakAi(teks: string) { const awal = teks.slice(0, 60).toLowerCase(); return roster().find((a) => a.id !== 'default' && awal.includes(a.nama.toLowerCase()))?.id || 'default'; }
+function kabarDari(aiTetap?: string | (() => string)) {
+    return async (teks: string) => {
+        const id = typeof aiTetap === 'function' ? aiTetap() : aiTetap || tebakAi(teks);
+        const r = roster(); const ai = r.find((a) => a.id === id) || r.find((a) => a.id === 'default') || r[0];
+        let masuk = false;
+        try { if (ai) { percakapan.pesan(ai.id, ai.id, ai.nama, teks); masuk = true; } } catch (e: any) { console.warn('[Pusat kabar]', e?.message || e); }
+        if (!masuk || bacaSaluran(config.dataDir).telegram) await teleAsli(teks);
+    };
+}
+
 // Laporan keuangan & trading untuk tampilan kantor (wajib login).
-const pencatat = new Pencatat(config.pencatat, config.hermesHome, config.dataDir, telegramNotifier(config.hermesHome));
-const tradingDesk = new TradingDesk(config.dataDir, telegramNotifier(config.hermesHome), tradingDeskDir);
+const pencatat = new Pencatat(config.pencatat, config.hermesHome, config.dataDir, kabarDari(() => AI_KEU()));
+const tradingDesk = new TradingDesk(config.dataDir, kabarDari('trading'), tradingDeskDir);
 app.get('/api/kantor/keuangan', requireToken, async (req, res) => {
     try {
         if (req.query.sync === '1') await pencatat.runOnce();
@@ -410,7 +426,7 @@ app.post('/api/kantor/keuangan/baca', requireToken, async (req, res) => {
         res.json({ ok: true, draf: r });
     } catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
 });
-const kalender = new Kalender(config.hermesHome, config.dataDir, telegramNotifier(config.hermesHome));
+const kalender = new Kalender(config.hermesHome, config.dataDir, kabarDari(() => (roster().some((a) => a.id === 'sekretaris') ? 'sekretaris' : 'default')));
 const priceCache = new Map<string, { at: number; p: number }>();
 app.get('/api/kantor/trading', requireToken, async (_req, res) => {
     const st = tradingDesk.load();
@@ -882,7 +898,22 @@ app.get('/api/kantor/papan', requireToken, async (req, res) => {
 // ── HR: review kinerja berkala, tidak boleh ada AI menganggur, delegasi lewat persetujuan Pak Rico ──
 const hr = new Hr(config.dataDir);
 if (!hr.st.reviewAt) { hr.st.reviewAt = Date.now() - (hr.hariReview - 7) * 86400_000; hr.simpan(); } // review pertama ±seminggu setelah dipasang (butuh data dulu)
-const kabariTelegram = telegramNotifier(config.hermesHome);
+const kabariTelegram = kabarDari(); // nama lama dipertahankan: sekarang masuk chat aplikasi (lihat Pusat kabar)
+// Pesan dari proses lain (pembaca WhatsApp, perintah CLI) & hasil pekerjaan terjadwal Hermes → chat aplikasi.
+setInterval(() => { for (const x of ambilAntre(config.dataDir)) void kabarDari(x.ai || undefined)(x.teks).catch(() => undefined); }, 5_000).unref();
+pengamatCron({ hermesHome: config.hermesHome, dataDir: config.dataDir, kirim: (aiId, judul, isi) => { void kabarDari(roster().some((a) => a.id === aiId) ? aiId : 'default')(`⏰ ${judul}\n\n${isi}`); } });
+const aturCronLokal = () => {
+    const f = path.join(config.dataDir, 'atur-cron-lokal.sh');
+    try { fs.writeFileSync(f, ATUR_CRON_LOKAL); } catch { return; }
+    jalankanBerkas('bash', [f], { timeout: 60_000, env: { ...process.env, HERMES_HOME: config.hermesHome } }, (err, stdout) => {
+        const n = /JUMLAH (\d+)/.exec(String(stdout || ''))?.[1];
+        if (err) console.warn('[Pusat kabar] cron lokal:', String(stdout || err.message).slice(-200));
+        else if (n && n !== '0') papan.catat({ ai: ID_JONI, nama: '', judul: `Memindahkan ${n} pengingat/jadwal AI dari Telegram ke chat aplikasi`, sumber: 'sistem', status: 'selesai' });
+    });
+};
+setTimeout(aturCronLokal, 20_000); setInterval(aturCronLokal, 30 * 60_000).unref();
+app.get('/api/kantor/saluran-kabar', requireToken, (_req, res) => { res.json({ ok: true, ...bacaSaluran(config.dataDir) }); });
+app.post('/api/kantor/saluran-kabar', requireToken, (req, res) => { res.json({ ok: true, ...simpanSaluran(config.dataDir, { telegram: !!req.body?.telegram }) }); });
 // Pemulihan tanpa membuka VPS: kalau .env sempat tertimpa, kabari Pak Rico (nama kunci saja), dan kirim kata sandi sementara SEKALI ke Telegram.
 setTimeout(() => {
     if (envDipulihkan.length) void kabariTelegram(`🛡️ Kantor: file .env sempat kehilangan ${envDipulihkan.length} pengaturan (${envDipulihkan.join(', ')}). Sudah dipulihkan otomatis dari cadangan.`).catch(() => undefined);
@@ -1226,7 +1257,7 @@ app.post('/api/kantor/trading/watchlist', requireToken, (req, res) => {
 });
 
 // ── Investigasi pergerakan saham ─────────────────────────────────────
-const investigasi = new Investigasi(config.dataDir, () => OfficeRoom.sharedLlm(), telegramNotifier(config.hermesHome), () => {
+const investigasi = new Investigasi(config.dataDir, () => OfficeRoom.sharedLlm(), kabarDari(), () => {
     const st = tradingDesk.load();
     return Array.from(new Set([...st.positions.map((p) => p.symbol), ...st.watchlist]));
 });
@@ -1275,8 +1306,7 @@ gameServer.listen(config.port, config.host).then(async () => {
     // Kantor langsung dibuka, walau belum ada yang menonton, supaya agen tetap "hidup".
     await matchMaker.createRoom('office', {});
     pencatat.start();
-    // Kabar posisi (target, stop, trailing, impas, lewat durasi) juga masuk ke chat pribadi Dito di aplikasi → notifikasi HP.
-    tradingDesk.keChat = (teks) => { const dito = roster().find((a) => a.id === 'trading'); if (dito) percakapan.pesan(dito.id, dito.id, dito.nama, teks); };
+    // Kabar posisi (target, stop, trailing, impas, lewat durasi) masuk ke chat pribadi Dito lewat Pusat kabar (kabarDari('trading')).
     tradingDesk.bungkus = (judul, kerja) => papan.jalankan({ ai: 'trading', judul, detail: 'Stop dinaikkan mengikuti harga tertinggi sejak beli dikurangi kelipatan ATR; tidak pernah diturunkan.', sumber: 'trading' }, kerja);
     tradingDesk.start();
     kalender.start();

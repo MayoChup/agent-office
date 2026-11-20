@@ -27,7 +27,11 @@ HERMES_ENV="${HERMES_HOME:-$HOME/.hermes}/.env"
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
 notify() {
-  # Kabar singkat ke Telegram pemilik, memakai bot Hermes. Token tidak pernah dicetak.
+  # Kabar masuk ke chat Joni di aplikasi (lewat antrean Pusat kabar). Telegram hanya kalau kantor sedang tidak berjalan
+  # (misalnya pembaruan gagal), supaya kabar tetap sampai. Token tidak pernah dicetak.
+  if [ -d "$DIR/data" ] && systemctl --user is-active --quiet kantor-virtual 2>/dev/null; then
+    python3 -c 'import json,sys,time; open(sys.argv[1],"a").write(json.dumps({"at":int(time.time()*1000),"ai":None,"teks":sys.argv[2]})+"\n")' "$DIR/data/kabar-antre.jsonl" "$1" && return 0
+  fi
   [ -f "$HERMES_ENV" ] || return 0
   local token chat
   token="$(grep -E '^TELEGRAM_BOT_TOKEN=' "$HERMES_ENV" | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'")" || true

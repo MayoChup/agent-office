@@ -2,7 +2,7 @@
  * Jadwal (Google Calendar) — tanpa AI.
  * - Membaca agenda untuk halaman Jadwal di kantor.
  * - Menambah acara (dipakai pencatat janji dari WhatsApp).
- * - Ringkasan agenda tiap pagi ke Telegram.
+ * - Ringkasan agenda tiap pagi ke chat aplikasi (Pusat kabar).
  * Memakai izin Google milik Hermes (~/.hermes/google_token.json).
  */
 import fs from 'fs';
