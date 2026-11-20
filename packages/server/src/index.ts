@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { ClaudeLangganan } from './kantor/claudeLangganan';
 import { bacaSaluran, simpanSaluran, kabarAntre, ambilAntre, pengamatCron } from './kantor/pusatKabar';
 import ATUR_CRON_LOKAL from './kantor/skrip/atur-cron-lokal.sh';
 import { teksAturan } from './kantor/presetAi';
@@ -454,6 +455,10 @@ app.get('/api/kantor/trading', requireToken, async (_req, res) => {
 const papan = new Papan(config.dataDir);
 papan.namaAi = (id) => roster().find((a) => a.id === id)?.nama;
 const percakapan = new Percakapan(config.dataDir, config.hermesBin, config.ownerName, roster, () => OfficeRoom.sharedLlm(), kuotaBerat);
+// Otak berat dari langganan Claude Pak Rico (claude -p resmi, Pak Rico login sendiri di VPS). Hanya untuk tugas berat.
+const claudeLangganan = new ClaudeLangganan(config.dataDir, config.hermesHome);
+percakapan.claude = claudeLangganan;
+app.get('/api/kantor/claude-langganan', requireToken, (_req, res) => { res.json({ ok: true, ...claudeLangganan.status() }); });
 const memoriTim = new MemoriTim(config.hermesHome, () => roster().map((a) => ({ id: a.id, nama: a.nama })), () => percakapan.router?.lindungi() ?? false);
 percakapan.ingatanRekan = (ai, teks) => memoriTim.rekan(ai, teks);
 percakapan.papan = papan;

@@ -82,6 +82,8 @@ export class Percakapan {
         this.serah.push({ id: ++this.serahSeq, dari, ke, judul: judul.replace(/\s+/g, ' ').slice(0, 100), jenis, at: Date.now() });
         this.serah = this.serah.slice(-100);
     }
+    /** Otak berat dari langganan Claude Pak Rico (diisi index.ts). */
+    claude?: { boleh(): boolean; jalankan(aiId: string, prompt: string): Promise<{ teks: string; usd: number }> };
     /** R5 · potongan ingatan rekan setim yang relevan dengan pesan terakhir (diisi index.ts). */
     ingatanRekan?: (aiId: string, teks: string) => string;
     constructor(
@@ -402,8 +404,19 @@ export class Percakapan {
         set.add(aiId); this.menulis.set(thread, set);
         this.papan?.ubah(idK, 'proses');
         try {
-            const out = await hermesSekali(this.run, this.hermesBin, aiId, prompt, berat ? this.kuota?.model : undefined);
-            this.router?.catat(aiId, berat ? 'berat' : 'hermes', prompt.length, out.length, true);
+            // Tugas berat: 1) Claude dari langganan Pak Rico (kredit bulanan, hangus tiap bulan) → 2) model berbayar OpenRouter (kuota harian) → 3) gratis.
+            if (berat && this.claude?.boleh()) {
+                try {
+                    const r = await this.claude.jalankan(aiId, prompt);
+                    this.router?.catat(aiId, 'claude-langganan', prompt.length, r.teks.length, true);
+                    this.rem?.catat(aiId, prompt.length, r.teks.length, true, sig);
+                    this.papan?.ubah(idK, 'selesai', r.teks);
+                    return r.teks;
+                } catch (e: any) { console.warn('[Chat] Claude langganan gagal, pindah ke OpenRouter:', String(e?.message || e).slice(0, 160)); }
+            }
+            const bayar = berat && !!this.kuota?.ambil();
+            const out = await hermesSekali(this.run, this.hermesBin, aiId, prompt, bayar ? this.kuota?.model : undefined);
+            this.router?.catat(aiId, bayar ? 'berat' : 'hermes', prompt.length, out.length, true);
             this.rem?.catat(aiId, prompt.length, out.length, true, sig);
             this.papan?.ubah(idK, 'selesai', out);
             return out;
@@ -425,7 +438,7 @@ export class Percakapan {
         const info = this.infoThread(thread);
         const lampOwner = [...this.baca(thread)].reverse().find((m) => m.dari === 'owner')?.lampiran;
         const isiGambar = await this.bacaGambar(aiId, ai.nama, lampOwner);
-        const berat = Boolean(opts.berat && this.kuota?.ambil());
+        const berat = Boolean(opts.berat); // jalur berat dipilih di jalankanAi (langganan Claude → OpenRouter → gratis)
         const prompt = opts.data ? [
             opts.aturan || '',
             '', '=== DATA (satu-satunya sumber yang boleh dipakai) ===', opts.data, '=== AKHIR DATA ===', '',

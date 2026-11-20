@@ -218,6 +218,7 @@ function ModelAi() {
         <div className="md-wrap">
             {pesan && <div className="fin-alert">{pesan}</div>}
             <OtakFreellm />
+            <OtakClaude />
             <KunciGratis />
             <section className="pk-kotak">
                 <div className="pk-kh2"><b>Kuota model hari ini</b><small>Tugas teks (ringkasan, JSON, Reels) didahulukan ke FreeLLM supaya bebannya tersebar ke banyak penyedia gratis. Penuh → otomatis pindah ke opsi gratis lain.</small></div>
@@ -379,6 +380,35 @@ function KunciGratis() {
                 ))}
             </div>
             {pesan && <small className={pesan.ok ? 'of-pesan' : 'pesan-salah'} role={pesan.ok ? 'status' : 'alert'}>{pesan.t}</small>}
+        </section>
+    );
+}
+
+/** Otak berat dari langganan Claude Pro: status, pemakaian kredit otomatis bulan ini, dan cara login kalau belum. */
+function OtakClaude() {
+    const r = useApi<{ terpasang: boolean; perluLogin: boolean; aktif: boolean; terpakaiBulan: number; kreditBulan: number; terpakaiHari: number; jatahHari: number; tugasBulan: number; gagalBulan: number; galat: string; galatAt: number }>('/api/kantor/claude-langganan', 60_000);
+    const d = r.data; if (!d) return null;
+    const usd = (x: number) => `$${x.toFixed(2)}`;
+    const siap = d.terpasang && !d.perluLogin;
+    return (
+        <section className="pk-kotak of">
+            <div className="pk-kh2"><b>Otak berat: Claude dari langganan Pro</b><small>Hanya untuk tugas berat. Memakai kredit otomatis bulanan langganan Bapak dulu (hangus tiap bulan), lalu saldo OpenRouter, lalu model gratis.</small></div>
+            {siap ? (
+                <>
+                    <div className="oc-meter" role="img" aria-label={`Terpakai ${usd(d.terpakaiBulan)} dari ${usd(d.kreditBulan)}`}><span style={{ width: `${Math.min(100, (d.terpakaiBulan / d.kreditBulan) * 100)}%` }} /></div>
+                    <div className="of-status"><span className={`of-titik ${d.aktif ? 'ok' : ''}`} aria-hidden /><small>
+                        Bulan ini {usd(d.terpakaiBulan)} dari {usd(d.kreditBulan)} · {d.tugasBulan} tugas berat · hari ini {usd(d.terpakaiHari)} dari jatah {usd(d.jatahHari)}
+                        {!d.aktif && ' · jatah hari ini habis, tugas berat sementara lewat OpenRouter'}
+                    </small></div>
+                    {d.galat && d.galatAt > Date.now() - 86400_000 && <small className="pesan-salah">Gagal terakhir: {d.galat}</small>}
+                </>
+            ) : (
+                <div className="oc-langkah">
+                    <small>{d.terpasang ? 'Claude Code sudah terpasang tapi belum login (atau login kedaluwarsa).' : 'Claude Code belum terpasang di VPS.'} Jalankan sekali di terminal VPS (akun ubuntu):</small>
+                    <pre>{d.terpasang ? 'sudo -iu kantor\nclaude\n/login' : 'sudo -iu kantor\ncurl -fsSL https://claude.ai/install.sh | bash\nclaude\n/login'}</pre>
+                    <small>Buka tautan yang muncul di HP, setujui dengan akun Claude Pro Bapak, lalu ketik /exit. Sampai saat itu tugas berat tetap lewat OpenRouter.</small>
+                </div>
+            )}
         </section>
     );
 }
