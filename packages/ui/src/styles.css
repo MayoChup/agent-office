@@ -3269,7 +3269,7 @@ body.no-office #phaser-container { visibility: hidden; }
 .kr-ulang { align-self: flex-start; }
 .kr-waktu { color: var(--muted); font-size: 11.5px; white-space: nowrap; }
 .kr-tabel { display: flex; flex-direction: column; gap: 2px; font-size: 12.5px; }
-.kr-bar-h, .kr-baris { display: grid; grid-template-columns: minmax(78px, 1.25fr) 1fr 1fr minmax(46px, .8fr) .9fr; gap: 6px; align-items: center; }
+.kr-bar-h, .kr-baris { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) minmax(0, 1fr) 54px minmax(0, .95fr); gap: 6px; align-items: center; }
 .kr-bar-h { color: var(--muted); font-size: 11px; padding: 0 6px 2px; }
 .kr-bar-h span:not(:first-child), .kr-baris > span:not(:first-child) { text-align: right; justify-self: end; }
 .kr-baris { padding: 6px; border-radius: 10px; }
@@ -3278,11 +3278,11 @@ body.no-office #phaser-container { visibility: hidden; }
 .kr-baris > span { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .kr-baris b { font-size: 13px; font-weight: 700; }
 .kr-baris em { font-style: normal; font-size: 11px; color: var(--muted); font-family: ui-monospace, Menlo, monospace; }
-.kr-nama b { font-size: 12.5px; } .kr-nama i { font-style: normal; color: var(--kr); }
-.kr-nama small { font-size: 10.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kr-nama b { font-size: 12.5px; white-space: nowrap; } .kr-nama i { font-style: normal; color: var(--kr); }
+.kr-baris > .kr-masuk { grid-column: 1 / -1; font-size: 11px; color: var(--muted); line-height: 1.35; margin-top: -2px; }
 .kr-baris .kr-rr { font-size: 11.5px; padding: 2px 7px; }
 .kr-kaki { color: var(--muted); font-size: 11.5px; line-height: 1.45; } .kr-kaki b { color: var(--text); }
-@media (max-width: 420px) { .kr-bar-h, .kr-baris { grid-template-columns: minmax(70px, 1.2fr) 1fr 1fr auto .9fr; gap: 4px; } .kr-baris { padding: 5px 4px; } .kr-baris b { font-size: 12px; } .kr-nama b { font-size: 11.5px; } .kr-baris .kr-rr { font-size: 10.5px; padding: 2px 5px; } }
+@media (max-width: 420px) { .kr-bar-h, .kr-baris { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr) 48px minmax(0, .95fr); gap: 4px; } .kr-baris { padding: 5px 4px; } .kr-baris b { font-size: 12px; } .kr-nama b { font-size: 11.5px; } .kr-baris .kr-rr { font-size: 10.5px; padding: 2px 5px; } }
 .kr-denyut { width: 10px; height: 10px; border-radius: 50%; background: var(--kr); animation: kr-denyut 1.2s ease-in-out infinite; }
 @keyframes kr-denyut { 0%, 100% { opacity: .3; transform: scale(.8); } 50% { opacity: 1; transform: scale(1.1); } }
 .kr-len { display: inline-flex; align-items: center; gap: 4px; font: 700 11.5px ui-monospace, Menlo, monospace; padding: 2px 8px; border-radius: 999px; white-space: nowrap; vertical-align: middle; }

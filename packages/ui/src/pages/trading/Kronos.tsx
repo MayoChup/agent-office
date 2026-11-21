@@ -133,11 +133,12 @@ export function PanelKronos({ s }: { s: string }) {
                 <div className="kr-bar-h" role="row"><span role="columnheader">Profil</span><span role="columnheader">Target</span><span role="columnheader">Stop</span><span role="columnheader">R:R</span><span role="columnheader">Harapan</span></div>
                 {pr.map((p) => (
                     <div key={p.id} role="row" className={`kr-baris ${p.id === best.id && best.harapan > 0 ? 'terbaik' : ''} ${p.pMasuk === 0 ? 'mati' : ''}`}>
-                        <span role="cell" className="kr-nama"><b>{NAMA[p.id]}{p.id === best.id && pr.length > 1 ? <i title="Harapan per posisi terbaik"> ★</i> : null}</b>{p.id === 'k' && <small>masuk {pct(p.masukPct)} · {p.pMasuk}%</small>}</span>
+                        <span role="cell" className="kr-nama"><b>{NAMA[p.id]}{p.id === best.id && pr.length > 1 ? <i title="Harapan per posisi terbaik"> ★</i> : null}</b></span>
                         <span role="cell"><b className="mono up">{pct(p.targetPct)}</b><em>{p.pTarget}%</em></span>
                         <span role="cell"><b className="mono down">{pct(p.stopPct)}</b><em>{p.pStop}%</em></span>
                         <span role="cell"><b className={`kr-rr ${kelasRR(p.rr)}`}>1:{angka(p.rr)}</b></span>
                         <span role="cell"><b className={`mono ${p.harapan > 0 ? 'up' : p.harapan < 0 ? 'down' : ''}`}>{pct(p.harapan)}</b></span>
+                        {p.masukPct < 0 && <small className="kr-masuk">beli menunggu turun {pct(p.masukPct)} · peluang masuk {p.pMasuk}% · target/stop dihitung dari harga masuk</small>}
                     </div>
                 ))}
             </div>
