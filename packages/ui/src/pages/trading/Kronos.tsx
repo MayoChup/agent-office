@@ -6,7 +6,9 @@ import { Ikon } from '../../components/Ikon';
  * Kronos di daftar saham: antrean latar belakang (bisa ditinggal), hasil tersimpan, lencana di Watchlist / Sinyal / Portofolio.
  * Satu sumber data bersama untuk semua halaman Trading (disegarkan tiap 5 detik saat antrean berjalan, tiap menit selain itu).
  */
-export interface RingkasK { s: string; mode: string; H: number; label: string; at: number; harga: number; medianPct: number | null; pNaik: number | null; targetPct: number; stopPct: number; pTarget: number; pStop: number; rr: number; harapan: number; hariTarget: number | null; basi: boolean }
+export interface RingkasK { s: string; mode: string; H: number; label: string; at: number; harga: number; medianPct: number | null; pNaik: number | null; targetPct: number; stopPct: number; pTarget: number; pStop: number; rr: number; harapan: number; hariTarget: number | null; basi: boolean; profil?: ProfilK[] }
+/** Satu profil: target/stop dalam % dari harga masuk profil itu; peluang dari jalur prediksi Kronos. */
+export interface ProfilK { id: 'k' | 'm' | 'a'; nama: string; masukPct: number; pMasuk: number; targetPct: number; stopPct: number; pTarget: number; pStop: number; pTidak: number; rr: number; harapan: number }
 export interface AntreK { antre: string[]; jalan: { s: string; label: string; detik: number } | null; selesai: number; gagal: Array<{ s: string; galat: string }>; total: number; sisaDetik: number; rataDetik: number; malam: boolean; jadwal?: { jam: string; hari: number[] }; malamKe?: string; terpasang: boolean; gaya: { mode: string; H: number; label: string; tanggal?: string } }
 interface DataK { gaya: { mode: string; H: number; label: string }; aktif: Record<string, RingkasK>; lain: Record<string, Array<{ label: string; at: number }>>; antre: AntreK }
 
@@ -26,7 +28,17 @@ if (typeof window !== 'undefined') window.addEventListener('kantor:gaya', () => 
 
 const tgl = (at: number) => new Date(at).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 const pct = (v: number | null | undefined) => (v == null ? '–' : `${v > 0 ? '+' : ''}${v.toLocaleString('id-ID', { maximumFractionDigits: 1 })}%`);
-const kelasRR = (r: RingkasK) => (r.rr >= 2 && r.pTarget >= r.pStop ? 'bagus' : r.rr >= 1.2 ? 'sedang' : 'lemah');
+/** Warna R:R: hijau ≥1,5 · kuning 1–1,5 · merah <1. */
+const kelasRR = (rr: number) => (rr >= 1.5 ? 'bagus' : rr >= 1 ? 'sedang' : 'lemah');
+const NAMA: Record<string, string> = { k: 'Konservatif', m: 'Moderat', a: 'Agresif' };
+const angka = (v: number) => v.toLocaleString('id-ID', { maximumFractionDigits: 1 });
+/** Ketiga profil (hasil lama tanpa profil → Moderat saja). */
+export function profilDari(r: RingkasK): ProfilK[] {
+    if (r.profil?.length) return r.profil;
+    return [{ id: 'm', nama: 'Moderat', masukPct: 0, pMasuk: 100, targetPct: r.targetPct, stopPct: r.stopPct, pTarget: r.pTarget, pStop: r.pStop, pTidak: Math.max(0, 100 - r.pTarget - r.pStop), rr: r.rr, harapan: r.harapan }];
+}
+/** Profil dengan harapan per posisi terbaik (yang bisa masuk). */
+export function terbaikDari(r: RingkasK) { return profilDari(r).filter((p) => p.pMasuk > 0).sort((a, b) => b.harapan - a.harapan)[0] || profilDari(r)[0]; }
 const menit = (d: number) => (d < 60 ? `${d} dtk` : `±${Math.round(d / 60)} menit`);
 async function antrekan(simbol: string[]) { await apiPost('/api/kantor/kronos/antre', { simbol }); muatKronos(); }
 
@@ -97,7 +109,7 @@ function posisiAntre(d: DataK, s: string) {
     const i = d.antre.antre.indexOf(s); return i >= 0 ? { jalan: false, ke: i + 1, detik: 0 } : null;
 }
 
-/** Panel ringkas Kronos di kartu saham (Watchlist). */
+/** Panel ringkas Kronos di kartu saham (Watchlist): ketiga profil dalam satu tabel. */
 export function PanelKronos({ s }: { s: string }) {
     const d = useKronos();
     if (!d) return null;
@@ -110,50 +122,76 @@ export function PanelKronos({ s }: { s: string }) {
             {d.antre.terpasang && <button className="btn small" onClick={() => antrekan([s])}>Hitung</button>}
         </div>
     );
-    // Rentang stop → harga sekarang → target (skala gabungan).
-    const lebar = Math.max(0.1, r.targetPct - r.stopPct), posNol = (-r.stopPct / lebar) * 100;
+    const pr = profilDari(r), best = terbaikDari(r);
     return (
         <div className={`kr-panel ${r.basi ? 'basi' : ''}`} onClick={henti} title="Prediksi statistik Kronos, bukan saran beli/jual">
             <div className="kr-atas">
-                <span className="kr-judul"><Ikon e="🔮" /> Kronos · {r.label} <small>{tgl(r.at)}{r.basi ? ' · kedaluwarsa' : ''}</small></span>
-                <span className={`kr-rr ${kelasRR(r)}`}>R:R 1:{r.rr.toLocaleString('id-ID', { maximumFractionDigits: 1 })}</span>
+                <span className="kr-judul"><Ikon e="🔮" /> Kronos · {r.label}</span>
+                <small className="kr-waktu">{tgl(r.at)}{r.basi ? ' · kedaluwarsa' : ''}</small>
             </div>
-            <div className="kr-arah"><span className={(r.medianPct ?? 0) >= 0 ? 'up' : 'down'}>{(r.medianPct ?? 0) >= 0 ? '▲' : '▼'} {pct(r.medianPct)}</span><small>median · peluang naik {r.pNaik ?? '–'}%</small></div>
-            <div className="kr-rentang" aria-hidden><i className="stop" style={{ width: `${posNol}%` }} /><i className="tgt" style={{ width: `${100 - posNol}%` }} /><b style={{ left: `${posNol}%` }} /></div>
-            <div className="kr-angka">
-                <div><small>Stop</small><b className="mono down">{pct(r.stopPct)}</b><em>kena {r.pStop}%</em></div>
-                <div><small>Target</small><b className="mono up">{pct(r.targetPct)}</b><em>kena {r.pTarget}%{r.hariTarget ? ` · ±${r.hariTarget} hr` : ''}</em></div>
-                <div><small>Harapan</small><b className={`mono ${r.harapan >= 0 ? 'up' : 'down'}`}>{pct(r.harapan)}</b><em>per posisi</em></div>
+            <div className="kr-tabel" role="table" aria-label={`Kronos ${s}: tiga profil`}>
+                <div className="kr-bar-h" role="row"><span role="columnheader">Profil</span><span role="columnheader">Target</span><span role="columnheader">Stop</span><span role="columnheader">R:R</span><span role="columnheader">Harapan</span></div>
+                {pr.map((p) => (
+                    <div key={p.id} role="row" className={`kr-baris ${p.id === best.id && best.harapan > 0 ? 'terbaik' : ''} ${p.pMasuk === 0 ? 'mati' : ''}`}>
+                        <span role="cell" className="kr-nama"><b>{NAMA[p.id]}{p.id === best.id && pr.length > 1 ? <i title="Harapan per posisi terbaik"> ★</i> : null}</b>{p.id === 'k' && <small>masuk {pct(p.masukPct)} · {p.pMasuk}%</small>}</span>
+                        <span role="cell"><b className="mono up">{pct(p.targetPct)}</b><em>{p.pTarget}%</em></span>
+                        <span role="cell"><b className="mono down">{pct(p.stopPct)}</b><em>{p.pStop}%</em></span>
+                        <span role="cell"><b className={`kr-rr ${kelasRR(p.rr)}`}>1:{angka(p.rr)}</b></span>
+                        <span role="cell"><b className={`mono ${p.harapan > 0 ? 'up' : p.harapan < 0 ? 'down' : ''}`}>{pct(p.harapan)}</b></span>
+                    </div>
+                ))}
             </div>
+            <small className="kr-kaki">Angka kecil = peluang kena · harapan = rata-rata hasil per posisi · harga berakhir di atas harga sekarang <b>{r.pNaik ?? '–'}%</b> · median {pct(r.medianPct)}</small>
             {r.basi && d.antre.terpasang && <button className="btn small kr-ulang" onClick={() => antrekan([s])}>Hitung ulang</button>}
         </div>
     );
 }
 
-/** Lencana kecil untuk daftar Sinyal / Portofolio / detail: 🔮 R:R + tanggal; gaya lain ditandai. */
+/** Lencana kecil untuk daftar Sinyal / Portofolio / detail: 🔮 profil terbaik + R:R-nya; ketiga profil di keterangan. */
 export function LencanaKronos({ s }: { s: string }) {
     const d = useKronos();
     if (!d) return null;
     const r = d.aktif[s], lain = d.lain[s], pos = posisiAntre(d, s);
     if (pos) return <span className="kr-len antre" title={pos.jalan ? 'Kronos sedang menghitung' : `Antrean Kronos ke-${pos.ke}`}>🔮 {pos.jalan ? '…' : `#${pos.ke}`}</span>;
-    if (r) return <span className={`kr-len ${kelasRR(r)} ${r.basi ? 'basi' : ''}`} title={`Kronos ${r.label} · ${tgl(r.at)} · target ${pct(r.targetPct)} (kena ${r.pTarget}%) · stop ${pct(r.stopPct)} (kena ${r.pStop}%)${r.basi ? ' · kedaluwarsa' : ''}`}>🔮 1:{r.rr.toLocaleString('id-ID', { maximumFractionDigits: 1 })} <small>{new Date(r.at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}</small></span>;
+    if (r) {
+        const b = terbaikDari(r), pr = profilDari(r);
+        const ket = `Kronos ${r.label} · ${tgl(r.at)}${r.basi ? ' · kedaluwarsa' : ''}\n` + pr.map((p) => `${NAMA[p.id]}: target ${pct(p.targetPct)} (${p.pTarget}%) · stop ${pct(p.stopPct)} (${p.pStop}%) · R:R 1:${angka(p.rr)} · harapan ${pct(p.harapan)}`).join('\n') + '\nPrediksi statistik, bukan saran beli/jual.';
+        return <span className={`kr-len ${kelasRR(b.rr)} ${r.basi ? 'basi' : ''}`} title={ket} aria-label={ket}>🔮 {pr.length > 1 ? `${b.id.toUpperCase()} ` : ''}1:{angka(b.rr)} <small>{new Date(r.at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}</small></span>;
+    }
     if (lain?.length) return <span className="kr-len lain" title={`Kronos sudah dihitung untuk gaya ${lain.map((x) => x.label).join(', ')}`}>🔮 {lain[0].label}</span>;
     return null;
 }
 
-/** Urutan & saring watchlist berdasarkan Kronos. */
-export type UrutK = 'bawaan' | 'rr' | 'target' | 'belum';
+/** Urutan & saring watchlist berdasarkan Kronos: harapan terbaik, R:R atau peluang target per profil. */
+export type UrutK = 'bawaan' | 'harapan' | 'belum' | `${'rr' | 'tgt'}:${'k' | 'm' | 'a' | 'best'}`;
 export function urutkanKronos(simbol: string[], urut: UrutK, d: DataK | null) {
+    if ((urut as string) === 'rr') urut = 'rr:best'; else if ((urut as string) === 'target') urut = 'tgt:best'; // pilihan lama
     if (!d || urut === 'bawaan') return simbol;
     if (urut === 'belum') return simbol.filter((s) => !d.aktif[s] || d.aktif[s].basi);
-    const v = (s: string) => { const r = d.aktif[s]; return r ? (urut === 'rr' ? r.rr : r.pTarget - r.pStop) : -1e9; };
+    const v = (s: string) => {
+        const r = d.aktif[s]; if (!r) return -1e9;
+        if (urut === 'harapan') return terbaikDari(r).harapan;
+        const [jenis, id] = String(urut).split(':');
+        const p = id === 'best' ? terbaikDari(r) : profilDari(r).find((x) => x.id === id);
+        if (!p) return -1e8;
+        return jenis === 'rr' ? p.rr : p.pTarget;
+    };
     return [...simbol].sort((a, b) => v(b) - v(a));
 }
 export function PilihUrut({ urut, setUrut }: { urut: UrutK; setUrut: (u: UrutK) => void }) {
+    const sah = ['bawaan', 'harapan', 'belum', 'rr:k', 'rr:m', 'rr:a', 'rr:best', 'tgt:k', 'tgt:m', 'tgt:a', 'tgt:best'];
     return (
         <label className="kr-urut">Urutkan
-            <select value={urut} onChange={(e) => setUrut(e.target.value as UrutK)}>
-                <option value="bawaan">Bawaan</option><option value="rr">🔮 R:R terbaik</option><option value="target">🔮 Peluang target − stop</option><option value="belum">🔮 Belum dihitung</option>
+            <select value={sah.includes(urut) ? urut : 'bawaan'} onChange={(e) => setUrut(e.target.value as UrutK)}>
+                <option value="bawaan">Bawaan</option>
+                <option value="harapan">🔮 Harapan terbaik</option>
+                <optgroup label="🔮 R:R">
+                    <option value="rr:best">R:R · profil terbaik</option><option value="rr:k">R:R · Konservatif</option><option value="rr:m">R:R · Moderat</option><option value="rr:a">R:R · Agresif</option>
+                </optgroup>
+                <optgroup label="🔮 Peluang kena target">
+                    <option value="tgt:best">Peluang target · profil terbaik</option><option value="tgt:k">Peluang target · Konservatif</option><option value="tgt:m">Peluang target · Moderat</option><option value="tgt:a">Peluang target · Agresif</option>
+                </optgroup>
+                <option value="belum">🔮 Belum dihitung</option>
             </select>
         </label>
     );

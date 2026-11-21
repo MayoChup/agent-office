@@ -13,7 +13,23 @@ export interface Ringkas {
     medianPct: number | null; pNaik: number | null;
     /** profil Moderat: target/stop dalam % dari harga sekarang, peluang kena (dari jalur prediksi), risiko:hasil */
     targetPct: number; stopPct: number; pTarget: number; pStop: number; rr: number; harapan: number; hariTarget: number | null;
+    /** Ketiga profil (Konservatif, Moderat, Agresif). Target/stop dalam % dari harga MASUK profil itu. */
+    profil?: ProfilRingkas[];
 }
+export interface ProfilRingkas { id: 'k' | 'm' | 'a'; nama: string; masukPct: number; pMasuk: number; targetPct: number; stopPct: number; pTarget: number; pStop: number; pTidak: number; rr: number; harapan: number }
+const ID_PROFIL = (n: string): 'k' | 'm' | 'a' => (/konserv/i.test(n) ? 'k' : /agres/i.test(n) ? 'a' : 'm');
+/** Ringkas ketiga profil dari keluaran prediksi. */
+export function ringkasProfil(out: any, harga: number): ProfilRingkas[] {
+    const arr: any[] = Array.isArray(out?.profil) ? out.profil : Array.isArray(out?.hasil) ? out.hasil : [];
+    return arr.filter((p) => p && p.masuk && p.target && p.stop).map((p) => {
+        const m = Number(p.masuk);
+        return { id: ID_PROFIL(String(p.nama || p.id || '')), nama: String(p.nama || ''), masukPct: +((m / harga - 1) * 100).toFixed(2), pMasuk: Math.round(p.pMasuk ?? 100),
+            targetPct: +((p.target / m - 1) * 100).toFixed(2), stopPct: +((p.stop / m - 1) * 100).toFixed(2),
+            pTarget: Math.round(p.pTarget ?? 0), pStop: Math.round(p.pStop ?? 0), pTidak: Math.round(p.pTidak ?? 0), rr: +(Number(p.rr) || 0).toFixed(2), harapan: +(Number(p.harapan) || 0).toFixed(2) };
+    }).sort((a, b) => 'kma'.indexOf(a.id) - 'kma'.indexOf(b.id));
+}
+/** Profil dengan harapan terbaik (yang pernah bisa masuk). */
+export function profilTerbaik(r: Pick<Ringkas, 'profil'>) { return (r.profil || []).filter((p) => p.pMasuk > 0).sort((a, b) => b.harapan - a.harapan)[0] || null; }
 interface Tugas { s: string; mode: string; H: number; tanggal?: string; label: string; asal: 'massal' | 'satu' | 'malam'; at: number }
 interface Status {
     antre: Tugas[]; jalan: (Tugas & { mulai: number }) | null; selesai: string[]; gagal: Array<{ s: string; galat: string }>;
@@ -58,6 +74,14 @@ export class KronosAntre {
         this.fGaya = path.join(dataDir, 'trading-gaya.json');
         fs.mkdirSync(this.dHasil, { recursive: true });
         try { this.hasil = JSON.parse(fs.readFileSync(this.fHasil, 'utf8')); } catch { /* baru */ }
+        // Hasil lama (dulu hanya Moderat) → lengkapi ketiga profil dari hasil lengkap yang tersimpan, tanpa hitung ulang.
+        let isi = 0;
+        for (const [k, r] of Object.entries(this.hasil)) {
+            if (r.profil?.length) continue;
+            const [s, g] = k.split('|');
+            try { const j = JSON.parse(fs.readFileSync(this.fileLengkap(s, g), 'utf8')); const pr = ringkasProfil(j.out, r.harga); if (pr.length) { r.profil = pr; isi++; } } catch { /* tidak ada */ }
+        }
+        if (isi) this.simpanHasil();
         try { this.st = JSON.parse(fs.readFileSync(this.fStatus, 'utf8')); } catch { this.st = { antre: [], jalan: null, selesai: [], gagal: [], total: 0, mulaiBatch: 0, rataDetik: 60, nDetik: 0, malam: false, malamKe: '' }; }
         if (!this.st.jadwal) this.st.jadwal = { jam: '06:00', hari: [2, 3, 4, 5, 6] };
         // Tugas yang sedang jalan saat kantor mati → kembali ke depan antrean.
@@ -79,7 +103,7 @@ export class KronosAntre {
     /** Simpan hasil prediksi lengkap (dipanggil juga dari halaman detail saat Bapak menghitung satu saham). */
     catat(s: string, mode: string, H: number, out: any) {
         if (!out || out.mesin !== 'kronos') return;
-        const mod = (out.hasil || out.profil || []).find?.((p: any) => /moderat/i.test(p.nama || p.id || '')) || (out.hasil || [])[1];
+        const mod = (out.profil || out.hasil || []).find?.((p: any) => /moderat/i.test(p.nama || p.id || '')) || (out.profil || out.hasil || [])[1];
         if (!mod) return;
         const harga = Number(out.harga) || Number(mod.masuk) || 0; if (!harga) return;
         const g = kunciGaya(mode, H), gy = { label: labelH(H) };
@@ -87,7 +111,8 @@ export class KronosAntre {
             s, mode, H, label: gy.label, at: Date.now(), harga, mesin: out.mesin,
             medianPct: out.medianPct ?? null, pNaik: out.pNaik ?? null,
             targetPct: +((mod.target / harga - 1) * 100).toFixed(2), stopPct: +((mod.stop / harga - 1) * 100).toFixed(2),
-            pTarget: Math.round(mod.pTarget ?? 0), pStop: Math.round(mod.pStop ?? 0), rr: +(Number(mod.rr) || 0).toFixed(2), harapan: +(Number(mod.harapan) || 0).toFixed(2), hariTarget: mod.hariTarget ?? null
+            pTarget: Math.round(mod.pTarget ?? 0), pStop: Math.round(mod.pStop ?? 0), rr: +(Number(mod.rr) || 0).toFixed(2), harapan: +(Number(mod.harapan) || 0).toFixed(2), hariTarget: mod.hariTarget ?? null,
+            profil: ringkasProfil(out, harga)
         };
         this.hasil[`${s}|${g}`] = r; this.simpanHasil();
         try { fs.writeFileSync(this.fileLengkap(s, g), JSON.stringify({ at: r.at, out })); } catch { /* */ }
@@ -159,10 +184,17 @@ export class KronosAntre {
     private laporBatch() {
         const g = this.gaya(), d = this.daftar(g.mode, g.H).aktif;
         const ok = this.st.selesai.map((s) => d[s]).filter(Boolean);
-        const bagus = ok.filter((r) => r.rr >= 1.5 && r.pTarget >= r.pStop).sort((a, b) => b.rr - a.rr).slice(0, 5);
+        const terbaik = (r: Ringkas) => profilTerbaik(r)?.harapan ?? r.harapan;
+        const bagus = ok.filter((r) => terbaik(r) > 0).sort((a, b) => terbaik(b) - terbaik(a)).slice(0, 6);
+        const f = (x: number) => String(x).replace('.', ',');
+        const baris = (r: Ringkas) => {
+            const pr = r.profil?.length ? r.profil : [{ id: 'm', rr: r.rr, harapan: r.harapan, pMasuk: 100 } as ProfilRingkas];
+            const b = profilTerbaik(r);
+            return `- **${r.s}** · ${pr.map((p) => `${p.id.toUpperCase()} 1:${f(p.rr)} (${p.harapan > 0 ? '+' : ''}${f(p.harapan)}%)${b && b.id === p.id ? '★' : ''}`).join(' · ')}`;
+        };
         const menit = Math.max(1, Math.round((Date.now() - this.st.mulaiBatch) / 60_000));
         const teks = [`🔮 **Kronos selesai** — ${ok.length} saham, gaya ${g.label} (±${menit} menit).`,
-            bagus.length ? `Risiko:hasil paling menarik:\n${bagus.map((r) => `- **${r.s}** · R:R 1:${r.rr} · target ${r.targetPct > 0 ? '+' : ''}${r.targetPct}% (${r.pTarget}%) · stop ${r.stopPct}% (${r.pStop}%)`).join('\n')}` : 'Belum ada yang risiko:hasilnya menarik (R:R ≥ 1,5).',
+            bagus.length ? `Harapan per posisi positif (K/M/A = Konservatif/Moderat/Agresif · R:R (harapan) · ★ terbaik):\n${bagus.map(baris).join('\n')}` : 'Belum ada saham dengan harapan per posisi positif di profil mana pun.',
             this.st.gagal.length ? `Gagal: ${this.st.gagal.map((x) => x.s).join(', ')}.` : '',
             'Detail di Trading → Watchlist (tanda 🔮). Ini prediksi statistik, bukan saran beli/jual.'].filter(Boolean).join('\n\n');
         try { this.o.kabar(teks); } catch { /* */ }
