@@ -111,8 +111,8 @@ export function SosmedPage() {
     const nAntre = x?.semua.filter((k) => k.tgl >= x.hari && ['prompt', 'aset', 'gagal'].includes(k.status)).length || 0;
     const nKom = x?.komentar.filter((c) => c.status === 'draf' || c.status === 'baru').length || 0;
     const TAB = useMemo(() => beranda ? [{ k: 'ringkasan', ico: '📊', label: 'Ringkasan performa' }, { k: 'kalender', ico: '🗓️', label: 'Kalender master' }] : [
-        { k: 'hari', ico: '🎬', label: 'Hari ini' }, { k: 'antre', ico: '📤', label: 'Antrean unggah', badge: nAntre || undefined }, { k: 'kalender', ico: '🗓️', label: 'Kalender' }, { k: 'aset', ico: '🧰', label: 'Gudang aset' }, { k: 'analisa', ico: '🔎', label: 'Analisa niche' }, { k: 'strategi', ico: '🧭', label: 'Strategi' },
-        { k: 'gaya', ico: '🎨', label: 'Gaya & efek' }, { k: 'profil', ico: '🪪', label: 'Profil & bio' }, { k: 'kinerja', ico: '📈', label: 'Hasil posting' }, { k: 'komentar', ico: '💬', label: 'Komentar & DM', badge: nKom || undefined }, { k: 'akun', ico: '⚙️', label: 'Akun & tim' }
+        { k: 'hari', ico: '🎬', label: 'Hari ini' }, { k: 'antre', ico: '📤', label: 'Antrean unggah', badge: nAntre || undefined }, { k: 'kalender', ico: '🗓️', label: 'Kalender' }, { k: 'aset', ico: '🧰', label: 'Gudang aset' }, { k: 'kinerja', ico: '📈', label: 'Hasil posting' }, { k: 'komentar', ico: '💬', label: 'Komentar & DM', badge: nKom || undefined }, { k: 'analisa', ico: '🔎', label: 'Analisa niche' }, { k: 'strategi', ico: '🧭', label: 'Strategi' },
+        { k: 'gaya', ico: '🎨', label: 'Gaya & efek' }, { k: 'profil', ico: '🪪', label: 'Profil & bio' }, { k: 'akun', ico: '⚙️', label: 'Akun & tim' }
     ], [nKom, nAntre, beranda]);
     const [tabAkun, setTabAkun] = useState(() => { try { return localStorage.getItem(LS) || 'hari'; } catch { return 'hari'; } });
     const [tabBeranda, setTabBeranda] = useState('ringkasan');
@@ -160,8 +160,8 @@ export function SosmedPage() {
             {msg && <div className="fin-alert">{msg}</div>}
             {x.siap && <AngkaUtama x={x} setTab={setTab} />}
             {x.sibuk && <div className="hz-bukti ok"><span className="pk-jalan"><i /></span><span>{SIBUK[x.sibuk] || 'Tim sedang bekerja…'}</span></div>}
-            {x.setup && (!x.setup.selesai || x.setup.langkah.some((l) => l.status === 'gagal') || Date.now() - x.setup.at < 86400_000) && <ProgresSetup x={x} jalankan={jalankan} />}
-            {x.siap && !kuis && tab !== 'akun' && <LangkahBerikut x={x} setTab={setTab} />}
+            {x.siap && !kuis && tab === 'hari' && <LangkahBerikut x={x} setTab={setTab} />}
+            {x.setup && (!x.setup.selesai || x.setup.langkah.some((l) => l.status === 'gagal') || (tab === 'hari' && Date.now() - x.setup.at < 86400_000)) && <ProgresSetup x={x} jalankan={jalankan} />}
             {(kuis || (!x.strategi && !x.starter && !x.setup)) && tab !== 'akun' ? <Starter key={x.akunAktif} platform={x.platformInfo[x.platform]} formatPlatform={x.platformInfo[x.platform]?.format || []} labelFormat={x.platformInfo[x.platform]?.label || {}}
                 gaya={x.gaya.map((g) => ({ ...g, ket: g.deskripsi }))} katalog={x.katalog} sibuk={!!x.sibuk} gambarGaya={gambarGaya} batal={x.strategi || x.starter ? () => setKuis(false) : undefined}
                 kirim={(jw: JawabanStarter) => { aksi(post('/api/kantor/sosmed/starter', { jawaban: jw }), 'Brief diterima. Tim mulai bekerja — progresnya terlihat di atas.'); setKuis(false); }} />
@@ -221,7 +221,7 @@ function ProgresSetup({ x, jalankan }: { x: Data; jalankan: P['jalankan'] }) {
             <div className="sd-h"><h3>{beres ? <><Ikon e="🎉" /> {'Akun siap'}</> : gagal && !jalan ? <><Ikon e="⚠️" /> {`${gagal} langkah belum berhasil`}</> : <><Ikon e="🚀" /> {'Tim sedang menyiapkan akun ini'}</>} <small>{selesai}/{st.langkah.length} langkah</small></h3></div>
             <div className="sm-setup-bar"><i style={{ width: `${(selesai / st.langkah.length) * 100}%` }} /></div>
             <ol>{st.langkah.map((l) => <li key={l.id} className={l.status}><span>{ikon[l.status]}</span>{l.label}{l.status === 'jalan' && <em className="pk-jalan"><i /></em>}{l.ket && <small> — {l.ket}</small>}</li>)}</ol>
-            {beres && <p className="sb-note">Semua sudah dibuat. Ikuti kartu <b>Langkah berikutnya</b> di atas — satu per satu, tidak perlu menebak harus ke tab mana.</p>}
+            {beres && <p className="sb-note">Semua sudah dibuat. Ikuti kartu <b>Langkah berikutnya</b> — satu per satu, tidak perlu menebak harus ke tab mana.</p>}
             {gagal > 0 && !jalan && <div className="sm-setup-ulang"><p className="sb-note">Biasanya karena otak AI sedang sibuk atau kena batas. Langkah yang sudah berhasil tidak diulang.</p>
                 <button className="btn primary" disabled={!!x.sibuk} onClick={() => jalankan('ulangSetup', 'Tim mencoba lagi langkah yang gagal — progresnya terlihat di sini.')}><Ikon e="↻" /> {'Coba lagi langkah yang gagal'}</button></div>}
             {jalan && <p className="sb-note">Sekitar 10–20 menit. Bapak boleh menutup halaman ini — Maya mengabari lewat chat saat selesai.</p>}
@@ -291,17 +291,17 @@ export function LangkahBerikut({ x, setTab, ekstra }: { x: Data; setTab: (k: str
     const kini = daftar.find((l) => l.aktif && !(l.manual && sudah.includes(l.id)));
     const total = daftar.filter((l) => l.manual || l.aktif).length, beres = daftar.filter((l) => l.manual && sudah.includes(l.id)).length;
     return (
-        <section className="sb-card sm-langkah" aria-label="Langkah berikutnya">
+        <section className="sb-card sm-lanjut" aria-label="Langkah berikutnya">
             {kini ? (<>
-                <small className="sm-langkah-k">Langkah berikutnya{total > 1 ? ` · ${beres} beres` : ''}</small>
+                <small className="sm-lanjut-k">Langkah berikutnya{total > 1 ? ` · ${beres} beres` : ''}</small>
                 <h3>{kini.judul}</h3>
                 <p>{kini.ket}</p>
-                <div className="sm-langkah-a">
+                <div className="sm-lanjut-a">
                     <button className="btn primary" onClick={() => setTab(kini.tab)}>{kini.tombol}</button>
                     {kini.manual && <button className="btn" onClick={() => tandai(kini.id)}>{kini.id === 'sambung' ? 'Nanti saja' : 'Sudah'}</button>}
                 </div>
             </>) : (<>
-                <small className="sm-langkah-k">Langkah berikutnya</small>
+                <small className="sm-lanjut-k">Langkah berikutnya</small>
                 <h3><Ikon e="✅" /> Semua beres untuk sekarang</h3>
                 <p>Tiap pagi tim menyiapkan sketsa untuk hari ini dan besok. Kalau ada yang perlu Bapak lakukan, muncul di sini.</p>
             </>)}

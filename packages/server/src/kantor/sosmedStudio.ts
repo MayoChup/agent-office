@@ -201,6 +201,8 @@ export function pasangStudio(d: DepsStudio) {
         }
         const png = k.format === 'feed' ? [await renderSlide(gaya, slide[0], 1, 1, merek(c), ukuran(c))] : await renderCarousel(gaya, slide, merek(c), ukuran(c));
         const dasar = d.folderAkun(c.a); try { berkas.buatFolder(dasar, 'Desain'); } catch { /* ada */ }
+        // Desain ulang: berkas desain lama konten ini dibuang (masuk tempat sampah Berkas), tidak menumpuk.
+        for (const lama of [k.aset, ...(k.asetLain || [])]) if (lama?.path?.startsWith(`${dasar}/Desain/`)) { try { berkas.hapus(lama.path); } catch { /* sudah hilang */ } }
         const nama = namaAman(`${c.s.labelBerkas(k)} ${k.judul}`);
         png.forEach((b, i) => { const rel = tulis(`${dasar}/Desain`, `${nama}${png.length > 1 ? `-${String(i + 1).padStart(2, '0')}` : ''}.png`, b); c.s.pasangAset(k.id, rel, i > 0); });
         k.desain = { gaya, oleh, at: Date.now(), catatan: catatan || undefined }; c.s.simpan();

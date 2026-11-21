@@ -63,6 +63,8 @@ export interface OpsiRender { w?: number; h?: number }
 const hexOk = (s?: string) => !!s && /^#[0-9a-f]{6}$/i.test(s);
 function terang(hex: string) { const n = parseInt(hex.slice(1), 16); const r = n >> 16, g = (n >> 8) & 255, b = n & 255; return (0.299 * r + 0.587 * g + 0.114 * b) / 255; }
 const kontras = (bg: string) => (terang(bg) > 0.6 ? '#111111' : '#ffffff');
+function lum(hex: string) { const n = parseInt(hex.slice(1), 16); const f = (v: number) => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(n >> 16) + 0.7152 * f((n >> 8) & 255) + 0.0722 * f(n & 255); }
+function rasioKontras(a: string, b: string) { if (!hexOk(a) || !hexOk(b)) return 1; const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
 
 /** Pecah teks jadi baris yang muat di lebar tertentu. "**kata**" = ditekankan (warna aksen). */
 function bungkus(g: any, teks: string, lebar: number): string[][] {
@@ -121,14 +123,23 @@ async function pasangGambar(g: any, buf: Buffer, x: number, y: number, w: number
 export async function renderSlide(gayaId: string, s: IsiSlide, no: number, n: number, merek: InfoMerek, opsi: OpsiRender = {}): Promise<Buffer> {
     const { createCanvas } = kanvas();
     const st = gayaDesain(gayaId), W = opsi.w || 1080, H = opsi.h || 1350;
-    const w = { ...st.w }; if (merek.aksenMerek && hexOk(merek.warna?.[0])) w.aksen = merek.warna![0];
+    const w = { ...st.w };
+    if (merek.aksenMerek && merek.warna?.some(hexOk)) {
+        // Warna merek dipakai sebagai aksen hanya kalau terbaca di latar gaya ini (kontras ≥ 3); kalau tidak, coba warna merek lain, lalu kembali ke aksen gaya.
+        const latar = st.id === 'bold-signal' ? w.bg : st.id === 'electric-studio' ? w.bg : st.id === 'creative-voltage' ? w.bg : (w.bg || w.kartu || '#ffffff');
+        const cocok = merek.warna!.filter(hexOk).find((c) => rasioKontras(c, latar) >= 3);
+        if (cocok) w.aksen = cocok;
+    }
+    if (st.id === 'bold-signal') w.teksKartu = kontras(w.aksen);
     const fJ = merek.fontJudul && DAFTAR_FONT.includes(merek.fontJudul) ? merek.fontJudul : st.judul.f;
     const fI = merek.fontIsi && DAFTAR_FONT.includes(merek.fontIsi) ? merek.fontIsi : st.isi.f;
     const c = createCanvas(W, H), g = c.getContext('2d');
     const pertama = no === 1, akhir = no === n && n > 1;
     const P = Math.round(W * 0.083); // tepi aman
-    const J = (o: Partial<Parameters<typeof blok>[2]> & { x: number; y: number; w: number; h: number; maks: number; warna: string }) => blok(g, s.judul, { f: fJ, w8: st.judul.w, italic: st.judul.italic, min: 30, ...o } as any);
-    const I = (o: Partial<Parameters<typeof blok>[2]> & { x: number; y: number; w: number; h: number; maks: number; warna: string }, teks = s.isi || '') => blok(g, teks, { f: fI, w8: st.isi.w, min: 24, lh: 1.38, ...o } as any);
+    // Slide tanpa gambar: huruf dibuat lebih besar supaya ruang terisi & mudah dibaca di HP.
+    const lega = s.gambar ? 1 : pertama ? 1.04 : 1.14, legaIsi = s.gambar ? 1 : 1.22;
+    const J = (o: Partial<Parameters<typeof blok>[2]> & { x: number; y: number; w: number; h: number; maks: number; warna: string }) => blok(g, s.judul, { f: fJ, w8: st.judul.w, italic: st.judul.italic, min: 30, ...o, maks: Math.round(o.maks * lega) } as any);
+    const I = (o: Partial<Parameters<typeof blok>[2]> & { x: number; y: number; w: number; h: number; maks: number; warna: string }, teks = s.isi || '') => blok(g, teks, { f: fI, w8: st.isi.w, min: 24, lh: 1.38, ...o, maks: Math.round(o.maks * legaIsi) } as any);
     let teksUtama = w.teks || '#111', warnaKaki = teksUtama, aksenProgres = w.aksen;
     // kotak media (untuk aset gambar) per gaya; null = tanpa gambar
     let media: { x: number; y: number; w: number; h: number; r?: number } | null = null;
