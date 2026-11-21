@@ -472,6 +472,7 @@ export class Sosmed {
                 voiceover: vo, jumlahKata: vo ? hitungKata(vo) : undefined, storyboard: bacaAdegan(x?.storyboard), musik: satu(x?.musik, 240) || undefined, sampul: satu(x?.sampul, 240) || undefined,
                 caption: teks(x?.caption, 4800) || undefined, hashtag: bacaTag(x?.hashtag), ajakan: satu(x?.ajakan, 200) || undefined };
         }).filter((x: Varian) => x.hook && x.storyboard.length >= 2);
+        v.forEach((x) => { x.hook = x.hook.replace(/\*\*/g, ''); if (x.caption) x.caption = x.caption.replace(/\*\*/g, ''); });
         if (v.length < 2) throw new Error('Sketsa ide dari AI tidak terbaca (kurang dari 2 ide yang lengkap).');
         v.forEach((x, i) => { x.no = i + 1; });
         this.terimaAset(k, j);
@@ -618,6 +619,8 @@ export class Sosmed {
         k.captionTiktok = satu(j.captionTiktok, 300) || undefined;
         k.youtube = j.youtube && satu(j.youtube.judul, 100) ? { judul: satu(j.youtube.judul, 100), deskripsi: satu(j.youtube.deskripsi, 400) } : undefined;
         this.terimaAset(k, j);
+        // Tanda penekanan ** hanya untuk teks slide; hook & caption ditampilkan/diunggah apa adanya.
+        if (k.hook) k.hook = k.hook.replace(/\*\*/g, ''); if (k.hookLain) k.hookLain = k.hookLain.map((h) => h.replace(/\*\*/g, '')); if (k.caption) k.caption = k.caption.replace(/\*\*/g, '');
         k.status = 'naskah'; k.diubah = Date.now(); k.galat = undefined; this.simpan();
     }
     /* ── 5. Prompt produksi (Vino): video/gambar sesuai gaya + suara ElevenLabs ── */

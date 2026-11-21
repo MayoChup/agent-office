@@ -261,10 +261,19 @@ async function isiTata(g: any, tata: Tata, t: Token, s: IsiSlide, o: { W: number
     };
     switch (tata) {
         case 'sampul': {
-            const adaGb = !!(gb || gb2), hJudul = adaGb ? A.h * 0.5 : A.h * 0.72;
+            const adaGb = !!(gb || gb2), hJudul = adaGb ? A.h * 0.5 : A.h * 0.62;
+            if (!adaGb) {
+                // Tanpa gambar: judul besar diletakkan di tengah area supaya tidak menyisakan ruang kosong di bawah.
+                const ukJ = o.J({ x: A.x, y: 0, w: A.w, h: hJudul, maks: 150, warna: t.teks, tekan: t.tekan, lh: 1.0, kering: true });
+                const ukI = s.isi ? o.I({ x: A.x, y: 0, w: A.w, h: A.h * 0.2, maks: 40, warna: t.teks2, kering: true }) : 0;
+                const y0 = A.y + Math.max(0, (A.h - (ukJ + (ukI ? ukI + 40 : 0))) * 0.42);
+                const hj2 = o.J({ x: A.x, y: y0, w: A.w, h: hJudul, maks: 150, warna: t.teks, tekan: t.tekan, lh: 1.0 });
+                g.fillStyle = t.aksen; g.fillRect(A.x, y0 + hj2 + 14, 110, 8);
+                if (s.isi) o.I({ x: A.x, y: y0 + hj2 + 46, w: A.w, h: A.h * 0.2, maks: 40, warna: t.teks2 });
+                return null;
+            }
             const hj = o.J({ x: A.x, y: A.y, w: A.w, h: hJudul, maks: 132, warna: t.teks, tekan: t.tekan, lh: 1.0 });
-            const hi = o.I({ x: A.x, y: A.y + hj + 30, w: adaGb ? A.w * 0.46 : A.w, h: A.h * 0.2, maks: 36, warna: t.teks2 });
-            if (!adaGb) return null;
+            const hi = o.I({ x: A.x, y: A.y + hj + 30, w: A.w * 0.46, h: A.h * 0.2, maks: 36, warna: t.teks2 });
             const sisi = Math.min(A.w * 0.52, A.y + A.h - (A.y + hj + 20));
             return pendamping({ x: A.x + A.w - sisi, y: A.y + A.h - sisi, w: sisi, h: sisi, r: 20 }, -0.06);
             void hi;
@@ -487,7 +496,7 @@ export async function renderSlide(gayaId: string, s: IsiSlide, no: number, n: nu
         const calon = [merek.warna![0], merek.warna![3], ...merek.warna!].filter((c) => hexOk(c) && jenuh(c) > 0.25);
         const sbgLatar = st.id === 'electric-studio' || st.id === 'creative-voltage';
         const cocok = st.id === 'bold-signal' ? calon.find((c) => rasioKontras(c, w.bg) >= 1.8 && Math.max(rasioKontras(c, '#ffffff'), rasioKontras(c, '#111111')) >= 4.5)
-            : calon.find((c) => (sbgLatar ? rasioKontras(c, '#ffffff') : rasioKontras(c, w.bg || w.kartu || '#ffffff')) >= 3);
+            : calon.find((c) => (sbgLatar ? rasioKontras(c, '#ffffff') : rasioKontras(c, st.id === 'pastel-geometry' ? w.kartu : st.id === 'split-pastel' ? w.kiri : w.bg || '#ffffff')) >= 3);
         if (cocok) {
             w.aksen = cocok;
             if (st.id === 'bold-signal') { const t = kontras(cocok); tekanKartu = calon.find((c) => c !== cocok && rasioKontras(c, cocok) >= 3) || (t === '#ffffff' ? '#ffd166' : '#ffffff'); }

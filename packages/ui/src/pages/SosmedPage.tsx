@@ -316,6 +316,7 @@ function TabHari({ x, jalankan, kartu, setTab }: P) {
     const per = (t: string) => x.semua.filter((k) => k.tgl === t);
     const perluAksi = x.semua.filter((k) => k.tgl <= tambah(x.hari, 1) && ['prompt', 'aset', 'gagal'].includes(k.status)).length;
     const perluPilih = x.semua.filter((k) => k.tgl >= x.hari && k.status === 'sketsa').length;
+    const sketsaNanti = x.semua.filter((k) => k.tgl > tambah(x.hari, 1) && k.status === 'sketsa');
     return (<>
         <section className="sb-card sm-pekan" aria-label="7 hari ke depan">
             {minggu.map((t, i) => {
@@ -333,11 +334,12 @@ function TabHari({ x, jalankan, kartu, setTab }: P) {
         <section className="sb-card">
             <div className="sd-h"><h3>Hari ini <small>{tglId(x.hari)} · unggah ±{x.strategi?.jam || '19:00'} WIB</small></h3><button className="btn small" disabled={!!x.sibuk} onClick={() => jalankan('harian')}><Ikon e="↻" /> Siapkan sekarang</button></div>
             {perluAksi > 0 && <p className="sm-tugas"><Ikon e="👉" /> {perluAksi} konten menunggu Bapak: salin prompt → buat videonya → unggah berkas → Setujui. Mau sekaligus banyak? <button className="btn small" onClick={() => setTab('antre')}>Buka Antrean unggah</button></p>}
-            {perluPilih > 0 && <p className="sm-tugas"><Ikon e="✏" /> {perluPilih} konten punya 4 sketsa ide yang menunggu Bapak pilih. Buka kartunya, lihat storyboard-nya, lalu tekan "Pilih sketsa".</p>}
+            {perluPilih > 0 && <p className="sm-tugas"><Ikon e="✏" /> {perluPilih} konten punya 4 sketsa ide yang menunggu Bapak pilih. Buka kartunya di bawah, lihat storyboard-nya, lalu tekan "Pilih sketsa".</p>}
             {!x.hariIni.length && <div className="fin-empty">Tidak ada jadwal unggah hari ini.</div>}
             {x.hariIni.map(kartu)}
         </section>
         {x.besok.length > 0 && <section className="sb-card"><div className="sd-h"><h3>Besok <small>disiapkan lebih awal supaya Bapak sempat produksi</small></h3></div>{x.besok.map(kartu)}</section>}
+        {sketsaNanti.length > 0 && <section className="sb-card"><div className="sd-h"><h3>Menunggu Bapak pilih sketsa <small>untuk hari-hari berikutnya</small></h3></div>{sketsaNanti.map(kartu)}</section>}
     </>);
 }
 
