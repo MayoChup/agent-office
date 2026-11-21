@@ -64,6 +64,7 @@ const hexOk = (s?: string) => !!s && /^#[0-9a-f]{6}$/i.test(s);
 function terang(hex: string) { const n = parseInt(hex.slice(1), 16); const r = n >> 16, g = (n >> 8) & 255, b = n & 255; return (0.299 * r + 0.587 * g + 0.114 * b) / 255; }
 const kontras = (bg: string) => (terang(bg) > 0.6 ? '#111111' : '#ffffff');
 function lum(hex: string) { const n = parseInt(hex.slice(1), 16); const f = (v: number) => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(n >> 16) + 0.7152 * f((n >> 8) & 255) + 0.0722 * f(n & 255); }
+function jenuh(hex: string) { const n = parseInt(hex.slice(1), 16); const r = (n >> 16) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255; const mx = Math.max(r, g, b), mn = Math.min(r, g, b); return mx === 0 ? 0 : (mx - mn) / mx; }
 function rasioKontras(a: string, b: string) { if (!hexOk(a) || !hexOk(b)) return 1; const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
 
 /** Pecah teks jadi baris yang muat di lebar tertentu. "**kata**" = ditekankan (warna aksen). */
@@ -124,13 +125,20 @@ export async function renderSlide(gayaId: string, s: IsiSlide, no: number, n: nu
     const { createCanvas } = kanvas();
     const st = gayaDesain(gayaId), W = opsi.w || 1080, H = opsi.h || 1350;
     const w = { ...st.w };
+    let tekanKartu = '#ffffff';
     if (merek.aksenMerek && merek.warna?.some(hexOk)) {
-        // Warna merek dipakai sebagai aksen hanya kalau terbaca di latar gaya ini (kontras ≥ 3); kalau tidak, coba warna merek lain, lalu kembali ke aksen gaya.
-        const latar = st.id === 'bold-signal' ? w.bg : st.id === 'electric-studio' ? w.bg : st.id === 'creative-voltage' ? w.bg : (w.bg || w.kartu || '#ffffff');
-        const cocok = merek.warna!.filter(hexOk).find((c) => rasioKontras(c, latar) >= 3);
-        if (cocok) w.aksen = cocok;
+        // Hanya warna merek yang "berwarna" (utama/aksen, bukan netral) yang dipakai sebagai aksen, dan hanya kalau terbaca:
+        // gaya yang memakai aksen sebagai LATAR teks putih → kontras dengan putih; selain itu → kontras dengan latar gaya.
+        const calon = [merek.warna![0], merek.warna![3], ...merek.warna!].filter((c) => hexOk(c) && jenuh(c) > 0.25);
+        const sbgLatar = st.id === 'electric-studio' || st.id === 'creative-voltage';
+        const cocok = st.id === 'bold-signal' ? calon.find((c) => rasioKontras(c, w.bg) >= 1.8 && Math.max(rasioKontras(c, '#ffffff'), rasioKontras(c, '#111111')) >= 4.5)
+            : calon.find((c) => (sbgLatar ? rasioKontras(c, '#ffffff') : rasioKontras(c, w.bg || w.kartu || '#ffffff')) >= 3);
+        if (cocok) {
+            w.aksen = cocok;
+            if (st.id === 'bold-signal') { const t = kontras(cocok); tekanKartu = calon.find((c) => c !== cocok && rasioKontras(c, cocok) >= 3) || (t === '#ffffff' ? '#ffd166' : '#ffffff'); }
+        }
     }
-    if (st.id === 'bold-signal') w.teksKartu = kontras(w.aksen);
+    if (st.id === 'bold-signal' && w.aksen !== st.w.aksen) w.teksKartu = kontras(w.aksen);
     const fJ = merek.fontJudul && DAFTAR_FONT.includes(merek.fontJudul) ? merek.fontJudul : st.judul.f;
     const fI = merek.fontIsi && DAFTAR_FONT.includes(merek.fontIsi) ? merek.fontIsi : st.isi.f;
     const c = createCanvas(W, H), g = c.getContext('2d');
@@ -153,7 +161,7 @@ export async function renderSlide(gayaId: string, s: IsiSlide, no: number, n: nu
             g.font = `500 26px "${fI}"`; g.fillStyle = w.teks; g.globalAlpha = 0.6; g.fillText((s.label || merek.nama).toUpperCase(), P * 0.7, P * 0.8); g.globalAlpha = 1;
             if (s.gambar) media = { x: kx + 48, y: ky + 230, w: kw - 96, h: kh * 0.36, r: 18 };
             const ty = media ? media.y + media.h + 36 : ky + kh * (pertama ? 0.36 : 0.3);
-            const hj = J({ x: kx + 48, y: ty, w: kw - 96, h: (ky + kh - 48 - ty) * (s.isi ? 0.58 : 1), maks: pertama ? 104 : 80, warna: w.teksKartu, tekan: '#ffffff', lh: 1.04 });
+            const hj = J({ x: kx + 48, y: ty, w: kw - 96, h: (ky + kh - 48 - ty) * (s.isi ? 0.58 : 1), maks: pertama ? 104 : 80, warna: w.teksKartu, tekan: w.aksen === st.w.aksen ? '#ffffff' : tekanKartu, lh: 1.04 });
             I({ x: kx + 48, y: ty + hj + 22, w: kw - 96, h: ky + kh - 48 - (ty + hj + 22), maks: 38, warna: w.teksKartu });
             teksUtama = w.teks; warnaKaki = w.teks; aksenProgres = w.aksen;
             break;
@@ -245,7 +253,7 @@ export async function renderSlide(gayaId: string, s: IsiSlide, no: number, n: nu
             g.fillStyle = w.bg; g.fillRect(0, 0, W, H);
             g.strokeStyle = '#1a1a1a'; g.lineWidth = 3; g.beginPath(); g.arc(W - P - 70, P + 90, 70, 0, Math.PI * 2); g.stroke();
             g.beginPath(); g.moveTo(W - P - 260, P + 200); g.lineTo(W - P, P + 200); g.stroke(); g.fillStyle = '#1a1a1a'; g.beginPath(); g.arc(W - P - 290, P + 200, 9, 0, Math.PI * 2); g.fill();
-            g.fillStyle = w.aksen; g.beginPath(); g.arc(P + 40, H - P - 140, 120, 0, Math.PI * 2); g.fill();
+            g.fillStyle = st.w.aksen; g.beginPath(); g.arc(P + 40, H - P - 140, 120, 0, Math.PI * 2); g.fill();
             g.font = `italic 400 30px "${fJ}"`; g.fillStyle = w.teks2; g.textBaseline = 'top'; g.fillText(`No. ${no}`, P, P + 40);
             if (s.gambar) media = { x: P, y: H * 0.46, w: W - P * 2, h: H * 0.3, r: 4 };
             const hj = J({ x: P, y: P + 260, w: W - P * 2, h: H * (media ? 0.2 : 0.34), maks: pertama ? 120 : 88, warna: w.teks, tekan: '#a0522d', lh: 1.0 });
