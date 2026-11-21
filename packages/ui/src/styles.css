@@ -3243,7 +3243,7 @@ body.no-office #phaser-container { visibility: hidden; }
 .kr-pita-a { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
 .kr-pita-j { display: flex; flex-direction: column; gap: 2px; } .kr-pita-j b { font-size: 15px; display: flex; align-items: center; gap: 6px; } .kr-pita-j small { color: var(--muted); font-size: 12.5px; }
 .kr-pita-t { display: flex; gap: 8px; flex-wrap: wrap; }
-:root .kr-pita .btn.primary, :root[data-theme="light"] .kr-pita .btn.primary { background: var(--kr); border-color: var(--kr); color: #fff; box-shadow: 0 8px 20px -8px color-mix(in srgb, var(--kr) 70%, transparent); }
+:root:root .kr-pita .btn.primary, :root:root[data-theme="light"] .kr-pita .btn.primary { background: var(--kr); border-color: var(--kr); color: #fff; box-shadow: 0 8px 20px -8px color-mix(in srgb, var(--kr) 70%, transparent); }
 .kr-progres { display: flex; flex-direction: column; gap: 6px; } .kr-progres small { color: var(--muted); font-size: 12.5px; } .kr-progres b { color: var(--text); }
 .kr-bar { height: 8px; border-radius: 99px; background: color-mix(in srgb, var(--kr) 14%, transparent); overflow: hidden; }
 .kr-bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--kr), #a78bfa); border-radius: 99px; transition: width .6s ease; min-width: 8px; }
