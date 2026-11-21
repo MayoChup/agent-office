@@ -3269,7 +3269,7 @@ body.no-office #phaser-container { visibility: hidden; }
 .kr-ulang { align-self: flex-start; }
 .kr-waktu { color: var(--muted); font-size: 11.5px; white-space: nowrap; }
 .kr-tabel { display: flex; flex-direction: column; gap: 2px; font-size: 12.5px; }
-.kr-bar-h, .kr-baris { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) minmax(0, 1fr) 54px minmax(0, .95fr); gap: 6px; align-items: center; }
+.kr-bar-h, .kr-baris { display: grid; grid-template-columns: minmax(100px, 1.35fr) minmax(0, 1fr) minmax(0, 1fr) 54px minmax(0, .95fr); gap: 6px; align-items: center; }
 .kr-bar-h { color: var(--muted); font-size: 11px; padding: 0 6px 2px; }
 .kr-bar-h span:not(:first-child), .kr-baris > span:not(:first-child) { text-align: right; justify-self: end; }
 .kr-baris { padding: 6px; border-radius: 10px; }
