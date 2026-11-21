@@ -45,7 +45,7 @@ jobs:
             --bundle --platform=node --target=node20 \
             --tsconfig=packages/server/tsconfig.json \
             --loader:.py=text --loader:.sh=text \
-            --external:sqlite3 --external:@whiskeysockets/baileys --external:pino \
+            --external:sqlite3 --external:@whiskeysockets/baileys --external:pino --external:@napi-rs/canvas \
             --outfile=release/kantor-server.js
 
       - name: Siapkan paket rilis
@@ -56,6 +56,7 @@ jobs:
           cp kantor/kantor-virtual.service release/
           cp kantor/README-KANTOR.md release/
           cp -r kantor/hermes-skills release/hermes-skills
+          cp -r kantor/fonta release/fonta
           cp kantor/kantor-update.sh kantor/kantor-update.service kantor/kantor-update.timer release/
           chmod +x release/kantor-update.sh
           cd release
@@ -66,6 +67,8 @@ jobs:
           bash ../kantor/ci-run.sh "whatsapp load" node -e "const B=require('@whiskeysockets/baileys'); if(typeof B.default!=='function') throw new Error('baileys'); require('pino'); console.log('whatsapp siap')"
           bash ../kantor/ci-run.sh "pdf" npm install pdfjs-dist@6.2.108 --omit=dev --no-audit --no-fund
           bash ../kantor/ci-run.sh "pdf load" node --input-type=module -e "const p = await import('pdfjs-dist/legacy/build/pdf.mjs'); if (typeof p.getDocument !== 'function') throw new Error('pdfjs'); console.log('pembaca PDF siap')"
+          bash ../kantor/ci-run.sh "desain" npm install @napi-rs/canvas@1.1.1 --omit=dev --no-audit --no-fund
+          bash ../kantor/ci-run.sh "desain load" node -e "const C=require('@napi-rs/canvas'); C.GlobalFonts.registerFromPath('fonta/Outfit.ttf','Outfit'); const c=C.createCanvas(200,100), g=c.getContext('2d'); g.font='800 40px Outfit'; g.fillText('Uji',10,60); if(c.toBuffer('image/png').length<200) throw new Error('canvas'); console.log('mesin desain siap')"
           cd ..
           tar czf kantor-virtual-linux-x64.tar.gz -C release .
           ls -lh kantor-virtual-linux-x64.tar.gz

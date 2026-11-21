@@ -4,7 +4,7 @@ import { apiPost } from '../../kantor/connection';
 import { useInterval } from '../../kantor/aktif';
 
 import { Ikon } from '../../components/Ikon';
-export interface AkunInfo { id: string; nama: string; platform: string; handle: string; warna: string; tersambung: boolean; pengikut: number | null; menunggu: number; sibuk: string }
+export interface AkunInfo { id: string; nama: string; platform: string; handle: string; warna: string; tersambung: boolean; pengikut: number | null; menunggu: number; sibuk: string; siap?: boolean }
 export interface PlatInfo { nama: string; ikon: string; format: string[]; label: Record<string, string>; kunci: Array<{ k: string; label: string; rahasia: boolean }>; catatan: string }
 interface Baris { nama: string; n: number; rataTayang: number; rataJangkauan: number; er: number | null }
 interface Top { akun: string; namaAkun: string; warna: string; platform: string; id: string; kode?: string; judul: string; format: string; tgl: string; tayang?: number; jangkauan?: number; suka?: number; komentar?: number; simpan?: number; bagikan?: number; er: number | null; tautan?: string; nilai?: string }
@@ -72,8 +72,17 @@ export function Beranda({ tab, akun, platform, pilihAkun, kabar }: { tab: string
             {tab === 'ringkasan' && <label>Periode<select value={hari} onChange={(e) => setHari(+e.target.value)}><option value={7}>7 hari</option><option value={30}>30 hari</option><option value={90}>90 hari</option><option value={365}>1 tahun</option></select></label>}
         </div>
     );
-    if (tab === 'kalender') return <>{Filter}<KalenderMaster akun={fAkun} plat={fPlat} daftar={akun} platform={platform} pilihAkun={pilihAkun} /></>;
-    if (!x) return <>{Filter}<section className="sb-card">{d.error ? <div className="error">{d.error}</div> : <div className="pg-skel" style={{ height: 220 }} />}</section></>;
+    const belum = akun.filter((a) => a.siap === false);
+    const Mulai = belum.length > 0 && (
+        <section className="sb-card br-mulai" aria-label="Mulai di sini">
+            <h3>Mulai di sini</h3>
+            <p className="sb-note" style={{ margin: 0 }}>{belum.length === akun.length ? 'Belum ada akun yang dikerjakan tim. Isi brief singkat (±3 menit) — sisanya tim yang mengerjakan: riset, strategi, bio, kalender, sampai sketsa konten pertama.' : 'Akun berikut belum punya brief, jadi tim belum bisa mulai.'}</p>
+            <ul>{belum.map((a) => <li key={a.id}><span><Ikon e={platform[a.platform]?.ikon} /> <b>{a.nama}</b> <small className="sb-note">{platform[a.platform]?.nama}</small></span><button className="btn primary small" onClick={() => pilihAkun(a.id)}>Isi brief</button></li>)}</ul>
+            <p className="sb-note" style={{ margin: '10px 0 0' }}>Mau buat akun baru? Ketuk <b>＋ Akun</b> di atas.</p>
+        </section>
+    );
+    if (tab === 'kalender') return <>{Mulai}{Filter}<KalenderMaster akun={fAkun} plat={fPlat} daftar={akun} platform={platform} pilihAkun={pilihAkun} /></>;
+    if (!x) return <>{Mulai}{Filter}<section className="sb-card">{d.error ? <div className="error">{d.error}</div> : <div className="pg-skel" style={{ height: 220 }} />}</section></>;
     const t = x.total, adaPk = x.seri.some((s) => s.pengikut != null);
     const KPI: Array<[string, string, string?]> = [
         ['Pengikut', angka(t.pengikut), t.tumbuh != null ? `${t.tumbuh >= 0 ? '▲ +' : '▼ '}${angka(t.tumbuh)} periode ini` : 'isi/sambungkan akun'],
@@ -85,6 +94,7 @@ export function Beranda({ tab, akun, platform, pilihAkun, kabar }: { tab: string
     ];
     const r = x.ringkasan;
     return (<>
+        {Mulai}
         {Filter}
         <section className="br-kpi">{KPI.map(([l, v, k]) => <div key={l}><small>{l}</small><b>{v}</b>{k && <em className={k.startsWith('▲') ? 'naik' : k.startsWith('▼') ? 'turun' : ''}>{k}</em>}</div>)}</section>
         <div className="br-dua">

@@ -9,6 +9,9 @@ import os from 'os';
 import path from 'path';
 import type { Request as Req, RequestHandler, Express } from 'express';
 import type { execFile } from 'child_process';
+import { pasangStudio } from './sosmedStudio';
+import type { ModelRouter } from './model';
+import type { ClaudeLangganan } from './claudeLangganan';
 import { Sosmed, ID as ID_SOSMED, hariWib, tambahHari, ambilJson, FORMAT_VIDEO, type Konten, type Format, type Hasil } from './sosmed';
 import * as P from './platform';
 import { LOOK, EFEK, GRADE } from './katalog';
@@ -25,6 +28,8 @@ export interface DepsSosmed {
     roster: () => Array<{ id: string }>; resetRoster: () => void; papan: Papan; percakapan: Percakapan;
     llm: () => { complete: (sys: string, user: string, max: number, coba: number) => Promise<string | null | undefined> } | null | undefined;
     berkas: Berkas; kabari: (t: string) => Promise<any>; idJoni: string; namaJoni: () => string; aturSosmed: string; jalankanBerkas: typeof execFile;
+    /** Router model (AI visi untuk label aset, kunci OpenRouter untuk gambar AI) & otak berat Claude (riset, tata desain). */
+    router?: () => ModelRouter | undefined; claude?: ClaudeLangganan;
 }
 const WARNA = ['#ec4899', '#0ea5e9', '#f59e0b', '#8b5cf6', '#10b981', '#ef4444', '#14b8a6', '#6366f1'];
 const UMUR_ANALISA = 14 * 86400_000;
@@ -43,7 +48,8 @@ export function pasangSosmed(d: DepsSosmed) {
     const suaraDari = (a: AkunSosmed) => path.join(os.homedir(), '.claude', 'instagram', a.id === 'utama' ? 'voice.md' : `voice-${a.id}.md`);
     const peta = new Map<string, Sosmed>();
     const teksInsight = () => (glob.ringkasan ? [glob.ringkasan.teks, glob.ringkasan.arahNiche ? `Arah niche: ${glob.ringkasan.arahNiche}` : '', ...glob.ringkasan.poin.map((x) => `- ${x}`), glob.ringkasan.ide.length ? `Ide dari data: ${glob.ringkasan.ide.join('; ')}` : ''].filter(Boolean).join('\n') : '') + (glob.ideBerita && Date.now() - glob.ideBerita.at < 10 * 86400_000 ? `\nIde dari berita minggu ini (Nina, divisi Trading):\n${glob.ideBerita.teks}` : '');
-    const muat = (a: AkunSosmed) => { const s = new Sosmed(d.dataDir, suaraDari(a), { file: a.id === 'utama' ? 'sosmed.json' : `sosmed-${a.id}.json`, platform: a.platform }); s.insightGlobal = teksInsight(); peta.set(a.id, s); return s; };
+    let studio: ReturnType<typeof pasangStudio> | null = null;
+    const muat = (a: AkunSosmed) => { const s = new Sosmed(d.dataDir, suaraDari(a), { file: a.id === 'utama' ? 'sosmed.json' : `sosmed-${a.id}.json`, platform: a.platform }); s.insightGlobal = teksInsight(); peta.set(a.id, s); studio?.sambung({ a, s }); return s; };
     for (const a of akun) muat(a);
     const ctx = (id: string): Ctx => { const a = akun.find((x) => x.id === id); const s = a && peta.get(a.id); if (!a || !s) throw new Error('Akun tidak ditemukan.'); return { a, s }; };
     const ctxReq = (req: Req) => ctx(String(req.query.akun || 'utama'));
@@ -58,7 +64,14 @@ export function pasangSosmed(d: DepsSosmed) {
     const label = (a: AkunSosmed) => `${a.nama} · ${P.PLATFORM[a.platform].nama}`;
 
     /* ── Kerja AI ── */
-    async function kerjaSosmed(aiId: string, judul: string, prompt: string, detail = ''): Promise<string> {
+    async function kerjaSosmed(aiId: string, judul: string, prompt: string, detail = '', berat = false): Promise<string> {
+        // Tugas berat (riset niche, strategi): otak Claude dari langganan Pak Rico — bisa mencari di web. Gagal/habis → jalur biasa.
+        if (berat && d.claude?.boleh()) {
+            try {
+                return await papan.jalankan({ ai: aiId, nama: `${(PERAN_SOSMED[aiId] || aiId).split(' (')[0]} · otak Claude`, judul, detail: `${detail} · riset web`.trim(), sumber: 'tugas' },
+                    async () => (await d.claude!.jalankan(aiId, `${prompt}\n\nCari data nyata di web (akun pesaing, tren, pertanyaan penonton) sebelum menjawab; sebut sumbernya di bagian "sumber" bila ada. Keluarkan JSON saja sesuai format.`)).teks);
+            } catch (e: any) { console.warn(`[Sosmed] Claude gagal untuk ${judul}, pakai jalur biasa:`, e?.message || e); }
+        }
         if (d.roster().some((x) => x.id === aiId)) {
             try { return await percakapan.tugas(aiId, judul, prompt, detail); }
             catch (e: any) { console.warn(`[Sosmed] ${aiId} gagal, pakai otak cadangan:`, e?.message || e); }
@@ -70,10 +83,10 @@ export function pasangSosmed(d: DepsSosmed) {
     }
     const duaKali = async <T>(fn: () => Promise<T>): Promise<T> => { try { return await fn(); } catch { return fn(); } };
     const j = (c: Ctx, t: string) => `[${label(c.a)}] ${t}`;
-    const analisa = (c: Ctx) => duaKali(async () => c.s.terimaAnalisa(await kerjaSosmed(ID_SOSMED.riset, j(c, 'Analisa niche'), c.s.promptAnalisa(), 'Dasar untuk strategi dan semua ide konten.')));
+    const analisa = (c: Ctx) => duaKali(async () => c.s.terimaAnalisa(await kerjaSosmed(ID_SOSMED.riset, j(c, 'Analisa niche'), c.s.promptAnalisa(), 'Dasar untuk strategi dan semua ide konten.', true)));
     async function strategi(c: Ctx, arahan = '') {
         if (!c.s.st.analisa || Date.now() - c.s.st.analisa.at > UMUR_ANALISA) await analisa(c).catch((e) => console.warn('[Sosmed] analisa:', e?.message || e));
-        await duaKali(async () => c.s.terimaStrategi(await kerjaSosmed(ID_SOSMED.kepala, j(c, 'Menyusun niche, pilar & jadwal format'), c.s.promptStrategi(arahan), 'Strategi akun: niche, penonton, pilar konten, jadwal format per hari.')));
+        await duaKali(async () => c.s.terimaStrategi(await kerjaSosmed(ID_SOSMED.kepala, j(c, 'Menyusun niche, pilar & jadwal format'), c.s.promptStrategi(arahan), 'Strategi akun: niche, penonton, pilar konten, jadwal format per hari.', true)));
     }
     async function rencana(c: Ctx, mulai = hariWib(), hari = 7, arahan = '') {
         if (!c.s.st.strategi) await strategi(c);
@@ -98,14 +111,18 @@ export function pasangSosmed(d: DepsSosmed) {
         }
         if (!k.naskah || k.status === 'rencana') await duaKali(async () => s.terimaNaskah(k, await kerjaSosmed(ID_SOSMED.penulis, j(c, `Naskah (${k.format}): ${k.judul}`), s.promptNaskah(k), `${k.tgl} · pilar ${k.pilar} · skill reels-cepat`)));
         await duaKali(async () => s.terimaProduksi(k, await kerjaSosmed(ID_SOSMED.produksi, j(c, `Prompt produksi: ${k.judul}`), s.promptProduksi(k), `Gaya: ${s.gayaDari(k)?.nama || (FORMAT_VIDEO(k.format) ? 'dipilih AI' : 'gambar')}`)));
+        if (!FORMAT_VIDEO(k.format)) await studio?.desainOtomatis(c, k).catch((e) => console.warn('[Sosmed] desain otomatis:', e?.message || e));
     }
     const paketProfil = (c: Ctx, arahan = '') => duaKali(async () => c.s.terimaPaketProfil(await kerjaSosmed(ID_SOSMED.kepala, j(c, 'Paket profil & bio akun'), c.s.promptPaketProfil(arahan), 'Nama, username, bio, link bio, highlight, foto profil, postingan pertama.')));
     /** Setelah kuis awal: semua langkah agency berjalan berurutan, progresnya terlihat di halaman akun. */
-    async function jalankanStarter(c: Ctx) {
+    async function jalankanStarter(c: Ctx, ulang = false) {
         const { s } = c;
+        let adaGagal = false;
         const langkah = async (id: string, fn: () => Promise<any>) => {
+            // Ulang: langkah yang sudah berhasil dilewati; yang gagal (dan sesudahnya) dicoba lagi.
+            if (ulang && s.st.setup?.langkah.find((l) => l.id === id)?.status === 'selesai') return;
             s.tandaiSetup(id, 'jalan');
-            try { await fn(); s.tandaiSetup(id, 'selesai'); } catch (e: any) { s.tandaiSetup(id, 'gagal', String(e?.message || e)); }
+            try { await fn(); s.tandaiSetup(id, 'selesai'); } catch (e: any) { adaGagal = true; s.tandaiSetup(id, 'gagal', String(e?.message || e)); }
         };
         await langkah('analisa', () => analisa(c));
         await langkah('strategi', () => strategi(c));
@@ -113,12 +130,27 @@ export function pasangSosmed(d: DepsSosmed) {
         await langkah('rencana', () => rencana(c, hariWib(), 7));
         await langkah('konten', async () => {
             const awal = s.st.konten.filter((k) => k.tgl >= hariWib() && k.status === 'rencana').slice(0, 2);
-            for (const k of awal) await kembangkan(c, k).catch((e) => { k.galat = String(e?.message || e).slice(0, 200); s.simpan(); });
+            if (!awal.length && !s.st.konten.some((k) => k.tgl >= hariWib() && k.status !== 'rencana')) throw new Error('Belum ada jadwal konten — kalender 7 hari perlu jadi dulu.');
+            let jadi = 0, galat = '';
+            for (const k of awal) await kembangkan(c, k).then(() => { jadi++; }).catch((e) => { galat = String(e?.message || e).slice(0, 200); k.galat = galat; s.simpan(); });
+            if (awal.length && !jadi) throw new Error(galat || 'Sketsa belum berhasil dibuat.');
         });
         s.st.harianKe = hariWib(); s.simpan();
         const kepala = d.roster().some((x) => x.id === ID_SOSMED.kepala);
+        if (adaGagal) {
+            const n = s.st.setup?.langkah.filter((l) => l.status === 'gagal').length || 0;
+            percakapan.pesan(kepala ? ID_SOSMED.kepala : d.idJoni, kepala ? ID_SOSMED.kepala : d.idJoni, kepala ? 'Maya' : d.namaJoni(), `Pak Rico, persiapan akun **${label(c.a)}** belum tuntas: ${n} langkah gagal (biasanya karena otak AI sedang sibuk/limit). Buka menu Konten → akun ini, lalu tekan **Coba lagi langkah yang gagal**.`);
+            return;
+        }
         percakapan.pesan(kepala ? ID_SOSMED.kepala : d.idJoni, kepala ? ID_SOSMED.kepala : d.idJoni, kepala ? 'Maya' : d.namaJoni(), `Pak Rico, akun **${label(c.a)}** sudah siap: analisa niche, strategi, profil & bio, kalender 7 hari, dan sketsa konten pertama. Buka menu **Konten** → akun ini.`);
-        d.kabari(`✅ Akun ${label(c.a)} siap: strategi, bio, kalender & sketsa pertama sudah dibuat. Buka menu Konten.`).catch(() => undefined);
+    }
+    const tumbuh = (c: Ctx) => duaKali(async () => c.s.terimaTumbuh(await kerjaSosmed(ID_SOSMED.kepala, j(c, 'Rencana pertumbuhan minggu ini'), c.s.promptTumbuh(), 'Rutinitas interaksi harian, tren, kolaborasi, giveaway, iklan.', true)));
+    async function laporanBulan(c: Ctx, bulan: string) {
+        const raw = await kerjaSosmed(ID_SOSMED.kepala, j(c, `Laporan bulanan ${bulan}`), c.s.promptLaporan(bulan), 'Laporan ala agency: angka, yang berhasil, rencana bulan depan.');
+        const lap = c.s.terimaLaporan(bulan, raw.replace(/^```\w*\n?|```$/g, '').trim());
+        const kepala = d.roster().some((x) => x.id === ID_SOSMED.kepala);
+        percakapan.pesan(kepala ? ID_SOSMED.kepala : d.idJoni, kepala ? ID_SOSMED.kepala : d.idJoni, kepala ? 'Maya' : d.namaJoni(), `📊 **Laporan bulanan ${label(c.a)} — ${bulan}**\n\n${lap.teks}`);
+        return lap;
     }
     const evaluasi = (c: Ctx, k: Konten) => duaKali(async () => c.s.terimaEvaluasi(k, await kerjaSosmed(ID_SOSMED.kepala, j(c, `Evaluasi hasil: ${k.judul}`), c.s.promptEvaluasi(k), 'Membandingkan hasil postingan dengan rata-rata akun.')));
     const pelajaran = (c: Ctx) => duaKali(async () => c.s.terimaPelajaran(await kerjaSosmed(ID_SOSMED.kepala, j(c, 'Menarik pelajaran dari hasil posting'), c.s.promptPelajaran(), 'Pelajaran ini dipakai untuk rencana dan naskah berikutnya.')));
@@ -160,8 +192,11 @@ export function pasangSosmed(d: DepsSosmed) {
             if (s.st.mingguKe !== hari && new Date(`${hari}T00:00:00Z`).getUTCDay() === 1) {
                 if (!s.st.analisa || Date.now() - s.st.analisa.at > UMUR_ANALISA) { s.sibuk = 'analisa'; await analisa(c).catch((e) => console.warn('[Sosmed] analisa:', e?.message || e)); }
                 if (s.st.konten.filter((k) => k.hasil?.length).length >= 2) { s.sibuk = 'pelajaran'; await pelajaran(c).catch((e) => console.warn('[Sosmed] pelajaran:', e?.message || e)); }
+                s.sibuk = 'tumbuh'; await tumbuh(c).catch((e) => console.warn('[Sosmed] tumbuh:', e?.message || e));
                 s.st.mingguKe = hari;
             }
+            const bulanLalu = new Date(Date.parse(`${hari.slice(0, 7)}-01T00:00:00Z`) - 86400_000).toISOString().slice(0, 7);
+            if (s.st.laporanKe !== bulanLalu && s.st.konten.some((k) => k.tgl.startsWith(bulanLalu) && k.status === 'terbit')) { s.sibuk = 'laporan'; await laporanBulan(c, bulanLalu).catch((e) => console.warn('[Sosmed] laporan:', e?.message || e)); }
             if (s.slotKosong(hari, 7).length) { s.sibuk = 'rencana'; await rencana(c, hari, 7).catch((e) => console.warn('[Sosmed] rencana:', e?.message || e)); }
             s.sibuk = 'naskah';
             for (const k of s.st.konten.filter((x) => (x.tgl === hari || x.tgl === besok) && (x.status === 'rencana' || x.status === 'naskah' || (x.status === 'sketsa' && x.varian?.some((v) => !v.promptVideo && !v.promptEdit))))) {
@@ -174,7 +209,6 @@ export function pasangSosmed(d: DepsSosmed) {
                 nKom ? `💬 ${nKom} komentar baru, draf balasannya sudah disiapkan Dea.` : '', 'Buka menu **Konten** untuk memilih sketsa, menyalin prompt, menaruh hasil, lalu tekan Setujui.'].filter(Boolean).join('\n\n');
             const kepala = d.roster().some((x) => x.id === ID_SOSMED.kepala);
             percakapan.pesan(kepala ? ID_SOSMED.kepala : d.idJoni, kepala ? ID_SOSMED.kepala : d.idJoni, kepala ? 'Maya' : d.namaJoni(), isi);
-            if (r.hariIni.length) d.kabari(`🎬 ${label(a)} hari ini: ${r.hariIni.map((k) => `${nf(k)} ${k.judul}`).join('; ')}. Buka menu Konten.`).catch(() => undefined);
             s.st.harianKe = hari; s.simpan();
         } finally { s.sibuk = ''; }
     }
@@ -298,6 +332,9 @@ export function pasangSosmed(d: DepsSosmed) {
         try { berkas.buatFolder('Sosmed', nm); } catch { /* ada */ }
         return `Sosmed/${nm}`;
     };
+    studio = pasangStudio({ app, requireToken, berkas, papan, dataDir: d.dataDir, ctxReq: ctxReq as any, semua: semua as any, folderAkun: folderAkun as any, label: label as any,
+        router: d.router || (() => undefined), claude: d.claude, kerjaSosmed: (ai, judul, prompt, detail) => kerjaSosmed(ai, judul, prompt, detail) });
+    for (const c of semua()) studio.sambung(c);
     const infoAkun = (a: AkunSosmed) => { const s = peta.get(a.id)!; return { ...a, tersambung: !!sambungan(a), siap: s.siap, sibuk: s.sibuk, pengikut: s.st.pengikut.length ? s.st.pengikut[s.st.pengikut.length - 1].n : null, menunggu: s.st.konten.filter((k) => k.tgl >= hariWib() && ['sketsa', 'prompt', 'aset', 'gagal'].includes(k.status)).length }; };
     const platformInfo = Object.fromEntries(Object.entries(P.PLATFORM).map(([id, p]) => [id, { nama: p.nama, ikon: p.ikon, format: p.format, label: p.label, kunci: p.kunci.map((x) => ({ k: x.k, label: x.label, rahasia: x.rahasia })), catatan: p.catatan }]));
 
@@ -308,7 +345,7 @@ export function pasangSosmed(d: DepsSosmed) {
             profil: s.st.profil, strategi: s.st.strategi, jadwal: s.jadwal, analisa: s.st.analisa, pelajaran: s.st.pelajaran, gaya: s.semuaGaya, pengikut: s.st.pengikut.slice(-120),
             ...s.ringkas(), hari: hariWib(), sibuk: s.sibuk, siap: s.siap, insight: glob.ringkasan,
             tim: Object.entries(PERAN_SOSMED).map(([id, nama]) => ({ id, nama, ada: d.roster().some((x) => x.id === id) })), ig: !!sambungan(a), bisaKomentar: P.bisaKomentar(a.platform),
-            kunciTerisi: Object.keys(rahasia.baca(a.id)).filter((x) => rahasia.baca(a.id)[x]), starter: s.st.starter, setup: s.st.setup, paketProfil: s.st.paketProfil };
+            kunciTerisi: Object.keys(rahasia.baca(a.id)).filter((x) => rahasia.baca(a.id)[x]), starter: s.st.starter, setup: s.st.setup, paketProfil: s.st.paketProfil, tumbuh: s.st.tumbuh || null, laporan: s.st.laporan || null };
     }));
     app.post('/api/kantor/sosmed/akun', requireToken, sm((req) => {
         const b = req.body || {}, platform = String(b.platform || '') as P.Platform;
@@ -451,6 +488,9 @@ export function pasangSosmed(d: DepsSosmed) {
         if (jn === 'pelajaran') return latar(c, 'pelajaran', () => pelajaran(c));
         if (jn === 'hasil') { if (!sb) throw new Error(`${nm} belum tersambung — isi angka hasil manual di tiap konten.`); return latar(c, 'hasil', () => ambilHasil(c)); }
         if (jn === 'komentar') { if (!sb) throw new Error(`${nm} belum tersambung — tempel komentar/DM manual di kotak bawah.`); return latar(c, 'komentar', () => ambilKomentar(c)); }
+        if (jn === 'tumbuh') return latar(c, 'tumbuh', () => tumbuh(c));
+        if (jn === 'laporan') { const b = /^\d{4}-\d{2}$/.test(String(req.body?.bulan || '')) ? String(req.body.bulan) : hariWib().slice(0, 7); return latar(c, 'laporan', () => laporanBulan(c, b)); }
+        if (jn === 'ulangSetup') { if (!c.s.st.setup) throw new Error('Isi brief akun ini dulu.'); return latar(c, 'starter', () => jalankanStarter(c, true)); }
         if (jn === 'harian') { if (c.s.sibuk) throw new Error('Tim sosmed masih mengerjakan permintaan sebelumnya.'); harian(c, 'diminta Bapak').catch((e) => console.warn('[Sosmed]', e?.message || e)); return { sibuk: 'harian' }; }
         throw new Error('Jenis tidak dikenal.');
     }));

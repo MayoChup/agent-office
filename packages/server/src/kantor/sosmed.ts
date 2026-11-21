@@ -38,7 +38,9 @@ export interface Varian {
     voiceover?: string; jumlahKata?: number; storyboard: Adegan[]; musik?: string; sampul?: string; caption?: string; hashtag?: string[]; ajakan?: string;
     promptVideo?: string; promptSuara?: { teks: string; gaya: string; pengaturan: string }; rekam?: string; promptEdit?: string; galat?: string;
 }
-export interface Slide { no: number; judul: string; isi: string; visual: string }
+export interface Slide { no: number; judul: string; isi: string; visual: string; /** id aset Gudang yang tampil di slide ini */ aset?: string }
+/** Saran aset dari tim (BUKAN otomatis dibuat): Pak Rico memilih Buat / Pakai yang ada / Lewati. */
+export interface SaranAset { id: string; jenis: string; nama: string; prompt: string; alasan: string; pengganti?: string; acuan?: string[]; status: 'saran' | 'dibuat' | 'pakai' | 'lewati'; hasil?: string }
 export interface Sudut { sudut: string; hook: string; scroll: number; relevansi: number; skor: number }
 export interface Gaya { id: string; nama: string; jenis: 'real' | 'animasi'; deskripsi: string; contoh?: { path: string; nama: string } | null; bawaan?: boolean }
 export interface Aset { path: string; nama: string; at: number; /** waktu berkas dihapus otomatis dari VPS (sudah terbit) */ dihapus?: number }
@@ -52,8 +54,11 @@ export interface Konten {
     status: StatusKonten; jam?: string; disetujui?: number; aset?: Aset | null; asetLain?: Aset[]; ig?: { id?: string; tautan?: string; at: number } | null;
     hasil?: Hasil[]; evaluasi?: { at: number; nilai: 'bagus' | 'biasa' | 'kurang'; teks: string } | null;
     galat?: string; dibuat: number; diubah: number;
+    /** Aset Gudang yang dipakai konten ini, saran aset baru, dan desain gambar yang dibuat kantor. */
+    pakaiAset?: string[]; saranAset?: SaranAset[]; desain?: { gaya: string; oleh: 'templat' | 'claude'; at: number; catatan?: string } | null;
 }
 export interface Komentar { id: string; mediaId: string; kontenId?: string; judul?: string; user: string; teks: string; at: number; draf?: string; status: 'baru' | 'draf' | 'terkirim' | 'abaikan'; galat?: string }
+export interface Tumbuh { at: number; ringkas: string; rutinitas: Array<{ tugas: string; menit: number }>; tren: Array<{ topik: string; kenapa: string; ide: string }>; kolaborasi: string[]; giveaway: string; iklan: string; sumber: string }
 export interface LangkahSetup { id: string; label: string; status: 'tunggu' | 'jalan' | 'selesai' | 'gagal'; ket?: string }
 export interface PaketProfil {
     at: number; namaTampilan: string[]; username: string[]; bio: Array<{ teks: string; alasan: string }>; kategori: string; linkBio: { cta: string; isi: string[] };
@@ -63,6 +68,8 @@ interface St {
     profil: Profil; strategi: Strategi | null; analisa: Analisa | null; konten: Konten[]; tren: { at: number; teks: string } | null; gaya: Gaya[];
     starter: { at: number; jawaban: Record<string, any>; ringkas: string } | null; setup: { at: number; selesai: boolean; langkah: LangkahSetup[] } | null; paketProfil: PaketProfil | null;
     pelajaran: { at: number; poin: string[]; ringkas: string } | null; komentar: Komentar[]; pengikut: Array<{ tgl: string; n: number; sumber: 'api' | 'manual' }>; harianKe: string; mingguKe: string; evaluasiKe: string;
+    /** Rencana pertumbuhan mingguan (di luar posting) & laporan bulanan ala agency. */
+    tumbuh?: Tumbuh | null; laporan?: { at: number; bulan: string; teks: string } | null; laporanKe?: string;
 }
 const PROFIL_AWAL: Profil = { akun: '', topik: '', audiens: '', tujuan: '', gaya: '', bahasa: 'Indonesia', perMinggu: 5, format: ['reel', 'feed', 'story'], durasi: 30, durasiPanjang: 300, suara: '', catatan: '', gayaVideo: 'otomatis', look: 'otomatis', grade: 'otomatis' };
 /** Gaya bawaan. Pak Rico bisa menambah gaya sendiri (nama, ciri, dan gambar acuan). */
@@ -144,6 +151,10 @@ function bacaProduksi(raw: string) {
 
 export class Sosmed {
     private file: string;
+    /** Daftar Gudang aset akun ini untuk prompt (diisi sosmedRute). Kosong = gudang belum diisi. */
+    gudangTeks: () => string = () => '';
+    /** id aset yang sah (untuk menyaring jawaban AI). */
+    gudangId: () => string[] = () => [];
     st: St = { profil: { ...PROFIL_AWAL }, strategi: null, analisa: null, starter: null, setup: null, paketProfil: null, konten: [], tren: null, gaya: [], pelajaran: null, komentar: [], pengikut: [], harianKe: '', mingguKe: '', evaluasiKe: '' };
     sibuk = '';
     /** Platform akun ini (Instagram/TikTok/YouTube/Facebook). */
@@ -418,7 +429,7 @@ export class Sosmed {
             `  "sketsa": {"shot":"dekat|sedang|jauh|layar|teks","kamera":"diam|zoom-in|zoom-out|geser-kiri|geser-kanan|naik|turun","objek":[{"jenis":"${JENIS_OBJEK.join('|')}","posisi":"kiri|tengah|kanan","label":"≤3 kata"}]} — maksimal 3 objek, pilih yang paling mewakili adegan. "layar" = rekaman layar HP/laptop; "teks" = hanya tulisan besar.`,
             '- "musik": musik/suasana latar (genre, tempo, suasana) — BUKAN bagian voiceover,',
             `- "sampul": teks & gambar sampul, "caption" ${NAMA_PLATFORM[this.platform]} (baris pertama = hook ulang, ajakan satu aksi${this.platform === 'youtube' ? '; ini jadi deskripsi video' : ''}), "hashtag" ${this.platform === 'youtube' ? '3–5' : this.platform === 'tiktok' ? '3–5' : '5–8'} (1–2 luas, sisanya niche), "ajakan" (satu aksi).`,
-            'Jangan mengarang angka/klaim; tandai [cek: …]. Bahasa manusia: tanpa klise AI, tanpa tanda pisah panjang, emoji 0–2.', '', this.konteks(), '', this.ATURAN,
+            'Jangan mengarang angka/klaim; tandai [cek: …]. Bahasa manusia: tanpa klise AI, tanpa tanda pisah panjang, emoji 0–2.', '', this.bagianGudang(k), '', this.konteks(), '', this.ATURAN,
             '{"varian":[{"sudut":"…","hook":"…","ringkas":"…","scroll":80,"relevansi":75,"gayaId":"…","look":"bold","grade":"dune","efek":["rack-focus","chart-grow"],"voiceover":"[HOOK]\\n…","storyboard":[{"detik":"0–3","visual":"…","teksLayar":"…","narasi":"…","sfx":"…","efek":"rack-focus","sketsa":{"shot":"dekat","kamera":"zoom-in","objek":[{"jenis":"hp","posisi":"tengah","label":"notif stok habis"}]}}],"musik":"…","sampul":"…","caption":"…","hashtag":["#…"],"ajakan":"…"}]}'
         ].filter(Boolean).join('\n');
     }
@@ -442,6 +453,7 @@ export class Sosmed {
         }).filter((x: Varian) => x.hook && x.storyboard.length >= 2);
         if (v.length < 2) throw new Error('Sketsa ide dari AI tidak terbaca (kurang dari 2 ide yang lengkap).');
         v.forEach((x, i) => { x.no = i + 1; });
+        this.terimaAset(k, j);
         k.varian = v; k.pilih = undefined; k.status = 'sketsa'; k.diubah = Date.now(); k.galat = undefined; this.simpan();
     }
     /** Konten sementara dari satu sketsa, supaya prompt produksi bisa ditulis per sketsa. */
@@ -535,9 +547,29 @@ export class Sosmed {
             k.arahan ? `ARAHAN PEMILIK UNTUK KONTEN INI (wajib diikuti): ${k.arahan}` : '',
             bagian[k.format], '',
             'CAPTION per platform: Instagram (baris pertama = hook ulang, 150–300 huruf, ajakan simpan/komen, 5–8 hashtag campuran 1–2 luas + sisanya niche), TikTok (≤150 huruf), YouTube Shorts (judul ≤100 huruf + deskripsi 1–2 kalimat, sertakan #Shorts). Kalau ada CTA kata kunci, ulangi kata yang sama persis di semua caption. Jangan menjanjikan sesuatu yang belum tentu disediakan pemilik — tandai [cek: …].',
-            'Bahasa manusia: tanpa kata klise AI, tanpa tanda pisah panjang, emoji 0–2.', '', this.konteks(), '', this.ATURAN,
+            'Bahasa manusia: tanpa kata klise AI, tanpa tanda pisah panjang, emoji 0–2.', '', this.bagianGudang(k), '', this.konteks(), '', this.ATURAN,
             '{"sudutPilihan":[{"sudut":"…","hook":"…","scroll":80,"relevansi":75}],"hook":"…","hookLain":["…","…"],"naskah":"HOOK: …\\nMASALAH: …\\nSOLUSI: …\\nCTA: …","voiceover":"[HOOK]\\n…","storyboard":[{"detik":"0–3","visual":"…","teksLayar":"…","sfx":"…","narasi":"…"}],"subtitle":["…"],"slide":[{"judul":"…","isi":"…","visual":"…"}],"caption":"…","hashtag":["#…"],"ajakan":"…","captionTiktok":"…","youtube":{"judul":"…","deskripsi":"…"},"sampul":"teks & gambar sampul","musik":"suasana musik latar"}'
         ].filter(Boolean).join('\n');
+    }
+    /** Bagian prompt: aset yang boleh dipakai + aturan saran aset baru. */
+    bagianGudang(k: Konten) {
+        const g = this.gudangTeks();
+        const slide = k.format === 'carousel' || k.format === 'feed';
+        return ['GUDANG ASET AKUN (logo, maskot, foto produk, dll. milik pemilik):', g || '(masih kosong)',
+            g ? `Pakai aset dari gudang yang relevan supaya konsisten — jangan mengarang produk, maskot, atau logo lain. Tulis id yang dipakai di "aset"${slide ? ' dan, per slide, di "slide[].aset" (satu id atau kosong)' : ''}.` : '',
+            'Kalau konten ini JAUH lebih bagus dengan aset baru yang belum ada (mis. maskot dengan pose/ekspresi lain, foto produk dari sudut lain, latar tertentu), tulis paling banyak 2 SARAN di "saranAset" — ini hanya saran, pemilik yang memutuskan dibuat atau tidak. Isi: jenis, nama singkat, prompt pembuat gambar yang jelas (sebut subjek, pose/sudut, latar polos/transparan bila untuk ditempel, gaya sama dengan aset acuan), alasan (1 kalimat), "acuan": id aset gudang yang harus jadi acuan (maskot/produk aslinya), "pengganti": id aset yang ada yang bisa dipakai kalau pemilik memilih tidak membuat. Kalau aset yang ada sudah cukup, "saranAset": [].',
+            `Kunci tambahan JSON: "aset":["id"],${slide ? ' "slide":[{…,"aset":"id"}],' : ''} "saranAset":[{"jenis":"maskot|produk|latar|foto|ikon|lain","nama":"…","prompt":"…","alasan":"…","acuan":["id"],"pengganti":"id"}]`].filter(Boolean).join('\n');
+    }
+    terimaAset(k: Konten, j: any) {
+        const sah = new Set(this.gudangId());
+        if (Array.isArray(j.aset)) k.pakaiAset = [...new Set(j.aset.map((x: any) => String(x)).filter((x: string) => sah.has(x)))].slice(0, 12) as string[];
+        if (Array.isArray(j.slide) && k.slide) j.slide.slice(0, k.slide.length).forEach((y: any, i: number) => { const id = String(y?.aset || ''); if (k.slide![i]) k.slide![i].aset = sah.has(id) ? id : undefined; });
+        if (Array.isArray(j.saranAset)) {
+            const lama = (k.saranAset || []).filter((x) => x.status !== 'saran');
+            const baru = j.saranAset.slice(0, 2).map((x: any) => ({ id: gid(), jenis: satu(x?.jenis, 20) || 'lain', nama: satu(x?.nama, 80), prompt: teks(x?.prompt, 1500), alasan: satu(x?.alasan, 240),
+                acuan: (Array.isArray(x?.acuan) ? x.acuan : []).map(String).filter((id: string) => sah.has(id)).slice(0, 6), pengganti: sah.has(String(x?.pengganti || '')) ? String(x.pengganti) : undefined, status: 'saran' as const })).filter((x: SaranAset) => x.nama && x.prompt);
+            k.saranAset = [...lama, ...baru].slice(-6);
+        }
     }
     terimaNaskah(k: Konten, raw: string) {
         const j = ambilJson(raw); if (!j || (!teks(j.naskah, 10) && !(Array.isArray(j.slide) && j.slide.length))) throw new Error('Naskah dari AI tidak terbaca.');
@@ -552,6 +584,7 @@ export class Sosmed {
         k.ajakan = satu(j.ajakan, 200); k.sampul = satu(j.sampul, 240); k.musik = satu(j.musik, 200);
         k.captionTiktok = satu(j.captionTiktok, 300) || undefined;
         k.youtube = j.youtube && satu(j.youtube.judul, 100) ? { judul: satu(j.youtube.judul, 100), deskripsi: satu(j.youtube.deskripsi, 400) } : undefined;
+        this.terimaAset(k, j);
         k.status = 'naskah'; k.diubah = Date.now(); k.galat = undefined; this.simpan();
     }
     /* ── 5. Prompt produksi (Vino): video/gambar sesuai gaya + suara ElevenLabs ── */
@@ -620,6 +653,40 @@ export class Sosmed {
         const j = ambilJson(raw); if (!j || !satu(j.teks, 10)) throw new Error('Evaluasi dari AI tidak terbaca.');
         k.evaluasi = { at: Date.now(), nilai: ['bagus', 'biasa', 'kurang'].includes(j.nilai) ? j.nilai : 'biasa', teks: teks(j.teks, 1200) }; this.simpan(); return k;
     }
+    /* ── Pertumbuhan di luar posting (Maya + Dea): rutinitas interaksi, tren, kolaborasi, giveaway, iklan ── */
+    promptTumbuh() {
+        const r = this.rataAkun(), pk = this.st.pengikut.slice(-30);
+        return ['Kamu Kepala Social Media di agency. Susun RENCANA PERTUMBUHAN minggu ini untuk akun ini — di luar jadwal posting yang sudah ada.',
+            'Cari tren & percakapan terbaru di niche ini (web) kalau bisa; kalau tidak bisa, katakan terus terang di "sumber".',
+            '- "rutinitas": 4–6 tugas interaksi HARIAN yang konkret & realistis untuk pemilik (total ≤ 30 menit), mis. "Balas semua komentar dalam 1 jam setelah posting", "Komentar bermakna di 5 postingan akun acuan: @…", "Balas 3 story pengikut". Sertakan "menit" per tugas.',
+            '- "tren": 3 topik/format/audio yang sedang naik dan relevan, masing-masing dengan "kenapa" dan "ide" konten konkret untuk akun ini.',
+            '- "kolaborasi": 2–3 ide kolaborasi/collab post/UGC yang masuk akal untuk ukuran akun ini (sebut tipe akun mitra, bukan mengarang nama).',
+            '- "giveaway": satu ide giveaway/kuis sederhana bila cocok, atau "" kalau belum waktunya (mis. pengikut masih sangat sedikit).',
+            '- "iklan": kapan & konten mana yang layak di-boost, anggaran kecil yang wajar (Rp), target audiens; atau "" kalau belum perlu.',
+            `DATA: ${r.n} posting terukur · rata tayang ${r.tayang ?? '-'} · jangkauan ${r.jangkauan ?? '-'} · pengikut: ${pk.length ? `${pk[0].n} → ${pk[pk.length - 1].n} (${pk[0].tgl} s/d ${pk[pk.length - 1].tgl})` : 'belum dicatat'}`,
+            '', this.konteks(false), '', this.ATURAN,
+            '{"ringkas":"1–2 kalimat fokus minggu ini","rutinitas":[{"tugas":"…","menit":5}],"tren":[{"topik":"…","kenapa":"…","ide":"…"}],"kolaborasi":["…"],"giveaway":"…","iklan":"…","sumber":"…"}'].join('\n');
+    }
+    terimaTumbuh(raw: string) {
+        const j = ambilJson(raw); if (!j || !Array.isArray(j.rutinitas)) throw new Error('Rencana pertumbuhan dari AI tidak terbaca.');
+        this.st.tumbuh = { at: Date.now(), ringkas: satu(j.ringkas, 400), rutinitas: j.rutinitas.slice(0, 6).map((x: any) => ({ tugas: satu(x?.tugas ?? x, 220), menit: Math.max(1, Math.min(30, Math.round(+x?.menit) || 5)) })).filter((x: any) => x.tugas),
+            tren: (Array.isArray(j.tren) ? j.tren : []).slice(0, 4).map((x: any) => ({ topik: satu(x?.topik, 120), kenapa: satu(x?.kenapa, 240), ide: satu(x?.ide, 300) })).filter((x: any) => x.topik),
+            kolaborasi: daftar(j.kolaborasi, 3, 240), giveaway: satu(j.giveaway, 400), iklan: satu(j.iklan, 400), sumber: satu(j.sumber, 200) };
+        this.simpan(); return this.st.tumbuh;
+    }
+    /** Laporan bulanan seperti agency ke klien (bulan = YYYY-MM yang dilaporkan). */
+    promptLaporan(bulan: string) {
+        const ks = this.st.konten.filter((k) => k.tgl.startsWith(bulan));
+        const terbit = ks.filter((k) => k.status === 'terbit');
+        const baris = terbit.map((k) => { const h = k.hasil?.slice().sort((a, b) => b.umurJam - a.umurJam)[0]; return `- ${k.tgl} ${k.format} "${k.judul}" · tayang ${h?.tayang ?? '-'} jangkauan ${h?.jangkauan ?? '-'} suka ${h?.suka ?? '-'} komen ${h?.komentar ?? '-'} simpan ${h?.simpan ?? '-'} bagikan ${h?.bagikan ?? '-'}`; });
+        const pk = this.st.pengikut.filter((x) => x.tgl.startsWith(bulan));
+        return [`Kamu Kepala Social Media di agency. Tulis LAPORAN BULANAN ${bulan} untuk pemilik akun (bahasa santai-profesional, ringkas, jujur; jangan mengarang angka).`,
+            'Struktur (markdown): **Ringkasan** (3 kalimat) · **Angka utama** (posting terbit, total tayang/jangkauan, perubahan pengikut, engagement) · **Yang paling berhasil** (2–3 konten + kenapa) · **Yang kurang** (1–2 + pelajaran) · **Rencana bulan depan** (3–5 langkah konkret).',
+            `DIRENCANAKAN ${ks.length} · TERBIT ${terbit.length}`, `PENGIKUT: ${pk.length ? `${pk[0].n} → ${pk[pk.length - 1].n}` : 'belum dicatat'}`, `KONTEN TERBIT:
+${baris.join('\n') || '(belum ada)'}`,
+            this.st.pelajaran ? `PELAJARAN TERAKHIR: ${this.st.pelajaran.ringkas}` : '', '', this.konteks(false)].filter(Boolean).join('\n');
+    }
+    terimaLaporan(bulan: string, raw: string) { const t = teks(raw, 6000); if (t.length < 80) throw new Error('Laporan dari AI terlalu pendek.'); this.st.laporan = { at: Date.now(), bulan, teks: t }; this.st.laporanKe = bulan; this.simpan(); return this.st.laporan; }
     promptPelajaran() {
         const ada = this.st.konten.filter((k) => k.hasil?.length).slice(-30);
         const baris = ada.map((k) => { const h = k.hasil!.slice().sort((a, b) => b.umurJam - a.umurJam)[0]; return `- ${k.tgl} ${k.format} [${k.pilar}] gaya ${this.gayaDari(k)?.nama || '-'} | "${k.judul}" | hook: ${k.hook || '-'} | tayang ${h.tayang ?? '-'} jangkauan ${h.jangkauan ?? '-'} suka ${h.suka ?? '-'} komen ${h.komentar ?? '-'} simpan ${h.simpan ?? '-'} bagikan ${h.bagikan ?? '-'}${k.evaluasi ? ` | nilai ${k.evaluasi.nilai}` : ''}`; });

@@ -8,6 +8,7 @@ import { StoryboardSketsa, type Adegan as AdeganS } from './sosmed/Sketsa';
 import { Beranda, type AkunInfo, type PlatInfo } from './sosmed/Beranda';
 import { GaleriPilih, PratinjauGaya } from './sosmed/Pratinjau';
 import { Starter, type JawabanStarter } from './sosmed/Starter';
+import { TabAset, StudioKonten, type SaranAset } from './sosmed/Studio';
 
 import { Ikon } from '../components/Ikon';
 import { Hidup } from '../components/Hidup';
@@ -21,7 +22,8 @@ interface Aset { path: string; nama: string; dihapus?: number }
 interface Konten {
     id: string; kode?: string; arahan?: string; look?: string; grade?: string; efek?: string[]; varian?: Varian[]; pilih?: number; tgl: string; pilar: string; format: Format; judul: string; sudut: string; tujuan: string; dasar?: string; gayaId?: string;
     sudutPilihan?: Array<{ sudut: string; hook: string; scroll: number; relevansi: number; skor: number }>; hook?: string; hookLain?: string[]; naskah?: string; voiceover?: string; jumlahKata?: number;
-    storyboard?: Adegan[]; subtitle?: string[]; slide?: Array<{ no: number; judul: string; isi: string; visual: string }>;
+    storyboard?: Adegan[]; subtitle?: string[]; slide?: Array<{ no: number; judul: string; isi: string; visual: string; aset?: string }>;
+    pakaiAset?: string[]; saranAset?: SaranAset[]; desain?: { gaya: string; oleh: 'templat' | 'claude'; at: number; catatan?: string } | null;
     caption?: string; hashtag?: string[]; ajakan?: string; captionTiktok?: string; youtube?: { judul: string; deskripsi: string };
     promptVideo?: string; promptGambar?: string; rekam?: string; promptEdit?: string; promptSuara?: { teks: string; gaya: string; pengaturan: string }; musik?: string; sampul?: string;
     status: Status; jam?: string; aset?: Aset | null; asetLain?: Aset[]; ig?: { tautan?: string; at: number } | null; hasil?: Hasil[]; evaluasi?: { at: number; nilai: 'bagus' | 'biasa' | 'kurang'; teks: string } | null; galat?: string;
@@ -39,6 +41,8 @@ interface Data {
     hari: string; sibuk: string; siap: boolean; tim: Array<{ id: string; nama: string; ada: boolean }>; ig: boolean;
     akunAktif: string; platform: string; akun: AkunInfo[]; platformInfo: Record<string, PlatInfo>; katalog: { look: ItemK[]; efek: ItemK[]; grade: ItemK[] };
     pengikut: Array<{ tgl: string; n: number; sumber: string }>; bisaKomentar: boolean; kunciTerisi: string[];
+    tumbuh: { at: number; ringkas: string; rutinitas: Array<{ tugas: string; menit: number }>; tren: Array<{ topik: string; kenapa: string; ide: string }>; kolaborasi: string[]; giveaway: string; iklan: string; sumber: string } | null;
+    laporan: { at: number; bulan: string; teks: string } | null;
     starter: { at: number; jawaban: Record<string, any>; ringkas: string } | null; setup: { at: number; selesai: boolean; langkah: Array<{ id: string; label: string; status: string; ket?: string }> } | null; paketProfil: PaketProfil | null;
 }
 interface PaketProfil { at: number; namaTampilan: string[]; username: string[]; bio: Array<{ teks: string; alasan: string }>; kategori: string; linkBio: { cta: string; isi: string[] }; highlight: Array<{ nama: string; isi: string; sampul: string }>; fotoProfil: string; banner: string; postPertama: Array<{ judul: string; format: string; alasan: string }>; tips: string[] }
@@ -66,7 +70,7 @@ const VIDEO = (f: Format) => f === 'reel' || f === 'story' || f === 'video';
 const RASIO = (f: Format) => (f === 'video' ? '16:9' : f === 'feed' || f === 'carousel' ? (PLAT === 'tiktok' ? '9:16' : '4:5') : '9:16');
 function post<T = any>(path: string, body: unknown) { return apiPost<T>(`${path}${path.includes('?') ? '&' : '?'}akun=${encodeURIComponent(AKUN)}`, body); }
 const LANGKAH: Array<{ s: Status[]; label: string }> = [{ s: ['rencana'], label: 'Ide' }, { s: ['sketsa', 'naskah'], label: 'Sketsa / naskah' }, { s: ['prompt'], label: 'Prompt siap' }, { s: ['aset', 'gagal'], label: 'Berkas masuk' }, { s: ['terjadwal', 'mengunggah', 'manual'], label: 'Dijadwalkan' }, { s: ['terbit'], label: 'Terbit' }];
-const SIBUK: Record<string, string> = { revisi: 'Vino sedang merevisi sesuai catatan Bapak…', analisa: 'Tara sedang menganalisa niche…', strategi: 'Tara menganalisa niche, lalu Maya menyusun strategi & jadwal…', rencana: 'Maya sedang mengisi kalender…', naskah: 'Lala menulis naskah, lalu Vino menyiapkan prompt…', harian: 'Tim menyiapkan konten hari ini & besok…', hasil: 'Mengambil angka hasil & pengikut…', komentar: 'Mengambil komentar & menyiapkan draf balasan…', evaluasi: 'Maya sedang menganalisa hasil postingan…', pelajaran: 'Maya menarik pelajaran dari semua postingan…' };
+const SIBUK: Record<string, string> = { revisi: 'Vino sedang merevisi sesuai catatan Bapak…', analisa: 'Tara sedang menganalisa niche…', strategi: 'Tara menganalisa niche, lalu Maya menyusun strategi & jadwal…', rencana: 'Maya sedang mengisi kalender…', naskah: 'Lala menulis naskah, lalu Vino menyiapkan prompt…', harian: 'Tim menyiapkan konten hari ini & besok…', hasil: 'Mengambil angka hasil & pengikut…', komentar: 'Mengambil komentar & menyiapkan draf balasan…', evaluasi: 'Maya sedang menganalisa hasil postingan…', pelajaran: 'Maya menarik pelajaran dari semua postingan…', desain: 'Kantor sedang mendesain slide…', tumbuh: 'Maya menyusun rencana pertumbuhan minggu ini…', laporan: 'Maya menulis laporan bulanan…', starter: 'Tim sedang menyiapkan akun…' };
 const HARI = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
 const HARI_PANJANG = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
 const tglId = (t: string, opt: Intl.DateTimeFormatOptions = { weekday: 'long', day: 'numeric', month: 'long' }) => new Date(`${t}T00:00:00Z`).toLocaleDateString('id-ID', { ...opt, timeZone: 'UTC' });
@@ -107,7 +111,7 @@ export function SosmedPage() {
     const nAntre = x?.semua.filter((k) => k.tgl >= x.hari && ['prompt', 'aset', 'gagal'].includes(k.status)).length || 0;
     const nKom = x?.komentar.filter((c) => c.status === 'draf' || c.status === 'baru').length || 0;
     const TAB = useMemo(() => beranda ? [{ k: 'ringkasan', ico: '📊', label: 'Ringkasan performa' }, { k: 'kalender', ico: '🗓️', label: 'Kalender master' }] : [
-        { k: 'hari', ico: '🎬', label: 'Hari ini' }, { k: 'antre', ico: '📤', label: 'Antrean unggah', badge: nAntre || undefined }, { k: 'kalender', ico: '🗓️', label: 'Kalender' }, { k: 'analisa', ico: '🔎', label: 'Analisa niche' }, { k: 'strategi', ico: '🧭', label: 'Strategi' },
+        { k: 'hari', ico: '🎬', label: 'Hari ini' }, { k: 'antre', ico: '📤', label: 'Antrean unggah', badge: nAntre || undefined }, { k: 'kalender', ico: '🗓️', label: 'Kalender' }, { k: 'aset', ico: '🧰', label: 'Gudang aset' }, { k: 'analisa', ico: '🔎', label: 'Analisa niche' }, { k: 'strategi', ico: '🧭', label: 'Strategi' },
         { k: 'gaya', ico: '🎨', label: 'Gaya & efek' }, { k: 'profil', ico: '🪪', label: 'Profil & bio' }, { k: 'kinerja', ico: '📈', label: 'Hasil posting' }, { k: 'komentar', ico: '💬', label: 'Komentar & DM', badge: nKom || undefined }, { k: 'akun', ico: '⚙️', label: 'Akun & tim' }
     ], [nKom, nAntre, beranda]);
     const [tabAkun, setTabAkun] = useState(() => { try { return localStorage.getItem(LS) || 'hari'; } catch { return 'hari'; } });
@@ -119,6 +123,7 @@ export function SosmedPage() {
     const [msg, setMsg] = useState('');
     const [buka, setBuka] = useState<string | null>(null);
     const [kuis, setKuis] = useState(false);
+    const [lain, setLain] = useState(false);
     const gambarGaya = useGambarGaya(d.data?.gaya || []);
     GAMBAR = gambarGaya;
     useInterval(() => d.reload(), x?.sibuk || x?.semua.some((k) => k.status === 'mengunggah') ? 5000 : null);
@@ -134,7 +139,16 @@ export function SosmedPage() {
     );
     if (!d.data) return <div className="pg sm">{kepala}<section className="sb-card">{d.error ? <div className="error">{d.error}</div> : <div className="pg-skel" style={{ height: 200 }} />}</section></div>;
     if (!beranda && !daftar.some((a) => a.id === akunId)) { setTimeout(() => pilihAkun('beranda'), 0); return null; }
-    const tabs = <div className="sm-tabs" role="tablist">{TAB.map((t) => <button key={t.k} role="tab" aria-selected={tab === t.k} className={tab === t.k ? 'on' : ''} onClick={() => setTab(t.k)}><Ikon e={t.ico} /> {t.label}{(t as any).badge ? <em>{(t as any).badge}</em> : null}</button>)}</div>;
+    // Tab utama (dipakai tiap hari) di depan; sisanya di "Lainnya" supaya tidak 10 tab sejajar.
+    const UTAMA = ['hari', 'antre', 'kalender', 'aset', 'kinerja', 'komentar'];
+    const tombolTab = (t: (typeof TAB)[number]) => <button key={t.k} role="tab" aria-selected={tab === t.k} className={tab === t.k ? 'on' : ''} onClick={() => { setTab(t.k); if (UTAMA.includes(t.k)) setLain(false); }}><Ikon e={t.ico} /> {t.label}{(t as any).badge ? <em>{(t as any).badge}</em> : null}</button>;
+    const tabLain = beranda ? [] : TAB.filter((t) => !UTAMA.includes(t.k));
+    const bukaLain = lain || tabLain.some((t) => t.k === tab);
+    const tabs = beranda ? <div className="sm-tabs" role="tablist">{TAB.map(tombolTab)}</div> : (<>
+        <div className="sm-tabs" role="tablist">{TAB.filter((t) => UTAMA.includes(t.k)).map(tombolTab)}
+            <button type="button" className={`sm-tab-lain ${bukaLain ? 'on' : ''}`} aria-expanded={bukaLain} onClick={() => setLain(!bukaLain)}><Ikon e="⋯" /> Lainnya</button></div>
+        {bukaLain && <div className="sm-tabs sm-tabs-2" role="tablist" aria-label="Tab lainnya">{tabLain.map(tombolTab)}</div>}
+    </>);
     if (beranda) return <div className="pg sm">{kepala}{tabs}{msg && <div className="fin-alert">{msg}</div>}<Beranda tab={tab} akun={daftar} platform={d.data.platformInfo} pilihAkun={pilihAkun} kabar={kabar} /></div>;
     if (!x) return <div className="pg sm">{kepala}<section className="sb-card"><div className="pg-skel" style={{ height: 200 }} /></section></div>;
     const kartu = (k: Konten) => <KartuKonten key={k.id} k={k} x={x} buka={buka === k.id} onBuka={() => setBuka(buka === k.id ? null : k.id)} aksi={aksi} kabar={kabar} gambarGaya={gambarGaya} />;
@@ -146,19 +160,21 @@ export function SosmedPage() {
             {msg && <div className="fin-alert">{msg}</div>}
             {x.siap && <AngkaUtama x={x} setTab={setTab} />}
             {x.sibuk && <div className="hz-bukti ok"><span className="pk-jalan"><i /></span><span>{SIBUK[x.sibuk] || 'Tim sedang bekerja…'}</span></div>}
-            {x.setup && (!x.setup.selesai || Date.now() - x.setup.at < 86400_000) && <ProgresSetup x={x} />}
+            {x.setup && (!x.setup.selesai || x.setup.langkah.some((l) => l.status === 'gagal') || Date.now() - x.setup.at < 86400_000) && <ProgresSetup x={x} jalankan={jalankan} />}
+            {x.siap && !kuis && tab !== 'akun' && <LangkahBerikut x={x} setTab={setTab} />}
             {(kuis || (!x.strategi && !x.starter && !x.setup)) && tab !== 'akun' ? <Starter key={x.akunAktif} platform={x.platformInfo[x.platform]} formatPlatform={x.platformInfo[x.platform]?.format || []} labelFormat={x.platformInfo[x.platform]?.label || {}}
                 gaya={x.gaya.map((g) => ({ ...g, ket: g.deskripsi }))} katalog={x.katalog} sibuk={!!x.sibuk} gambarGaya={gambarGaya} batal={x.strategi || x.starter ? () => setKuis(false) : undefined}
                 kirim={(jw: JawabanStarter) => { aksi(post('/api/kantor/sosmed/starter', { jawaban: jw }), 'Brief diterima. Tim mulai bekerja — progresnya terlihat di atas.'); setKuis(false); }} />
-            : !x.siap && tab !== 'akun' && tab !== 'gaya' && <Mulai x={x} setTab={setTab} />}
-            {x.siap && <Hidup key={`${akunId}-hari`} aktif={tab === 'hari'}><TabHari {...p} /></Hidup>}
+            : !x.siap && tab !== 'akun' && tab !== 'gaya' && <Mulai bukaKuis={() => setKuis(true)} />}
+            {x.siap && <Hidup key={`${akunId}-hari`} aktif={tab === 'hari'}><RutinitasHari {...p} /><TabHari {...p} /></Hidup>}
             {x.siap && <Hidup key={`${akunId}-antre`} aktif={tab === 'antre'}><TabAntre {...p} /></Hidup>}
             {x.siap && <Hidup key={`${akunId}-kalender`} aktif={tab === 'kalender'}><TabKalender {...p} /></Hidup>}
+            {x.siap && <Hidup key={`${akunId}-aset`} aktif={tab === 'aset'}><TabAset akun={akunId} kabar={kabar} namaAkun={x.akun.find((a) => a.id === akunId)?.nama || ''} /></Hidup>}
             {x.siap && <Hidup key={`${akunId}-analisa`} aktif={tab === 'analisa'}><TabAnalisa {...p} /></Hidup>}
-            {x.siap && <Hidup key={`${akunId}-strategi`} aktif={tab === 'strategi'}><TabStrategi {...p} /></Hidup>}
+            {x.siap && <Hidup key={`${akunId}-strategi`} aktif={tab === 'strategi'}><TabStrategi {...p} /><KartuTumbuh {...p} /></Hidup>}
             <Hidup key={`${akunId}-gaya`} aktif={tab === 'gaya'}><TabGaya {...p} /></Hidup>
             {x.siap && <Hidup key={`${akunId}-profil`} aktif={tab === 'profil'}><TabProfil {...p} /></Hidup>}
-            {x.siap && <Hidup key={`${akunId}-kinerja`} aktif={tab === 'kinerja'}><TabKinerja {...p} /></Hidup>}
+            {x.siap && <Hidup key={`${akunId}-kinerja`} aktif={tab === 'kinerja'}><TabKinerja {...p} /><KartuLaporan {...p} /></Hidup>}
             {x.siap && <Hidup key={`${akunId}-komentar`} aktif={tab === 'komentar'}><TabKomentar {...p} /></Hidup>}
             <Hidup key={`${akunId}-akun`} aktif={tab === 'akun'}><TabAkun {...p} muat={() => d.reload()} keBeranda={() => pilihAkun('beranda')} bukaKuis={() => { setKuis(true); setTab('hari'); }} /></Hidup>
         </div>
@@ -194,15 +210,21 @@ type P = { x: Data; aksi: Aksi; kabar: (m: string) => void; jalankan: (j: string
 function Arahan({ nilai, set, ph }: { nilai: string; set: (v: string) => void; ph: string }) {
     return <label className="sm-arahan"><span><Ikon e="💬" /> Arahan Bapak <small>opsional · wajib diikuti tim</small></span><textarea rows={2} value={nilai} maxLength={1500} placeholder={ph} onChange={(e) => set(e.target.value)} /></label>;
 }
-function ProgresSetup({ x }: { x: Data }) {
+function ProgresSetup({ x, jalankan }: { x: Data; jalankan: P['jalankan'] }) {
     const st = x.setup!; const ikon: Record<string, string> = { tunggu: '○', jalan: '⏳', selesai: '✅', gagal: '⚠️' };
     const selesai = st.langkah.filter((l) => l.status === 'selesai').length;
+    const gagal = st.langkah.filter((l) => l.status === 'gagal').length;
+    const jalan = x.sibuk === 'starter' || st.langkah.some((l) => l.status === 'jalan');
+    const beres = st.selesai && !gagal;
     return (
-        <section className="sb-card sm-setup">
-            <div className="sd-h"><h3>{st.selesai ? <><Ikon e="🎉" /> {'Akun siap'}</> : <><Ikon e="🚀" /> {'Tim sedang menyiapkan akun ini'}</>} <small>{selesai}/{st.langkah.length} langkah</small></h3></div>
+        <section className={`sb-card sm-setup ${gagal && !jalan ? 'ada-gagal' : ''}`}>
+            <div className="sd-h"><h3>{beres ? <><Ikon e="🎉" /> {'Akun siap'}</> : gagal && !jalan ? <><Ikon e="⚠️" /> {`${gagal} langkah belum berhasil`}</> : <><Ikon e="🚀" /> {'Tim sedang menyiapkan akun ini'}</>} <small>{selesai}/{st.langkah.length} langkah</small></h3></div>
             <div className="sm-setup-bar"><i style={{ width: `${(selesai / st.langkah.length) * 100}%` }} /></div>
             <ol>{st.langkah.map((l) => <li key={l.id} className={l.status}><span>{ikon[l.status]}</span>{l.label}{l.status === 'jalan' && <em className="pk-jalan"><i /></em>}{l.ket && <small> — {l.ket}</small>}</li>)}</ol>
-            {st.selesai && <p className="sb-note">Semua sudah dibuat. Mulai dari tab <b>Profil & bio</b> untuk merapikan akun, lalu <b>Hari ini</b> untuk memilih sketsa konten pertama.</p>}
+            {beres && <p className="sb-note">Semua sudah dibuat. Ikuti kartu <b>Langkah berikutnya</b> di atas — satu per satu, tidak perlu menebak harus ke tab mana.</p>}
+            {gagal > 0 && !jalan && <div className="sm-setup-ulang"><p className="sb-note">Biasanya karena otak AI sedang sibuk atau kena batas. Langkah yang sudah berhasil tidak diulang.</p>
+                <button className="btn primary" disabled={!!x.sibuk} onClick={() => jalankan('ulangSetup', 'Tim mencoba lagi langkah yang gagal — progresnya terlihat di sini.')}><Ikon e="↻" /> {'Coba lagi langkah yang gagal'}</button></div>}
+            {jalan && <p className="sb-note">Sekitar 10–20 menit. Bapak boleh menutup halaman ini — Maya mengabari lewat chat saat selesai.</p>}
         </section>
     );
 }
@@ -235,18 +257,54 @@ function TabProfil({ x, jalankan }: P) {
         </section>
     );
 }
-function Mulai({ x, setTab }: { x: Data; setTab: (k: string) => void }) {
-    const ada = x.tim.filter((t) => t.ada).length;
+function Mulai({ bukaKuis }: { bukaKuis: () => void }) {
     return (
         <section className="sb-card sm-mulai">
-            <h3>Mulai dari sini</h3>
-            <ol>
-                <li><b>Bentuk timnya</b> ({ada}/5 anggota ada) dan isi <b>profil akun</b> di tab "Akun & tim". Topik boleh dikosongkan, nanti tim yang mengusulkan niche.</li>
-                <li>Pilih <b>gaya video</b> yang Bapak suka di tab "Gaya video" (boleh dibiarkan otomatis).</li>
-                <li>Tekan <b>Susun strategi</b>. Tara menganalisa niche, lalu Maya menentukan pilar konten dan jadwal feed/reel/story per hari.</li>
-                <li>Tekan <b>Isi kalender</b>. Mulai saat itu, tiap pagi tim menyiapkan naskah dan prompt untuk hari itu dan besoknya.</li>
-            </ol>
-            <button className="btn primary" onClick={() => setTab('akun')}>Buka Akun & tim</button>
+            <h3>Brief akun ini belum lengkap</h3>
+            <p className="sb-note">Jawab beberapa pertanyaan singkat (±3 menit). Setelah itu tim mengerjakan semuanya: riset niche, strategi, bio, kalender, sampai sketsa konten pertama.</p>
+            <button className="btn primary" onClick={bukaKuis}>Isi brief sekarang</button>
+        </section>
+    );
+}
+
+/** Satu langkah yang perlu Bapak lakukan sekarang — supaya tidak perlu menebak harus ke tab mana. */
+const LS_LANGKAH = (akun: string) => `kantor:sosmed-langkah:${akun}`;
+function bacaSudah(akun: string): string[] { try { return JSON.parse(localStorage.getItem(LS_LANGKAH(akun)) || '[]'); } catch { return []; } }
+export function LangkahBerikut({ x, setTab, ekstra }: { x: Data; setTab: (k: string) => void; ekstra?: Array<{ id: string; judul: string; ket: string; tab: string; tombol: string; manual?: boolean; aktif: boolean }> }) {
+    const [sudah, setSudah] = useState(() => bacaSudah(x.akunAktif));
+    useEffect(() => { setSudah(bacaSudah(x.akunAktif)); }, [x.akunAktif]);
+    const tandai = (id: string) => { const b = [...new Set([...sudah, id])]; setSudah(b); try { localStorage.setItem(LS_LANGKAH(x.akunAktif), JSON.stringify(b)); } catch { /* */ } };
+    if (!x.setup || !x.setup.selesai || x.setup.langkah.some((l) => l.status === 'gagal')) return null;
+    const perluPilih = x.semua.filter((k) => k.tgl >= x.hari && k.status === 'sketsa').length;
+    const perluBuat = x.semua.filter((k) => k.tgl >= x.hari && ['prompt', 'aset', 'gagal'].includes(k.status)).length;
+    const kom = x.komentar.filter((c) => c.status === 'draf' || c.status === 'baru').length;
+    const daftar = [
+        { id: 'profil', judul: 'Pasang profil akun', ket: `Salin nama, username, dan bio pilihan ke ${PLAT_NAMA}, lalu pasang foto profil.`, tab: 'profil', tombol: 'Buka Profil & bio', manual: true, aktif: !!x.paketProfil },
+        { id: 'gudang', judul: 'Isi Gudang aset', ket: 'Unggah logo, foto produk, maskot, atau foto tempat. Semua konten mengambil dari sini supaya feed konsisten.', tab: 'aset', tombol: 'Buka Gudang aset', manual: true, aktif: true },
+        { id: 'brand', judul: 'Atur brand kit', ket: 'Minta usulan Maya untuk palet, font, gaya desain, dan konsep logo — lalu pilih yang Bapak suka. Ada juga foto profil & cover highlight siap pakai.', tab: 'aset', tombol: 'Atur brand kit', manual: true, aktif: true },
+        ...(ekstra || []),
+        { id: 'pilih', judul: `Pilih sketsa untuk ${perluPilih} konten`, ket: 'Tiap konten punya beberapa sketsa. Ketuk yang paling Bapak suka — tim lanjut menulis naskah & caption.', tab: 'hari', tombol: 'Pilih sketsa', aktif: perluPilih > 0 },
+        { id: 'buat', judul: `Buat ${perluBuat} konten`, ket: 'Naskah & prompt sudah siap. Tekan "Kirim ke Claude" atau salin promptnya, lalu unggah hasilnya dan Setujui.', tab: 'antre', tombol: 'Buka Antrean unggah', aktif: perluBuat > 0 },
+        { id: 'komentar', judul: `Balas ${kom} komentar/DM`, ket: 'Dea sudah menyiapkan draf balasan. Tinggal periksa dan kirim.', tab: 'komentar', tombol: 'Buka Komentar & DM', aktif: kom > 0 },
+        { id: 'sambung', judul: `Sambungkan ${PLAT_NAMA} (opsional)`, ket: 'Supaya konten terbit otomatis tepat jamnya dan angka hasilnya terbaca sendiri. Tanpa ini pun tetap jalan — Bapak diingatkan untuk unggah manual.', tab: 'akun', tombol: 'Sambungkan', manual: true, aktif: !x.ig },
+    ];
+    const kini = daftar.find((l) => l.aktif && !(l.manual && sudah.includes(l.id)));
+    const total = daftar.filter((l) => l.manual || l.aktif).length, beres = daftar.filter((l) => l.manual && sudah.includes(l.id)).length;
+    return (
+        <section className="sb-card sm-langkah" aria-label="Langkah berikutnya">
+            {kini ? (<>
+                <small className="sm-langkah-k">Langkah berikutnya{total > 1 ? ` · ${beres} beres` : ''}</small>
+                <h3>{kini.judul}</h3>
+                <p>{kini.ket}</p>
+                <div className="sm-langkah-a">
+                    <button className="btn primary" onClick={() => setTab(kini.tab)}>{kini.tombol}</button>
+                    {kini.manual && <button className="btn" onClick={() => tandai(kini.id)}>{kini.id === 'sambung' ? 'Nanti saja' : 'Sudah'}</button>}
+                </div>
+            </>) : (<>
+                <small className="sm-langkah-k">Langkah berikutnya</small>
+                <h3><Ikon e="✅" /> Semua beres untuk sekarang</h3>
+                <p>Tiap pagi tim menyiapkan sketsa untuk hari ini dan besok. Kalau ada yang perlu Bapak lakukan, muncul di sini.</p>
+            </>)}
         </section>
     );
 }
@@ -337,7 +395,7 @@ function TabAntre({ x, aksi, kabar, setTab }: P) {
         </section>
         <section className="sb-card">
             <div className="sd-h"><h3>2 · Siap disetujui <small>{siap.length}</small></h3>
-                <button className="btn primary" disabled={!dipilih.length} onClick={async () => { if ((await konfirmasi(`Setujui ${dipilih.length} konten? Masing-masing ${x.ig ? 'terbit otomatis' : 'diingatkan lewat Telegram'} pada tanggal & jamnya.`))) aksi(post<{ dijadwalkan: number; masalah: string[] }>('/api/kantor/sosmed/setujui-semua', { ids: dipilih.map((k) => k.id) }).then((r) => { if (r.masalah.length) kabar(`${r.dijadwalkan} dijadwalkan. Belum bisa: ${r.masalah.join(' · ')}`); return r; }), `✓ ${dipilih.length} konten dijadwalkan.`); }}>✓ Setujui semua ({dipilih.length})</button></div>
+                <button className="btn primary" disabled={!dipilih.length} onClick={async () => { if ((await konfirmasi(`Setujui ${dipilih.length} konten? Masing-masing ${x.ig ? 'terbit otomatis' : 'diingatkan lewat chat Maya'} pada tanggal & jamnya.`))) aksi(post<{ dijadwalkan: number; masalah: string[] }>('/api/kantor/sosmed/setujui-semua', { ids: dipilih.map((k) => k.id) }).then((r) => { if (r.masalah.length) kabar(`${r.dijadwalkan} dijadwalkan. Belum bisa: ${r.masalah.join(' · ')}`); return r; }), `✓ ${dipilih.length} konten dijadwalkan.`); }}>✓ Setujui semua ({dipilih.length})</button></div>
             {!siap.length && <div className="fin-empty">Belum ada konten yang berkasnya sudah masuk.</div>}
             <div className="sm-ablist">{siap.map((k) => <label key={k.id} className="sm-ab-c"><input type="checkbox" checked={pilih[k.id] !== false} onChange={(e) => setPilih({ ...pilih, [k.id]: e.target.checked })} /><Baris k={k} kanan={<em className="sm-ab-s"><Ikon e="📁" /> {k.aset?.nama}{k.asetLain?.length ? ` +${k.asetLain.length}` : ''}</em>} /></label>)}</div>
             {siap.length > 0 && <p className="sb-note">Caption ikut terunggah apa adanya; periksa dulu di tab Caption pada kartunya bila perlu. Jam bisa diubah di kartu konten.</p>}
@@ -346,7 +404,7 @@ function TabAntre({ x, aksi, kabar, setTab }: P) {
             <div className="sd-h"><h3>3 · Terjadwal <small>{jadwal.length}</small></h3></div>
             {!jadwal.length && <div className="fin-empty">Belum ada yang terjadwal.</div>}
             <div className="sm-ablist">{jadwal.map((k) => <Baris key={k.id} k={k} kanan={k.status === 'mengunggah' ? <span className="pk-jalan"><i /> mengunggah…</span> : k.status === 'manual' ? <em className="sm-ab-s">unggah manual</em> : <button className="btn small" onClick={() => aksi(post(`/api/kantor/sosmed/konten/${k.id}/batal`, {}), 'Jadwal dibatalkan.')}>Batalkan</button>} />)}</div>
-            <p className="sb-note">{x.ig ? 'Kantor mengunggah tepat pada jamnya (dicek tiap menit) dan mengabari Bapak lewat Telegram.' : `${PLAT_NAMA} belum tersambung: pada jamnya Bapak diingatkan lewat Telegram untuk mengunggah manual. Sambungkan akun di Akun & tim supaya terbit otomatis.`} <button className="btn small" onClick={() => setTab('kalender')}>Lihat kalender</button></p>
+            <p className="sb-note">{x.ig ? 'Kantor mengunggah tepat pada jamnya (dicek tiap menit) dan mengabari Bapak lewat chat Maya.' : `${PLAT_NAMA} belum tersambung: pada jamnya Bapak diingatkan lewat chat Maya untuk mengunggah manual. Sambungkan akun di Akun & tim supaya terbit otomatis.`} <button className="btn small" onClick={() => setTab('kalender')}>Lihat kalender</button></p>
         </section>
     </>);
 }
@@ -448,6 +506,52 @@ function TabAnalisa({ x, jalankan }: P) {
     );
 }
 
+/** Rencana pertumbuhan mingguan (di luar posting): tren, kolaborasi, giveaway, iklan. */
+function KartuTumbuh({ x, jalankan }: P) {
+    const t = x.tumbuh;
+    return (
+        <section className="sb-card sm-tumbuh">
+            <div className="sd-h"><h3><Ikon e="🌱" /> Rencana pertumbuhan minggu ini <small>{t ? `diperbarui ${new Date(t.at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })} · otomatis tiap Senin` : 'otomatis tiap Senin'}</small></h3>
+                <button className="btn small" disabled={!!x.sibuk} onClick={() => jalankan('tumbuh', 'Maya menyusun rencana pertumbuhan (±1–3 menit).')}>{t ? <><Ikon e="↻" /> Susun ulang</> : 'Susun sekarang'}</button></div>
+            {!t ? <div className="fin-empty">Di luar posting: rutinitas interaksi harian, tren yang sedang naik, ide kolaborasi, giveaway, dan kapan layak pasang iklan.</div> : (<>
+                {t.ringkas && <p className="sm-p">{t.ringkas}</p>}
+                {t.tren.length > 0 && <div className="sm-blok"><div className="sm-blok-h"><b><Ikon e="📈" /> Tren yang bisa dipakai</b></div><ul>{t.tren.map((y) => <li key={y.topik}><b>{y.topik}</b> — {y.kenapa}<br /><small className="sb-note">Ide: {y.ide}</small></li>)}</ul></div>}
+                {t.kolaborasi.length > 0 && <div className="sm-blok"><div className="sm-blok-h"><b><Ikon e="🤝" /> Kolaborasi</b></div><ul>{t.kolaborasi.map((y) => <li key={y}>{y}</li>)}</ul></div>}
+                {t.giveaway && <div className="sm-blok"><div className="sm-blok-h"><b><Ikon e="🎁" /> Giveaway / kuis</b></div><p className="sm-p">{t.giveaway}</p></div>}
+                {t.iklan && <div className="sm-blok"><div className="sm-blok-h"><b><Ikon e="📣" /> Iklan (boost)</b></div><p className="sm-p">{t.iklan}</p></div>}
+                {t.sumber && <small className="sb-note">Sumber: {t.sumber}</small>}
+            </>)}
+        </section>
+    );
+}
+/** Daftar interaksi harian (Dea): dicentang per hari di HP ini. */
+function RutinitasHari({ x }: P) {
+    const t = x.tumbuh?.rutinitas || [];
+    const kunci = `kantor:sosmed-rutin:${x.akunAktif}:${x.hari}`;
+    const [ok, setOk] = useState<number[]>(() => { try { return JSON.parse(localStorage.getItem(kunci) || '[]'); } catch { return []; } });
+    useEffect(() => { try { setOk(JSON.parse(localStorage.getItem(kunci) || '[]')); } catch { setOk([]); } }, [kunci]);
+    if (!t.length) return null;
+    const togel = (i: number) => { const b = ok.includes(i) ? ok.filter((y) => y !== i) : [...ok, i]; setOk(b); try { localStorage.setItem(kunci, JSON.stringify(b)); } catch { /* */ } };
+    const menit = t.reduce((a, y) => a + y.menit, 0);
+    return (
+        <section className="sb-card sm-rutin" aria-label="Rutinitas interaksi hari ini">
+            <div className="sd-h"><h3><Ikon e="💬" /> Rutinitas interaksi hari ini <small>{ok.length}/{t.length} beres · ±{menit} menit</small></h3></div>
+            <ul>{t.map((y, i) => <li key={i}><label className="st-cek"><input type="checkbox" checked={ok.includes(i)} onChange={() => togel(i)} /> <span className={ok.includes(i) ? 'coret' : ''}>{y.tugas}</span> <small className="sb-note">{y.menit} mnt</small></label></li>)}</ul>
+        </section>
+    );
+}
+/** Laporan bulanan ala agency. */
+function KartuLaporan({ x, jalankan }: P) {
+    const l = x.laporan, [buka, setBuka] = useState(false);
+    return (
+        <section className="sb-card sm-laporan">
+            <div className="sd-h"><h3><Ikon e="📊" /> Laporan bulanan <small>{l ? `terakhir: ${l.bulan}` : 'otomatis tiap awal bulan'} · juga dikirim ke chat Maya</small></h3>
+                <button className="btn small" disabled={!!x.sibuk} onClick={() => jalankan('laporan', 'Maya menulis laporan bulan ini (±1–2 menit).')}>Buat laporan bulan ini</button></div>
+            {l ? (<><button className="btn-link" onClick={() => setBuka(!buka)} aria-expanded={buka}>{buka ? 'Sembunyikan' : `Baca laporan ${l.bulan}`}</button>{buka && <pre className="sm-pre sm-laporan-isi">{l.teks}</pre>}</>)
+                : <div className="fin-empty">Ringkasan angka, konten terbaik & terlemah, dan rencana bulan depan — seperti laporan agency ke klien.</div>}
+        </section>
+    );
+}
 function TabStrategi({ x, jalankan }: P) {
     const [arahan, setArahan] = useState('');
     const s = x.strategi;
@@ -764,7 +868,7 @@ function KartuKonten({ k, x, buka, onBuka, aksi, kabar, gambarGaya }: { k: Konte
                     </>) : (<>
                         {k.pilih && k.varian?.length ? <p className="sm-dipilih"><Ikon e="✏" /> Paket dari <b>sketsa #{k.pilih}</b> · kode berkas <b className="mono">{label(k)}</b> {!['terjadwal', 'mengunggah', 'terbit'].includes(k.status) && <button className="btn small" onClick={() => setGanti(true)}>Lihat / ganti sketsa</button>}</p> : null}
                         <div className="sm-sub-tab" role="tablist">{[['produksi', '🎬 Produksi'], ['naskah', '📝 Naskah'], ['caption', '✍️ Caption'], ['hasil', '📈 Hasil']].map(([kk, l]) => <button key={kk} role="tab" aria-selected={sub === kk} className={sub === kk ? 'on' : ''} onClick={() => setSub(kk)}>{l}</button>)}</div>
-                        {sub === 'produksi' && <Produksi k={k} x={x} aksi={aksi} kabar={kabar} />}
+                        {sub === 'produksi' && <><StudioKonten akun={x.akunAktif} k={k} kabar={kabar} muat={() => aksi(Promise.resolve())} sibuk={sibuk} /><Produksi k={k} x={x} aksi={aksi} kabar={kabar} /></>}
                         {sub === 'naskah' && <Naskah k={k} durasi={x.profil.durasi} />}
                         {sub === 'caption' && <Caption k={k} aksi={aksi} />}
                         {sub === 'hasil' && <HasilKonten k={k} x={x} aksi={aksi} />}
@@ -961,7 +1065,7 @@ function Produksi({ k, x, aksi, kabar }: { k: Konten; x: Data; aksi: Aksi; kabar
                 <div className="sm-aksi">
                     {k.status !== 'terbit' && k.status !== 'mengunggah' && <button className="btn" disabled={naik != null} onClick={() => input.current?.click()}>{naik != null ? `Mengunggah ${naik}…` : k.aset ? <><Ikon e="↻" /> {'Ganti berkas'}</> : banyak ? <><Ikon e="⬆" /> {'Unggah semua slide (urut)'}</> : <><Ikon e="⬆" /> {'Unggah berkas'}</>}</button>}
                     {['aset', 'gagal'].includes(k.status) && k.aset && (nanti
-                        ? <button className="btn primary" onClick={() => aksi(post(url('setujui'), {}), `Disetujui — ${x.ig ? 'terbit otomatis' : 'Bapak diingatkan lewat Telegram'} ${kapan(k, x)} WIB.`)}>✓ Setujui · terbit {kapan(k, x)}</button>
+                        ? <button className="btn primary" onClick={() => aksi(post(url('setujui'), {}), `Disetujui — ${x.ig ? 'terbit otomatis' : 'Bapak diingatkan lewat chat Maya'} ${kapan(k, x)} WIB.`)}>✓ Setujui · terbit {kapan(k, x)}</button>
                         : <button className="btn primary" onClick={async () => { if ((await konfirmasi(x.ig ? `Unggah "${k.judul}" (${FMT[k.format].label}) ke ${PLAT_NAMA} sekarang, beserta captionnya?` : `${PLAT_NAMA} belum tersambung. Tandai "${k.judul}" siap diunggah manual?`))) aksi(post(url('setujui'), { sekarang: true }), x.ig ? `Disetujui — sedang diunggah ke ${PLAT_NAMA}.` : 'Siap diunggah manual: salin caption di tab Caption.'); }}>✓ Setujui{x.ig ? ' & unggah sekarang' : ''}</button>)}
                     {['aset', 'gagal'].includes(k.status) && k.aset && nanti && <button className="btn small" onClick={async () => { if ((await konfirmasi(`Unggah "${k.judul}" sekarang, tidak menunggu jadwal?`))) aksi(post(url('setujui'), { sekarang: true }), 'Disetujui — diunggah sekarang.'); }}>Unggah sekarang</button>}
                     {k.status === 'terjadwal' && <><span className="sm-terjadwal"><Ikon e="⏰" /> Terjadwal {kapan(k, x)} WIB{x.ig ? '' : ' (pengingat)'}</span><button className="btn small" onClick={async () => { if ((await konfirmasi(`Unggah "${k.judul}" sekarang?`))) aksi(post(url('setujui'), { sekarang: true }), 'Diunggah sekarang.'); }}>Unggah sekarang</button><button className="btn small" onClick={() => aksi(post(url('batal'), {}), 'Jadwal dibatalkan.')}>Batalkan jadwal</button></>}

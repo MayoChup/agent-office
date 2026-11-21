@@ -35,6 +35,8 @@ export class ModelRouter {
     lindungi() { return this.env.KANTOR_FREELLM_PRIVAT === '0'; }
     /** Kunci baru dari formulir Pak Rico langsung dipakai tanpa memulai ulang kantor. */
     setEnv(k: string, v: string) { this.env = { ...this.env, [k]: v }; this.visiOr = { at: 0, model: [] }; }
+    /** Kunci OpenRouter (hanya dipakai di VPS untuk gambar AI; tidak pernah dikirim ke tampilan). */
+    kunciOpenRouter() { return this.env.OPENROUTER_API_KEY || ''; }
     private bolehFree(id: string) { return !(this.lindungi() && AI_PRIVAT.test(id)); }
     private file: string;
     st: St = { atur: {}, hari: '', pakai: {}, aiHari: {}, riwayat: [], review: null, modelAuto: {} };

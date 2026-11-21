@@ -1046,7 +1046,7 @@ app.post('/api/kantor/hr/usulan/:id', requireToken, async (req, res) => {
 const sosmedTim = pasangSosmed({
     app, requireToken, dataDir: config.dataDir, hermesHome: config.hermesHome, skillDir: path.join(__dirname, 'hermes-skills'),
     roster, resetRoster: () => { rosterCache.at = 0; }, papan, percakapan, llm: () => OfficeRoom.sharedLlm() as any,
-    berkas, kabari: kabariTelegram, idJoni: ID_JONI, namaJoni, aturSosmed: ATUR_SOSMED, jalankanBerkas
+    berkas, kabari: kabarDari('sosmed'), idJoni: ID_JONI, namaJoni, aturSosmed: ATUR_SOSMED, jalankanBerkas, router: () => percakapan.router, claude: claudeLangganan
 });
 
 // ── Kotak "Perlu keputusan Bapak" (ATM Munder Difflin: satu antrean persetujuan, tiap item bertiket) ──
