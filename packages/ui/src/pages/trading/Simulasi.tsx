@@ -2,13 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { SimMemuat } from './SimMemuat';
 import { apiGetSimpan, taruhApi } from '../../kantor/api';
 import { apiGet, apiPost } from '../../kantor/connection';
+import { muatKronos } from './Kronos';
 import { usd } from './types';
 
 import { Ikon } from '../../components/Ikon';
 interface Prof { nama: string; masuk: number; target: number; stop: number; ket: string; pMasuk: number; pTarget: number; pStop: number; pTidak: number; rr: number; harapan: number; hariTarget: number | null }
 interface Sim { simulasi: number; langkah: number; satuan: 'hari' | 'batang'; harga: number; profil: Prof[]; contoh: Array<{ c: number[]; akhir: 'target' | 'stop' | 'tidak' }>; sumber: string; menitPerBatang?: number; horizon: number; mode: string;
     mesin?: 'kronos' | 'acak'; model?: string; pita?: Array<{ p10: number; p50: number; p90: number }>; riwayat?: Array<{ t: string; c: number }>; pNaik?: number; medianAkhir?: number; medianPct?: number; detik?: number;
-    kronos?: { terpasang: boolean; memasang: boolean; catatan: string } }
+    kronos?: { terpasang: boolean; memasang: boolean; catatan: string }; tersimpan?: { at: number; baru?: boolean } }
 interface StatusK { terpasang: boolean; memasang: boolean; log: string[]; error: string; model: string }
 
 /** Kartu pemasangan Kronos di VPS (sekali saja). */
@@ -43,7 +44,7 @@ export function Simulasi({ simbol, q, onTutup }: { simbol: string; q: string; on
     const url = `/api/kantor/simulasi/${encodeURIComponent(simbol)}?${q}`;
     useEffect(() => {
         let a = true; setErr('');
-        (ulang ? apiGet<Sim>(url).then((r) => { taruhApi(url, r); return r; }) : apiGetSimpan<Sim>(url, 600_000)).then((r) => a && setD(r)).catch((e) => a && setErr(String(e.message || e)));
+        (ulang ? apiGet<Sim>(`${url}&ulang=1`).then((r) => { taruhApi(url, r); return r; }) : apiGetSimpan<Sim>(url, 600_000)).then((r) => { if (!a) return; setD(r); if (r.mesin === 'kronos') muatKronos(); }).catch((e) => a && setErr(String(e.message || e)));
         return () => { a = false; };
     }, [simbol, q, ulang]);
     const K = d?.mesin === 'kronos';
@@ -71,7 +72,8 @@ export function Simulasi({ simbol, q, onTutup }: { simbol: string; q: string; on
                 <div className="sim-n">{!d ? <><b>Prediksi</b> sedang dihitung…</> : K ? <><b>Kronos</b> · {d.simulasi} jalur prediksi</> : <><b>10.000</b> simulasi acak</>}</div>
                 <button className="icon-btn" onClick={onTutup} aria-label="Tutup">✕</button>
             </div>
-            {!d && !err && <SimMemuat simbol={simbol} />}
+            {!d && !err && <><SimMemuat simbol={simbol} /><p className="sb-note kr-tinggal"><Ikon e="💡" /> Boleh ditinggal — hitungan tetap jalan di server. Hasilnya tersimpan dan langsung tampil saat dibuka lagi, juga di Watchlist (tanda 🔮).</p></>}
+            {d?.tersimpan && K && <div className="kr-simpan"><span><Ikon e="🔮" /> {d.tersimpan.baru ? 'Baru dihitung' : 'Hasil tersimpan'} · {new Date(d.tersimpan.at).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>{!d.tersimpan.baru && <button className="btn small" onClick={() => { setD(null); setUlang((n) => n + 1); }}>Hitung ulang dengan data terbaru</button>}</div>}
             {d && !K && <PasangKronos onSiap={() => setUlang((n) => n + 1)} />}
             {d?.kronos?.catatan && <div className="hz-bukti warn"><Ikon e="⚠" /> <span>Kronos gagal untuk permintaan ini ({d.kronos.catatan}) — yang tampil adalah simulasi acak cadangan. <button className="btn small" onClick={() => setUlang((n) => n + 1)}>Coba lagi</button></span></div>}
             {err && <div className="error">{err}</div>}

@@ -3,6 +3,7 @@ import { useApi } from '../../kantor/api';
 import { apiPost } from '../../kantor/connection';
 import { FaktorKey, ScreenerData } from './types';
 import { Kartu } from './PilihanView';
+import { PitaKronos, PanelKronos, PilihUrut, urutkanKronos, useKronos, type UrutK } from './Kronos';
 
 import { Ikon } from '../../components/Ikon';
 import { konfirmasi } from '../../components/Konfirmasi';
@@ -19,7 +20,11 @@ export function WatchlistView({ data, faktor, onOpen }: { data: ScreenerData; fa
     const [err, setErr] = useState('');
     const folders = fd.data?.folders || [];
     const cur = folders.find((f) => f.id === aktif);
-    const simbol = aktif === 'utama' ? fd.data?.utama || [] : cur?.simbol || [];
+    const simbolAsli = aktif === 'utama' ? fd.data?.utama || [] : cur?.simbol || [];
+    const kd = useKronos();
+    const [urut, setUrut] = useState<UrutK>(() => { try { return (localStorage.getItem('kantor:wl-urut') as UrutK) || 'bawaan'; } catch { return 'bawaan'; } });
+    const gantiUrut = (u: UrutK) => { setUrut(u); try { localStorage.setItem('kantor:wl-urut', u); } catch { /* */ } };
+    const simbol = urutkanKronos(simbolAsli, urut, kd);
 
     const kirim = async (body: any) => {
         setErr('');
@@ -66,14 +71,16 @@ export function WatchlistView({ data, faktor, onOpen }: { data: ScreenerData; fa
                 )}
             </div>
             {err && <div className="error">{err}</div>}
-            {simbol.length === 0 && <div className="sb-card fin-empty">Folder ini masih kosong. Tambahkan kode saham di atas, atau dari halaman detail saham (tombol + Watchlist).</div>}
+            {simbolAsli.length > 0 && <PitaKronos simbol={simbolAsli} />}
+            {simbolAsli.length > 1 && <div className="kr-alat"><PilihUrut urut={urut} setUrut={gantiUrut} />{urut === 'belum' && <small className="sb-note">{simbol.length} belum dihitung untuk gaya ini</small>}</div>}
+            {simbolAsli.length === 0 && <div className="sb-card fin-empty">Folder ini masih kosong. Tambahkan kode saham di atas, atau dari halaman detail saham (tombol + Watchlist).</div>}
             <div className="sb-grid">
                 {simbol.map((s) => {
                     const b = data.baris.find((x) => x.s === s);
                     return (
                         <div key={s} className="wl-item">
-                            {b ? <Kartu b={b} faktor={faktor} onOpen={onOpen} /> : (
-                                <article className="sb-cardx" onClick={() => onOpen(s)}><header><div><b className="mono">{s}</b><small>{data.baris.length ? 'Di luar S&P 500 — ketuk untuk grafik & sinyal' : 'Data pasar belum diambil — ketuk untuk grafik'}</small></div></header></article>
+                            {b ? <Kartu b={b} faktor={faktor} onOpen={onOpen} kronos="panel" /> : (
+                                <article className="sb-cardx" onClick={() => onOpen(s)}><header><div><b className="mono">{s}</b><small>{data.baris.length ? 'Di luar S&P 500 — ketuk untuk grafik & sinyal' : 'Data pasar belum diambil — ketuk untuk grafik'}</small></div></header><PanelKronos s={s} /></article>
                             )}
                             <button className="wl-x" title="Keluarkan dari folder" onClick={() => buang(s)}>✕</button>
                         </div>

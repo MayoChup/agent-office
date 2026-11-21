@@ -4,6 +4,7 @@ import { eventBus } from '../events';
 import React, { useState, useRef, useEffect } from 'react';
 import { useSubNav } from '../kantor/subnav';
 import { Horison, HorisonBar, nilaiH, paramH, MODE_LAMA } from './trading/Horison';
+import { useGayaServer } from './trading/Kronos';
 import { usePreset, PresetPilih, PresetRekomendasi } from './trading/Preset';
 import { UjiMundur } from './trading/UjiMundur';
 import { HistorySinyal } from './trading/History';
@@ -67,6 +68,8 @@ export function TradingPage() {
     const [horison, setHorisonS] = useState<Horison>(() => { try { const v = JSON.parse(localStorage.getItem('kantor:horison') || ''); if (v?.mode === 'tanggal' && !(v.tanggal > new Date().toISOString().slice(0, 10))) return { mode: 'swingpendek' }; if (v?.mode && MODE_LAMA[v.mode]) return { mode: MODE_LAMA[v.mode] }; return v?.mode ? v : { mode: 'swingpendek' }; } catch { return { mode: 'swingpendek' }; } });
     const setHorison = (h: Horison) => { setHorisonS(h); try { localStorage.setItem('kantor:horison', JSON.stringify(h)); } catch { /* */ } };
     const H = nilaiH(horison);
+    // Gaya posisi juga disimpan di server: sama di HP & laptop, dipakai Kronos massal & otomatis tiap pagi.
+    useGayaServer(horison.mode, horison.tanggal, H, (m, t) => setHorison({ mode: m as Horison['mode'], tanggal: t }));
     const [preset, setPresetS] = useState<{ t: string; f: string }>(() => { try { return JSON.parse(localStorage.getItem('kantor:preset') || '') || { t: '', f: '' }; } catch { return { t: '', f: '' }; } });
     const setPreset = (x: { t: string; f: string }) => { setPresetS(x); try { localStorage.setItem('kantor:preset', JSON.stringify(x)); } catch { /* */ } };
     const pd = usePreset();

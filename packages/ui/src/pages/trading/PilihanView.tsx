@@ -1,4 +1,5 @@
 import { Bintang } from './Bintang';
+import { LencanaKronos, PanelKronos } from './Kronos';
 import React, { useMemo, useState } from 'react';
 import { Baris, FaktorKey, FAKTOR, LABELS, Label, ScreenerData, kelas, usd, persen, skorBar } from './types';
 import { Sparkline, Mom } from './Sparkline';
@@ -109,14 +110,14 @@ function FaktorBars({ b }: { b: Baris }) {
     );
 }
 
-export function Kartu({ b, faktor, onOpen }: { b: Baris; faktor: FaktorKey; onOpen: (s: string) => void }) {
+export function Kartu({ b, faktor, onOpen, kronos = 'lencana' }: { b: Baris; faktor: FaktorKey; onOpen: (s: string) => void; kronos?: 'panel' | 'lencana' }) {
     const sk = b.skor?.[faktor];
     const pr = b.x?.proyeksi;
     return (
         <article className="sb-cardx" onClick={() => onOpen(b.s)}>
             <header>
                 <div><b className="mono">{b.s}</b><small>{b.nama}</small></div>
-                <div className="kc-r">{sk && <span className={`lb ${kelas(sk.label)}`}>{sk.label.toUpperCase()}</span>}<Bintang s={b.s} /></div>
+                <div className="kc-r">{kronos === 'lencana' && <LencanaKronos s={b.s} />}{sk && <span className={`lb ${kelas(sk.label)}`}>{sk.label.toUpperCase()}</span>}<Bintang s={b.s} /></div>
             </header>
             {faktor === 'semua' && sk?.asli && <div className="sb-tahan" title="Sinyal hanya keluar kalau teknikal, fundamental, berita & whales lengkap">Sinyal {sk.asli} ditahan · menunggu data {sk.kurang?.join(', ')}</div>}
             <div className="sb-price">
@@ -139,6 +140,7 @@ export function Kartu({ b, faktor, onOpen }: { b: Baris; faktor: FaktorKey; onOp
                     ))}
                 </div>
             )}
+            {kronos === 'panel' && <PanelKronos s={b.s} />}
             <div className="sb-ind">
                 <div><small>RSI 14</small><b className="mono">{b.rsi ?? '–'}</b></div>
                 <div><small>Peluang naik 20h</small><b className="mono">{pr ? `${pr.peluangNaik}%` : '–'}</b></div>
@@ -155,7 +157,7 @@ function BarisKecil({ b, faktor, onOpen }: { b: Baris; faktor: FaktorKey; onOpen
     const best = pr?.target.find((t) => t.nama === pr.terbaik);
     return (
         <div className="sb-row" onClick={() => onOpen(b.s)}>
-            <div className="c1 c1-b"><Bintang s={b.s} /><div><b className="mono">{b.s}</b><small>{b.nama}</small></div></div>
+            <div className="c1 c1-b"><Bintang s={b.s} /><div><b className="mono">{b.s} <LencanaKronos s={b.s} /></b><small>{b.nama}</small></div></div>
             <div className="c2 mono">{usd(b.harga)} <em className={b.chg1d >= 0 ? 'up' : 'down'}>{persen(b.chg1d)}</em></div>
             <div className="c3">{b.x && <Sparkline data={b.x.spark} w={90} h={28} />}</div>
             <div className="c4 mono">{best ? <>→ {usd(best.harga)} <small>({best.peluang}%)</small></> : '–'}</div>

@@ -1,3 +1,4 @@
+import { LencanaKronos } from './Kronos';
 import React, { useEffect, useRef, useState } from 'react';
 import { TanggalInput } from '../../components/Tanggal';
 import { createPortal } from 'react-dom';
@@ -82,7 +83,7 @@ export function Portofolio({ onBuka }: { onBuka?: (s: string) => void }) {
                 {d.data.posisi.map((p) => (
                     <div key={p.symbol} className="porto-pos">
                         <div className="pp-top">
-                            <button className="pp-sym" onClick={() => onBuka?.(p.symbol)}><b className="mono">{p.symbol}</b><small>{p.shares} lembar @ {usd(p.entry)} · {p.hari} hari</small></button>
+                            <button className="pp-sym" onClick={() => onBuka?.(p.symbol)}><b className="mono">{p.symbol} <LencanaKronos s={p.symbol} /></b><small>{p.shares} lembar @ {usd(p.entry)} · {p.hari} hari</small></button>
                             <div className="pp-pnl"><b className={`mono ${kls(p.pnl)}`}>{tanda(p.pnl)}</b><small className={kls(p.pnlPct)}>{pc(p.pnlPct)}</small></div>
                         </div>
                         <Rentang p={p} />

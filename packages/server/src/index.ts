@@ -40,6 +40,7 @@ import * as porto from './kantor/portofolio';
 import { PERAN_AI } from './kantor/papan';
 import { Papan, Kerja, bulanWib } from './kantor/papan';
 import { Kronos, BarK, hariBursaBerikut } from './kantor/kronos';
+import { KronosAntre, gayaDari } from './kantor/kronosAntre';
 import { BeritaTerkait } from './kantor/beritaTerkait';
 import ATUR_HR from './kantor/skrip/atur-hr.sh';
 import ATUR_SOSMED from './kantor/skrip/atur-sosmed.sh';
@@ -1172,55 +1173,103 @@ async function prediksiKronos(s: string, H: number, harga: number, batang: BarK[
         pNaik: Math.round((akhir.filter((x) => x > harga).length / n) * 100), medianAkhir: +kuantil(akhir, 0.5).toFixed(2), medianPct: +((kuantil(akhir, 0.5) / harga - 1) * 100).toFixed(2), detik: r.detik
     };
 }
+/** Prediksi satu saham (Kronos bila terpasang; cadangan simulasi acak). Dipakai halaman detail & antrean Kronos. */
+const simJalan = new Map<string, Promise<any>>();
+/** Permintaan yang sama selagi masih dihitung (mis. halaman ditinggal lalu dibuka lagi) menunggu hitungan yang sudah berjalan — tidak menghitung dua kali. */
+function hitungSim(s: string, H: number, mode: string): Promise<any> {
+    const kunci = `${s}|${H}|${mode}|${kronos.terpasang ? 'k' : 's'}`;
+    const ada = simJalan.get(kunci); if (ada) return ada;
+    const p = hitungSimInti(s, H, mode, kunci).finally(() => simJalan.delete(kunci));
+    simJalan.set(kunci, p); return p;
+}
+async function hitungSimInti(s: string, H: number, mode: string, kunci: string): Promise<any> {
+    const c = simCache.get(kunci);
+    if (c && Date.now() - c.at < (c.v.mesin === 'kronos' && H > 1 ? 6 * 3600_000 : 20 * 60_000)) return c.v;
+    const b = screener.hargaTerakhir(s);
+    let out: any, catatan = '';
+    if (H === 1) {
+        // Scalping / day trading: batang menit (CNBC 5 hari).
+        const r = await cnbcChart(s, '5D');
+        const q0 = r.indicators.quote[0];
+        const ts: number[] = r.timestamp;
+        const step = ts.length > 2 ? Math.round(Math.min(...ts.slice(1).map((t, i) => t - ts[i]).filter((x) => x > 0)) / 60) : 5;
+        const hari = new Map<string, number>(); for (const t of ts) { const k = new Date((t - 4 * 3600) * 1000).toISOString().slice(0, 10); hari.set(k, (hari.get(k) || 0) + 1); }
+        const perSesi = Math.max(...hari.values());
+        const harga = Number(q0.close[q0.close.length - 1]) || b?.harga || 0;
+        if (kronos.terpasang) {
+            try {
+                const batang: BarK[] = ts.map((t, i) => ({ t: new Date(t * 1000).toISOString(), o: +q0.open[i], h: +q0.high[i], l: +q0.low[i], c: +q0.close[i], v: +(q0.volume?.[i] || 0) })).filter((x) => x.c > 0 && x.h >= x.l && x.o > 0);
+                const P = Math.min(perSesi, 48);
+                const t0 = ts[ts.length - 1];
+                out = { ...(await prediksiKronos(s, H, harga, batang, Array.from({ length: P }, (_, i) => new Date((t0 + (i + 1) * step * 60) * 1000).toISOString()), 'batang')), menitPerBatang: step, sumber: `CNBC (batang ${step} menit)` };
+            } catch (e: any) { catatan = String(e?.message || e); }
+        }
+        if (!out) {
+            const langkah = langkahDari(q0.high, q0.low, q0.close).filter((x) => Math.abs(x.c - 1) < 0.08);
+            out = { ...simulasi(harga, langkah, Math.min(perSesi, 400), { profil: ['konservatif', 'moderat', 'agresif'], satuan: 'batang' }), mesin: 'acak', menitPerBatang: step, sumber: 'CNBC (menit)' };
+        }
+    } else {
+        const seri = screener.seriHarian(s);
+        if (!seri || !b) throw new Error('Data harga harian belum ada. Tekan ↻ di Trading dulu.');
+        if (kronos.terpasang) {
+            try {
+                const rows = await porto.harian(path.join(config.dataDir, 'portofolio-harga'), s);
+                if (rows.length < 60) throw new Error('Riwayat harga bertanggal kurang dari 60 hari.');
+                const batang: BarK[] = rows.filter((x) => x.c > 0 && x.h >= x.l).map((x) => ({ t: x.t, o: x.o || x.c, h: x.h, l: x.l, c: x.c, v: x.v }));
+                const P = Math.min(H, 120);
+                out = { ...(await prediksiKronos(s, H, batang[batang.length - 1].c, batang, hariBursaBerikut(batang[batang.length - 1].t, P), 'hari')), sumber: `harga harian ${batang.length} hari` };
+            } catch (e: any) { catatan = String(e?.message || e); }
+        }
+        if (!out) out = { ...simulasi(b.harga, langkahDari(seri.h, seri.l, seri.c), H, { profil: ['konservatif', 'moderat', 'agresif'], satuan: 'hari' }), mesin: 'acak', sumber: 'harga harian 1 tahun' };
+    }
+    out.horizon = H; out.mode = mode; out.kronos = { terpasang: kronos.terpasang, memasang: kronos.status().memasang, catatan };
+    if (!catatan) simCache.set(kunci, { at: Date.now(), v: out });
+    if (simCache.size > 100) simCache.delete(simCache.keys().next().value as string);
+    return out;
+}
 app.get('/api/kantor/simulasi/:s', requireToken, async (req, res) => {
     const s = String(req.params.s).toUpperCase().slice(0, 12);
     const [H, mode] = qH(req);
-    const kunci = `${s}|${H}|${mode}|${kronos.terpasang ? 'k' : 's'}`;
-    const c = simCache.get(kunci);
-    if (c && Date.now() - c.at < (c.v.mesin === 'kronos' && H > 1 ? 6 * 3600_000 : 20 * 60_000)) { res.json({ ok: true, ...c.v }); return; }
     try {
-        const b = screener.hargaTerakhir(s);
-        let out: any, catatan = '';
-        if (H === 1) {
-            // Scalping / day trading: batang menit (CNBC 5 hari).
-            const r = await cnbcChart(s, '5D');
-            const q0 = r.indicators.quote[0];
-            const ts: number[] = r.timestamp;
-            const step = ts.length > 2 ? Math.round(Math.min(...ts.slice(1).map((t, i) => t - ts[i]).filter((x) => x > 0)) / 60) : 5;
-            const hari = new Map<string, number>(); for (const t of ts) { const k = new Date((t - 4 * 3600) * 1000).toISOString().slice(0, 10); hari.set(k, (hari.get(k) || 0) + 1); }
-            const perSesi = Math.max(...hari.values());
-            const harga = Number(q0.close[q0.close.length - 1]) || b?.harga || 0;
-            if (kronos.terpasang) {
-                try {
-                    const batang: BarK[] = ts.map((t, i) => ({ t: new Date(t * 1000).toISOString(), o: +q0.open[i], h: +q0.high[i], l: +q0.low[i], c: +q0.close[i], v: +(q0.volume?.[i] || 0) })).filter((x) => x.c > 0 && x.h >= x.l && x.o > 0);
-                    const P = Math.min(perSesi, 48);
-                    const t0 = ts[ts.length - 1];
-                    out = { ...(await prediksiKronos(s, H, harga, batang, Array.from({ length: P }, (_, i) => new Date((t0 + (i + 1) * step * 60) * 1000).toISOString()), 'batang')), menitPerBatang: step, sumber: `CNBC (batang ${step} menit)` };
-                } catch (e: any) { catatan = String(e?.message || e); }
-            }
-            if (!out) {
-                const langkah = langkahDari(q0.high, q0.low, q0.close).filter((x) => Math.abs(x.c - 1) < 0.08);
-                out = { ...simulasi(harga, langkah, Math.min(perSesi, 400), { profil: ['konservatif', 'moderat', 'agresif'], satuan: 'batang' }), mesin: 'acak', menitPerBatang: step, sumber: 'CNBC (menit)' };
-            }
-        } else {
-            const seri = screener.seriHarian(s);
-            if (!seri || !b) throw new Error('Data harga harian belum ada. Tekan ↻ di Trading dulu.');
-            if (kronos.terpasang) {
-                try {
-                    const rows = await porto.harian(path.join(config.dataDir, 'portofolio-harga'), s);
-                    if (rows.length < 60) throw new Error('Riwayat harga bertanggal kurang dari 60 hari.');
-                    const batang: BarK[] = rows.filter((x) => x.c > 0 && x.h >= x.l).map((x) => ({ t: x.t, o: x.o || x.c, h: x.h, l: x.l, c: x.c, v: x.v }));
-                    const P = Math.min(H, 120);
-                    out = { ...(await prediksiKronos(s, H, batang[batang.length - 1].c, batang, hariBursaBerikut(batang[batang.length - 1].t, P), 'hari')), sumber: `harga harian ${batang.length} hari` };
-                } catch (e: any) { catatan = String(e?.message || e); }
-            }
-            if (!out) out = { ...simulasi(b.harga, langkahDari(seri.h, seri.l, seri.c), H, { profil: ['konservatif', 'moderat', 'agresif'], satuan: 'hari' }), mesin: 'acak', sumber: 'harga harian 1 tahun' };
+        // Hasil Kronos tersimpan (dari antrean/hitungan sebelumnya) → tampil langsung, kecuali diminta hitung ulang.
+        if (req.query.ulang !== '1') {
+            const lama = kronosAntre.lengkap(s, mode, H);
+            if (lama && !KronosAntre.basi(lama.at, H)) { res.json({ ok: true, ...lama.out, tersimpan: { at: lama.at } }); return; }
         }
-        out.horizon = H; out.mode = mode; out.kronos = { terpasang: kronos.terpasang, memasang: kronos.status().memasang, catatan };
-        if (!catatan) simCache.set(kunci, { at: Date.now(), v: out });
-        if (simCache.size > 100) simCache.delete(simCache.keys().next().value as string);
-        res.json({ ok: true, ...out });
+        const out = await hitungSim(s, H, mode);
+        kronosAntre.catat(s, mode, H, out);
+        res.json({ ok: true, ...out, tersimpan: out.mesin === 'kronos' ? { at: Date.now(), baru: true } : undefined });
     } catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
+});
+// ── Antrean Kronos (banyak saham di latar belakang) + gaya posisi aktif yang sama di semua perangkat ──
+const kronosAntre = new KronosAntre(config.dataDir, {
+    hitung: (s, H, mode) => hitungSim(s, H, mode === 'scalping' ? 'scalping' : ''),
+    terpasang: () => kronos.terpasang,
+    watchlist: () => tradingDesk.load().watchlist,
+    kabar: (t) => { void kabarDari('trading')(t); },
+    papan: (judul, detail, fn) => papan.jalankan({ ai: 'trading', judul, detail, sumber: 'trading' }, fn)
+});
+app.get('/api/kantor/trading/gaya', requireToken, (_req, res) => { res.json({ ok: true, gaya: kronosAntre.gaya(), tersimpan: kronosAntre.adaGaya() }); });
+app.post('/api/kantor/trading/gaya', requireToken, (req, res) => {
+    try { res.json({ ok: true, gaya: kronosAntre.aturGaya(String(req.body?.mode || ''), req.body?.tanggal ? String(req.body.tanggal) : undefined, Number(req.body?.H) || undefined) }); }
+    catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
+});
+app.get('/api/kantor/kronos/hasil', requireToken, (req, res) => {
+    const g = req.query.m ? gayaDari(String(req.query.m), req.query.tgl ? String(req.query.tgl) : undefined) : kronosAntre.gaya();
+    res.json({ ok: true, gaya: g, ...kronosAntre.daftar(g.mode, g.H), antre: kronosAntre.status() });
+});
+app.post('/api/kantor/kronos/antre', requireToken, (req, res) => {
+    try {
+        const g = req.body?.mode ? gayaDari(String(req.body.mode), req.body?.tanggal ? String(req.body.tanggal) : undefined) : kronosAntre.gaya();
+        const simbol: string[] = Array.isArray(req.body?.simbol) ? req.body.simbol : [];
+        const n = kronosAntre.tambah(simbol, g, simbol.length > 1 ? 'massal' : 'satu');
+        res.json({ ok: true, ditambah: n, antre: kronosAntre.status() });
+    } catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
+});
+app.post('/api/kantor/kronos/antre/batal', requireToken, (_req, res) => { res.json({ ok: true, dibatalkan: kronosAntre.batal(), antre: kronosAntre.status() }); });
+app.post('/api/kantor/kronos/malam', requireToken, (req, res) => {
+    try { res.json({ ok: true, malam: kronosAntre.aturMalam(!!req.body?.nyala, req.body?.jadwal), antre: kronosAntre.status() }); }
+    catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
 });
 app.get('/api/kantor/screener/:s', requireToken, (req, res) => { res.json({ ok: true, spark: screener.spark(String(req.params.s).toUpperCase()) }); });
 app.post('/api/kantor/screener/perbarui', requireToken, (req, res) => {

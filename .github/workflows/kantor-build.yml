@@ -124,7 +124,16 @@ jobs:
           kill %1 || true
           tail -20 /tmp/smoke.log
 
+      - name: Terbitkan rilis uji "kantor-uji" (commit bertanda [uji] — TIDAK dipasang ke VPS)
+        if: contains(github.event.head_commit.message, '[uji]')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete kantor-uji --yes --cleanup-tag || true
+          gh release create kantor-uji kantor-virtual-linux-x64.tar.gz --target "$GITHUB_SHA" --title "Kantor Virtual (uji, belum dipasang)" --notes "Rilis uji dari commit $GITHUB_SHA — VPS tidak mengambil rilis ini." --prerelease
+
       - name: Terbitkan rilis "kantor-latest"
+        if: ${{ !contains(github.event.head_commit.message, '[uji]') }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -137,6 +146,7 @@ jobs:
             --prerelease
 
       - name: Samakan cabang main (untuk Vercel)
+        if: ${{ !contains(github.event.head_commit.message, '[uji]') }}
         run: |
           git fetch --no-tags origin main || true
           git push origin "$GITHUB_SHA:refs/heads/main" || echo "::warning::main tidak bisa disamakan otomatis"
