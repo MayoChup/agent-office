@@ -38,7 +38,28 @@ export interface Varian {
     voiceover?: string; jumlahKata?: number; storyboard: Adegan[]; musik?: string; sampul?: string; caption?: string; hashtag?: string[]; ajakan?: string;
     promptVideo?: string; promptSuara?: { teks: string; gaya: string; pengaturan: string }; rekam?: string; promptEdit?: string; galat?: string;
 }
-export interface Slide { no: number; judul: string; isi: string; visual: string; /** id aset Gudang yang tampil di slide ini */ aset?: string }
+export interface Slide {
+    no: number; judul: string; isi: string; visual: string; /** id aset Gudang yang tampil di slide ini */ aset?: string;
+    /** Tata letak & elemen dibuat-tangan (mesin desain kantor). */
+    tata?: string; angka?: string; poin?: string[]; kiri?: string; kanan?: string; labelKiri?: string; labelKanan?: string; kutipan?: string; sumber?: string;
+    elemen?: Array<{ jenis: string; teks?: string }>; /** gambar elemen konten yang perlu dibuat AI otomatis (mis. "kulkas dua pintu") */ gambarElemen?: string; elemenId?: string; /** id komentar ASLI untuk kartu bukti sosial */ komentar?: string;
+}
+const TATA_OK = ['klasik', 'sampul', 'daftar', 'angka', 'banding', 'kutipan', 'foto', 'penutup'];
+const ELEMEN_OK = ['lingkari', 'garis-bawah', 'stabilo', 'panah', 'catatan', 'selotip', 'polaroid', 'stiker', 'harga', 'cap', 'lokasi', 'bintang', 'tekstur', 'maskot'];
+/** Baca satu slide dari jawaban AI (termasuk tata & elemen). */
+export function bacaSlide(y: any, i: number): Slide {
+    const tx = (v: any, n: number) => (v == null ? '' : String(v).replace(/\s+/g, ' ').trim().slice(0, n));
+    const sl: Slide = { no: i + 1, judul: tx(y?.judul, 140), isi: tx(y?.isi, 400), visual: tx(y?.visual, 400) };
+    if (TATA_OK.includes(y?.tata)) sl.tata = y.tata;
+    if (y?.angka) sl.angka = tx(y.angka, 12);
+    if (Array.isArray(y?.poin)) sl.poin = y.poin.map((p: any) => tx(p, 120)).filter(Boolean).slice(0, 6);
+    for (const k of ['kiri', 'kanan', 'kutipan'] as const) if (y?.[k]) sl[k] = tx(y[k], 240);
+    for (const k of ['labelKiri', 'labelKanan', 'sumber'] as const) if (y?.[k]) sl[k] = tx(y[k], 60);
+    if (Array.isArray(y?.elemen)) sl.elemen = y.elemen.map((e: any) => (typeof e === 'string' ? { jenis: e } : { jenis: String(e?.jenis || ''), teks: e?.teks ? tx(e.teks, 40) : undefined })).filter((e: any) => ELEMEN_OK.includes(e.jenis)).slice(0, 3);
+    if (y?.gambarElemen) sl.gambarElemen = tx(y.gambarElemen, 200);
+    if (y?.komentar) sl.komentar = tx(y.komentar, 40);
+    return sl;
+}
 /** Saran aset dari tim (BUKAN otomatis dibuat): Pak Rico memilih Buat / Pakai yang ada / Lewati. */
 export interface SaranAset { id: string; jenis: string; nama: string; prompt: string; alasan: string; pengganti?: string; acuan?: string[]; status: 'saran' | 'dibuat' | 'pakai' | 'lewati'; hasil?: string }
 export interface Sudut { sudut: string; hook: string; scroll: number; relevansi: number; skor: number }
@@ -55,7 +76,7 @@ export interface Konten {
     hasil?: Hasil[]; evaluasi?: { at: number; nilai: 'bagus' | 'biasa' | 'kurang'; teks: string } | null;
     galat?: string; dibuat: number; diubah: number;
     /** Aset Gudang yang dipakai konten ini, saran aset baru, dan desain gambar yang dibuat kantor. */
-    pakaiAset?: string[]; saranAset?: SaranAset[]; desain?: { gaya: string; oleh: 'templat' | 'claude'; at: number; catatan?: string } | null;
+    pakaiAset?: string[]; saranAset?: SaranAset[]; /** banyaknya elemen hiasan di desain: otomatis (bawaan) / sedikit / tanpa */ hiasan?: 'otomatis' | 'sedikit' | 'tanpa'; desain?: { gaya: string; oleh: 'templat' | 'claude'; at: number; catatan?: string } | null;
 }
 export interface Komentar { id: string; mediaId: string; kontenId?: string; judul?: string; user: string; teks: string; at: number; draf?: string; status: 'baru' | 'draf' | 'terkirim' | 'abaikan'; galat?: string }
 export interface Tumbuh { at: number; ringkas: string; rutinitas: Array<{ tugas: string; menit: number }>; tren: Array<{ topik: string; kenapa: string; ide: string }>; kolaborasi: string[]; giveaway: string; iklan: string; sumber: string }
@@ -517,7 +538,7 @@ export class Sosmed {
     terimaRevisi(k: Konten, no: number | null, raw: string) {
         const j = ambilJson(raw); if (!j || (!j.hook && !j.storyboard && !j.caption && !j.promptVideo && !j.promptGambar)) throw new Error('Revisi dari AI tidak terbaca.');
         const x: any = { ...j }; if (x.ringkas == null && !no) delete x.ringkas;
-        if (!no && Array.isArray(j.slide)) k.slide = j.slide.slice(0, 10).map((y: any, i: number) => ({ no: i + 1, judul: satu(y.judul, 120), isi: satu(y.isi, 400), visual: satu(y.visual, 400) })).filter((y: Slide) => y.judul || y.isi);
+        if (!no && Array.isArray(j.slide)) k.slide = j.slide.slice(0, 10).map((y: any, i: number) => bacaSlide(y, i)).filter((y: Slide) => y.judul || y.isi);
         if (j.promptSuara && !teks(j.promptSuara.teks, 10)) delete x.promptSuara;
         return this.ubahVarian(k.id, no, x);
     }
@@ -558,7 +579,19 @@ export class Sosmed {
         return ['GUDANG ASET AKUN (logo, maskot, foto produk, dll. milik pemilik):', g || '(masih kosong)',
             g ? `Pakai aset dari gudang yang relevan supaya konsisten — jangan mengarang produk, maskot, atau logo lain. Tulis id yang dipakai di "aset"${slide ? ' dan, per slide, di "slide[].aset" (satu id atau kosong)' : ''}.` : '',
             'Kalau konten ini JAUH lebih bagus dengan aset baru yang belum ada (mis. maskot dengan pose/ekspresi lain, foto produk dari sudut lain, latar tertentu), tulis paling banyak 2 SARAN di "saranAset" — ini hanya saran, pemilik yang memutuskan dibuat atau tidak. Isi: jenis, nama singkat, prompt pembuat gambar yang jelas (sebut subjek, pose/sudut, latar polos/transparan bila untuk ditempel, gaya sama dengan aset acuan), alasan (1 kalimat), "acuan": id aset gudang yang harus jadi acuan (maskot/produk aslinya), "pengganti": id aset yang ada yang bisa dipakai kalau pemilik memilih tidak membuat. Kalau aset yang ada sudah cukup, "saranAset": [].',
+            slide ? this.bagianDesain() : '',
             `Kunci tambahan JSON: "aset":["id"],${slide ? ' "slide":[{…,"aset":"id"}],' : ''} "saranAset":[{"jenis":"maskot|produk|latar|foto|ikon|lain","nama":"…","prompt":"…","alasan":"…","acuan":["id"],"pengganti":"id"}]`].filter(Boolean).join('\n');
+    }
+    /** Arahan tata letak & elemen per slide supaya carousel tidak monoton. */
+    bagianDesain() {
+        const kom = this.st.komentar.filter((c) => c.teks && c.teks.length > 12 && c.status !== 'abaikan').slice(-12);
+        return ['DESAIN PER SLIDE (mesin desain kantor yang menggambar; kamu yang menentukan):',
+            '- "tata" tiap slide, bervariasi & sesuai isi: sampul (slide 1), daftar (isi "poin": 3–5 butir pendek), angka (isi "angka": mis. "3 hari", "Rp45rb", "70%"), banding (isi "kiri" & "kanan", opsional "labelKiri"/"labelKanan", mis. Salah/Benar, Dulu/Sekarang), kutipan (isi "kutipan" & "sumber" — hanya kutipan nyata/umum, jangan mengarang testimoni pelanggan), foto (hanya kalau slide punya aset foto), penutup (slide terakhir: ajakan simpan/ikuti), klasik. Jangan dua slide berurutan dengan tata yang sama kecuali daftar lanjutan.',
+            '- Di "judul", tandai 1–3 kata terpenting dengan **dua bintang**.',
+            '- "elemen" (0–2 per slide, jangan tiap slide ramai): lingkari / garis-bawah / stabilo (menyorot kata **tebal**), panah (menunjuk gambar; "teks" pendek tulisan tangan), catatan (tulisan tangan pendek, "teks" ≤4 kata), polaroid / selotip / stiker (gaya tempel gambar), harga (label harga, "teks" mis. Rp45rb — hanya harga NYATA dari brief/gudang), cap ("teks" mis. BARU/TERLARIS — hanya kalau benar), lokasi ("teks" kota), bintang, tekstur, maskot (kalau gudang punya maskot).',
+            '- "gambarElemen": kalau slide jauh lebih jelas dengan ilustrasi benda pendukung yang TIDAK ada di gudang (mis. "kulkas dua pintu", "gelas es kopi", "jam dinding"), tulis nama bendanya (≤6 kata). Ini dibuat otomatis sebagai ilustrasi stiker. Paling banyak 2 per carousel; jangan untuk produk/maskot/logo milik akun (itu pakai aset gudang).',
+            kom.length ? `- "komentar": id komentar ASLI di bawah bila cocok untuk bukti sosial (maks 1 per carousel):\n${kom.map((c) => `[${c.id}] @${c.user || 'pengikut'}: ${c.teks.slice(0, 140)}`).join('\n')}` : '',
+            'Contoh slide: {"judul":"Simpan di **mana**?","tata":"banding","labelKiri":"Salah","kiri":"…","labelKanan":"Benar","kanan":"…","elemen":[{"jenis":"garis-bawah"}],"gambarElemen":"kulkas dua pintu"}'].filter(Boolean).join('\n');
     }
     terimaAset(k: Konten, j: any) {
         const sah = new Set(this.gudangId());
@@ -579,7 +612,7 @@ export class Sosmed {
         k.jumlahKata = k.voiceover ? k.voiceover.replace(/\[[^\]]*\]|\/+|\*+/g, ' ').split(/\s+/).filter((w) => /\w/.test(w)).length : undefined;
         k.storyboard = bacaAdegan(j.storyboard);
         k.subtitle = daftar(j.subtitle, 120, 60);
-        k.slide = (Array.isArray(j.slide) ? j.slide : []).slice(0, 10).map((s: any, i: number) => ({ no: i + 1, judul: satu(s.judul, 120), isi: satu(s.isi, 400), visual: satu(s.visual, 400) })).filter((s: Slide) => s.judul || s.isi);
+        k.slide = (Array.isArray(j.slide) ? j.slide : []).slice(0, 10).map((s: any, i: number) => bacaSlide(s, i)).filter((s: Slide) => s.judul || s.isi);
         k.caption = teks(j.caption, 2200); k.hashtag = daftar(j.hashtag, 10, 40).map((h: string) => `#${h.replace(/^#+/, '').replace(/\s+/g, '')}`).filter((h: string) => h.length > 1);
         k.ajakan = satu(j.ajakan, 200); k.sampul = satu(j.sampul, 240); k.musik = satu(j.musik, 200);
         k.captionTiktok = satu(j.captionTiktok, 300) || undefined;

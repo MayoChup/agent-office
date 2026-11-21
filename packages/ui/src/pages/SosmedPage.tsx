@@ -22,7 +22,8 @@ interface Aset { path: string; nama: string; dihapus?: number }
 interface Konten {
     id: string; kode?: string; arahan?: string; look?: string; grade?: string; efek?: string[]; varian?: Varian[]; pilih?: number; tgl: string; pilar: string; format: Format; judul: string; sudut: string; tujuan: string; dasar?: string; gayaId?: string;
     sudutPilihan?: Array<{ sudut: string; hook: string; scroll: number; relevansi: number; skor: number }>; hook?: string; hookLain?: string[]; naskah?: string; voiceover?: string; jumlahKata?: number;
-    storyboard?: Adegan[]; subtitle?: string[]; slide?: Array<{ no: number; judul: string; isi: string; visual: string; aset?: string }>;
+    storyboard?: Adegan[]; subtitle?: string[]; slide?: Array<{ no: number; judul: string; isi: string; visual: string; aset?: string; tata?: string; poin?: string[]; kiri?: string; kanan?: string; elemen?: Array<{ jenis: string; teks?: string }>; gambarElemen?: string }>;
+    hiasan?: 'otomatis' | 'sedikit' | 'tanpa';
     pakaiAset?: string[]; saranAset?: SaranAset[]; desain?: { gaya: string; oleh: 'templat' | 'claude'; at: number; catatan?: string } | null;
     caption?: string; hashtag?: string[]; ajakan?: string; captionTiktok?: string; youtube?: { judul: string; deskripsi: string };
     promptVideo?: string; promptGambar?: string; rekam?: string; promptEdit?: string; promptSuara?: { teks: string; gaya: string; pengaturan: string }; musik?: string; sampul?: string;
@@ -1107,7 +1108,7 @@ function Naskah({ k, durasi }: { k: Konten; durasi: number }) {
         {k.voiceover && <Blok judul={`Voiceover${k.jumlahKata ? ` · ${k.jumlahKata} kata ≈ ${Math.round(k.jumlahKata / 2.75)} dtk (target ${durasi} dtk)` : ''}`} teks={k.voiceover} salin="Salin voiceover"><small className="sb-note">"/" jeda pendek · "//" jeda panjang · KAPITAL = ditekan</small></Blok>}
         {!!k.slide?.length && (
             <section className="sm-blok"><div className="sm-blok-h"><b>{k.format === 'feed' ? 'Isi gambar' : `Slide (${k.slide.length})`}</b></div>
-                <div className="sm-slide">{k.slide.map((s) => <div key={s.no}><small>{s.no}</small><b>{s.judul}</b><p>{s.isi}</p><em>{s.visual}</em></div>)}</div></section>
+                <div className="sm-slide">{k.slide.map((s) => <div key={s.no}><small>{s.no}{s.tata && s.tata !== 'klasik' ? ` · ${s.tata}` : ''}</small><b>{s.judul.replace(/\*\*/g, '')}</b><p>{s.isi}{s.poin?.length ? ` ${s.poin.map((x) => `✓ ${x}`).join(' ')}` : ''}{s.kiri ? ` ✗ ${s.kiri} ✓ ${s.kanan || ''}` : ''}</p><em>{s.visual}{s.elemen?.length ? ` · elemen: ${s.elemen.map((e) => e.jenis).join(', ')}` : ''}{s.gambarElemen ? ` · ilustrasi: ${s.gambarElemen}` : ''}</em></div>)}</div></section>
         )}
         {!!k.storyboard?.length && (
             <section className="sm-blok"><div className="sm-blok-h"><b>Storyboard sketsa</b></div><StoryboardSketsa adegan={k.storyboard} musik={k.musik} kecil /></section>

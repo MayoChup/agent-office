@@ -29,9 +29,9 @@ const FONTA: Array<[string, string]> = [
     ['SpaceMono-Regular.ttf', 'Space Mono'], ['SpaceMono-Bold.ttf', 'Space Mono'], ['Cormorant.ttf', 'Cormorant'], ['Cormorant-Italic.ttf', 'Cormorant'],
     ['IBMPlexSans.ttf', 'IBM Plex Sans'], ['BodoniModa.ttf', 'Bodoni Moda'], ['DMSans.ttf', 'DM Sans'], ['PlusJakartaSans.ttf', 'Plus Jakarta Sans'],
     ['Outfit.ttf', 'Outfit'], ['Fraunces.ttf', 'Fraunces'], ['WorkSans.ttf', 'Work Sans'], ['Unbounded.ttf', 'Unbounded'], ['Sora.ttf', 'Sora'],
-    ['JetBrainsMono.ttf', 'JetBrains Mono'], ['Archivo.ttf', 'Archivo'], ['Nunito.ttf', 'Nunito'], ['CormorantGaramond.ttf', 'Cormorant Garamond'], ['SourceSerif4.ttf', 'Source Serif 4']
+    ['JetBrainsMono.ttf', 'JetBrains Mono'], ['Archivo.ttf', 'Archivo'], ['Nunito.ttf', 'Nunito'], ['CormorantGaramond.ttf', 'Cormorant Garamond'], ['SourceSerif4.ttf', 'Source Serif 4'], ['Caveat.ttf', 'Caveat']
 ];
-export const DAFTAR_FONT = [...new Set(FONTA.map((f) => f[1]))];
+export const DAFTAR_FONT = [...new Set(FONTA.map((f) => f[1]))].filter((f) => f !== 'Caveat');
 
 /* ── Gaya ── */
 export interface GayaDesain {
@@ -56,7 +56,17 @@ export const GAYA_DESAIN: GayaDesain[] = [
 export const gayaDesain = (id?: string) => GAYA_DESAIN.find((g) => g.id === id) || GAYA_DESAIN[0];
 
 /* ── Data slide ── */
-export interface IsiSlide { judul: string; isi?: string; label?: string; gambar?: Buffer | null; /** produk/logo transparan: ditampilkan utuh (contain); foto: memenuhi bingkai (cover) */ utuh?: boolean }
+/** Tata letak per slide (supaya carousel tidak monoton). 'klasik' = tata bawaan gaya. */
+export const TATA = ['klasik', 'sampul', 'daftar', 'angka', 'banding', 'kutipan', 'foto', 'penutup'] as const;
+export type Tata = (typeof TATA)[number];
+/** Elemen "dibuat tangan" yang ditempel di slide (digambar kode, gratis). */
+export const ELEMEN = ['lingkari', 'garis-bawah', 'stabilo', 'panah', 'catatan', 'selotip', 'polaroid', 'stiker', 'harga', 'cap', 'lokasi', 'bintang', 'tekstur', 'maskot'] as const;
+export interface Elemen { jenis: string; teks?: string }
+export interface IsiSlide {
+    judul: string; isi?: string; label?: string; gambar?: Buffer | null; /** produk/logo transparan: ditampilkan utuh (contain); foto: memenuhi bingkai (cover) */ utuh?: boolean;
+    tata?: Tata; angka?: string; poin?: string[]; kiri?: string; kanan?: string; labelKiri?: string; labelKanan?: string; kutipan?: string; sumber?: string;
+    elemen?: Elemen[]; /** gambar elemen konten (mis. ilustrasi kulkas, latar transparan) */ gambar2?: Buffer | null; maskot?: Buffer | null; komentar?: { teks: string; nama: string } | null;
+}
 export interface InfoMerek { nama: string; handle?: string; warna?: string[]; logo?: Buffer | null; fontJudul?: string; fontIsi?: string; aksenMerek?: boolean }
 export interface OpsiRender { w?: number; h?: number }
 
@@ -67,43 +77,65 @@ function lum(hex: string) { const n = parseInt(hex.slice(1), 16); const f = (v: 
 function jenuh(hex: string) { const n = parseInt(hex.slice(1), 16); const r = (n >> 16) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255; const mx = Math.max(r, g, b), mn = Math.min(r, g, b); return mx === 0 ? 0 : (mx - mn) / mx; }
 function rasioKontras(a: string, b: string) { if (!hexOk(a) || !hexOk(b)) return 1; const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
 
-/** Pecah teks jadi baris yang muat di lebar tertentu. "**kata**" = ditekankan (warna aksen). */
-function bungkus(g: any, teks: string, lebar: number): string[][] {
-    const kata = String(teks || '').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
-    const baris: string[][] = []; let kini: string[] = [];
-    const ukur = (ws: string[]) => g.measureText(ws.join(' ').replace(/\*\*/g, '')).width;
+/** Kata dengan bagian yang ditekankan. "**kata**?" → [{t:"kata",tekan:true},{t:"?",tekan:false}] */
+type Kata = Array<{ t: string; tekan: boolean }>;
+function urai(teks: string): Kata[] {
+    const bagian = String(teks || '').replace(/\s+/g, ' ').trim().split('**');
+    const kata: Kata[] = []; let kini: Kata = [];
+    bagian.forEach((b, i) => {
+        const tekan = i % 2 === 1;
+        b.split(/( )/).forEach((p) => {
+            if (p === ' ') { if (kini.length) kata.push(kini); kini = []; }
+            else if (p) kini.push({ t: p, tekan });
+        });
+    });
+    if (kini.length) kata.push(kini);
+    return kata;
+}
+const polos = (k: Kata) => k.map((x) => x.t).join('');
+/** Pecah teks jadi baris yang muat di lebar tertentu. */
+function bungkus(g: any, kata: Kata[], lebar: number): Kata[][] {
+    const baris: Kata[][] = []; let kini: Kata[] = [];
+    const ukur = (ws: Kata[]) => g.measureText(ws.map(polos).join(' ')).width;
     for (const k of kata) {
         if (kini.length && ukur([...kini, k]) > lebar) { baris.push(kini); kini = [k]; } else kini.push(k);
     }
     if (kini.length) baris.push(kini);
     return baris;
 }
+/** Kotak kata yang ditekankan (**…**) pada blok judul terakhir — dipakai elemen coretan (lingkari, garis bawah, stabilo). */
+let kotakTekan: Array<{ x: number; y: number; w: number; h: number }> = [];
+let catatKotak = false;
 /** Tulis blok teks yang mengecil sendiri sampai muat di kotak. Mengembalikan tinggi yang dipakai. */
-function blok(g: any, teks: string, o: { x: number; y: number; w: number; h: number; f: string; w8: number; italic?: boolean; maks: number; min: number; warna: string; tekan?: string; lh?: number; rata?: 'kiri' | 'tengah'; huruf?: number }): number {
+function blok(g: any, teks: string, o: { x: number; y: number; w: number; h: number; f: string; w8: number; italic?: boolean; maks: number; min: number; warna: string; tekan?: string; lh?: number; rata?: 'kiri' | 'tengah'; huruf?: number; kering?: boolean }): number {
     if (!teks) return 0;
-    let ukuran = o.maks, baris: string[][] = [];
+    const kata = urai(teks);
+    let ukuran = o.maks, baris: Kata[][] = [];
     const lh = o.lh || 1.12;
+    const lebarBaris = (b: Kata[]) => g.measureText(b.map(polos).join(' ')).width;
     for (; ukuran >= o.min; ukuran -= 2) {
         g.font = `${o.italic ? 'italic ' : ''}${o.w8} ${ukuran}px "${o.f}"`;
-        baris = bungkus(g, teks, o.w);
-        if (baris.length * ukuran * lh <= o.h && baris.every((b) => g.measureText(b.join(' ').replace(/\*\*/g, '')).width <= o.w)) break;
+        baris = bungkus(g, kata, o.w);
+        if (baris.length * ukuran * lh <= o.h && baris.every((b) => lebarBaris(b) <= o.w)) break;
     }
     ukuran = Math.max(ukuran, o.min);
     g.font = `${o.italic ? 'italic ' : ''}${o.w8} ${ukuran}px "${o.f}"`; g.textBaseline = 'top';
-    let y = o.y; let tekan = false;
+    let y = o.y;
     for (const b of baris) {
-        const lebarBaris = g.measureText(b.join(' ').replace(/\*\*/g, '')).width;
-        let x = o.rata === 'tengah' ? o.x + (o.w - lebarBaris) / 2 : o.x;
-        for (let i = 0; i < b.length; i++) {
-            let k = b[i];
-            const buka = k.startsWith('**'), tutup = k.endsWith('**') && k.length > 2;
-            if (buka) { tekan = true; k = k.slice(2); }
-            if (tutup || (buka && k.endsWith('**'))) k = k.replace(/\*\*$/, '');
-            g.fillStyle = tekan && o.tekan ? o.tekan : o.warna;
-            const t = k + (i < b.length - 1 ? ' ' : '');
-            g.fillText(t, x, y); x += g.measureText(t).width;
-            if (tutup || (buka && b[i].endsWith('**') && b[i].length > 4)) tekan = false;
-        }
+        let x = o.rata === 'tengah' ? o.x + (o.w - lebarBaris(b)) / 2 : o.x;
+        b.forEach((k, i) => {
+            for (const seg of k) {
+                const lw = g.measureText(seg.t).width;
+                if (seg.tekan && catatKotak) {
+                    const akhir = kotakTekan[kotakTekan.length - 1];
+                    if (akhir && Math.abs(akhir.y - y) < 2 && x - (akhir.x + akhir.w) < g.measureText(' ').width + 3) akhir.w = x + lw - akhir.x; else kotakTekan.push({ x, y, w: lw, h: ukuran });
+                }
+                g.fillStyle = seg.tekan && o.tekan ? o.tekan : o.warna;
+                if (!o.kering) g.fillText(seg.t, x, y);
+                x += lw;
+            }
+            if (i < b.length - 1) x += g.measureText(' ').width;
+        });
         y += ukuran * lh;
     }
     return y - o.y;
@@ -118,6 +150,329 @@ async function pasangGambar(g: any, buf: Buffer, x: number, y: number, w: number
     if (!o.utuh) { bulat(g, x, y, w, h, o.r ?? 24); g.clip(); }
     g.drawImage(im, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
     g.restore();
+}
+
+/* ── Tata letak per slide ── */
+interface Token { a: { x: number; y: number; w: number; h: number }; teks: string; teks2: string; aksen: string; tekan: string; kartu: string; garis: string; kaki: string; progres: string; gelap: boolean; rata?: 'kiri' | 'tengah' }
+type Kotak = { x: number; y: number; w: number; h: number; r?: number };
+
+/** Latar & ciri khas tiap gaya tanpa isi; mengembalikan area isi + warna. */
+function dasar(g: any, st: GayaDesain, w: Record<string, string>, W: number, H: number, P: number, no: number, n: number, merek: InfoMerek, s: IsiSlide, fJ: string, fI: string): Token {
+    const nomor = `${String(no).padStart(2, '0')} / ${String(n).padStart(2, '0')}`;
+    const atas = P + 90, bawah = H - P * 1.9;
+    const label = (x: number, y: number, teks: string, bg: string, fg: string) => { g.font = `700 24px "${fI}"`; const tw = g.measureText(teks).width + 36; g.fillStyle = bg; bulat(g, x, y, tw, 48, 24); g.fill(); g.fillStyle = fg; g.textBaseline = 'middle'; g.fillText(teks, x + 18, y + 25); return tw; };
+    g.textAlign = 'left';
+    switch (st.id) {
+        case 'bold-signal': {
+            const gr = g.createLinearGradient(0, 0, W, H); gr.addColorStop(0, w.bg); gr.addColorStop(0.5, w.bg2); gr.addColorStop(1, w.bg); g.fillStyle = gr; g.fillRect(0, 0, W, H);
+            const kx = P * 0.6, ky = P * 1.5, kw = W - kx * 2, kh = H - ky - P * 1.75;
+            g.fillStyle = w.aksen; bulat(g, kx, ky, kw, kh, 28); g.fill();
+            g.font = `500 26px "${fI}"`; g.fillStyle = w.teks; g.globalAlpha = 0.6; g.textBaseline = 'top'; g.fillText((s.label || merek.nama).toUpperCase(), kx, P * 0.75); g.textAlign = 'right'; g.fillText(nomor, kx + kw, P * 0.75); g.textAlign = 'left'; g.globalAlpha = 1;
+            const tk = w.teksKartu, tkn = w.tekanKartu || (tk === '#ffffff' ? '#1a1a1a' : '#ffffff'); return { a: { x: kx + 48, y: ky + 48, w: kw - 96, h: kh - 96 }, teks: tk, teks2: tk, aksen: tkn, tekan: tkn, kartu: 'rgba(0,0,0,0.14)', garis: 'rgba(0,0,0,0.25)', kaki: w.teks, progres: w.aksen, gelap: tk === '#ffffff' };
+        }
+        case 'electric-studio': {
+            g.fillStyle = w.bg; g.fillRect(0, 0, W, H); g.fillStyle = w.aksen; g.fillRect(0, 0, 22, H); g.fillRect(0, H - 14, W, 14);
+            g.fillStyle = w.gelap; g.fillRect(P, P, 14, 92); g.font = `800 28px "${fJ}"`; g.textBaseline = 'top'; g.fillText(merek.nama, P + 34, P + 4);
+            g.font = `500 24px "${fI}"`; g.globalAlpha = 0.55; g.fillText(nomor, P + 34, P + 44); g.globalAlpha = 1;
+            return { a: { x: P, y: atas + 40, w: W - P * 2, h: bawah - atas - 40 }, teks: w.teks, teks2: '#333333', aksen: w.aksen, tekan: w.aksen, kartu: '#f1f3fb', garis: '#d7dbea', kaki: w.gelap, progres: w.aksen, gelap: false };
+        }
+        case 'creative-voltage': {
+            g.fillStyle = w.bg; g.fillRect(0, 0, W, H); g.fillStyle = w.aksen; g.fillRect(0, 0, W, 18);
+            g.fillStyle = 'rgba(255,255,255,0.10)'; for (let y = H - 300; y < H; y += 28) for (let x = W - 300 + ((y / 28) % 2) * 14; x < W; x += 28) { g.beginPath(); g.arc(x, y, 4, 0, Math.PI * 2); g.fill(); }
+            label(P, P, (s.label || `#${String(no).padStart(2, '0')}`).toUpperCase(), w.neon, '#111111');
+            return { a: { x: P, y: atas + 30, w: W - P * 2, h: bawah - atas - 30 }, teks: '#ffffff', teks2: '#d8d8e8', aksen: w.neon, tekan: w.neon, kartu: 'rgba(255,255,255,0.07)', garis: 'rgba(255,255,255,0.18)', kaki: '#ffffff', progres: w.neon, gelap: true };
+        }
+        case 'dark-botanical': {
+            g.fillStyle = w.bg; g.fillRect(0, 0, W, H);
+            const bola = (x: number, y: number, r: number, warna: string, a: number) => { const gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, warna); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.globalAlpha = a; g.fillStyle = gr; g.fillRect(x - r, y - r, r * 2, r * 2); g.globalAlpha = 1; };
+            bola(W * 0.95, H * 0.06, 380, w.aksen, 0.45); bola(W * 0.02, H * 0.97, 360, w.emas, 0.22);
+            g.font = `italic 400 30px "${fJ}"`; g.fillStyle = w.teks2; g.textBaseline = 'top'; g.fillText(s.label || merek.nama, P, P); g.textAlign = 'right'; g.fillText(nomor, W - P, P); g.textAlign = 'left';
+            return { a: { x: P, y: atas + 30, w: W - P * 2, h: bawah - atas - 30 }, teks: w.teks, teks2: w.teks2, aksen: w.aksen, tekan: w.aksen, kartu: 'rgba(255,255,255,0.05)', garis: 'rgba(212,165,116,0.35)', kaki: w.teks2, progres: w.aksen, gelap: true };
+        }
+        case 'notebook-tabs': {
+            g.fillStyle = w.luar; g.fillRect(0, 0, W, H);
+            const kx = 56, ky = 56, kw = W - 56 - 96, kh = H - 112;
+            g.shadowColor = 'rgba(0,0,0,0.35)'; g.shadowBlur = 30; g.fillStyle = w.bg; bulat(g, kx, ky, kw, kh, 14); g.fill(); g.shadowBlur = 0;
+            const tab = [w.t1, w.t2, w.t3, w.t4, w.t5]; for (let i = 0; i < 5; i++) { g.fillStyle = tab[i]; bulat(g, kx + kw - 8, ky + 80 + i * 150, 66, 130, 10); g.fill(); }
+            for (let i = 0; i < 3; i++) { g.fillStyle = w.luar; g.beginPath(); g.arc(kx + 34, ky + kh * (0.25 + i * 0.25), 12, 0, Math.PI * 2); g.fill(); }
+            g.font = `500 24px "${fI}"`; g.fillStyle = '#1a1a1a'; g.globalAlpha = 0.5; g.textBaseline = 'top'; g.fillText(`${s.label || merek.nama} · ${nomor}`, kx + 90, ky + 56); g.globalAlpha = 1;
+            return { a: { x: kx + 90, y: ky + 120, w: kw - 150, h: kh - 120 - 110 }, teks: w.teks, teks2: '#333333', aksen: '#7c5cc4', tekan: '#7c5cc4', kartu: '#efece4', garis: '#d9d4c7', kaki: '#1a1a1a', progres: '#7c5cc4', gelap: false };
+        }
+        case 'pastel-geometry': {
+            g.fillStyle = w.bg; g.fillRect(0, 0, W, H);
+            const kx = 60, ky = 70, kw = W - 60 - 150, kh = H - 140;
+            g.shadowColor = 'rgba(40,60,90,0.18)'; g.shadowBlur = 40; g.shadowOffsetY = 10; g.fillStyle = w.kartu; bulat(g, kx, ky, kw, kh, 40); g.fill(); g.shadowBlur = 0; g.shadowOffsetY = 0;
+            const pil = [w.p1, w.p2, w.p3, w.p4, w.aksen], tinggi = [120, 190, 260, 190, 120];
+            let py = H / 2 - tinggi.reduce((a, b) => a + b + 18, 0) / 2; for (let i = 0; i < 5; i++) { g.fillStyle = pil[i]; bulat(g, W - 120, py, 58, tinggi[i], 29); g.fill(); py += tinggi[i] + 18; }
+            label(kx + 60, ky + 56, `${no} / ${n}`, w.p2, '#1a1a1a');
+            return { a: { x: kx + 60, y: ky + 140, w: kw - 120, h: kh - 140 - 110 }, teks: w.teks, teks2: '#3a3a3a', aksen: w.aksen, tekan: w.aksen, kartu: '#f0eef5', garis: '#dcd8e6', kaki: '#1a1a1a', progres: w.aksen, gelap: false };
+        }
+        case 'split-pastel': {
+            const bagi = Math.round(W * 0.5); g.fillStyle = w.kiri; g.fillRect(0, 0, bagi, H); g.fillStyle = w.kanan; g.fillRect(bagi, 0, W - bagi, H);
+            g.strokeStyle = 'rgba(26,26,26,0.07)'; g.lineWidth = 2; for (let x = bagi + 40; x < W; x += 54) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke(); } for (let y = 40; y < H; y += 54) { g.beginPath(); g.moveTo(bagi, y); g.lineTo(W, y); g.stroke(); }
+            const lw = label(P, P, s.label || merek.nama, w.b1, '#1a1a1a'); label(P + lw + 12, P, `${no}/${n}`, w.b2, '#1a1a1a');
+            return { a: { x: P, y: atas + 30, w: W - P * 2, h: bawah - atas - 30 }, teks: w.teks, teks2: '#2b2b2b', aksen: '#c2185b', tekan: '#c2185b', kartu: 'rgba(255,255,255,0.65)', garis: 'rgba(26,26,26,0.15)', kaki: '#1a1a1a', progres: '#1a1a1a', gelap: false };
+        }
+        case 'vintage-editorial': {
+            g.fillStyle = w.bg; g.fillRect(0, 0, W, H);
+            g.strokeStyle = '#1a1a1a'; g.lineWidth = 3; g.beginPath(); g.arc(W - P - 50, P + 50, 50, 0, Math.PI * 2); g.stroke();
+            g.beginPath(); g.moveTo(W - P - 230, P + 130); g.lineTo(W - P, P + 130); g.stroke(); g.fillStyle = '#1a1a1a'; g.beginPath(); g.arc(W - P - 256, P + 130, 8, 0, Math.PI * 2); g.fill();
+            g.font = `italic 400 30px "${fJ}"`; g.fillStyle = w.teks2; g.textBaseline = 'top'; g.fillText(`No. ${no}`, P, P + 20);
+            return { a: { x: P, y: atas + 70, w: W - P * 2, h: bawah - atas - 70 }, teks: w.teks, teks2: w.teks2, aksen: '#a0522d', tekan: '#a0522d', kartu: '#ece6da', garis: '#1a1a1a', kaki: w.teks, progres: '#1a1a1a', gelap: false };
+        }
+        case 'neon-cyber': {
+            g.fillStyle = w.bg; g.fillRect(0, 0, W, H);
+            g.strokeStyle = 'rgba(0,255,204,0.08)'; g.lineWidth = 1; for (let x = 0; x < W; x += 60) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke(); } for (let y = 0; y < H; y += 60) { g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); }
+            g.font = `400 24px "${fI}"`; g.fillStyle = w.aksen; g.textBaseline = 'top'; g.fillText(`// ${String(no).padStart(2, '0')}_${(s.label || merek.nama).toUpperCase().replace(/\s+/g, '_')}`, P, P);
+            return { a: { x: P, y: atas + 20, w: W - P * 2, h: bawah - atas - 20 }, teks: w.teks, teks2: '#9fd8e0', aksen: w.aksen, tekan: w.magenta, kartu: 'rgba(0,255,204,0.06)', garis: 'rgba(0,255,204,0.35)', kaki: w.aksen, progres: w.aksen, gelap: true };
+        }
+        case 'terminal-green': {
+            g.fillStyle = w.bg; g.fillRect(0, 0, W, H);
+            for (let y = 0; y < H; y += 4) { g.fillStyle = 'rgba(255,255,255,0.018)'; g.fillRect(0, y, W, 1); }
+            g.fillStyle = '#161b22'; g.fillRect(0, 0, W, 76); for (const [i, cw] of ['#ff5f56', '#ffbd2e', '#27c93f'].entries()) { g.fillStyle = cw; g.beginPath(); g.arc(40 + i * 34, 38, 10, 0, Math.PI * 2); g.fill(); }
+            g.font = `400 24px "${fI}"`; g.fillStyle = w.redup; g.textBaseline = 'middle'; g.fillText(`~/${(merek.handle || merek.nama).replace(/^@/, '').toLowerCase().replace(/\s+/g, '-')} — slide ${no}/${n}`, 160, 38);
+            return { a: { x: P, y: 150, w: W - P * 2, h: bawah - 150 }, teks: w.teks, teks2: w.redup, aksen: w.aksen, tekan: '#f0f6fc', kartu: '#161b22', garis: '#30363d', kaki: w.redup, progres: w.aksen, gelap: true };
+        }
+        case 'swiss-modern': {
+            g.fillStyle = w.bg; g.fillRect(0, 0, W, H);
+            g.strokeStyle = w.garis; g.lineWidth = 2; for (let i = 1; i < 6; i++) { const x = (W / 6) * i; g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke(); }
+            g.fillStyle = w.aksen; g.fillRect(W - W / 6, 0, W / 6, 150); g.font = `800 96px "${fJ}"`; g.fillStyle = '#ffffff'; g.textBaseline = 'top'; g.textAlign = 'center'; g.fillText(String(no), W - W / 12, 26); g.textAlign = 'left';
+            return { a: { x: P * 0.7, y: 200, w: W - P * 0.7 - W / 6 - 20, h: bawah - 200 }, teks: w.teks, teks2: '#222222', aksen: w.aksen, tekan: w.aksen, kartu: '#f4f4f4', garis: '#000000', kaki: '#000000', progres: w.aksen, gelap: false };
+        }
+        case 'paper-ink': default: {
+            g.fillStyle = w.bg; g.fillRect(0, 0, W, H);
+            g.strokeStyle = w.teks; g.lineWidth = 1.5; g.beginPath(); g.moveTo(P, P + 70); g.lineTo(W - P, P + 70); g.stroke();
+            g.font = `italic 400 26px "${fI}"`; g.fillStyle = w.teks2; g.textBaseline = 'top'; g.fillText(merek.nama, P, P + 20); g.textAlign = 'right'; g.fillText(`${no} · ${n}`, W - P, P + 20); g.textAlign = 'left';
+            return { a: { x: P, y: P + 130, w: W - P * 2, h: bawah - P - 130 }, teks: w.teks, teks2: w.teks2, aksen: w.aksen, tekan: w.aksen, kartu: '#f1eee8', garis: w.teks, kaki: w.teks2, progres: w.aksen, gelap: false };
+        }
+    }
+}
+
+/** Isi slide menurut tata letaknya. Mengembalikan kotak gambar (untuk elemen panah/selotip). */
+async function isiTata(g: any, tata: Tata, t: Token, s: IsiSlide, o: { W: number; H: number; P: number; pertama: boolean; J: (o: any, teks?: string) => number; I: (o: any, teks?: string) => number; fJ: string; fI: string; st: GayaDesain }): Promise<Kotak | null> {
+    const A = t.a, ada = (j: string) => !!s.elemen?.some((e) => e.jenis === j);
+    const hias = { polaroid: ada('polaroid'), stiker: ada('stiker'), selotip: ada('selotip') };
+    const gb = s.gambar || null, gb2 = s.gambar2 || null;
+    // Gambar pendamping (aset gudang atau elemen AI) untuk tata yang memberi ruang gambar kecil.
+    const pendamping = async (k: Kotak, putar = 0) => {
+        const buf = gb || gb2; if (!buf) return null;
+        const utuh = gb ? s.utuh !== false : true;
+        return gambarHias(g, buf, k, { utuh, ...hias, putar, stiker: hias.stiker || (!gb && !!gb2) });
+    };
+    switch (tata) {
+        case 'sampul': {
+            const adaGb = !!(gb || gb2), hJudul = adaGb ? A.h * 0.5 : A.h * 0.72;
+            const hj = o.J({ x: A.x, y: A.y, w: A.w, h: hJudul, maks: 132, warna: t.teks, tekan: t.tekan, lh: 1.0 });
+            const hi = o.I({ x: A.x, y: A.y + hj + 30, w: adaGb ? A.w * 0.46 : A.w, h: A.h * 0.2, maks: 36, warna: t.teks2 });
+            if (!adaGb) return null;
+            const sisi = Math.min(A.w * 0.52, A.y + A.h - (A.y + hj + 20));
+            return pendamping({ x: A.x + A.w - sisi, y: A.y + A.h - sisi, w: sisi, h: sisi, r: 20 }, -0.06);
+            void hi;
+        }
+        case 'daftar': {
+            const hj = o.J({ x: A.x, y: A.y, w: A.w, h: A.h * 0.26, maks: 76, warna: t.teks, tekan: t.tekan, lh: 1.04 });
+            const poin = (s.poin?.length ? s.poin : String(s.isi || '').split(/\n|;|•/)).map((x) => x.trim()).filter(Boolean).slice(0, 6);
+            const adaGb = !!(gb || gb2);
+            let y = A.y + hj + 44; const lebar = adaGb ? A.w * 0.66 : A.w, sisaH = A.y + A.h - y, per = Math.min(150, sisaH / Math.max(1, poin.length));
+            poin.forEach((p, i) => {
+                // penanda: centang dalam lingkaran
+                g.fillStyle = t.aksen; g.beginPath(); g.arc(A.x + 24, y + 26, 24, 0, Math.PI * 2); g.fill();
+                g.strokeStyle = t.gelap && kontras(t.aksen) === '#111111' ? '#111111' : kontras(t.aksen); g.lineWidth = 5; g.lineCap = 'round'; g.lineJoin = 'round';
+                g.beginPath(); g.moveTo(A.x + 13, y + 27); g.lineTo(A.x + 21, y + 35); g.lineTo(A.x + 36, y + 17); g.stroke();
+                o.I({ x: A.x + 68, y: y + 4, w: lebar - 68, h: per - 18, maks: 40, warna: t.teks, lh: 1.25 }, p);
+                if (i < poin.length - 1) { g.strokeStyle = t.garis; g.globalAlpha = 0.5; g.lineWidth = 1.5; g.beginPath(); g.moveTo(A.x + 68, y + per - 10); g.lineTo(A.x + lebar, y + per - 10); g.stroke(); g.globalAlpha = 1; }
+                y += per;
+            });
+            if (!adaGb) return null;
+            const sisi = A.w * 0.32; return pendamping({ x: A.x + A.w - sisi, y: A.y + hj + 40, w: sisi, h: sisi, r: 16 }, 0.05);
+        }
+        case 'angka': {
+            const angka = String(s.angka || '').slice(0, 10) || '1';
+            let u = 330; g.textBaseline = 'top'; for (; u > 90; u -= 10) { g.font = `${o.st.judul.w} ${u}px "${o.fJ}"`; if (g.measureText(angka).width <= A.w) break; }
+            g.fillStyle = t.aksen; g.fillText(angka, A.x - u * 0.03, A.y);
+            const ya = A.y + u * 0.98;
+            g.fillStyle = t.aksen; g.fillRect(A.x, ya + 10, 90, 8);
+            const hj = o.J({ x: A.x, y: ya + 50, w: A.w, h: A.h * 0.24, maks: 72, warna: t.teks, tekan: t.tekan, lh: 1.05 });
+            o.I({ x: A.x, y: ya + 70 + hj, w: (gb || gb2) ? A.w * 0.6 : A.w, h: A.y + A.h - (ya + 70 + hj), maks: 38, warna: t.teks2 });
+            if (!(gb || gb2)) return null;
+            const sisi = A.w * 0.34; return pendamping({ x: A.x + A.w - sisi, y: A.y + A.h - sisi, w: sisi, h: sisi, r: 16 }, -0.05);
+        }
+        case 'banding': {
+            const hj = o.J({ x: A.x, y: A.y, w: A.w, h: A.h * 0.22, maks: 72, warna: t.teks, tekan: t.tekan, lh: 1.04 });
+            const y0 = A.y + hj + 36, tinggi = (A.y + A.h - y0 - 24) / 2;
+            const kartu = (y: number, salah: boolean, judul: string, isi: string) => {
+                g.fillStyle = t.kartu; bulat(g, A.x, y, A.w, tinggi, 22); g.fill();
+                const warna = salah ? '#e5484d' : '#30a46c';
+                g.fillStyle = warna; g.beginPath(); g.arc(A.x + 50, y + 52, 26, 0, Math.PI * 2); g.fill();
+                g.strokeStyle = '#ffffff'; g.lineWidth = 6; g.lineCap = 'round'; g.beginPath();
+                if (salah) { g.moveTo(A.x + 40, y + 42); g.lineTo(A.x + 60, y + 62); g.moveTo(A.x + 60, y + 42); g.lineTo(A.x + 40, y + 62); } else { g.moveTo(A.x + 38, y + 53); g.lineTo(A.x + 47, y + 62); g.lineTo(A.x + 63, y + 42); }
+                g.stroke();
+                g.font = `700 30px "${o.fI}"`; g.fillStyle = warna; g.textBaseline = 'middle'; g.fillText(judul, A.x + 92, y + 53);
+                const ht = o.I({ x: A.x + 36, y: 0, w: A.w - 72, h: tinggi - 124, maks: 46, warna: t.teks, lh: 1.3, kering: true }, isi); o.I({ x: A.x + 36, y: y + 100 + Math.max(0, (tinggi - 124 - ht) / 2), w: A.w - 72, h: tinggi - 124, maks: 46, warna: t.teks, lh: 1.3 }, isi);
+            };
+            kartu(y0, true, s.labelKiri || 'Salah', s.kiri || ''); kartu(y0 + tinggi + 24, false, s.labelKanan || 'Benar', s.kanan || '');
+            return null;
+        }
+        case 'kutipan': {
+            g.font = `700 260px "${o.fJ}"`; g.fillStyle = t.aksen; g.textBaseline = 'top'; g.globalAlpha = 0.9; g.fillText('“', A.x - 10, A.y - 60); g.globalAlpha = 1;
+            const hj = o.J({ x: A.x, y: A.y + 150, w: A.w, h: A.h * 0.55, maks: 80, warna: t.teks, tekan: t.tekan, lh: 1.12, italic: true }, s.kutipan || s.judul);
+            if (s.sumber) { g.font = `600 30px "${o.fI}"`; g.fillStyle = t.teks2; g.textBaseline = 'top'; g.fillText(`— ${s.sumber}`, A.x, A.y + 190 + hj); }
+            if (s.isi && s.kutipan) o.I({ x: A.x, y: A.y + 260 + hj, w: A.w, h: A.y + A.h - (A.y + 260 + hj), maks: 34, warna: t.teks2 });
+            return null;
+        }
+        case 'foto': {
+            const k = { x: A.x, y: A.y, w: A.w, h: A.h * 0.66, r: 24 };
+            await gambarHias(g, gb!, k, { utuh: false, ...hias });
+            const hj = o.J({ x: A.x, y: k.y + k.h + 30, w: A.w, h: A.h * 0.2, maks: 68, warna: t.teks, tekan: t.tekan, lh: 1.04 });
+            o.I({ x: A.x, y: k.y + k.h + 50 + hj, w: A.w, h: A.y + A.h - (k.y + k.h + 50 + hj), maks: 34, warna: t.teks2 });
+            return k;
+        }
+        case 'penutup': {
+            const adaGb = !!(s.maskot || gb || gb2);
+            const hj = o.J({ x: A.x, y: A.y + (adaGb ? 0 : A.h * 0.12), w: A.w, h: A.h * 0.36, maks: 104, warna: t.teks, tekan: t.tekan, lh: 1.02, rata: 'tengah' });
+            const y1 = A.y + (adaGb ? 0 : A.h * 0.12) + hj + 26;
+            const hi = o.I({ x: A.x, y: y1, w: A.w, h: A.h * 0.16, maks: 36, warna: t.teks2, rata: 'tengah' });
+            // Ikon simpan · bagikan · ikuti
+            const yI = y1 + hi + 50, cx = A.x + A.w / 2;
+            const ikon = [(x: number, y: number) => { g.beginPath(); g.moveTo(x - 18, y - 26); g.lineTo(x + 18, y - 26); g.lineTo(x + 18, y + 26); g.lineTo(x, y + 12); g.lineTo(x - 18, y + 26); g.closePath(); g.stroke(); },
+                (x: number, y: number) => { g.beginPath(); g.moveTo(x - 24, y + 4); g.lineTo(x + 24, y - 22); g.lineTo(x + 6, y + 24); g.lineTo(x - 2, y + 4); g.closePath(); g.stroke(); },
+                (x: number, y: number) => { g.beginPath(); g.arc(x - 6, y - 10, 13, 0, Math.PI * 2); g.stroke(); g.beginPath(); g.arc(x - 6, y + 26, 24, Math.PI * 1.15, Math.PI * 1.85); g.stroke(); g.beginPath(); g.moveTo(x + 22, y - 6); g.lineTo(x + 22, y + 14); g.moveTo(x + 12, y + 4); g.lineTo(x + 32, y + 4); g.stroke(); }];
+            const tulisan = ['Simpan', 'Bagikan', 'Ikuti'];
+            ikon.forEach((f, i) => { const x = cx + (i - 1) * 190; g.fillStyle = t.kartu; g.beginPath(); g.arc(x, yI + 40, 56, 0, Math.PI * 2); g.fill(); g.strokeStyle = t.aksen; g.lineWidth = 5; g.lineJoin = 'round'; g.lineCap = 'round'; f(x, yI + 40); g.font = `600 24px "${o.fI}"`; g.fillStyle = t.teks2; g.textAlign = 'center'; g.textBaseline = 'top'; g.fillText(tulisan[i], x, yI + 108); g.textAlign = 'left'; });
+            const buf = s.maskot || gb || gb2; if (!buf) return null;
+            const sisi = Math.min(A.w * 0.42, A.y + A.h - (yI + 150));
+            if (sisi < 120) return null;
+            const k = { x: cx - sisi / 2, y: A.y + A.h - sisi, w: sisi, h: sisi };
+            await gambarHias(g, buf, k, { utuh: true, stiker: !s.maskot && hias.stiker });
+            return k;
+        }
+    }
+    return null;
+}
+
+/** Gambar dengan hiasan: polaroid, stiker berpinggiran putih, selotip, sedikit diputar. */
+async function gambarHias(g: any, buf: Buffer, k: Kotak, o: { utuh?: boolean; polaroid?: boolean; stiker?: boolean; selotip?: boolean; putar?: number }): Promise<Kotak> {
+    let nyata: Kotak = k;
+    const { loadImage, createCanvas } = kanvas();
+    const im = await loadImage(buf);
+    g.save();
+    const cx = k.x + k.w / 2, cy = k.y + k.h / 2;
+    const putar = o.putar ?? (o.polaroid ? -0.04 : 0);
+    g.translate(cx, cy); g.rotate(putar); g.translate(-cx, -cy);
+    if (o.polaroid) {
+        const pad = k.w * 0.05, bawah = k.w * 0.16;
+        g.shadowColor = 'rgba(0,0,0,0.28)'; g.shadowBlur = 30; g.shadowOffsetY = 12; g.fillStyle = '#fdfdfb'; g.fillRect(k.x, k.y, k.w, k.h); g.shadowColor = 'transparent';
+        const ix = k.x + pad, iy = k.y + pad, iw = k.w - pad * 2, ih = k.h - pad - bawah;
+        const sk = Math.max(iw / im.width, ih / im.height); g.save(); g.beginPath(); g.rect(ix, iy, iw, ih); g.clip(); g.drawImage(im, ix + (iw - im.width * sk) / 2, iy + (ih - im.height * sk) / 2, im.width * sk, im.height * sk); g.restore();
+    } else if (o.stiker || o.utuh) {
+        const sk = Math.min(k.w / im.width, k.h / im.height), dw = im.width * sk, dh = im.height * sk, dx = k.x + (k.w - dw) / 2, dy = k.y + (k.h - dh) / 2;
+        nyata = { x: dx, y: dy, w: dw, h: dh };
+        if (o.stiker) {
+            // siluet putih di sekeliling gambar transparan = pinggiran stiker
+            const tb = Math.max(6, Math.round(Math.min(dw, dh) * 0.03));
+            const c2 = createCanvas(Math.ceil(dw + tb * 2), Math.ceil(dh + tb * 2)), g2 = c2.getContext('2d');
+            for (let a = 0; a < 16; a++) { const r = (a / 16) * Math.PI * 2; g2.drawImage(im, tb + Math.cos(r) * tb, tb + Math.sin(r) * tb, dw, dh); }
+            g2.globalCompositeOperation = 'source-in'; g2.fillStyle = '#ffffff'; g2.fillRect(0, 0, c2.width, c2.height);
+            g.shadowColor = 'rgba(0,0,0,0.25)'; g.shadowBlur = 18; g.shadowOffsetY = 8; g.drawImage(c2, dx - tb, dy - tb); g.shadowColor = 'transparent';
+        } else { g.shadowColor = 'rgba(0,0,0,0.18)'; g.shadowBlur = 24; g.shadowOffsetY = 10; }
+        g.drawImage(im, dx, dy, dw, dh); g.shadowColor = 'transparent';
+    } else {
+        const sk = Math.max(k.w / im.width, k.h / im.height);
+        g.save(); bulat(g, k.x, k.y, k.w, k.h, k.r ?? 24); g.clip(); g.drawImage(im, k.x + (k.w - im.width * sk) / 2, k.y + (k.h - im.height * sk) / 2, im.width * sk, im.height * sk); g.restore();
+    }
+    if (o.selotip) {
+        const pita = (x: number, y: number, r: number) => { g.save(); g.translate(x, y); g.rotate(r); g.fillStyle = 'rgba(244, 226, 170, 0.82)'; g.fillRect(-70, -22, 140, 44); g.fillStyle = 'rgba(255,255,255,0.18)'; for (let i = -70; i < 70; i += 10) g.fillRect(i, -22, 4, 44); g.restore(); };
+        pita(k.x + 30, k.y + 6, -0.6); pita(k.x + k.w - 30, k.y + 6, 0.6);
+    }
+    g.restore();
+    return nyata;
+}
+
+/** Garis bergaya tangan: sedikit goyang supaya tidak terlihat seperti garis komputer. */
+function goyang(i: number) { const x = Math.sin(i * 12.9898) * 43758.5453; return x - Math.floor(x) - 0.5; }
+/** Elemen dibuat-tangan di atas slide. */
+async function hiasi(g: any, s: IsiSlide, o: { W: number; H: number; P: number; media: Kotak | null; tekan: string; teks: string; gelap: boolean; fJ: string; pertama: boolean; akhir: boolean }) {
+    const el = (s.elemen || []).slice(0, 3); if (!el.length) return;
+    const { W, H, P } = o, kt = kotakTekan[0];
+    const coret = o.tekan;
+    const tangan = (teks: string, x: number, y: number, ukuran: number, warna: string, putar = -0.05, rata: 'left' | 'center' = 'left') => { g.save(); g.translate(x, y); g.rotate(putar); g.font = `700 ${ukuran}px "Caveat"`; g.fillStyle = warna; g.textBaseline = 'middle'; g.textAlign = rata; g.fillText(teks, 0, 0); const lb = g.measureText(teks).width; g.restore(); return lb; };
+    for (const [i, e] of el.entries()) {
+        g.save(); g.lineCap = 'round'; g.lineJoin = 'round';
+        switch (e.jenis) {
+            case 'lingkari': {
+                if (!kt) break;
+                g.strokeStyle = coret; g.lineWidth = 6; g.beginPath();
+                const cx = kt.x + kt.w / 2, cy = kt.y + kt.h * 0.55, rx = kt.w / 2 + 20, ry = kt.h * 0.56 + 6;
+                for (let a = 0; a <= 1.08; a += 0.02) { const t = -0.4 + a * Math.PI * 2, j = 1 + goyang(a * 40) * 0.05; const x = cx + Math.cos(t) * rx * j, y = cy + Math.sin(t) * ry * j; a === 0 ? g.moveTo(x, y) : g.lineTo(x, y); }
+                g.stroke(); break;
+            }
+            case 'garis-bawah': {
+                if (!kt) break;
+                g.strokeStyle = coret; g.lineWidth = 7; g.beginPath();
+                const y = kt.y + kt.h * 1.02; g.moveTo(kt.x - 6, y + 4); for (let x = kt.x; x <= kt.x + kt.w + 10; x += 14) g.lineTo(x, y + goyang(x) * 8);
+                g.moveTo(kt.x + kt.w * 0.1, y + 16); g.lineTo(kt.x + kt.w * 0.85, y + 12); g.stroke(); break;
+            }
+            case 'stabilo': break; // sudah digambar di belakang teks (lihat J)
+            case 'panah': {
+                if (!o.media) break;
+                const m = o.media, kanan = m.x + m.w + 150 < W, dari = kanan ? { x: m.x + m.w + 110, y: m.y - 50 } : { x: m.x - 110, y: m.y - 50 }, ke = kanan ? { x: m.x + m.w - 10, y: m.y + m.h * 0.25 } : { x: m.x + 10, y: m.y + m.h * 0.25 };
+                g.strokeStyle = coret; g.lineWidth = 6; g.beginPath(); g.moveTo(dari.x, dari.y);
+                const kx = (dari.x + ke.x) / 2 + (kanan ? 50 : -50), ky = (dari.y + ke.y) / 2 - 10; g.quadraticCurveTo(kx, ky, ke.x, ke.y); g.stroke();
+                const sud = Math.atan2(ke.y - ky, ke.x - kx); g.beginPath(); g.moveTo(ke.x, ke.y); g.lineTo(ke.x - Math.cos(sud - 0.5) * 30, ke.y - Math.sin(sud - 0.5) * 30); g.moveTo(ke.x, ke.y); g.lineTo(ke.x - Math.cos(sud + 0.5) * 30, ke.y - Math.sin(sud + 0.5) * 30); g.stroke();
+                if (e.teks) tangan(e.teks.slice(0, 24), dari.x, dari.y - 34, 46, coret, -0.06, 'center');
+                break;
+            }
+            case 'catatan': {
+                const t = (e.teks || '').slice(0, 40); if (!t) break;
+                const x = o.media ? Math.max(P, o.media.x - 20) : P + 10, y = o.media ? Math.max(P * 2, o.media.y - 60) : H - P * 2.6;
+                tangan(t, x, y, 50, coret, -0.05);
+                break;
+            }
+            case 'harga': case 'cap': {
+                const t = (e.teks || (e.jenis === 'cap' ? 'BARU' : '')).slice(0, 14); if (!t) break;
+                const r = e.jenis === 'harga' ? 112 : 104, m = o.media, x = m ? Math.min(W - r - 20, m.x + m.w - r * 0.4) : W - P - r + 10, y = m ? Math.max(r + 20, m.y + r * 0.5) : H - P * 2 - r - 40;
+                g.translate(x, y); g.rotate(e.jenis === 'harga' ? 0.18 : -0.22);
+                if (e.jenis === 'harga') { g.fillStyle = '#ffd60a'; g.beginPath(); for (let a = 0; a < 32; a++) { const t2 = (a / 32) * Math.PI * 2, rr = a % 2 ? r * 0.86 : r; a === 0 ? g.moveTo(Math.cos(t2) * rr, Math.sin(t2) * rr) : g.lineTo(Math.cos(t2) * rr, Math.sin(t2) * rr); } g.closePath(); g.fill(); g.fillStyle = '#111111'; }
+                else { g.strokeStyle = coret; g.lineWidth = 6; g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2); g.stroke(); g.lineWidth = 2; g.beginPath(); g.arc(0, 0, r - 14, 0, Math.PI * 2); g.stroke(); g.fillStyle = coret; }
+                let u = 64; for (; u > 22; u -= 2) { g.font = `800 ${u}px "${o.fJ}"`; if (g.measureText(t).width < r * 1.45) break; }
+                g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(t, 0, 4);
+                break;
+            }
+            case 'lokasi': {
+                const t = (e.teks || '').slice(0, 24); if (!t) break;
+                g.font = `700 28px "${o.fJ}"`; const tw = g.measureText(t).width + 86, x = W - P - tw, y = P + 64;
+                g.fillStyle = o.gelap ? 'rgba(255,255,255,0.92)' : '#111111'; bulat(g, x, y, tw, 58, 29); g.fill();
+                const fg = o.gelap ? '#111111' : '#ffffff'; g.fillStyle = '#e5484d'; g.beginPath(); g.arc(x + 32, y + 24, 12, Math.PI, 0); g.lineTo(x + 32, y + 46); g.closePath(); g.fill(); g.fillStyle = '#ffffff'; g.beginPath(); g.arc(x + 32, y + 24, 5, 0, Math.PI * 2); g.fill();
+                g.fillStyle = fg; g.textBaseline = 'middle'; g.fillText(t, x + 58, y + 30);
+                break;
+            }
+            case 'bintang': {
+                const pos = kt ? [{ x: kt.x + kt.w + 26, y: kt.y - 4, r: 22 }, { x: kt.x + kt.w + 56, y: kt.y + 26, r: 12 }] : [{ x: W - P - 40, y: P + 140, r: 26 }, { x: W - P - 90, y: P + 190, r: 14 }];
+                g.fillStyle = coret; for (const p of pos) { g.beginPath(); for (let a = 0; a < 8; a++) { const t2 = (a / 8) * Math.PI * 2, rr = a % 2 ? p.r * 0.28 : p.r; a === 0 ? g.moveTo(p.x + Math.cos(t2) * rr, p.y + Math.sin(t2) * rr) : g.lineTo(p.x + Math.cos(t2) * rr, p.y + Math.sin(t2) * rr); } g.closePath(); g.fill(); }
+                break;
+            }
+            case 'tekstur': {
+                const { createCanvas } = kanvas(); const c2 = createCanvas(256, 256), g2 = c2.getContext('2d'), d = g2.createImageData(256, 256);
+                for (let p = 0; p < d.data.length; p += 4) { const v = 128 + goyang(p * 0.37 + i) * 255; d.data[p] = d.data[p + 1] = d.data[p + 2] = v; d.data[p + 3] = 22; }
+                g2.putImageData(d, 0, 0); g.globalCompositeOperation = o.gelap ? 'screen' : 'multiply'; g.fillStyle = g.createPattern(c2, 'repeat'); g.fillRect(0, 0, W, H);
+                break;
+            }
+            case 'maskot': {
+                if (!s.maskot) break;
+                const sisi = W * 0.3; await gambarHias(g, s.maskot, { x: W - sisi - P * 0.2, y: H - sisi - P * 1.5, w: sisi, h: sisi }, { utuh: true, putar: -0.08 });
+                break;
+            }
+        }
+        g.restore();
+    }
+    if (s.komentar?.teks) {
+        // Kartu komentar asli (bukan karangan): dipakai hanya bila komentar sungguhan dipilih.
+        const kw = W - P * 2, x = P, ky = H - P * 1.9 - 190;
+        g.save(); g.shadowColor = 'rgba(0,0,0,0.2)'; g.shadowBlur = 24; g.shadowOffsetY = 8; g.fillStyle = '#ffffff'; bulat(g, x, ky, kw, 170, 24); g.fill(); g.restore();
+        g.fillStyle = '#e4e4e7'; g.beginPath(); g.arc(x + 52, ky + 52, 26, 0, Math.PI * 2); g.fill();
+        g.font = '700 26px "Plus Jakarta Sans"'; g.fillStyle = '#111111'; g.textBaseline = 'middle'; g.fillText(s.komentar.nama.slice(0, 30), x + 92, ky + 46);
+        blok(g, s.komentar.teks, { x: x + 92, y: ky + 72, w: kw - 120, h: 84, f: 'Plus Jakarta Sans', w8: 500, maks: 28, min: 20, warna: '#333333', lh: 1.3 });
+    }
 }
 
 /** Gambar satu slide. no = 1..n. */
@@ -138,7 +493,7 @@ export async function renderSlide(gayaId: string, s: IsiSlide, no: number, n: nu
             if (st.id === 'bold-signal') { const t = kontras(cocok); tekanKartu = calon.find((c) => c !== cocok && rasioKontras(c, cocok) >= 3) || (t === '#ffffff' ? '#ffd166' : '#ffffff'); }
         }
     }
-    if (st.id === 'bold-signal' && w.aksen !== st.w.aksen) w.teksKartu = kontras(w.aksen);
+    if (st.id === 'bold-signal' && w.aksen !== st.w.aksen) { w.teksKartu = kontras(w.aksen); w.tekanKartu = tekanKartu; }
     const fJ = merek.fontJudul && DAFTAR_FONT.includes(merek.fontJudul) ? merek.fontJudul : st.judul.f;
     const fI = merek.fontIsi && DAFTAR_FONT.includes(merek.fontIsi) ? merek.fontIsi : st.isi.f;
     const c = createCanvas(W, H), g = c.getContext('2d');
@@ -146,13 +501,31 @@ export async function renderSlide(gayaId: string, s: IsiSlide, no: number, n: nu
     const P = Math.round(W * 0.083); // tepi aman
     // Slide tanpa gambar: huruf dibuat lebih besar supaya ruang terisi & mudah dibaca di HP.
     const lega = s.gambar ? 1 : pertama ? 1.04 : 1.14, legaIsi = s.gambar ? 1 : 1.22;
-    const J = (o: Partial<Parameters<typeof blok>[2]> & { x: number; y: number; w: number; h: number; maks: number; warna: string }) => blok(g, s.judul, { f: fJ, w8: st.judul.w, italic: st.judul.italic, min: 30, ...o, maks: Math.round(o.maks * lega) } as any);
+    kotakTekan = [];
+    const stabilo = !!s.elemen?.some((e) => e.jenis === 'stabilo');
+    const J = (o: Partial<Parameters<typeof blok>[2]> & { x: number; y: number; w: number; h: number; maks: number; warna: string }, teks = s.judul) => {
+        const opsi = { f: fJ, w8: st.judul.w, italic: st.judul.italic, min: 30, ...o, maks: Math.round(o.maks * lega) } as any;
+        if (stabilo && !o.kering && teks.includes('**')) {
+            // Stabilo digambar DI BELAKANG kata yang ditekankan: ukur dulu, warnai, baru tulis.
+            const awal = kotakTekan.length; catatKotak = true; blok(g, teks, { ...opsi, kering: true }); catatKotak = false;
+            const gelapLatar = terang(o.warna.startsWith('#') ? o.warna : '#111111') > 0.6;
+            for (const k of kotakTekan.splice(awal)) { g.save(); g.fillStyle = gelapLatar ? 'rgba(255, 214, 10, 0.95)' : 'rgba(255, 221, 0, 0.7)'; g.beginPath(); g.moveTo(k.x - 8, k.y + k.h * 0.42); g.lineTo(k.x + k.w + 10, k.y + k.h * 0.36); g.lineTo(k.x + k.w + 6, k.y + k.h * 1.02); g.lineTo(k.x - 10, k.y + k.h * 1.06); g.closePath(); g.fill(); g.restore(); }
+            opsi.tekan = gelapLatar ? '#111111' : opsi.warna;
+        }
+        catatKotak = !o.kering; try { return blok(g, teks, opsi); } finally { catatKotak = false; }
+    };
     const I = (o: Partial<Parameters<typeof blok>[2]> & { x: number; y: number; w: number; h: number; maks: number; warna: string }, teks = s.isi || '') => blok(g, teks, { f: fI, w8: st.isi.w, min: 24, lh: 1.38, ...o, maks: Math.round(o.maks * legaIsi) } as any);
     let teksUtama = w.teks || '#111', warnaKaki = teksUtama, aksenProgres = w.aksen;
     // kotak media (untuk aset gambar) per gaya; null = tanpa gambar
     let media: { x: number; y: number; w: number; h: number; r?: number } | null = null;
-
-    switch (st.id) {
+    const ada = (j: string) => !!s.elemen?.some((e) => e.jenis === j);
+    const tata = s.tata && s.tata !== 'klasik' && TATA.includes(s.tata) && !(s.tata === 'foto' && !s.gambar) ? s.tata : null;
+    let tok: Token | null = null;
+    if (tata) {
+        tok = dasar(g, st, w, W, H, P, no, n, merek, s, fJ, fI);
+        warnaKaki = tok.kaki; aksenProgres = tok.progres;
+        media = await isiTata(g, tata, tok, s, { W, H, P, pertama, J, I, fJ, fI, st });
+    } else switch (st.id) {
         case 'bold-signal': {
             const gr = g.createLinearGradient(0, 0, W, H); gr.addColorStop(0, w.bg); gr.addColorStop(0.5, w.bg2); gr.addColorStop(1, w.bg); g.fillStyle = gr; g.fillRect(0, 0, W, H);
             const kx = P * 0.7, ky = P * 1.6, kw = W - kx * 2, kh = H - ky - P * 1.8;
@@ -320,7 +693,8 @@ export async function renderSlide(gayaId: string, s: IsiSlide, no: number, n: nu
         }
     }
     void teksUtama;
-    if (media && s.gambar) { try { await pasangGambar(g, s.gambar, media.x, media.y, media.w, media.h, { utuh: s.utuh, r: media.r }); } catch { /* gambar rusak → lewati */ } }
+    if (!tata && media && s.gambar) { try { media = await gambarHias(g, s.gambar, media, { utuh: s.utuh, polaroid: ada('polaroid'), stiker: ada('stiker'), selotip: ada('selotip') }); } catch { /* gambar rusak → lewati */ } }
+    await hiasi(g, s, { W, H, P, media, tekan: tok?.aksen || (st.id === 'bold-signal' ? w.teksKartu : st.id === 'creative-voltage' ? w.neon : st.id === 'notebook-tabs' ? '#7c5cc4' : st.id === 'split-pastel' ? '#c2185b' : st.id === 'vintage-editorial' ? '#a0522d' : w.aksen), teks: tok?.teks || teksUtama, gelap: tok ? tok.gelap : st.gelap, fJ, pertama, akhir });
 
     // Kaki: logo/handle, progres, panah geser
     const kakiY = H - Math.round(P * 0.95);

@@ -16,13 +16,13 @@ import type { ModelRouter } from './model';
 import type { ClaudeLangganan } from './claudeLangganan';
 import { GambarAi } from './gambarAi';
 import { GAYA_DESAIN, DAFTAR_FONT, gayaDesain, renderCarousel, renderSlide, contohSlide, renderLogo, renderCover, renderFotoProfil, kecilkan, desainSiap, type IsiSlide, type InfoMerek, type KonsepLogo } from './desainSosmed';
-import { ambilJson, FORMAT_VIDEO, type Konten, type Sosmed } from './sosmed';
+import { ambilJson, bacaSlide, FORMAT_VIDEO, type Konten, type Sosmed, type Slide } from './sosmed';
 
 type Ctx = { a: { id: string; nama: string; platform: string; handle: string }; s: Sosmed };
-export const JENIS_ASET = ['logo', 'maskot', 'produk', 'foto', 'latar', 'ikon', 'highlight', 'profil', 'lain'] as const;
-export const NAMA_JENIS: Record<string, string> = { logo: 'Logo', maskot: 'Maskot', produk: 'Foto produk', foto: 'Foto (orang/tempat)', latar: 'Latar', ikon: 'Ikon & stiker', highlight: 'Cover highlight', profil: 'Foto profil', lain: 'Lainnya' };
+export const JENIS_ASET = ['logo', 'maskot', 'produk', 'foto', 'latar', 'ikon', 'elemen', 'highlight', 'profil', 'lain'] as const;
+export const NAMA_JENIS: Record<string, string> = { logo: 'Logo', maskot: 'Maskot', produk: 'Foto produk', foto: 'Foto (orang/tempat)', latar: 'Latar', ikon: 'Ikon & stiker', elemen: 'Elemen konten', highlight: 'Cover highlight', profil: 'Foto profil', lain: 'Lainnya' };
 /** Aset yang biasanya ditempel utuh (tidak dipotong). */
-const UTUH = new Set(['logo', 'maskot', 'produk', 'ikon']);
+const UTUH = new Set(['logo', 'maskot', 'produk', 'ikon', 'elemen']);
 
 export interface ItemGudang { id: string; jenis: string; nama: string; ket: string; path: string; mime: string; sumber: 'unggah' | 'ai' | 'kantor'; at: number; label: 'menunggu' | 'ok' | 'gagal'; calon?: string; galat?: string }
 export interface Brand { warna: string[]; fontJudul: string; fontIsi: string; gayaDesain: string; aksenMerek: boolean; logoId?: string; at: number }
@@ -144,15 +144,47 @@ export function pasangStudio(d: DepsStudio) {
     const ukuran = (c: Ctx) => (c.a.platform === 'tiktok' ? { w: 1080, h: 1920 } : { w: 1080, h: 1350 });
 
     /* ── Desain carousel / feed ── */
-    const slideDari = (c: Ctx, k: Konten): IsiSlide[] => {
-        const src = k.slide?.length ? k.slide : k.hook ? [{ no: 1, judul: k.hook, isi: '', visual: '' }] : [];
+    const slideDari = (c: Ctx, k: Konten, src0?: Slide[]): IsiSlide[] => {
+        const src: Slide[] = src0 || (k.slide?.length ? k.slide : k.hook ? [{ no: 1, judul: k.hook, isi: '', visual: '' }] : []);
         const peta = new Map(tersedia(c).map((x) => [x.id, x]));
+        const bacaId = (id?: string) => { const it = id ? peta.get(id) : undefined; try { return it ? { it, b: baca(it) } : null; } catch { return null; } };
+        const maskot = tersedia(c).find((x) => x.jenis === 'maskot');
+        const hiasan = k.hiasan || 'otomatis';
         return src.slice(0, 10).map((sl, i) => {
-            const it = sl.aset ? peta.get(sl.aset) : undefined;
-            let g: Buffer | null = null; try { if (it) g = baca(it); } catch { /* */ }
-            return { judul: i === 0 && k.hook && k.format === 'carousel' && !sl.judul ? k.hook : sl.judul, isi: sl.isi, label: k.pilar, gambar: g, utuh: it ? UTUH.has(it.jenis) : undefined };
+            const a = bacaId(sl.aset), e2 = bacaId(sl.elemenId);
+            const kom = sl.komentar ? c.s.st.komentar.find((x) => x.id === sl.komentar) : undefined; // hanya komentar ASLI
+            let elemen = hiasan === 'tanpa' ? [] : (sl.elemen || []).slice(0, hiasan === 'sedikit' ? 1 : 2);
+            if (!maskot) elemen = elemen.filter((e) => e.jenis !== 'maskot');
+            const mk = elemen.some((e) => e.jenis === 'maskot') || sl.tata === 'penutup' ? bacaId(maskot?.id) : null;
+            return {
+                judul: i === 0 && k.hook && k.format === 'carousel' && !sl.judul ? k.hook : sl.judul, isi: sl.isi, label: k.pilar, gambar: a?.b || null, utuh: a ? UTUH.has(a.it.jenis) : undefined,
+                tata: (k.format === 'feed' && !sl.tata ? 'sampul' : sl.tata) as any, angka: sl.angka, poin: sl.poin, kiri: sl.kiri, kanan: sl.kanan, labelKiri: sl.labelKiri, labelKanan: sl.labelKanan, kutipan: sl.kutipan, sumber: sl.sumber,
+                elemen, gambar2: hiasan === 'tanpa' ? null : e2?.b || null, maskot: mk?.b || null, komentar: kom && hiasan !== 'tanpa' ? { teks: kom.teks.slice(0, 160), nama: `@${kom.user || 'pengikut'}` } : null
+            };
         });
     };
+    /** Elemen konten (ilustrasi benda pendukung) dibuat OTOMATIS lewat gambar AI — batas harian sendiri; dipakai ulang kalau sudah ada. */
+    const kunciNama = (t: string) => t.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter((w) => w.length > 2);
+    async function siapkanElemen(c: Ctx, k: Konten, gaya: string) {
+        if ((k.hiasan || 'otomatis') !== 'otomatis' || !k.slide?.length) return;
+        const perlu = k.slide.filter((sl) => sl.gambarElemen && !sl.elemenId).slice(0, 2);
+        for (const sl of perlu) {
+            const kata = kunciNama(sl.gambarElemen!);
+            const lama = tersedia(c).filter((x) => x.jenis === 'elemen').find((x) => { const kx = kunciNama(x.nama); return kata.length && kata.filter((w) => kx.includes(w)).length / kata.length >= 0.6; });
+            if (lama) { sl.elemenId = lama.id; continue; }
+            if (!gambarAi.bolehOtomatis()) break;
+            const b = gudang(c).brand, gy = gayaDesain(gaya);
+            const corak = ['paper-ink', 'vintage-editorial', 'dark-botanical'].includes(gy.id) ? 'ilustrasi gaya tinta/linocut sederhana' : gy.id === 'neon-cyber' || gy.id === 'terminal-green' ? 'ilustrasi flat dengan garis neon tipis' : 'ilustrasi stiker flat vector, garis luar rapi, bayangan lembut';
+            try {
+                const r = await gambarAi.buat({ prompt: `${sl.gambarElemen}. ${corak}, satu objek utuh di tengah, sudut pandang 3/4 yang menarik, warna selaras ${b?.warna?.slice(0, 3).join(', ') || gy.nama}, latar transparan, tanpa teks, tanpa logo merek.`, n: 1, rasio: '1:1', latarTransparan: true, otomatis: true, untuk: `${d.label(c.a)}: elemen ${sl.gambarElemen}` });
+                const gb = r.gambar[0]; if (!gb) continue;
+                const rel = tulis(folder(c, 'Elemen'), `${namaAman(sl.gambarElemen!)}.png`, gb.data);
+                const it: ItemGudang = { id: gid(), jenis: 'elemen', nama: sl.gambarElemen!.slice(0, 80), ket: `Ilustrasi otomatis (${gy.nama})`, path: rel, mime: gb.mime, sumber: 'ai', at: Date.now(), label: 'ok' };
+                gudang(c).item.push(it); simpan(c); sl.elemenId = it.id;
+            } catch (e: any) { console.warn('[Studio] elemen otomatis:', e?.message || e); break; }
+        }
+        c.s.simpan();
+    }
     const bolehClaude = (c: Ctx, otomatis: boolean) => {
         if (!d.claude?.boleh()) return false;
         const g = gudang(c), batas = Math.max(0, Number(process.env.KANTOR_CAROUSEL_CLAUDE_HARI ?? 1));
@@ -160,7 +192,7 @@ export function pasangStudio(d: DepsStudio) {
         return otomatis ? g.claudeHari.n < batas : true;
     };
     /** Claude sebagai penata: memilih gaya, merapikan teks slide, menandai kata yang ditekankan, menempatkan aset. Kantor yang menggambar. */
-    async function tataClaude(c: Ctx, k: Konten, gayaAwal: string): Promise<{ gaya: string; slide: Array<{ judul: string; isi: string; label?: string; aset?: string }>; catatan: string; usd: number }> {
+    async function tataClaude(c: Ctx, k: Konten, gayaAwal: string): Promise<{ gaya: string; slide: Slide[]; catatan: string; usd: number }> {
         const prompt = ['Kamu art director & copywriter carousel Instagram kelas agency. Tata ulang carousel di bawah supaya maksimal: berhenti-scroll di slide 1, satu ide per slide, mudah dibaca di HP, slide terakhir ajakan simpan/bagikan/ikuti.',
             'Kamu TIDAK menggambar; mesin desain kantor yang menggambar. Tugasmu memilih gaya, merapikan kata-kata, dan menandai penekanan.',
             '- Judul ≤ 8 kata (slide 1 boleh ≤ 12). Isi ≤ 28 kata. Bahasa sama dengan aslinya, natural, tanpa klise AI, tanpa tanda pisah panjang.',
@@ -171,12 +203,14 @@ export function pasangStudio(d: DepsStudio) {
             `GAYA TERSEDIA:\n${GAYA_DESAIN.map((g) => `${g.id}: ${g.nama} — ${g.nuansa}; cocok: ${g.cocok}`).join('\n')}`,
             `AKUN: ${c.a.nama} (${c.a.platform}) · niche: ${c.s.st.strategi?.niche || c.s.st.profil.topik} · audiens: ${c.s.st.strategi?.audiens || c.s.st.profil.audiens}`,
             `GUDANG ASET:\n${teksGudang(c) || '(kosong)'}`,
-            `CAROUSEL SAAT INI (${k.judul}):\n${(k.slide || []).map((s) => `${s.no}. judul: ${s.judul} | isi: ${s.isi} | visual: ${s.visual} | aset: ${s.aset || '-'}`).join('\n') || `1. ${k.hook}`}`,
-            'Keluarkan JSON saja: {"gaya":"id","slide":[{"judul":"…","isi":"…","label":"…","aset":"id atau kosong"}],"catatan":"1 kalimat alasan pilihan desain"}'].join('\n\n');
+            c.s.bagianDesain(),
+            `CAROUSEL SAAT INI (${k.judul}):\n${(k.slide || []).map((s) => `${s.no}. ${JSON.stringify({ judul: s.judul, isi: s.isi, tata: s.tata, angka: s.angka, poin: s.poin, kiri: s.kiri, kanan: s.kanan, elemen: s.elemen, gambarElemen: s.gambarElemen, aset: s.aset })}`).join('\n') || `1. ${k.hook}`}`,
+            'Keluarkan JSON saja: {"gaya":"id","slide":[{"judul":"…","isi":"…","label":"…","aset":"id atau kosong","tata":"…","elemen":[{"jenis":"…","teks":"…"}],"gambarElemen":"…"}],"catatan":"1 kalimat alasan pilihan desain"}'].join('\n\n');
         const r = await d.claude!.jalankan('sosmed', prompt);
         const j = ambilJson(r.teks); if (!j || !Array.isArray(j.slide) || !j.slide.length) throw new Error('Tata letak dari Claude tidak terbaca.');
         const sah = new Set(tersedia(c).map((x) => x.id));
-        return { gaya: GAYA_DESAIN.some((g) => g.id === j.gaya) ? j.gaya : gayaAwal, slide: j.slide.slice(0, 10).map((x: any) => ({ judul: String(x.judul || '').slice(0, 160), isi: String(x.isi || '').slice(0, 400), label: String(x.label || '').slice(0, 24) || undefined, aset: sah.has(String(x.aset || '')) ? String(x.aset) : undefined })).filter((x: any) => x.judul), catatan: String(j.catatan || '').slice(0, 300), usd: r.usd };
+        const slide: Slide[] = j.slide.slice(0, 10).map((x: any, i: number) => { const sl = bacaSlide(x, i); sl.aset = sah.has(String(x?.aset || '')) ? String(x.aset) : undefined; const lama = k.slide?.[i]; if (lama) { sl.visual = lama.visual; if (lama.elemenId && sl.gambarElemen === lama.gambarElemen) sl.elemenId = lama.elemenId; } return sl; }).filter((x: Slide) => x.judul);
+        return { gaya: GAYA_DESAIN.some((g) => g.id === j.gaya) ? j.gaya : gayaAwal, slide, catatan: String(j.catatan || '').slice(0, 300), usd: r.usd };
     }
     async function desainKonten(c: Ctx, k: Konten, mode: 'templat' | 'claude' | 'otomatis', gayaPilih?: string) {
         if (FORMAT_VIDEO(k.format)) throw new Error('Desain otomatis hanya untuk carousel dan postingan gambar.');
@@ -189,16 +223,16 @@ export function pasangStudio(d: DepsStudio) {
             try {
                 const t = await papan.jalankan({ ai: 'sosmed-produksi', nama: 'Vino · otak Claude', judul: `[${d.label(c.a)}] Tata desain: ${k.judul}`, detail: 'Claude menata gaya, teks, dan penempatan aset; kantor yang menggambar.', sumber: 'tugas' }, () => tataClaude(c, k, gaya));
                 gaya = t.gaya; oleh = 'claude'; catatan = t.catatan;
-                const peta = new Map(tersedia(c).map((x) => [x.id, x]));
-                slide = t.slide.map((x) => { const it = x.aset ? peta.get(x.aset) : undefined; let b: Buffer | null = null; try { if (it) b = baca(it); } catch { /* */ } return { judul: x.judul, isi: x.isi, label: x.label || k.pilar, gambar: b, utuh: it ? UTUH.has(it.jenis) : undefined }; });
-                // Teks hasil tata Claude ikut disimpan ke konten (supaya caption/teks slide sinkron).
-                k.slide = t.slide.map((x, i) => ({ no: i + 1, judul: x.judul.replace(/\*\*/g, ''), isi: x.isi, visual: k.slide?.[i]?.visual || '', aset: x.aset }));
+                // Teks & tata hasil Claude disimpan ke konten (judul tanpa tanda ** disimpan apa adanya; penekanan dipakai mesin desain).
+                k.slide = t.slide;
                 g.claudeHari.n++; simpan(c);
             } catch (e: any) {
                 if (mode === 'claude') throw e;
                 console.warn('[Studio] tata Claude gagal, pakai templat:', e?.message || e);
             }
         }
+        await siapkanElemen(c, k, gaya);
+        slide = slideDari(c, k);
         const png = k.format === 'feed' ? [await renderSlide(gaya, slide[0], 1, 1, merek(c), ukuran(c))] : await renderCarousel(gaya, slide, merek(c), ukuran(c));
         const dasar = d.folderAkun(c.a); try { berkas.buatFolder(dasar, 'Desain'); } catch { /* ada */ }
         // Desain ulang: berkas desain lama konten ini dibuang (masuk tempat sampah Berkas), tidak menumpuk.
@@ -292,7 +326,7 @@ export function pasangStudio(d: DepsStudio) {
 
     /* ── Kirim ke Claude ── */
     const asetKonten = (c: Ctx, k: Konten) => {
-        const g = gudang(c), id = new Set<string>([...(k.pakaiAset || []), ...(k.slide || []).map((s) => s.aset || '').filter(Boolean), ...(k.saranAset || []).map((x) => x.status === 'dibuat' ? x.hasil || '' : x.status === 'pakai' ? x.pengganti || '' : '').filter(Boolean)]);
+        const g = gudang(c), id = new Set<string>([...(k.pakaiAset || []), ...(k.slide || []).flatMap((s) => [s.aset || '', s.elemenId || '']).filter(Boolean), ...(k.saranAset || []).map((x) => x.status === 'dibuat' ? x.hasil || '' : x.status === 'pakai' ? x.pengganti || '' : '').filter(Boolean)]);
         const logo = g.brand?.logoId || tersedia(c).find((x) => x.jenis === 'logo')?.id; if (logo) id.add(logo);
         return tersedia(c).filter((x) => id.has(x.id));
     };
@@ -316,8 +350,8 @@ export function pasangStudio(d: DepsStudio) {
         }
         const isi = [kepala, `Buat ${k.format === 'carousel' ? `CAROUSEL ${k.slide?.length || 6} slide` : 'POSTINGAN 1 GAMBAR'} siap unggah (PNG per slide).`,
             `GAYA DESAIN: ${gy.nama} — ${gy.nuansa}. Font judul ${b?.fontJudul || gy.judul.f}, isi ${b?.fontIsi || gy.isi.f}. Warna ${b?.aksenMerek && b?.warna?.length ? `merek ${b.warna.join(', ')}` : Object.values(gy.w).join(', ')}.`,
-            'Aturan: hook besar di slide 1, satu ide per slide, teks terbaca di HP (judul besar, isi pendek), tepi aman ±90px, nomor/progres kecil di bawah, panah geser kecuali slide terakhir, slide terakhir ajakan simpan/ikuti. Tanpa gambar AI tambahan — pakai aset terlampir; edit seperlunya (hapus latar, potong, beri bayangan halus, sesuaikan warna).',
-            `ISI SLIDE:\n${(k.slide || []).map((sl) => { const a = sl.aset ? aset.findIndex((x) => x.id === sl.aset) : -1; return `${sl.no}. ${sl.judul}${sl.isi ? ` — ${sl.isi}` : ''}${a >= 0 ? ` [pakai ${namaFile(aset[a], a)}]` : sl.visual ? ` (visual: ${sl.visual})` : ''}`; }).join('\n') || k.hook || k.judul}`,
+            'Aturan: hook besar di slide 1, satu ide per slide, tata letak tiap slide bervariasi sesuai catatan [tata], kata bertanda **…** ditekankan, elemen tangan (lingkaran spidol, garis bawah coretan, stabilo, catatan tulisan tangan, polaroid+selotip, stiker) dipakai secukupnya sesuai catatan, teks terbaca di HP (judul besar, isi pendek), tepi aman ±90px, nomor/progres kecil di bawah, panah geser kecuali slide terakhir, slide terakhir ajakan simpan/ikuti. Tanpa gambar AI tambahan — pakai aset terlampir; edit seperlunya (hapus latar, potong, beri bayangan halus, sesuaikan warna).',
+            `ISI SLIDE:\n${(k.slide || []).map((sl) => { const a = sl.aset ? aset.findIndex((x) => x.id === sl.aset) : -1; const tambah = [sl.tata && sl.tata !== 'klasik' ? `tata: ${sl.tata}` : '', sl.angka ? `angka besar: ${sl.angka}` : '', sl.poin?.length ? `poin: ${sl.poin.join(' / ')}` : '', sl.kiri ? `${sl.labelKiri || 'Salah'}: ${sl.kiri} | ${sl.labelKanan || 'Benar'}: ${sl.kanan}` : '', (k.hiasan || 'otomatis') !== 'tanpa' && sl.elemen?.length ? `elemen tangan: ${sl.elemen.map((e) => e.jenis + (e.teks ? ` "${e.teks}"` : '')).join(', ')}` : '', sl.elemenId ? `ilustrasi: ${aset.find((x) => x.id === sl.elemenId)?.nama || sl.gambarElemen}` : ''].filter(Boolean).join('; '); return `${sl.no}. ${sl.judul}${sl.isi ? ` — ${sl.isi}` : ''}${tambah ? ` [${tambah}]` : ''}${a >= 0 ? ` [pakai ${namaFile(aset[a], a)}]` : sl.visual ? ` (visual: ${sl.visual})` : ''}`; }).join('\n') || k.hook || k.judul}`,
             brand, daftarAset, 'Setelah jadi, tampilkan pratinjau semua slide, lalu berikan file PNG-nya.'];
         return isi.filter(Boolean).join('\n\n');
     }
@@ -416,7 +450,12 @@ export function pasangStudio(d: DepsStudio) {
         if (aksi === 'tautan') return berkas.tautan(it.path, !!b.unduh);
         throw new Error('Aksi tidak dikenal.');
     }));
-    app.post('/api/kantor/sosmed/gambar-ai/batas', requireToken, r((req) => ({ batasHari: gambarAi.aturBatas(Number(req.body?.usd)) })));
+    app.post('/api/kantor/sosmed/gambar-ai/batas', requireToken, r((req) => req.body?.otomatis ? { batasOtomatis: gambarAi.aturBatasOtomatis(Number(req.body?.usd)) } : { batasHari: gambarAi.aturBatas(Number(req.body?.usd)) }));
+    app.post('/api/kantor/sosmed/konten/:id/hiasan', requireToken, r((req) => {
+        const c = d.ctxReq(req), k = c.s.cari(String(req.params.id)), m = String(req.body?.mode);
+        if (!['otomatis', 'sedikit', 'tanpa'].includes(m)) throw new Error('Pilihan elemen tidak dikenal.');
+        k.hiasan = m as Konten['hiasan']; c.s.simpan(); return { konten: k };
+    }));
     app.post('/api/kantor/sosmed/brand', requireToken, r((req) => {
         const c = d.ctxReq(req), b = req.body || {}, g = gudang(c), lama = g.brand;
         const warna = (Array.isArray(b.warna) ? b.warna : lama?.warna || []).map(String).filter((v: string) => /^#[0-9a-f]{6}$/i.test(v)).slice(0, 6);

@@ -3194,3 +3194,4 @@ body.no-office #phaser-container { visibility: hidden; }
 .sm-laporan-isi { white-space: pre-wrap; max-height: 60vh; overflow: auto; }
 .sm-pre { white-space: pre-wrap; font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; line-height: 1.5; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin: 8px 0 0; overflow-wrap: anywhere; }
 .sk-langkah a.btn { text-decoration: none; display: inline-flex; align-items: center; }
+.gd-oto { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; margin: 0 0 8px; }

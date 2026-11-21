@@ -17,13 +17,13 @@ interface Kerja { id: string; jenis: string; judul: string; status: 'jalan' | 's
 interface GayaD { id: string; nama: string; nuansa: string; cocok: string; gelap: boolean; judul: string; isi: string; warna: string[] }
 export interface DataGudang {
     item: ItemGudang[]; brand: Brand | null; usulan: Usulan | null; kerja: Kerja[]; jenis: Array<{ id: string; nama: string }>;
-    gambarAi: { ada: boolean; batasHari: number; terpakaiHari: number; terpakaiBulan: number; jumlah: number; model: string; perkiraan: { standar: number; tinggi: number } };
+    gambarAi: { ada: boolean; batasHari: number; terpakaiHari: number; batasOtomatis: number; terpakaiOtomatis: number; terpakaiBulan: number; jumlah: number; model: string; perkiraan: { standar: number; tinggi: number } };
     desain: { siap: boolean; pesan: string }; gaya: GayaD[]; font: string[]; claude: { aktif: boolean; carouselHari: number; batasHari: number } | null;
 }
 /** Bagian konten yang dipakai studio. */
 export interface KontenStudio {
     id: string; kode?: string; judul: string; format: string; status: string; hook?: string; slide?: Array<{ no: number; judul: string; isi: string; visual: string; aset?: string }>;
-    pakaiAset?: string[]; saranAset?: SaranAset[]; desain?: { gaya: string; oleh: 'templat' | 'claude'; at: number; catatan?: string } | null;
+    hiasan?: 'otomatis' | 'sedikit' | 'tanpa'; pakaiAset?: string[]; saranAset?: SaranAset[]; desain?: { gaya: string; oleh: 'templat' | 'claude'; at: number; catatan?: string } | null;
     promptEdit?: string; promptVideo?: string; rekam?: string; promptSuara?: unknown; gayaId?: string; aset?: { path: string } | null;
 }
 
@@ -150,7 +150,9 @@ export function TabAset({ akun, kabar, namaAkun }: { akun: string; kabar: (m: st
         <BrandKit akun={akun} g={g} aksi={aksi} kabar={kabar} muat={() => d.reload()} />
         <section className="sb-card"><div className="sd-h"><h3><Ikon e="💳" /> Gambar AI <small>saldo OpenRouter · hanya saat Bapak menekan Buat</small></h3>
             <label className="gd-batas">Batas/hari $<input type="number" min={0} max={20} step={0.1} defaultValue={g.gambarAi.batasHari} key={g.gambarAi.batasHari} onBlur={(e) => { const v = +e.target.value; if (v !== g.gambarAi.batasHari) aksi(post(akun, '/api/kantor/sosmed/gambar-ai/batas', { usd: v }), `Batas harian gambar AI: $${v}.`); }} aria-label="Batas biaya gambar AI per hari (dolar)" /></label></div>
-            <p className="sb-note" style={{ margin: 0 }}>Hari ini {usd(g.gambarAi.terpakaiHari)} dari batas {usd(g.gambarAi.batasHari)} · bulan ini {usd(g.gambarAi.terpakaiBulan)} ({g.gambarAi.jumlah} gambar) · model {g.gambarAi.model}. Satu gambar standar ±{usd(g.gambarAi.perkiraan.standar)}, kualitas tinggi ±{usd(g.gambarAi.perkiraan.tinggi)}.</p></section>
+            <div className="gd-oto"><span>Elemen konten otomatis (ilustrasi kulkas, gelas, dll. saat carousel membutuhkannya): hari ini {usd(g.gambarAi.terpakaiOtomatis)} dari batas</span>
+                <label className="gd-batas">$<input type="number" min={0} max={10} step={0.05} defaultValue={g.gambarAi.batasOtomatis} key={`o${g.gambarAi.batasOtomatis}`} onBlur={(e) => { const v = +e.target.value; if (v !== g.gambarAi.batasOtomatis) aksi(post(akun, '/api/kantor/sosmed/gambar-ai/batas', { usd: v, otomatis: true }), `Batas elemen otomatis: $${v}/hari.`); }} aria-label="Batas elemen otomatis per hari (dolar)" />/hari</label></div>
+            <p className="sb-note" style={{ margin: 0 }}>Aset atas perintah Bapak: hari ini {usd(g.gambarAi.terpakaiHari)} dari batas {usd(g.gambarAi.batasHari)} · bulan ini {usd(g.gambarAi.terpakaiBulan)} ({g.gambarAi.jumlah} gambar) · model {g.gambarAi.model}. Satu gambar standar ±{usd(g.gambarAi.perkiraan.standar)}, kualitas tinggi ±{usd(g.gambarAi.perkiraan.tinggi)}.</p></section>
     </>);
 }
 function ItemAset({ akun, x, g, aksi, variasi }: { akun: string; x: ItemGudang; g: DataGudang; aksi: (p: Promise<any>, ok?: string) => void; variasi: () => void }) {
@@ -285,6 +287,8 @@ export function StudioKonten({ akun, k, kabar, muat, sibuk }: { akun: string; k:
             {kerja ? <div className="hz-bukti ok"><span className="pk-jalan"><i /></span><span>{kerja.judul}…</span></div> : (<>
                 <div className="sk-desain-a">
                     <label>Gaya<select value={gayaAktif} onChange={(e) => setGaya(e.target.value)}>{g.gaya.map((x) => <option key={x.id} value={x.id}>{x.nama}</option>)}</select></label>
+                    <label>Elemen<select value={k.hiasan || 'otomatis'} onChange={(e) => aksi(post(akun, url('hiasan'), { mode: e.target.value }), e.target.value === 'tanpa' ? 'Desain berikutnya bersih tanpa elemen tangan.' : e.target.value === 'sedikit' ? 'Maksimal 1 elemen per slide, tanpa ilustrasi otomatis.' : 'Elemen tangan + ilustrasi otomatis (dalam batas harian).')}>
+                        <option value="otomatis">Otomatis</option><option value="sedikit">Sedikit</option><option value="tanpa">Tanpa</option></select></label>
                     <button className="btn small primary" disabled={sibuk || !g.desain.siap} onClick={() => aksi(post(akun, url('desain'), { oleh: 'templat', gaya: gayaAktif }), 'Kantor menggambar slide — hasilnya langsung jadi berkas konten ini.')}>{k.aset ? 'Desain ulang (gratis)' : 'Desain sekarang (gratis)'}</button>
                     <button className="btn small" disabled={sibuk || !g.claude?.aktif || !g.desain.siap} title={g.claude?.aktif ? '' : 'Otak Claude sedang tidak tersedia'} onClick={() => aksi(post(akun, url('desain'), { oleh: 'claude', gaya: gayaAktif }), 'Claude menata gaya, teks & penempatan aset; kantor menggambar.')}><Ikon e="🧠" /> Ditata Claude</button>
                 </div>
