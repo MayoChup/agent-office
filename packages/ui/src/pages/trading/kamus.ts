@@ -9,6 +9,8 @@ export type Nada = 'up' | 'down' | 'netral';
 export interface Bacaan { judul: string; nilai: string; status: string; nada: Nada; apa: string; baca: string; kini: string }
 
 const a = (v: number, d = 1) => v.toLocaleString('id-ID', { maximumFractionDigits: d, minimumFractionDigits: 0 });
+/** Dolar dalam format yang sama dengan bagian lain Trading ($172.97). */
+const d$ = (v: number) => `$${v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const ada = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const kosong = (judul: string, apa: string, baca: string): Bacaan => ({ judul, nilai: '–', status: 'Belum ada', nada: 'netral', apa, baca, kini: 'Datanya belum tersedia untuk saham ini.' });
 
@@ -46,7 +48,7 @@ export function ma(b: Baris, n: 50 | 200): Bacaan {
     const baca = `Harga di atas MA${n} = tren ${n === 50 ? 'menengah' : 'panjang'} naik. Di bawahnya = tren turun. MA50 memotong MA200 ke atas disebut golden cross (tanda kuat naik), ke bawah disebut death cross.`;
     if (!ada(v)) return kosong(judul, apa, baca);
     const jarak = (b.harga / v - 1) * 100;
-    return { judul, nilai: `$${a(v, 2)}`, status: `${jarak >= 0 ? '+' : '−'}${a(Math.abs(jarak))}%`, nada: jarak >= 0 ? 'up' : 'down', apa, baca, kini: `Harga ${b.s} ${a(Math.abs(jarak))}% ${jarak >= 0 ? 'di atas' : 'di bawah'} MA${n}: tren ${n === 50 ? 'menengah' : 'panjang'} sedang ${jarak >= 0 ? 'naik' : 'turun'}.${b.sinyal?.goldenCross != null && n === 200 ? ` Golden cross terjadi ${b.sinyal.goldenCross} hari lalu.` : ''}${b.sinyal?.deathCross != null && n === 200 ? ` Death cross terjadi ${b.sinyal.deathCross} hari lalu.` : ''}` };
+    return { judul, nilai: d$(v), status: `${jarak >= 0 ? '+' : '−'}${a(Math.abs(jarak))}%`, nada: jarak >= 0 ? 'up' : 'down', apa, baca, kini: `Harga ${b.s} ${a(Math.abs(jarak))}% ${jarak >= 0 ? 'di atas' : 'di bawah'} MA${n}: tren ${n === 50 ? 'menengah' : 'panjang'} sedang ${jarak >= 0 ? 'naik' : 'turun'}.${b.sinyal?.goldenCross != null && n === 200 ? ` Golden cross terjadi ${b.sinyal.goldenCross} hari lalu.` : ''}${b.sinyal?.deathCross != null && n === 200 ? ` Death cross terjadi ${b.sinyal.deathCross} hari lalu.` : ''}` };
 }
 
 export function volume(b: Baris): Bacaan {
@@ -62,7 +64,7 @@ export function atr(b: Baris): Bacaan {
     const baca = 'Makin besar ATR, makin liar sahamnya. Berguna untuk menakar stop loss: stop yang lebih sempit dari 1× ATR mudah tersentuh oleh gerak harian biasa.';
     const v = b.x?.atr; if (!ada(v) || !b.harga) return kosong(judul, apa, baca);
     const p = (v / b.harga) * 100;
-    return { judul, nilai: `±${a(p)}%`, status: p >= 3.5 ? 'Liar' : p >= 2 ? 'Sedang' : 'Tenang', nada: 'netral', apa, baca, kini: `${b.s} rata-rata bergerak ±$${a(v, 2)} (±${a(p)}%) per hari.` };
+    return { judul, nilai: `±${a(p)}%`, status: p >= 3.5 ? 'Liar' : p >= 2 ? 'Sedang' : 'Tenang', nada: 'netral', apa, baca, kini: `${b.s} rata-rata bergerak ±${d$(v)} (±${a(p)}%) per hari.` };
 }
 
 export function posisi52(b: Baris): Bacaan {
@@ -70,7 +72,7 @@ export function posisi52(b: Baris): Bacaan {
     const baca = 'Dekat tertinggi = saham sedang kuat (bisa tembus naik, bisa juga tertahan). Dekat terendah = saham sedang lemah atau sedang diskon.';
     const hi = b.sinyal?.hi52, lo = b.sinyal?.lo52; if (!ada(hi) || !ada(lo) || hi <= lo) return kosong(judul, apa, baca);
     const pos = ((b.harga - lo) / (hi - lo)) * 100, dariHi = (1 - b.harga / hi) * 100;
-    return { judul, nilai: `${a(Math.max(0, Math.min(100, pos)), 0)}%`, status: dariHi < 1 ? 'Di puncak' : `−${a(dariHi)}% dari puncak`, nada: pos >= 50 ? 'up' : 'down', apa, baca, kini: `Rentang setahun ${b.s}: $${a(lo, 2)} – $${a(hi, 2)}. Harga sekarang ${dariHi < 1 ? 'di sekitar puncak setahun' : `${a(dariHi)}% di bawah puncak`}.` };
+    return { judul, nilai: `${a(Math.max(0, Math.min(100, pos)), 0)}%`, status: dariHi < 1 ? 'Di puncak' : `−${a(dariHi)}% dari puncak`, nada: pos >= 50 ? 'up' : 'down', apa, baca, kini: `Rentang setahun ${b.s}: ${d$(lo)} – ${d$(hi)}. Harga sekarang ${dariHi < 1 ? 'di sekitar puncak setahun' : `${a(dariHi)}% di bawah puncak`}.` };
 }
 
 export function momentum(b: Baris, k: 'chg1m' | 'chg3m' | 'chg1y'): Bacaan {
