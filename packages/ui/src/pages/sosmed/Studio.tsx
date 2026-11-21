@@ -133,7 +133,7 @@ export function TabAset({ akun, kabar, namaAkun }: { akun: string; kabar: (m: st
                     <button className="btn small primary" disabled={!!naik} onClick={() => input.current?.click()}>{naik ? `Mengunggah ${naik}` : <><Ikon e="⬆" /> Unggah</>}</button>
                     <button className="btn small" onClick={() => setBuat({})}><Ikon e="✨" /> Buat dengan AI</button>
                 </div>
-                <input ref={input} type="file" accept="image/png,image/jpeg,image/webp" multiple hidden onChange={(e) => { const f = [...(e.target.files || [])]; e.target.value = ''; if (f.length) void unggah(f); }} />
+                <input ref={input} type="file" accept="image/png,image/jpeg,image/webp" multiple hidden onChange={(e) => { const f = Array.from(e.target.files || []); e.target.value = ''; if (f.length) void unggah(f); }} />
             </div>
             {!ada.length && !calon.size && <div className="fin-empty">Isi gudang dengan logo, maskot, foto produk, foto toko/tempat, atau foto Bapak. Tim akan memakai aset yang sama di setiap konten supaya feed konsisten — tidak mengarang produk atau maskot lain.</div>}
             {kerjaAktif.map((k) => <div key={k.id} className={`hz-bukti ${k.status === 'gagal' ? 'warn' : 'ok'}`}>{k.status === 'jalan' ? <span className="pk-jalan"><i /></span> : <Ikon e="⚠️" />}<span>{k.judul}{k.status === 'gagal' ? ` — ${k.galat}` : ' …'}</span></div>)}
