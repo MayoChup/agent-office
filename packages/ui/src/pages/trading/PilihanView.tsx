@@ -5,6 +5,10 @@ import { Baris, FaktorKey, FAKTOR, LABELS, Label, ScreenerData, kelas, usd, pers
 import { Sparkline, Mom } from './Sparkline';
 
 import { Ikon } from '../../components/Ikon';
+import { Info, InfoKamus } from './InfoI';
+import * as K from './kamus';
+/** Label sinyal dalam huruf kalimat (Beli kuat, Tahan, …). */
+const kalimat = (l: string) => l.charAt(0).toUpperCase() + l.slice(1).toLowerCase();
 type Urut = 'skor' | 'chg1d' | 'potensi' | 'peluang' | 'rsi' | 's';
 const URUT: Array<{ k: Urut; label: string }> = [{ k: 'skor', label: 'Skor' }, { k: 'potensi', label: 'Potensi naik' }, { k: 'peluang', label: 'Peluang' }, { k: 'chg1d', label: 'Perubahan' }, { k: 'rsi', label: 'RSI' }, { k: 's', label: 'Kode' }];
 
@@ -99,13 +103,29 @@ function FaktorBars({ b }: { b: Baris }) {
             {FAKTOR.filter((f) => f.k !== 'semua').map((f) => {
                 const s = b.skor?.[f.k];
                 return (
-                    <div key={f.k} className="sb-fbar" title={s ? `${f.label}: ${s.label}` : `${f.label}: belum ada data`}>
-                        <span>{f.label}</span>
+                    <div key={f.k} className="sb-fbar">
+                        <span>{f.label} <Info judul={f.label} teks={f.info} kini={s ? `${b.s}: skor ${f.label.toLowerCase()} ${skorBar(s.skor)}/100, ${s.label.toLowerCase()}.` : undefined} /></span>
                         <div className="track"><i className={kelas(s?.label)} style={{ width: `${s ? skorBar(s.skor) : 0}%` }} /></div>
                         <em className={`t-${kelas(s?.label)}`}>{s ? s.label : '–'}</em>
                     </div>
                 );
             })}
+        </div>
+    );
+}
+
+/** Empat indikator sekilas: dua teknikal (momentum) + dua fundamental (valuasi & kualitas). */
+function Sekilas({ b }: { b: Baris }) {
+    const xs = [K.rsi(b), K.macd(b), K.fundamental(b, 'per'), K.fundamental(b, 'roe')];
+    return (
+        <div className="sb-ind">
+            {xs.map((x) => (
+                <div key={x.judul}>
+                    <small>{x.judul} <InfoKamus x={x} /></small>
+                    <b className="mono">{x.nilai}</b>
+                    <em className={`t-${x.nada}`}>{x.status}</em>
+                </div>
+            ))}
         </div>
     );
 }
@@ -117,9 +137,9 @@ export function Kartu({ b, faktor, onOpen, kronos = 'lencana' }: { b: Baris; fak
         <article className="sb-cardx" onClick={() => onOpen(b.s)}>
             <header>
                 <div><b className="mono">{b.s}</b><small>{b.nama}</small></div>
-                <div className="kc-r">{kronos === 'lencana' && <LencanaKronos s={b.s} />}{sk && <span className={`lb ${kelas(sk.label)}`}>{sk.label.toUpperCase()}</span>}<Bintang s={b.s} /></div>
+                <div className="kc-r">{kronos === 'lencana' && <LencanaKronos s={b.s} />}{sk && <span className={`lb ${kelas(sk.label)}`}>{kalimat(sk.label)}</span>}<Bintang s={b.s} /></div>
             </header>
-            {faktor === 'semua' && sk?.asli && <div className="sb-tahan" title="Sinyal hanya keluar kalau teknikal, fundamental, berita & whales lengkap">Sinyal {sk.asli} ditahan · menunggu data {sk.kurang?.join(', ')}</div>}
+            {faktor === 'semua' && sk?.asli && <div className="sb-tahan" title="Sinyal hanya keluar kalau teknikal, fundamental, berita & whales lengkap">Sinyal {sk.asli.toLowerCase()} ditahan · menunggu data {sk.kurang?.join(', ')}</div>}
             <div className="sb-price">
                 <div><small>Penutupan terakhir</small><b className="mono">{usd(b.harga)}</b><em className={`mono ${b.chg1d >= 0 ? 'up' : 'down'}`}>{persen(b.chg1d)}</em></div>
                 {b.x && <Sparkline data={b.x.spark} />}
@@ -128,25 +148,24 @@ export function Kartu({ b, faktor, onOpen, kronos = 'lencana' }: { b: Baris; fak
                 <span>Tren · <b>{b.x?.trenLabel || '–'}</b></span>
                 {b.x && <div className="moms"><Mom label="1W" v={b.x.mom.w1} /><Mom label="1M" v={b.x.mom.m1} /><Mom label="3M" v={b.x.mom.m3} /></div>}
             </div>
+            <Sekilas b={b} />
+            <FaktorBars b={b} />
             {pr && (
-                <div className="sb-targets">
-                    {pr.target.map((t) => (
-                        <div key={t.nama} className={t.nama === pr.terbaik ? 'best' : ''}>
-                            <small>{t.nama}{t.nama === pr.terbaik ? ' ★' : ''}</small>
-                            <b className="mono">{usd(t.harga)}</b>
-                            <em className="mono up">+{t.pct.toFixed(1)}%</em>
-                            <span className="mono">peluang {t.peluang}%</span>
-                        </div>
-                    ))}
+                <div className="sb-proj">
+                    <small className="sb-sub">Target sinyal · ≤{pr.horizon} hari bursa <Info judul="Target sinyal" teks={`Tiga level target untuk ${pr.horizon} hari bursa ke depan. Peluang dihitung dari pergerakan harga pada hari-hari serupa dalam setahun terakhir: seberapa sering harga sempat menyentuh level itu. ★ = kombinasi peluang × potensi terbaik.`} /></small>
+                    <div className="sb-targets">
+                        {pr.target.map((t) => (
+                            <div key={t.nama} className={t.nama === pr.terbaik ? 'best' : ''}>
+                                <small>{t.nama}{t.nama === pr.terbaik ? ' ★' : ''}</small>
+                                <b className="mono">{usd(t.harga)}</b>
+                                <em className="mono up">+{t.pct.toFixed(1)}%</em>
+                                <span className="mono">peluang {t.peluang}%</span>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             )}
             {kronos === 'panel' && <PanelKronos s={b.s} />}
-            <div className="sb-ind">
-                <div><small>RSI 14</small><b className="mono">{b.rsi ?? '–'}</b></div>
-                <div><small>Peluang naik 20h</small><b className="mono">{pr ? `${pr.peluangNaik}%` : '–'}</b></div>
-                <div><small>Rasio vol</small><b className="mono">{b.volX}×</b></div>
-            </div>
-            <FaktorBars b={b} />
         </article>
     );
 }
@@ -161,7 +180,7 @@ function BarisKecil({ b, faktor, onOpen }: { b: Baris; faktor: FaktorKey; onOpen
             <div className="c2 mono">{usd(b.harga)} <em className={b.chg1d >= 0 ? 'up' : 'down'}>{persen(b.chg1d)}</em></div>
             <div className="c3">{b.x && <Sparkline data={b.x.spark} w={90} h={28} />}</div>
             <div className="c4 mono">{best ? <>→ {usd(best.harga)} <small>({best.peluang}%)</small></> : '–'}</div>
-            <div className="c5">{sk && <span className={`lb ${kelas(sk.label)}`} title={sk.asli ? `Sinyal ${sk.asli} ditahan: data ${sk.kurang?.join(', ')} belum siap` : undefined}>{sk.label.toUpperCase()}{sk.asli ? ' ·' : ''}</span>}</div>
+            <div className="c5">{sk && <span className={`lb ${kelas(sk.label)}`} title={sk.asli ? `Sinyal ${sk.asli} ditahan: data ${sk.kurang?.join(', ')} belum siap` : undefined}>{kalimat(sk.label)}{sk.asli ? ' ·' : ''}</span>}</div>
         </div>
     );
 }

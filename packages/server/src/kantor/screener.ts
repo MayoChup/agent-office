@@ -26,6 +26,10 @@ export interface Sinyal {
     doubleTop: 'terbentuk' | 'terkonfirmasi' | null; doubleBottom: 'terbentuk' | 'terkonfirmasi' | null;
     breakout52: boolean; dekat52Low: boolean; rsiOversold: boolean; rsiOverbought: boolean;
     macdBullish: number | null; macdBearish: number | null; diAtasMa200: boolean; volumeSpike: boolean; tren: 'naik' | 'turun' | 'datar';
+    /** MACD di atas garis sinyal sekarang? & berapa hari sejak terakhir memotong (maks 120). */
+    macdAtas?: boolean | null; macdHari?: number | null;
+    /** Harga tertinggi & terendah 52 minggu (penutupan). */
+    hi52?: number | null; lo52?: number | null;
 }
 export interface Baris {
     s: string; nama: string; sektor: string; harga: number; chg1d: number; chg1m: number; chg3m: number; chg1y: number;
@@ -118,6 +122,10 @@ export function analisis(c: number[], v: number[]) {
         macdBearish: crossAgo(macd, sig, false, 5),
         diAtasMa200: ma200 != null && last > ma200,
         volumeSpike: avgV > 0 && v[n - 1] >= avgV * 2,
+        macdAtas: macd[n - 1] != null && sig[n - 1] != null ? macd[n - 1] > sig[n - 1] : null,
+        macdHari: (() => { const at = macd[n - 1] > sig[n - 1]; for (let k = 1; k <= Math.min(120, n - 2); k++) { if ((macd[n - 1 - k] > sig[n - 1 - k]) !== at) return k - 1; } return null; })(),
+        hi52: prior.length > 100 ? +Math.max(...prior, last).toFixed(2) : null,
+        lo52: prior.length > 100 ? +Math.min(...prior, last).toFixed(2) : null,
         tren: ma50 != null && ma200 != null && last > ma50 && ma50 > ma200 && slope > 0.01 ? 'naik' : ma50 != null && ma200 != null && last < ma50 && ma50 < ma200 && slope < -0.01 ? 'turun' : 'datar'
     };
     const pct = (k: number) => (n > k ? +((last / c[n - 1 - k] - 1) * 100).toFixed(2) : 0);

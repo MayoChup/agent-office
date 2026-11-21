@@ -11,6 +11,13 @@ import { PegangPosisi } from './PegangPosisi';
 import type { TradingData } from '../../kantor/api';
 
 import { Ikon } from '../../components/Ikon';
+import { Info, InfoKamus } from './InfoI';
+import * as K from './kamus';
+const kalimat = (l: string) => l.charAt(0).toUpperCase() + l.slice(1).toLowerCase();
+/** Satu kotak indikator: nama + ⓘ, angka, status singkat. */
+function KV({ x }: { x: K.Bacaan }) {
+    return <div><small>{x.judul} <InfoKamus x={x} /></small><b className="mono">{x.nilai}</b>{x.status && <em className={`t-${x.nada}`}>{x.status}</em>}</div>;
+}
 interface FaktorFull { skor: number; label: Label; alasan: string[] }
 interface Profil { nama: string; ringkas: string; deskripsi: string; situs: string; sektor: string; industri: string; alamat: string }
 interface Detail { preset?: PresetEval[]; baris: Baris; skor: Record<FaktorKey, FaktorFull | null>; berita: { n: number; judul: Array<{ t: string; s: number; tgl: string; url: string }> } | null; orang: { net: number; beli: number; jual: number; n: number } | null }
@@ -82,7 +89,7 @@ export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPre
                 {all && (
                     <div className="sd-score">
                         <div className={`sd-gauge ${kelas(all.label)}`} style={{ ['--p' as any]: skorBar(all.skor) }}><b className="mono">{skorBar(all.skor)}</b><small>/100</small></div>
-                        <span className={`lb big ${kelas(all.label)}`}>{all.label.toUpperCase()}</span>
+                        <span className={`lb big ${kelas(all.label)}`}>{kalimat(all.label)}</span>
                         <div className="sd-mini">{FAKTOR.filter((x) => x.k !== 'semua').map((x) => { const s = d.skor[x.k]; return <span key={x.k} className={`lb sm ${kelas(s?.label)}`} title={x.info}><Ikon e={x.ico} /> {s ? s.label : '–'}</span>; })}</div>
                     </div>
                 )}
@@ -147,7 +154,7 @@ export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPre
                     return (
                         <div className="sd-fbody">
                             <div className="sd-fhead">
-                                <span className={`lb ${kelas(s?.label)}`}>{s ? s.label.toUpperCase() : 'BELUM ADA DATA'}</span>
+                                <span className={`lb ${kelas(s?.label)}`}>{s ? kalimat(s.label) : 'Belum ada data'}</span>
                                 <div className="track"><i className={kelas(s?.label)} style={{ width: `${s ? skorBar(s.skor) : 0}%` }} /></div>
                                 <b className="mono">{s ? skorBar(s.skor) : '–'}</b>
                             </div>
@@ -175,22 +182,22 @@ export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPre
                                     <a key={i} href={j.url} target="_blank" rel="noreferrer"><span className={`sent ${j.s > 0 ? 'pos' : j.s < 0 ? 'neg' : ''}`}>{j.s > 0 ? 'Positif' : j.s < 0 ? 'Negatif' : 'Netral'}</span><b>{j.t}</b><small>{j.tgl}</small></a>
                                 ))}</div>
                             )}
+                            {tab === 'teknikal' && (
+                                <div className="sd-kv">
+                                    {[K.rsi(b), K.macd(b), K.ma(b, 50), K.ma(b, 200), K.volume(b), K.atr(b), K.posisi52(b), K.momentum(b, 'chg1m'), K.momentum(b, 'chg3m'), K.momentum(b, 'chg1y')].map((x) => <KV key={x.judul} x={x} />)}
+                                </div>
+                            )}
                             {tab === 'whales' && (
-                                <div className="sd-kv mono">
-                                    <div><small>CMF 20</small><b>{b.x?.cmf ?? '–'}</b></div>
-                                    <div><small>OBV 20 hari</small><b>{b.x?.obv ?? '–'}</b></div>
-                                    <div><small>Orang dalam beli</small><b>{d.orang ? usd(d.orang.beli, 0) : '–'}</b></div>
-                                    <div><small>Orang dalam jual</small><b>{d.orang ? usd(d.orang.jual, 0) : '–'}</b></div>
+                                <div className="sd-kv">
+                                    <KV x={K.cmf(b)} /><KV x={K.obv(b)} />
+                                    <div><small>Orang dalam beli <Info judul="Pembelian orang dalam" teks={`${K.ORANG_DALAM.apa}\n\n${K.ORANG_DALAM.baca}`} kini={d.orang ? `${b.s}: ${d.orang.n} transaksi, beli ${usd(d.orang.beli, 0)} · jual ${usd(d.orang.jual, 0)}.` : undefined} /></small><b className="mono">{d.orang ? usd(d.orang.beli, 0) : '–'}</b></div>
+                                    <div><small>Orang dalam jual <Info judul="Penjualan orang dalam" teks={`${K.ORANG_DALAM.apa}\n\n${K.ORANG_DALAM.baca}`} /></small><b className="mono">{d.orang ? usd(d.orang.jual, 0) : '–'}</b></div>
                                 </div>
                             )}
                             {tab === 'fundamental' && f && (
-                                <div className="sd-kv mono">
-                                    <div><small>ROE</small><b>{f.roe ?? '–'}%</b></div><div><small>ROA</small><b>{f.roa ?? '–'}%</b></div>
-                                    <div><small>PER</small><b>{f.per ?? '–'}×</b></div><div><small>PBV</small><b>{f.pbv ?? '–'}×</b></div>
-                                    <div><small>DER</small><b>{f.der ?? '–'}×</b></div><div><small>Margin laba</small><b>{f.npm ?? '–'}%</b></div>
-                                    <div><small>Tumbuh pendapatan</small><b>{f.revGrowth ?? '–'}%</b></div><div><small>Kapitalisasi</small><b>{kap(b.mcap ?? f.mcap)}</b></div>
-                                    <div><small>P/S</small><b>{(f as any).ps ?? '–'}×</b></div><div><small>Current ratio</small><b>{(f as any).cr ?? '–'}×</b></div>
-                                    <div><small>Laba tumbuh/th (3 th)</small><b>{(f as any).epsCagr3 ?? '–'}%</b></div><div><small>Arus kas bebas</small><b>{(f as any).fcf != null ? `$${((f as any).fcf / 1000).toFixed(1)} M` : '–'}</b></div>
+                                <div className="sd-kv">
+                                    {(['roe', 'roa', 'per', 'pbv', 'der', 'npm', 'revGrowth', 'ps', 'cr', 'epsCagr3', 'fcf'] as const).map((k) => <KV key={k} x={K.fundamental(b, k)} />)}
+                                    <KV x={K.kapitalisasi(b, kap(b.mcap ?? f.mcap))} />
                                 </div>
                             )}
                         </div>

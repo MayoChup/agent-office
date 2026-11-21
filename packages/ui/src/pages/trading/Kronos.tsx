@@ -1,3 +1,5 @@
+import { Info } from './InfoI';
+import { INFO_KRONOS } from './kamus';
 import React, { useEffect, useState, useSyncExternalStore } from 'react';
 import { apiGet, apiPost } from '../../kantor/connection';
 import { Ikon } from '../../components/Ikon';
@@ -60,7 +62,7 @@ export function PitaKronos({ simbol }: { simbol: string[] }) {
                     <button className="btn small" onClick={() => kirim(apiPost('/api/kantor/kronos/antre/batal', {}))}>Hentikan sisa antrean</button>
                 ) : (
                     <div className="kr-pita-t">
-                        <button className="btn small primary" disabled={!belum.length} onClick={() => kirim(antrekan(belum))}>{belum.length ? `🔮 Kronos semua · ${g.label} (${belum.length})` : '✓ Semua sudah dihitung'}</button>
+                        <button className="btn small primary" disabled={!belum.length} onClick={() => kirim(antrekan(belum))}>{belum.length ? <><Ikon e="🔮" /> Kronos semua · {g.label} ({belum.length})</> : 'Semua sudah dihitung'}</button>
                         {belum.length < simbol.length && <button className="btn small" onClick={() => kirim(antrekan(simbol))} title="Hitung ulang semua dengan data terbaru">Hitung ulang semua</button>}
                     </div>
                 )}
@@ -130,7 +132,7 @@ export function PanelKronos({ s }: { s: string }) {
                 <small className="kr-waktu">{tgl(r.at)}{r.basi ? ' · kedaluwarsa' : ''}</small>
             </div>
             <div className="kr-tabel" role="table" aria-label={`Kronos ${s}: tiga profil`}>
-                <div className="kr-bar-h" role="row"><span role="columnheader">Profil</span><span role="columnheader">Target</span><span role="columnheader">Stop</span><span role="columnheader">R:R</span><span role="columnheader">Harapan</span></div>
+                <div className="kr-bar-h" role="row"><span role="columnheader">Profil</span><span role="columnheader">Target <Info judul="Target" teks={INFO_KRONOS.target} /></span><span role="columnheader">Stop <Info judul="Stop" teks={INFO_KRONOS.stop} /></span><span role="columnheader">R:R <Info judul="Risiko : hasil" teks={INFO_KRONOS.rr} /></span><span role="columnheader">Harapan <Info judul="Harapan per posisi" teks={INFO_KRONOS.harapan} /></span></div>
                 {pr.map((p) => (
                     <div key={p.id} role="row" className={`kr-baris ${p.id === best.id && best.harapan > 0 ? 'terbaik' : ''} ${p.pMasuk === 0 ? 'mati' : ''}`}>
                         <span role="cell" className="kr-nama"><b>{NAMA[p.id]}{p.id === best.id && pr.length > 1 ? <i title="Harapan per posisi terbaik"> ★</i> : null}</b></span>
@@ -142,7 +144,7 @@ export function PanelKronos({ s }: { s: string }) {
                     </div>
                 ))}
             </div>
-            <small className="kr-kaki">Angka kecil = peluang kena · harapan = rata-rata hasil per posisi · harga berakhir di atas harga sekarang <b>{r.pNaik ?? '–'}%</b> · median {pct(r.medianPct)}</small>
+            <small className="kr-kaki">Harga berakhir di atas harga sekarang <b>{r.pNaik ?? '–'}%</b> <Info judul="Harga berakhir di atas harga sekarang" teks={INFO_KRONOS.naik} /> · median {pct(r.medianPct)}</small>
             {r.basi && d.antre.terpasang && <button className="btn small kr-ulang" onClick={() => antrekan([s])}>Hitung ulang</button>}
         </div>
     );
@@ -153,13 +155,13 @@ export function LencanaKronos({ s }: { s: string }) {
     const d = useKronos();
     if (!d) return null;
     const r = d.aktif[s], lain = d.lain[s], pos = posisiAntre(d, s);
-    if (pos) return <span className="kr-len antre" title={pos.jalan ? 'Kronos sedang menghitung' : `Antrean Kronos ke-${pos.ke}`}>🔮 {pos.jalan ? '…' : `#${pos.ke}`}</span>;
+    if (pos) return <span className="kr-len antre" title={pos.jalan ? 'Kronos sedang menghitung' : `Antrean Kronos ke-${pos.ke}`}><Ikon e="🔮" /> {pos.jalan ? '…' : `#${pos.ke}`}</span>;
     if (r) {
         const b = terbaikDari(r), pr = profilDari(r);
         const ket = `Kronos ${r.label} · ${tgl(r.at)}${r.basi ? ' · kedaluwarsa' : ''}\n` + pr.map((p) => `${NAMA[p.id]}: target ${pct(p.targetPct)} (${p.pTarget}%) · stop ${pct(p.stopPct)} (${p.pStop}%) · R:R 1:${angka(p.rr)} · harapan ${pct(p.harapan)}`).join('\n') + '\nPrediksi statistik, bukan saran beli/jual.';
-        return <span className={`kr-len ${kelasRR(b.rr)} ${r.basi ? 'basi' : ''}`} title={ket} aria-label={ket}>🔮 {pr.length > 1 ? `${b.id.toUpperCase()} ` : ''}1:{angka(b.rr)} <small>{new Date(r.at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}</small></span>;
+        return <span className={`kr-len ${kelasRR(b.rr)} ${r.basi ? 'basi' : ''}`} title={ket} aria-label={ket}><Ikon e="🔮" /> {pr.length > 1 ? `${b.id.toUpperCase()} ` : ''}1:{angka(b.rr)} <small>{new Date(r.at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}</small></span>;
     }
-    if (lain?.length) return <span className="kr-len lain" title={`Kronos sudah dihitung untuk gaya ${lain.map((x) => x.label).join(', ')}`}>🔮 {lain[0].label}</span>;
+    if (lain?.length) return <span className="kr-len lain" title={`Kronos sudah dihitung untuk gaya ${lain.map((x) => x.label).join(', ')}`}><Ikon e="🔮" /> {lain[0].label}</span>;
     return null;
 }
 
@@ -185,14 +187,14 @@ export function PilihUrut({ urut, setUrut }: { urut: UrutK; setUrut: (u: UrutK) 
         <label className="kr-urut">Urutkan
             <select value={sah.includes(urut) ? urut : 'bawaan'} onChange={(e) => setUrut(e.target.value as UrutK)}>
                 <option value="bawaan">Bawaan</option>
-                <option value="harapan">🔮 Harapan terbaik</option>
-                <optgroup label="🔮 R:R">
+                <option value="harapan">Harapan terbaik</option>
+                <optgroup label="R:R">
                     <option value="rr:best">R:R · profil terbaik</option><option value="rr:k">R:R · Konservatif</option><option value="rr:m">R:R · Moderat</option><option value="rr:a">R:R · Agresif</option>
                 </optgroup>
-                <optgroup label="🔮 Peluang kena target">
+                <optgroup label="Peluang kena target">
                     <option value="tgt:best">Peluang target · profil terbaik</option><option value="tgt:k">Peluang target · Konservatif</option><option value="tgt:m">Peluang target · Moderat</option><option value="tgt:a">Peluang target · Agresif</option>
                 </optgroup>
-                <option value="belum">🔮 Belum dihitung</option>
+                <option value="belum">Belum di-Kronos</option>
             </select>
         </label>
     );

@@ -9,6 +9,7 @@ export interface Sinyal {
     goldenCross: number | null; deathCross: number | null; doubleTop: string | null; doubleBottom: string | null;
     breakout52: boolean; dekat52Low: boolean; rsiOversold: boolean; rsiOverbought: boolean; macdBullish: number | null; macdBearish: number | null;
     diAtasMa200: boolean; volumeSpike: boolean; tren: 'naik' | 'turun' | 'datar';
+    macdAtas?: boolean | null; macdHari?: number | null; hi52?: number | null; lo52?: number | null;
 }
 export interface Baris {
     s: string; nama: string; sektor: string; harga: number; chg1d: number; chg1m: number; chg3m: number; chg1y: number;
