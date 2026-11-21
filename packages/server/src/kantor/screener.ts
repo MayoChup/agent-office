@@ -98,6 +98,17 @@ export function polaGanda(c: number[], atas: boolean): 'terbentuk' | 'terkonfirm
     return null;
 }
 
+/** MACD sekarang di atas/bawah garis sinyal, hari sejak potongan terakhir, dan rentang 52 minggu (dari penutupan). */
+export function sinyalTambahan(c: number[]) {
+    const n = c.length;
+    const e26 = ema(c, 26), macd = ema(c, 12).map((x, i) => x - e26[i]), sig = ema(macd, 9);
+    const at = n > 35 ? macd[n - 1] > sig[n - 1] : null;
+    let hari: number | null = null;
+    if (at != null) for (let k = 1; k <= Math.min(120, n - 36); k++) { if ((macd[n - 1 - k] > sig[n - 1 - k]) !== at) { hari = k - 1; break; } }
+    const th = c.slice(Math.max(0, n - 252));
+    return { macdAtas: at, macdHari: hari, hi52: th.length > 100 ? +Math.max(...th).toFixed(2) : null, lo52: th.length > 100 ? +Math.min(...th).toFixed(2) : null };
+}
+
 export function analisis(c: number[], v: number[]) {
     const n = c.length;
     const m20 = sma(c, 20), m50 = sma(c, 50), m200 = sma(c, 200);
@@ -122,10 +133,7 @@ export function analisis(c: number[], v: number[]) {
         macdBearish: crossAgo(macd, sig, false, 5),
         diAtasMa200: ma200 != null && last > ma200,
         volumeSpike: avgV > 0 && v[n - 1] >= avgV * 2,
-        macdAtas: macd[n - 1] != null && sig[n - 1] != null ? macd[n - 1] > sig[n - 1] : null,
-        macdHari: (() => { const at = macd[n - 1] > sig[n - 1]; for (let k = 1; k <= Math.min(120, n - 2); k++) { if ((macd[n - 1 - k] > sig[n - 1 - k]) !== at) return k - 1; } return null; })(),
-        hi52: prior.length > 100 ? +Math.max(...prior, last).toFixed(2) : null,
-        lo52: prior.length > 100 ? +Math.min(...prior, last).toFixed(2) : null,
+        ...sinyalTambahan(c),
         tren: ma50 != null && ma200 != null && last > ma50 && ma50 > ma200 && slope > 0.01 ? 'naik' : ma50 != null && ma200 != null && last < ma50 && ma50 < ma200 && slope < -0.01 ? 'turun' : 'datar'
     };
     const pct = (k: number) => (n > k ? +((last / c[n - 1 - k] - 1) * 100).toFixed(2) : 0);
@@ -190,6 +198,13 @@ export class Screener {
         this.file = path.join(dir, 'data.json');
         this.sparkDir = path.join(dir, 'spark');
         try { this.st = JSON.parse(fs.readFileSync(this.file, 'utf8')); } catch { this.st = { baris: [], teknikalSesi: '', teknikalAt: 0, fundamentalAt: 0, gagal: [] }; }
+        // Data lama (sebelum ada MACD/rentang 52 minggu) → lengkapi dari harga tersimpan, tanpa menunggu sesi bursa berikutnya.
+        let isi = 0;
+        for (const b of this.st.baris) {
+            if (!b.sinyal || b.sinyal.macdAtas !== undefined) continue;
+            try { const j = JSON.parse(fs.readFileSync(path.join(this.sparkDir, `${b.s}.hlc.json`), 'utf8')); if (Array.isArray(j.c) && j.c.length > 40) { Object.assign(b.sinyal, sinyalTambahan(j.c)); isi++; } } catch { /* tidak ada */ }
+        }
+        if (isi) try { fs.writeFileSync(this.file, JSON.stringify(this.st)); } catch { /* */ }
     }
     private simpan() { fs.writeFileSync(this.file, JSON.stringify(this.st)); this.cacheData.clear(); }
     /** Hasil data() per kombinasi horison/preset — dihitung sekali, dipakai ulang sampai data berubah (maks. 2 menit). */
