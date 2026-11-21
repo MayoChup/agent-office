@@ -47,6 +47,13 @@ jobs:
             --loader:.py=text --loader:.sh=text \
             --external:sqlite3 --external:@whiskeysockets/baileys --external:pino --external:@napi-rs/canvas \
             --outfile=release/kantor-server.js
+          # Thread terpisah untuk uji mundur mingguan (supaya server utama tetap lancar).
+          bash kantor/ci-run.sh "esbuild uji" npx --yes esbuild@0.24.2 packages/server/src/ujiWorker.ts \
+            --bundle --platform=node --target=node20 \
+            --tsconfig=packages/server/tsconfig.json \
+            --loader:.py=text --loader:.sh=text \
+            --external:sqlite3 --external:@whiskeysockets/baileys --external:pino --external:@napi-rs/canvas \
+            --outfile=release/kantor-uji-worker.js
 
       - name: Siapkan paket rilis
         run: |

@@ -40,13 +40,27 @@ function safeSet(key: string, value: string) {
 export function getRoom() { return room; }
 
 /** Panggil API kantor yang butuh login (GET). */
+/** Jeda coba ulang untuk GET saat sambungan putus / server sibuk atau menyala ulang (GET aman diulang). */
+const JEDA_ULANG = [1500, 4000, 9000];
+const tidur = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export async function apiGet<T = any>(pathAndQuery: string): Promise<T> {
     const server = currentServer();
     const token = safeGet(LS_TOKEN);
-    const res = await fetch(`${server}${pathAndQuery}`, { headers: { Authorization: `Bearer ${token}` } });
-    const data = await res.json().catch(() => ({}));
-    if (res.status === 401) { safeSet(LS_TOKEN, ''); setStatus('login'); }
-    if (!res.ok || data?.ok === false) throw new Error(manusiawi(data?.error || `HTTP ${res.status}`, res.status));
+    let res: Response | null = null;
+    for (let i = 0; ; i++) {
+        try {
+            res = await fetch(`${server}${pathAndQuery}`, { headers: { Authorization: `Bearer ${token}` } });
+            if (![502, 503, 504].includes(res.status) || i >= JEDA_ULANG.length) break;
+        } catch (e) {
+            if (i >= JEDA_ULANG.length || (typeof navigator !== 'undefined' && navigator.onLine === false)) {
+                throw new Error(typeof navigator !== 'undefined' && navigator.onLine === false ? 'HP/laptop sedang tidak terhubung ke internet. Coba lagi setelah tersambung.' : 'Server belum menjawab (mungkin sedang sibuk atau menyala ulang). Ketuk ↻ untuk mencoba lagi.');
+            }
+        }
+        await tidur(JEDA_ULANG[i]);
+    }
+    const data = await res!.json().catch(() => ({}));
+    if (res!.status === 401) { safeSet(LS_TOKEN, ''); setStatus('login'); }
+    if (!res!.ok || data?.ok === false) throw new Error(manusiawi(data?.error || `HTTP ${res!.status}`, res!.status));
     return data as T;
 }
 /** Panggil API kantor yang butuh login (POST JSON). */
