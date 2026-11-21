@@ -127,6 +127,7 @@ export function pasangSosmed(d: DepsSosmed) {
         await langkah('analisa', () => analisa(c));
         await langkah('strategi', () => strategi(c));
         await langkah('profil', () => paketProfil(c));
+        await langkah('brand', async () => { if (!studio) throw new Error('Studio belum siap.'); await studio.brandSetup(c); });
         await langkah('rencana', () => rencana(c, hariWib(), 7));
         await langkah('konten', async () => {
             const awal = s.st.konten.filter((k) => k.tgl >= hariWib() && k.status === 'rencana').slice(0, 2);

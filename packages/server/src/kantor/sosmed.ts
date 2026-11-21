@@ -389,7 +389,7 @@ export class Sosmed {
         this.st.starter = { at: Date.now(), jawaban: jw, ringkas };
         this.st.setup = { at: Date.now(), selesai: false, langkah: [
             { id: 'analisa', label: 'Riset & analisa niche (Tara)', status: 'tunggu' }, { id: 'strategi', label: 'Strategi, pilar & jadwal unggah (Maya)', status: 'tunggu' },
-            { id: 'profil', label: 'Profil & bio akun (Maya)', status: 'tunggu' }, { id: 'rencana', label: 'Kalender 7 hari pertama (Maya)', status: 'tunggu' },
+            { id: 'profil', label: 'Profil & bio akun (Maya)', status: 'tunggu' }, { id: 'brand', label: 'Brand kit: pilihan palet, font & logo (Maya)', status: 'tunggu' }, { id: 'rencana', label: 'Kalender 7 hari pertama (Maya)', status: 'tunggu' },
             { id: 'konten', label: 'Sketsa & prompt konten pertama (Lala & Vino)', status: 'tunggu' }] };
         this.simpan(); this.tulisSuara();
     }

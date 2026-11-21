@@ -15,7 +15,7 @@ import type { Papan } from './papan';
 import type { ModelRouter } from './model';
 import type { ClaudeLangganan } from './claudeLangganan';
 import { GambarAi } from './gambarAi';
-import { GAYA_DESAIN, DAFTAR_FONT, gayaDesain, renderCarousel, renderSlide, contohSlide, renderLogo, renderCover, renderFotoProfil, kecilkan, desainSiap, type IsiSlide, type InfoMerek, type KonsepLogo } from './desainSosmed';
+import { GAYA_DESAIN, DAFTAR_FONT, gayaDesain, renderCarousel, renderSlide, contohSlide, renderLogo, renderCover, renderFotoProfil, renderKartuFont, kecilkan, desainSiap, type IsiSlide, type InfoMerek, type KonsepLogo } from './desainSosmed';
 import { ambilJson, bacaSlide, FORMAT_VIDEO, type Konten, type Sosmed, type Slide } from './sosmed';
 
 type Ctx = { a: { id: string; nama: string; platform: string; handle: string }; s: Sosmed };
@@ -25,8 +25,9 @@ export const NAMA_JENIS: Record<string, string> = { logo: 'Logo', maskot: 'Masko
 const UTUH = new Set(['logo', 'maskot', 'produk', 'ikon', 'elemen']);
 
 export interface ItemGudang { id: string; jenis: string; nama: string; ket: string; path: string; mime: string; sumber: 'unggah' | 'ai' | 'kantor'; at: number; label: 'menunggu' | 'ok' | 'gagal'; calon?: string; galat?: string }
-export interface Brand { warna: string[]; fontJudul: string; fontIsi: string; gayaDesain: string; aksenMerek: boolean; logoId?: string; at: number }
-interface Usulan { at: number; warna: string[]; fontJudul: string; fontIsi: string; gayaDesain: string; alasan: string; logo: KonsepLogo[]; highlight: string[] }
+export interface Brand { warna: string[]; fontJudul: string; fontIsi: string; gayaDesain: string; aksenMerek: boolean; logoId?: string; at: number; /** dipasang otomatis dari usulan, belum dipilih Pak Rico */ sementara?: boolean; palet?: number }
+export interface Palet { nama: string; nuansa: string; warna: string[]; fontJudul: string; fontIsi: string; gayaDesain: string }
+interface Usulan { at: number; warna: string[]; fontJudul: string; fontIsi: string; gayaDesain: string; alasan: string; logo: KonsepLogo[]; highlight: string[]; palet?: Palet[]; arahan?: string }
 interface Kerja { id: string; jenis: 'gambar' | 'brand' | 'desain' | 'label'; judul: string; status: 'jalan' | 'selesai' | 'gagal'; galat?: string; at: number; usd?: number; batch?: string; konten?: string }
 interface Gudang { item: ItemGudang[]; brand: Brand | null; usulan: Usulan | null; kerja: Kerja[]; claudeHari: { hari: string; n: number } }
 
@@ -269,41 +270,79 @@ export function pasangStudio(d: DepsStudio) {
     }
 
     /* ── Brand kit (usulan Maya) ── */
-    async function usulBrand(c: Ctx, arahan: string) {
+    /** Maya menyusun 4 pilihan palet (+ font & gaya), 4 konsep logo, dan nama highlight. lempar = untuk langkah setup (galat diteruskan). */
+    async function usulBrand(c: Ctx, arahan: string, o: { lempar?: boolean; paletSaja?: boolean } = {}) {
         const s = c.s, st = s.st;
-        const x = kerjaBaru(c, { jenis: 'brand', judul: 'Usulan brand kit' });
+        const x = kerjaBaru(c, { jenis: 'brand', judul: o.paletSaja ? 'Pilihan palet baru' : 'Usulan brand kit' });
         try {
-            const prompt = ['Kamu brand designer di agency social media. Susun BRAND KIT untuk akun ini supaya feed konsisten & mudah dikenali.',
+            const lama = gudang(c).usulan;
+            const prompt = ['Kamu brand designer di agency social media. Susun BRAND KIT untuk akun ini supaya feed konsisten, menarik, & mudah dikenali.',
                 `AKUN: ${c.a.nama} (${c.a.platform}) · niche: ${st.strategi?.niche || st.profil.topik} · audiens: ${st.strategi?.audiens || st.profil.audiens} · nada: ${st.profil.gaya}`,
                 st.strategi?.janji ? `JANJI AKUN: ${st.strategi.janji}` : '', st.paketProfil?.namaTampilan?.length ? `NAMA TAMPILAN: ${st.paketProfil.namaTampilan.join(' / ')}` : '',
                 `GUDANG ASET: ${teksGudang(c) || '(kosong)'}`, arahan ? `ARAHAN PEMILIK (wajib diikuti): ${arahan}` : '',
-                '- "warna": 5 hex — [utama, gelap, terang, aksen, netral]. Kontras teks harus terbaca.',
-                `- "fontJudul" & "fontIsi": pilih dari daftar ini saja: ${DAFTAR_FONT.join(', ')}.`,
-                `- "gayaDesain": satu id dari: ${GAYA_DESAIN.map((g) => `${g.id} (${g.nuansa})`).join('; ')}.`,
-                '- "logo": 4 konsep logo berbasis tipografi yang berbeda: tiap konsep {"jenis":"monogram|wordmark|lencana|garis","teks":"…(monogram 1–3 huruf)","sub":"opsional, mis. kota/slogan pendek","font":"dari daftar","warna":"#hex","latar":"#hex"}.',
-                '- "highlight": 5 nama sorotan story (1 kata, ≤10 huruf), mis. Menu, Testi, Promo, Tips, FAQ.',
-                '- "alasan": 2 kalimat kenapa kombinasi ini cocok.',
-                'JSON saja: {"warna":["#…"],"fontJudul":"…","fontIsi":"…","gayaDesain":"…","logo":[…],"highlight":["…"],"alasan":"…"}'].filter(Boolean).join('\n');
-            const raw = await d.kerjaSosmed('sosmed', `[${d.label(c.a)}] Brand kit`, prompt, 'Palet, font, gaya desain, 4 konsep logo, cover highlight.');
-            const j = ambilJson(raw); if (!j || !Array.isArray(j.warna)) throw new Error('Usulan brand dari AI tidak terbaca.');
+                o.paletSaja && lama?.palet?.length ? `JANGAN ulangi palet ini (buat yang benar-benar berbeda): ${lama.palet.map((p) => `${p.nama} ${p.warna.join(' ')}`).join(' | ')}` : '',
+                '- "palet": 4 PILIHAN yang jelas berbeda karakternya (mis. hangat-akrab, bersih-premium, cerah-ceria, tegas-kontras). Tiap pilihan: {"nama":"2–3 kata yang menggugah, mis. Kopi Senja","nuansa":"3–5 kata","warna":["utama","gelap","terang","aksen","netral"] (5 hex; teks gelap harus terbaca di atas terang dan sebaliknya),"fontJudul","fontIsi","gayaDesain"}.',
+                `  Font hanya dari: ${DAFTAR_FONT.join(', ')}. Gaya hanya id dari: ${GAYA_DESAIN.map((g) => `${g.id} (${g.nuansa})`).join('; ')}.`,
+                o.paletSaja ? '' : '- "logo": 4 konsep logo berbasis tipografi yang berbeda: tiap konsep {"jenis":"monogram|wordmark|lencana|garis","teks":"…(monogram 1–3 huruf)","sub":"opsional, mis. kota/slogan pendek","font":"dari daftar","warna":"#hex","latar":"#hex"} — pakai warna dari palet pertama.',
+                o.paletSaja ? '' : '- "highlight": 5 nama sorotan story (1 kata, ≤10 huruf), mis. Menu, Testi, Promo, Tips, FAQ.',
+                '- "alasan": 2 kalimat kenapa pilihan pertama paling cocok.',
+                `JSON saja: {"palet":[…4…],${o.paletSaja ? '' : '"logo":[…],"highlight":["…"],'}"alasan":"…"}`].filter(Boolean).join('\n');
+            const raw = await d.kerjaSosmed('sosmed', `[${d.label(c.a)}] ${o.paletSaja ? 'Pilihan palet' : 'Brand kit'}`, prompt, '4 pilihan palet + font + gaya' + (o.paletSaja ? '' : ', 4 konsep logo, cover highlight.'));
+            const j = ambilJson(raw); if (!j || !Array.isArray(j.palet) || !j.palet.length) throw new Error('Usulan brand dari AI tidak terbaca.');
             const hex = (v: any) => (/^#[0-9a-f]{6}$/i.test(String(v)) ? String(v) : '');
             const font = (v: any, cad: string) => (DAFTAR_FONT.includes(String(v)) ? String(v) : cad);
+            const palet: Palet[] = j.palet.slice(0, 4).map((p: any, i: number) => ({ nama: String(p?.nama || `Pilihan ${i + 1}`).slice(0, 40), nuansa: String(p?.nuansa || '').slice(0, 60), warna: (Array.isArray(p?.warna) ? p.warna : []).map(hex).filter(Boolean).slice(0, 5), fontJudul: font(p?.fontJudul, 'Outfit'), fontIsi: font(p?.fontIsi, 'Outfit'), gayaDesain: GAYA_DESAIN.some((g) => g.id === p?.gayaDesain) ? p.gayaDesain : GAYA_DESAIN[5].id }))
+                .filter((p: Palet) => p.warna.length >= 4);
+            if (!palet.length) throw new Error('Palet dari AI tidak lengkap.');
+            const p0 = palet[0];
             const u: Usulan = {
-                at: Date.now(), warna: j.warna.map(hex).filter(Boolean).slice(0, 5), fontJudul: font(j.fontJudul, 'Outfit'), fontIsi: font(j.fontIsi, 'Outfit'),
-                gayaDesain: GAYA_DESAIN.some((g) => g.id === j.gayaDesain) ? j.gayaDesain : GAYA_DESAIN[5].id, alasan: String(j.alasan || '').slice(0, 400),
-                logo: (Array.isArray(j.logo) ? j.logo : []).slice(0, 4).map((l: any) => ({ jenis: ['monogram', 'wordmark', 'lencana', 'garis'].includes(l?.jenis) ? l.jenis : 'wordmark', teks: String(l?.teks || c.a.nama).slice(0, 24), sub: l?.sub ? String(l.sub).slice(0, 28) : undefined, font: font(l?.font, 'Outfit'), warna: hex(l?.warna) || '#111111', latar: hex(l?.latar) || '#ffffff' })),
-                highlight: (Array.isArray(j.highlight) ? j.highlight : []).map((h: any) => String(h).slice(0, 12)).filter(Boolean).slice(0, 6)
+                at: Date.now(), warna: p0.warna, fontJudul: p0.fontJudul, fontIsi: p0.fontIsi, gayaDesain: p0.gayaDesain, alasan: String(j.alasan || '').slice(0, 400), palet, arahan: arahan || undefined,
+                logo: o.paletSaja ? lama?.logo || [] : (Array.isArray(j.logo) ? j.logo : []).slice(0, 4).map((l: any) => ({ jenis: ['monogram', 'wordmark', 'lencana', 'garis'].includes(l?.jenis) ? l.jenis : 'wordmark', teks: String(l?.teks || c.a.nama).slice(0, 24), sub: l?.sub ? String(l.sub).slice(0, 28) : undefined, font: font(l?.font, 'Outfit'), warna: hex(l?.warna) || p0.warna[2] || '#ffffff', latar: hex(l?.latar) || p0.warna[0] || '#111111' })),
+                highlight: o.paletSaja ? lama?.highlight || [] : (Array.isArray(j.highlight) ? j.highlight : []).map((h: any) => String(h).slice(0, 12)).filter(Boolean).slice(0, 6)
             };
             const g = gudang(c); g.usulan = u;
-            // Logo konsep digambar sebagai calon (dipilih Pak Rico; yang tidak dipilih dibuang).
-            const batch = gid(), dir = folder(c, 'Brand');
-            for (const [i, l] of u.logo.entries()) {
-                const b = await renderLogo(l);
-                g.item.push({ id: gid(), jenis: 'logo', nama: `Logo ${l.teks} (${l.jenis})`, ket: `Konsep ${i + 1}: ${l.jenis}, font ${l.font}, ${l.warna} di atas ${l.latar}`, path: tulis(dir, `Logo konsep ${i + 1}.png`, b), mime: 'image/png', sumber: 'kantor', at: Date.now(), label: 'ok', calon: batch });
+            // Belum ada brand pilihan Pak Rico → palet pertama dipakai SEMENTARA supaya desain pertama sudah berwarna merek.
+            if (!g.brand || g.brand.sementara) g.brand = { warna: p0.warna, fontJudul: p0.fontJudul, fontIsi: p0.fontIsi, gayaDesain: p0.gayaDesain, aksenMerek: true, logoId: g.brand?.logoId, at: Date.now(), sementara: true, palet: 0 };
+            if (!o.paletSaja) {
+                // Logo konsep digambar sebagai calon (dipilih Pak Rico; yang tidak dipilih dibuang).
+                const batch = gid(), dir = folder(c, 'Brand');
+                for (const [i, l] of u.logo.entries()) {
+                    const b = await renderLogo(l);
+                    g.item.push({ id: gid(), jenis: 'logo', nama: `Logo ${l.teks} (${l.jenis})`, ket: `Konsep ${i + 1}: ${l.jenis}, font ${l.font}, ${l.warna} di atas ${l.latar}`, path: tulis(dir, `Logo konsep ${i + 1}.png`, b), mime: 'image/png', sumber: 'kantor', at: Date.now(), label: 'ok', calon: batch });
+                }
+                x.batch = batch;
             }
-            x.batch = batch;
+            pratinjauPaletCache.delete(c.a.id);
             kerjaSelesai(c, x);
-        } catch (e: any) { kerjaSelesai(c, x, String(e?.message || e)); }
+        } catch (e: any) { kerjaSelesai(c, x, String(e?.message || e)); if (o.lempar) throw e; }
+    }
+    /** Pratinjau tiap pilihan palet: kartu font, avatar, dan 6 slide contoh (grid feed mini). */
+    const pratinjauPaletCache = new Map<string, { kunci: string; data: any }>();
+    async function pratinjauPalet(c: Ctx) {
+        const g = gudang(c), u = g.usulan; if (!u?.palet?.length) return { palet: [] };
+        const kunci = `${u.at}:${g.brand?.logoId || ''}`;
+        const ada = pratinjauPaletCache.get(c.a.id); if (ada?.kunci === kunci) return ada.data;
+        const m0 = merek(c), topik = c.s.st.strategi?.niche || c.s.st.profil.topik || c.a.nama;
+        const contoh = contohSlide(topik);
+        const ragam: IsiSlide[] = [
+            { tata: 'sampul', judul: contoh[0].judul, isi: contoh[0].isi, label: 'Tips' },
+            { tata: 'angka', angka: '3x', judul: 'Lebih **sering disimpan**', isi: 'Carousel yang rapi dan konsisten membuat orang kembali.', elemen: [{ jenis: 'garis-bawah' }] },
+            { tata: 'daftar', judul: 'Yang Bapak **dapat**', poin: ['Tips praktis tiap minggu', 'Info promo lebih dulu', 'Jawaban pertanyaan pengikut'], elemen: [{ jenis: 'bintang' }] },
+            { tata: 'kutipan', kutipan: 'Konsisten **mengalahkan** sempurna.', sumber: m0.nama, judul: '' },
+            { tata: 'banding', judul: 'Dulu vs **sekarang**', labelKiri: 'Dulu', kiri: 'Posting tanpa rencana, warna beda-beda.', labelKanan: 'Sekarang', kanan: 'Satu gaya, feed rapi dan mudah dikenali.' },
+            { tata: 'penutup', judul: 'Ikuti untuk **tips berikutnya**', isi: `@${m0.handle || m0.nama}` }
+        ];
+        const hasil = [] as any[];
+        for (const p of u.palet) {
+            const m = { ...m0, warna: p.warna, fontJudul: p.fontJudul, fontIsi: p.fontIsi, aksenMerek: true };
+            const grid: string[] = [];
+            for (const [i, sl] of ragam.entries()) grid.push(`data:image/jpeg;base64,${(await kecilkan(await renderSlide(p.gayaDesain, sl, i + 1, ragam.length, m, { w: 1080, h: 1350 }), 300)).toString('base64')}`);
+            const avatar = m0.logo ? await renderFotoProfil(m0.logo, p.warna[2] || '#ffffff', 240) : await renderLogo({ jenis: 'monogram', teks: (m0.nama.match(/\b\w/g) || ['K']).slice(0, 2).join(''), font: p.fontJudul, warna: p.warna[2] || '#ffffff', latar: p.warna[0] || '#111111' }, 240);
+            hasil.push({ ...p, gaya: gayaDesain(p.gayaDesain).nama, grid, avatar: `data:image/png;base64,${avatar.toString('base64')}`, font: `data:image/png;base64,${(await renderKartuFont(p.fontJudul, p.fontIsi, m0.nama, p.warna)).toString('base64')}` });
+        }
+        const data = { palet: hasil, nama: m0.nama, handle: m0.handle, bio: c.s.st.paketProfil?.bio?.[0]?.teks || c.s.st.strategi?.janji || '', alasan: u.alasan, pilihan: g.brand?.sementara ? null : g.brand?.palet ?? null, sementara: !!g.brand?.sementara };
+        pratinjauPaletCache.set(c.a.id, { kunci, data });
+        return data;
     }
     async function buatKit(c: Ctx, jenis: 'profil' | 'highlight') {
         const g = gudang(c), b = g.brand; if (!b) throw new Error('Simpan brand kit dulu (warna & font).');
@@ -461,12 +500,19 @@ export function pasangStudio(d: DepsStudio) {
         const warna = (Array.isArray(b.warna) ? b.warna : lama?.warna || []).map(String).filter((v: string) => /^#[0-9a-f]{6}$/i.test(v)).slice(0, 6);
         g.brand = { warna, fontJudul: DAFTAR_FONT.includes(b.fontJudul) ? b.fontJudul : lama?.fontJudul || 'Outfit', fontIsi: DAFTAR_FONT.includes(b.fontIsi) ? b.fontIsi : lama?.fontIsi || 'Outfit',
             gayaDesain: GAYA_DESAIN.some((x) => x.id === b.gayaDesain) ? b.gayaDesain : lama?.gayaDesain || GAYA_DESAIN[0].id, aksenMerek: b.aksenMerek != null ? !!b.aksenMerek : !!lama?.aksenMerek,
-            logoId: b.logoId !== undefined ? (g.item.some((x) => x.id === b.logoId && !x.calon) ? String(b.logoId) : undefined) : lama?.logoId, at: Date.now() };
+            logoId: b.logoId !== undefined ? (g.item.some((x) => x.id === b.logoId && !x.calon) ? String(b.logoId) : undefined) : lama?.logoId, at: Date.now(),
+            sementara: Array.isArray(b.warna) || b.fontJudul || b.fontIsi ? undefined : lama?.sementara, palet: Array.isArray(b.warna) ? undefined : lama?.palet };
         simpan(c); return { brand: g.brand };
     }));
     app.post('/api/kantor/sosmed/brand/usul', requireToken, r((req) => {
         const c = d.ctxReq(req); if (gudang(c).kerja.some((x) => x.jenis === 'brand' && x.status === 'jalan')) throw new Error('Maya masih menyusun brand kit.');
-        void usulBrand(c, String(req.body?.arahan || '').slice(0, 800)); return { jalan: true };
+        void usulBrand(c, String(req.body?.arahan || '').slice(0, 800), { paletSaja: !!req.body?.paletSaja && !!gudang(c).usulan }); return { jalan: true };
+    }));
+    app.post('/api/kantor/sosmed/brand/pratinjau-palet', requireToken, r(async (req) => pratinjauPalet(d.ctxReq(req))));
+    app.post('/api/kantor/sosmed/brand/pilih-palet', requireToken, r((req) => {
+        const c = d.ctxReq(req), g = gudang(c), i = Number(req.body?.i), p = g.usulan?.palet?.[i]; if (!p) throw new Error('Pilihan palet tidak ditemukan.');
+        g.brand = { warna: p.warna, fontJudul: p.fontJudul, fontIsi: p.fontIsi, gayaDesain: p.gayaDesain, aksenMerek: true, logoId: g.brand?.logoId, at: Date.now(), palet: i };
+        pratinjauPaletCache.delete(c.a.id); simpan(c); return { brand: g.brand };
     }));
     app.post('/api/kantor/sosmed/brand/terapkan', requireToken, r((req) => {
         const c = d.ctxReq(req), g = gudang(c), u = g.usulan; if (!u) throw new Error('Belum ada usulan.');
@@ -512,6 +558,8 @@ export function pasangStudio(d: DepsStudio) {
             const x = kerjaBaru(c, { jenis: 'desain', judul: `Desain otomatis: ${k.judul}`, konten: k.id });
             await desainKonten(c, k, 'otomatis').then(() => kerjaSelesai(c, x)).catch((e) => kerjaSelesai(c, x, String(e?.message || e)));
         },
-        gambarAi
+        gambarAi,
+        /** Langkah setup awal: brand kit (palet sementara dipasang otomatis). */
+        brandSetup: (c: Ctx) => usulBrand(c, '', { lempar: true })
     };
 }

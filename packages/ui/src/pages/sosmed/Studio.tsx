@@ -11,8 +11,8 @@ import { konfirmasi } from '../../components/Konfirmasi';
  */
 export interface ItemGudang { id: string; jenis: string; nama: string; ket: string; sumber: 'unggah' | 'ai' | 'kantor'; at: number; label: 'menunggu' | 'ok' | 'gagal'; calon?: string; galat?: string; path: string }
 export interface SaranAset { id: string; jenis: string; nama: string; prompt: string; alasan: string; pengganti?: string; acuan?: string[]; status: 'saran' | 'dibuat' | 'pakai' | 'lewati'; hasil?: string }
-interface Brand { warna: string[]; fontJudul: string; fontIsi: string; gayaDesain: string; aksenMerek: boolean; logoId?: string; at: number }
-interface Usulan { at: number; warna: string[]; fontJudul: string; fontIsi: string; gayaDesain: string; alasan: string; logo: unknown[]; highlight: string[] }
+interface Brand { warna: string[]; fontJudul: string; fontIsi: string; gayaDesain: string; aksenMerek: boolean; logoId?: string; at: number; sementara?: boolean; palet?: number }
+interface Usulan { at: number; warna: string[]; fontJudul: string; fontIsi: string; gayaDesain: string; alasan: string; logo: unknown[]; highlight: string[]; palet?: Array<{ nama: string }> }
 interface Kerja { id: string; jenis: string; judul: string; status: 'jalan' | 'selesai' | 'gagal'; galat?: string; at: number; usd?: number; batch?: string; konten?: string }
 interface GayaD { id: string; nama: string; nuansa: string; cocok: string; gelap: boolean; judul: string; isi: string; warna: string[] }
 export interface DataGudang {
@@ -183,6 +183,60 @@ function ItemAset({ akun, x, g, aksi, variasi }: { akun: string; x: ItemGudang; 
     );
 }
 
+/* ── Pemilih palet: 4 pilihan dengan contoh feed Instagram mini ── */
+interface PratinjauPalet { palet: Array<{ nama: string; nuansa: string; warna: string[]; fontJudul: string; fontIsi: string; gaya: string; grid: string[]; avatar: string; font: string }>; nama: string; handle?: string; bio: string; alasan: string; pilihan: number | null; sementara: boolean }
+const PERAN = ['Utama', 'Gelap', 'Terang', 'Aksen', 'Netral'];
+export function PilihPalet({ akun, kabar, kunci, muat, jalan, setup }: { akun: string; kabar: (m: string) => void; kunci: string; muat: () => void; jalan?: boolean; setup?: boolean }) {
+    const [d, setD] = useState<PratinjauPalet | null>(null), [galat, setGalat] = useState('');
+    const [kirim, setKirim] = useState(-1), [arahan, setArahan] = useState(''), [lain, setLain] = useState(false);
+    useEffect(() => {
+        let batal = false; setGalat('');
+        post<PratinjauPalet>(akun, '/api/kantor/sosmed/brand/pratinjau-palet', {}).then((r) => { if (!batal) setD(r); }).catch((e) => { if (!batal) setGalat(String(e.message || e)); });
+        return () => { batal = true; };
+    }, [akun, kunci]);
+    if (galat) return <div className="error">{galat}</div>;
+    if (setup && d && !d.sementara) return null;
+    const pakai = async (i: number) => {
+        setKirim(i);
+        try { await post(akun, '/api/kantor/sosmed/brand/pilih-palet', { i }); setD((x) => (x ? { ...x, pilihan: i, sementara: false } : x)); kabar(`✓ Palet "${d?.palet[i]?.nama}" dipakai — galeri gaya & desain berikutnya ikut warna ini.`); muat(); }
+        catch (e: any) { kabar(String(e.message || e)); } finally { setKirim(-1); }
+    };
+    const baru = async () => {
+        try { await post(akun, '/api/kantor/sosmed/brand/usul', { arahan, paletSaja: true }); kabar('Maya menyusun 4 palet baru (±1 menit).'); setLain(false); setArahan(''); muat(); }
+        catch (e: any) { kabar(String(e.message || e)); }
+    };
+    return (
+        <section className={`pp ${setup ? 'sb-card' : ''}`} aria-label="Pilih palet brand">
+            <div className="pp-kepala">
+                <div><h3>{setup ? 'Pilih palet untuk akun ini' : 'Palet brand'}</h3>
+                    <p className="sb-note">{d?.sementara ? 'Maya sudah memasang pilihan pertama sementara. Ketuk palet yang paling Bapak suka — semua desain ikut warnanya.' : 'Ketuk untuk ganti. Contoh feed memakai nama & logo akun ini.'}</p></div>
+                <button className="btn small" disabled={jalan} onClick={() => setLain(!lain)} aria-expanded={lain}>{jalan ? 'Maya menyusun…' : <><Ikon e="↻" /> Pilihan lain</>}</button>
+            </div>
+            {lain && <div className="pp-lain"><input value={arahan} maxLength={300} placeholder="Arahan (opsional): lebih cerah, jangan ungu, nuansa kopi…" onChange={(e) => setArahan(e.target.value)} aria-label="Arahan palet" /><button className="btn small primary" onClick={baru}>Minta 4 palet baru</button></div>}
+            <div className="pp-daftar" role="radiogroup" aria-label="Pilihan palet">
+                {(d?.palet || [0, 1, 2, 3].map(() => null)).map((p, i) => {
+                    if (!p) return <div key={i} className="pp-kartu muat" aria-hidden><span className="pg-skel" style={{ height: 420 }} /></div>;
+                    const dipakai = d!.pilihan === i || (d!.sementara && i === 0);
+                    return (
+                        <div key={i} className={`pp-kartu ${d!.pilihan === i ? 'on' : ''}`} role="radio" aria-checked={d!.pilihan === i}>
+                            <div className="pp-judul"><div><b>{p.nama}</b><small>{p.nuansa}</small></div>{d!.pilihan === i ? <span className="pp-cek">✓ Dipakai</span> : d!.sementara && i === 0 ? <span className="pp-cek sementara">Sementara</span> : null}</div>
+                            <div className="pp-warna">{p.warna.map((w, j) => <div key={j}><i style={{ background: w }} /><small>{PERAN[j] || ''}</small><small className="mono">{w}</small></div>)}</div>
+                            <div className="pp-ig" aria-label={`Contoh profil Instagram dengan palet ${p.nama}`}>
+                                <div className="pp-ig-atas"><img src={p.avatar} alt="" /><div><b>{d!.handle ? `@${d!.handle}` : d!.nama}</b><small>{d!.bio}</small></div></div>
+                                <div className="pp-grid">{p.grid.map((src, j) => <img key={j} src={src} alt="" loading="lazy" />)}</div>
+                            </div>
+                            <img className="pp-font" src={p.font} alt={`Font ${p.fontJudul} dan ${p.fontIsi}`} />
+                            <div className="pp-kaki"><small>Gaya {p.gaya}</small>
+                                <button className={`btn small ${dipakai && !d!.sementara ? '' : 'primary'}`} disabled={kirim >= 0 || d!.pilihan === i} onClick={() => pakai(i)}>{kirim === i ? 'Memasang…' : d!.pilihan === i ? '✓ Dipakai' : 'Pakai palet ini'}</button></div>
+                        </div>
+                    );
+                })}
+            </div>
+            {d?.alasan && <p className="sb-note">Catatan Maya: {d.alasan}</p>}
+        </section>
+    );
+}
+
 /* ── Brand kit + galeri gaya ── */
 function BrandKit({ akun, g, aksi, kabar, muat }: { akun: string; g: DataGudang; aksi: (p: Promise<any>, ok?: string) => void; kabar: (m: string) => void; muat: () => void }) {
     const b = g.brand, u = g.usulan;
@@ -195,15 +249,15 @@ function BrandKit({ akun, g, aksi, kabar, muat }: { akun: string; g: DataGudang;
     return (<>
         <section className="sb-card bk" aria-label="Brand kit">
             <div className="sd-h"><h3><Ikon e="🎨" /> Brand kit <small>{b ? 'dipakai di semua carousel & gambar akun ini' : 'belum diatur'}</small></h3></div>
-            <div className="bk-usul">
+            {!u?.palet?.length && <div className="bk-usul">
                 <input value={arahan} maxLength={800} placeholder="Arahan (opsional), mis. 'hangat seperti kedai kopi', 'jangan ungu'" onChange={(e) => setArahan(e.target.value)} aria-label="Arahan brand kit" />
                 <button className="btn small primary" disabled={brandJalan} onClick={() => aksi(post(akun, '/api/kantor/sosmed/brand/usul', { arahan }), 'Maya menyusun palet, font, gaya, dan 4 konsep logo (±1–2 menit).')}>{brandJalan ? 'Maya sedang menyusun…' : <><Ikon e="✨" /> Minta usulan Maya</>}</button>
-            </div>
-            {u && <div className="bk-usulan"><div><b>Usulan Maya</b><small className="sb-note"> {new Date(u.at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}</small></div>
-                <div className="bk-swatch">{u.warna.map((w) => <i key={w} style={{ background: w }} title={w} />)}</div>
-                <small>{u.fontJudul} + {u.fontIsi} · gaya {g.gaya.find((x) => x.id === u.gayaDesain)?.nama}</small><p className="sb-note" style={{ margin: '4px 0' }}>{u.alasan}</p>
-                <button className="btn small" onClick={() => aksi(post(akun, '/api/kantor/sosmed/brand/terapkan', {}), '✓ Usulan diterapkan.')}>Terapkan usulan</button>
-                {g.item.some((x) => x.calon && x.jenis === 'logo') && <small className="sb-note"> · 4 konsep logo menunggu Bapak pilih di Gudang aset di atas.</small>}</div>}
+            </div>}
+            {u?.palet?.length ? <PilihPalet akun={akun} kabar={kabar} kunci={`${u.at}:${b?.at || 0}`} muat={muat} jalan={brandJalan} />
+                : u ? <div className="bk-usulan"><div><b>Usulan Maya</b></div><div className="bk-swatch">{u.warna.map((w) => <i key={w} style={{ background: w }} title={w} />)}</div>
+                    <button className="btn small" onClick={() => aksi(post(akun, '/api/kantor/sosmed/brand/terapkan', {}), '✓ Usulan diterapkan.')}>Terapkan usulan</button></div> : null}
+            {g.item.some((x) => x.calon && x.jenis === 'logo') && <p className="sb-note">4 konsep logo menunggu Bapak pilih di Gudang aset (atas).</p>}
+            <details className="bk-sendiri"><summary>Sesuaikan sendiri (warna, font)</summary>
             <div className="bk-isi">
                 <div><small>Palet warna</small><div className="bk-warna">{warna.map((w, i) => <label key={i} className="bk-w"><input type="color" value={w} onChange={(e) => setWarna(warna.map((x, j) => (j === i ? e.target.value : x)))} aria-label={`Warna ${i + 1}`} /><span className="mono">{w}</span></label>)}</div>
                     <small className="sb-note">Urutan: utama · gelap · terang · aksen · netral</small></div>
@@ -213,7 +267,8 @@ function BrandKit({ akun, g, aksi, kabar, muat }: { akun: string; g: DataGudang;
                     <label className="st-cek"><input type="checkbox" checked={aksen} onChange={(e) => setAksen(e.target.checked)} /> Pakai warna utama merek sebagai aksen di semua gaya</label>
                 </div>
             </div>
-            <div className="sm-aksi"><button className="btn primary" onClick={() => simpan({})}>Simpan brand kit</button>
+            <div className="sm-aksi"><button className="btn primary" onClick={() => simpan({})}>Simpan warna & font ini</button></div></details>
+            <div className="sm-aksi">
                 <button className="btn" disabled={!b} onClick={() => aksi(post(akun, '/api/kantor/sosmed/brand/kit', { jenis: 'profil' }), '✓ Foto profil dibuat dari logo utama — ada di Gudang aset.')}><Ikon e="👤" /> Buat foto profil</button>
                 <button className="btn" disabled={!b} onClick={() => aksi(post(akun, '/api/kantor/sosmed/brand/kit', { jenis: 'highlight' }), '✓ Cover highlight dibuat — ada di Gudang aset.')}><Ikon e="⭕" /> Buat cover highlight</button></div>
         </section>

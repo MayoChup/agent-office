@@ -780,3 +780,17 @@ export async function kecilkan(buf: Buffer, maks = 768): Promise<Buffer> {
     c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
     return c.toBuffer('image/jpeg', 85);
 }
+/** Kartu contoh pasangan font (untuk pemilih palet). */
+export async function renderKartuFont(fJudul: string, fIsi: string, nama: string, warna: string[], w = 640, h = 260): Promise<Buffer> {
+    const { createCanvas } = kanvas();
+    const c = createCanvas(w, h), g = c.getContext('2d');
+    const terangW = warna.find((x) => hexOk(x) && terang(x) > 0.7) || '#ffffff', gelapW = warna.find((x) => hexOk(x) && terang(x) < 0.35) || '#111111', utama = hexOk(warna[0]) ? warna[0] : gelapW;
+    g.fillStyle = terangW; g.fillRect(0, 0, w, h);
+    g.textBaseline = 'top';
+    g.font = `800 120px "${fJudul}"`; g.fillStyle = rasioKontras(utama, terangW) >= 3 ? utama : gelapW; g.fillText('Aa', 28, 34);
+    const x = 28 + g.measureText('Aa').width + 30;
+    blok(g, nama, { x, y: 40, w: w - x - 28, h: 110, f: fJudul, w8: 800, maks: 46, min: 22, warna: gelapW, lh: 1.05 });
+    blok(g, 'Tips singkat, rapi, dan mudah dibaca setiap minggu.', { x, y: 150, w: w - x - 28, h: 70, f: fIsi, w8: 400, maks: 24, min: 16, warna: gelapW, lh: 1.3 });
+    g.font = `600 18px "${fIsi}"`; g.fillStyle = gelapW; g.globalAlpha = 0.55; g.fillText(`${fJudul} + ${fIsi}`, 28, h - 34); g.globalAlpha = 1;
+    return c.toBuffer('image/png');
+}

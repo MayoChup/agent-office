@@ -8,7 +8,7 @@ import { StoryboardSketsa, type Adegan as AdeganS } from './sosmed/Sketsa';
 import { Beranda, type AkunInfo, type PlatInfo } from './sosmed/Beranda';
 import { GaleriPilih, PratinjauGaya } from './sosmed/Pratinjau';
 import { Starter, type JawabanStarter } from './sosmed/Starter';
-import { TabAset, StudioKonten, type SaranAset } from './sosmed/Studio';
+import { TabAset, StudioKonten, PilihPalet, type SaranAset } from './sosmed/Studio';
 
 import { Ikon } from '../components/Ikon';
 import { Hidup } from '../components/Hidup';
@@ -161,6 +161,7 @@ export function SosmedPage() {
             {msg && <div className="fin-alert">{msg}</div>}
             {x.siap && <AngkaUtama x={x} setTab={setTab} />}
             {x.sibuk && <div className="hz-bukti ok"><span className="pk-jalan"><i /></span><span>{SIBUK[x.sibuk] || 'Tim sedang bekerja…'}</span></div>}
+            {x.siap && !kuis && tab === 'hari' && x.setup?.langkah.some((l) => l.id === 'brand' && l.status === 'selesai') && <PilihPalet akun={akunId} kabar={kabar} kunci={String(x.setup.at)} muat={() => d.reload()} setup />}
             {x.siap && !kuis && tab === 'hari' && <LangkahBerikut x={x} setTab={setTab} />}
             {x.setup && (!x.setup.selesai || x.setup.langkah.some((l) => l.status === 'gagal') || (tab === 'hari' && Date.now() - x.setup.at < 86400_000)) && <ProgresSetup x={x} jalankan={jalankan} />}
             {(kuis || (!x.strategi && !x.starter && !x.setup)) && tab !== 'akun' ? <Starter key={x.akunAktif} platform={x.platformInfo[x.platform]} formatPlatform={x.platformInfo[x.platform]?.format || []} labelFormat={x.platformInfo[x.platform]?.label || {}}
