@@ -339,6 +339,7 @@ export function StudioKonten({ akun, k, kabar, muat, sibuk }: { akun: string; k:
         {!video && k.status !== 'terbit' && k.status !== 'mengunggah' && (k.slide?.length || k.hook) && <section className="sm-blok sk-desain">
             <div className="sm-blok-h"><b><Ikon e="🖼" /> Desain {k.format === 'carousel' ? 'carousel' : 'gambar'}</b>{k.desain && <small className="sb-note" style={{ margin: 0 }}>terakhir: {g.gaya.find((x) => x.id === k.desain!.gaya)?.nama} · {k.desain.oleh === 'claude' ? 'ditata Claude' : 'templat'}</small>}</div>
             {k.desain?.catatan && <p className="sb-note" style={{ margin: '0 0 8px' }}>Catatan Claude: {k.desain.catatan}</p>}
+            {k.aset && <SlideKonten akun={akun} id={k.id} kunci={`${k.desain?.at || 0}:${k.aset.path}`} />}
             {kerja ? <div className="hz-bukti ok"><span className="pk-jalan"><i /></span><span>{kerja.judul}…</span></div> : (<>
                 <div className="sk-desain-a">
                     <label>Gaya<select value={gayaAktif} onChange={(e) => setGaya(e.target.value)}>{g.gaya.map((x) => <option key={x.id} value={x.id}>{x.nama}</option>)}</select></label>
@@ -357,6 +358,13 @@ export function StudioKonten({ akun, k, kabar, muat, sibuk }: { akun: string; k:
         </section>
         <CaraBikin k={k} adaDesain={!video && g.desain.siap} />
     </>);
+}
+/** Strip pratinjau slide/gambar yang sudah jadi (supaya Bapak bisa melihat hasil desain langsung di kartu). */
+function SlideKonten({ akun, id, kunci }: { akun: string; id: string; kunci: string }) {
+    const d = useApi<{ gambar: Array<{ url: string; nama: string }> }>(`/api/kantor/sosmed/konten/${id}/pratinjau?${q(akun)}&k=${encodeURIComponent(kunci)}`, 0);
+    const g = d.data?.gambar || [];
+    if (!g.length) return null;
+    return <div className="sk-slide" aria-label="Pratinjau hasil">{g.map((x, i) => <a key={x.url} href={`${serverBase()}${x.url}`} target="_blank" rel="noopener noreferrer" title={x.nama}><img src={`${serverBase()}${x.url}`} alt={`Slide ${i + 1}`} loading="lazy" /><small>{i + 1}</small></a>)}</div>;
 }
 function PaketClaude({ akun, k, kabar }: { akun: string; k: KontenStudio; kabar: (m: string) => void }) {
     const d = useApi<{ teks: string; aset: Array<{ id: string; nama: string; jenis: string }> }>(`/api/kantor/sosmed/konten/${k.id}/claude?${q(akun)}`, 0);

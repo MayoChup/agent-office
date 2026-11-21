@@ -3230,3 +3230,9 @@ body.no-office #phaser-container { visibility: hidden; }
   .pp-kaki .btn { white-space: nowrap; }
 }
 @media (prefers-reduced-motion: reduce) { .pp-kartu, .pp-kartu:hover, .pp-kartu.on { transition: none; transform: none; } }
+.sk-slide { display: flex; gap: 8px; overflow-x: auto; padding: 4px 2px 10px; scroll-snap-type: x mandatory; }
+.sk-slide a { flex: 0 0 132px; position: relative; scroll-snap-align: start; }
+.sk-slide img { width: 100%; aspect-ratio: 4 / 5; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); display: block; background: var(--panel-2); }
+.sk-slide small { position: absolute; left: 6px; top: 6px; background: rgba(0,0,0,.6); color: #fff; font-size: 11px; padding: 1px 6px; border-radius: 999px; }
+.sm-rutin .st-cek > span { flex: 1; } .sm-rutin .st-cek small { white-space: nowrap; }
+@media (max-width: 640px) { .sk-slide a { flex-basis: 40%; } }

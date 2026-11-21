@@ -540,6 +540,12 @@ export function pasangStudio(d: DepsStudio) {
         else throw new Error('Aksi tidak dikenal.');
         c.s.simpan(); return { konten: k };
     }));
+    /** Pratinjau berkas gambar konten (slide hasil desain / unggahan) — tautan 10 menit. */
+    app.get('/api/kantor/sosmed/konten/:id/pratinjau', requireToken, r((req) => {
+        const c = d.ctxReq(req), k = c.s.cari(String(req.params.id));
+        const daftar = [k.aset, ...(k.asetLain || [])].filter((a): a is NonNullable<typeof a> => !!a && GAMBAR.test(a.path || ''));
+        return { gambar: daftar.map((a) => { try { return { url: berkas.tautan(a.path, false).url, nama: path.basename(a.path) }; } catch { return null; } }).filter(Boolean), at: k.desain?.at || k.diubah };
+    }));
     app.get('/api/kantor/sosmed/konten/:id/claude', requireToken, r((req) => {
         const c = d.ctxReq(req), k = c.s.cari(String(req.params.id));
         return { teks: teksClaude(c, k), aset: asetKonten(c, k).map((a, i) => ({ id: a.id, nama: namaFile(a, i), jenis: a.jenis })) };
