@@ -152,7 +152,9 @@ export function pasangStudio(d: DepsStudio) {
         const maskot = tersedia(c).find((x) => x.jenis === 'maskot');
         const hiasan = k.hiasan || 'otomatis';
         return src.slice(0, 10).map((sl, i) => {
-            const a = bacaId(sl.aset), e2 = bacaId(sl.elemenId);
+            // Sampul tanpa gambar: pakai produk/maskot yang memang dipilih untuk konten ini (bukan mengarang).
+            const asetSampul = !sl.aset && i === 0 && (sl.tata === 'sampul' || !sl.tata) ? (k.pakaiAset || []).find((id) => ['produk', 'maskot'].includes(peta.get(id)?.jenis || '')) : undefined;
+            const a = bacaId(sl.aset || asetSampul), e2 = bacaId(sl.elemenId);
             const kom = sl.komentar ? c.s.st.komentar.find((x) => x.id === sl.komentar) : undefined; // hanya komentar ASLI
             let elemen = hiasan === 'tanpa' ? [] : (sl.elemen || []).slice(0, hiasan === 'sedikit' ? 1 : 2);
             if (!maskot) elemen = elemen.filter((e) => e.jenis !== 'maskot');
