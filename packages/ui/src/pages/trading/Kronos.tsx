@@ -128,11 +128,11 @@ export function PanelKronos({ s }: { s: string }) {
     return (
         <div className={`kr-panel ${r.basi ? 'basi' : ''}`} onClick={henti} title="Prediksi statistik Kronos, bukan saran beli/jual">
             <div className="kr-atas">
-                <span className="kr-judul"><Ikon e="🔮" /> Kronos · {r.label}</span>
+                <span className="kr-judul"><Ikon e="🔮" /> Kronos · {r.label} <Info judul="Cara membaca tabel Kronos" teks={`Target: ${INFO_KRONOS.target}\n\nStop: ${INFO_KRONOS.stop}\n\nR:R: ${INFO_KRONOS.rr}\n\nHarapan: ${INFO_KRONOS.harapan}\n\n★ = profil dengan harapan terbaik. Prediksi statistik, bukan saran beli/jual.`} /></span>
                 <small className="kr-waktu">{tgl(r.at)}{r.basi ? ' · kedaluwarsa' : ''}</small>
             </div>
             <div className="kr-tabel" role="table" aria-label={`Kronos ${s}: tiga profil`}>
-                <div className="kr-bar-h" role="row"><span role="columnheader">Profil</span><span role="columnheader">Target <Info judul="Target" teks={INFO_KRONOS.target} /></span><span role="columnheader">Stop <Info judul="Stop" teks={INFO_KRONOS.stop} /></span><span role="columnheader">R:R <Info judul="Risiko : hasil" teks={INFO_KRONOS.rr} /></span><span role="columnheader">Harapan <Info judul="Harapan per posisi" teks={INFO_KRONOS.harapan} /></span></div>
+                <div className="kr-bar-h" role="row"><span role="columnheader">Profil</span><span role="columnheader">Target</span><span role="columnheader">Stop</span><span role="columnheader">R:R</span><span role="columnheader">Harapan</span></div>
                 {pr.map((p) => (
                     <div key={p.id} role="row" className={`kr-baris ${p.id === best.id && best.harapan > 0 ? 'terbaik' : ''} ${p.pMasuk === 0 ? 'mati' : ''}`}>
                         <span role="cell" className="kr-nama"><b>{NAMA[p.id]}{p.id === best.id && pr.length > 1 ? <i title="Harapan per posisi terbaik"> ★</i> : null}</b></span>

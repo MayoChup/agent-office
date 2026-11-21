@@ -26,9 +26,10 @@ export function Info({ teks, judul, kini, label = 'Penjelasan' }: { teks: string
         const esc = (e: KeyboardEvent) => e.key === 'Escape' && setBuka(false); document.addEventListener('keydown', esc);
         return () => { document.removeEventListener('pointerdown', tutup, true); window.removeEventListener('scroll', gulir, true); window.removeEventListener('resize', gulir); document.removeEventListener('keydown', esc); };
     }, [buka]);
-    const hover = (b: boolean) => { if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) { arah.current = b; setBuka(b); } };
+    // Arahkan kursor hanya untuk mouse sungguhan; sentuhan di HP memakai ketuk (buka/tutup).
+    const hover = (e: React.PointerEvent, b: boolean) => { if (e.pointerType === 'mouse') { arah.current = b; setBuka(b); } };
     return (
-        <span className="info-i" onMouseEnter={() => hover(true)} onMouseLeave={() => hover(false)} onClick={(e) => e.stopPropagation()}>
+        <span className="info-i" onPointerEnter={(e) => hover(e, true)} onPointerLeave={(e) => hover(e, false)} onClick={(e) => e.stopPropagation()}>
             <button ref={tombol} type="button" aria-label={judul ? `Penjelasan ${judul}` : label} aria-expanded={buka} onClick={(e) => { e.stopPropagation(); setBuka(arah.current ? true : !buka); arah.current = false; }}>i</button>
             {buka && (
                 <span ref={pop} className={`info-i-pop ${pos?.atas ? 'atas' : ''}`} role="tooltip" style={pos ? { left: pos.left, top: pos.top } : { visibility: 'hidden' }}>
