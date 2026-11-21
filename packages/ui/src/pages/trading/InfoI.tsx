@@ -9,17 +9,19 @@ export function Info({ teks, judul, kini, label = 'Penjelasan' }: { teks: string
     const [buka, setBuka] = useState(false);
     const [pos, setPos] = useState<{ left: number; top: number; atas: boolean } | null>(null);
     const tombol = useRef<HTMLButtonElement>(null), pop = useRef<HTMLSpanElement>(null), arah = useRef(false);
+    const [geser, setGeser] = useState(0);
     useLayoutEffect(() => {
         if (!buka || !tombol.current) return;
         const r = tombol.current.getBoundingClientRect(), lebar = Math.min(320, window.innerWidth - 24);
         const h = pop.current?.offsetHeight || 160;
         const atas = r.bottom + 8 + h > window.innerHeight - 8 && r.top - 8 - h > 8;
+        if (r.bottom < 0 || r.top > window.innerHeight) { setBuka(false); return; } // tombolnya sudah tergulir keluar layar
         setPos({ left: Math.max(12, Math.min(r.left + r.width / 2 - lebar / 2, window.innerWidth - lebar - 12)), top: atas ? r.top - 8 - h : r.bottom + 8, atas });
-    }, [buka]);
+    }, [buka, geser]);
     useEffect(() => {
         if (!buka) return;
         const tutup = (e: Event) => { if (!pop.current?.contains(e.target as Node) && !tombol.current?.contains(e.target as Node)) setBuka(false); };
-        const gulir = () => setBuka(false);
+        const gulir = () => setGeser((g) => g + 1); // halaman digulir → pop-up ikut pindah, tidak tertutup
         document.addEventListener('pointerdown', tutup, true); window.addEventListener('scroll', gulir, true); window.addEventListener('resize', gulir);
         const esc = (e: KeyboardEvent) => e.key === 'Escape' && setBuka(false); document.addEventListener('keydown', esc);
         return () => { document.removeEventListener('pointerdown', tutup, true); window.removeEventListener('scroll', gulir, true); window.removeEventListener('resize', gulir); document.removeEventListener('keydown', esc); };
