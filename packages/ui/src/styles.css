@@ -3439,3 +3439,5 @@ body.no-office #phaser-container { visibility: hidden; }
 .sj-kertas { display: flex; flex-direction: column; gap: 2px; padding-top: 12px; border-top: 1px solid var(--line); } .sj-kertas b { font-size: 13px; font-weight: 600; } .sj-kertas small { color: var(--muted); font-size: 12.5px; line-height: 1.5; }
 .sj-tanda { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 500; color: var(--down); background: color-mix(in srgb, var(--down) 12%, transparent); white-space: nowrap; font-family: inherit; }
 .tbl-wrap { overflow-x: auto; }
+.sj-tabel td small { display: block; font-size: 11px; margin-top: 2px; font-weight: 500; }
+@media (max-width: 560px) { .sj-tabel .sj-n { display: none; } .sj-tabel th, .sj-tabel td { padding: 6px 4px; } .sj-tabel { font-size: 12px; } }

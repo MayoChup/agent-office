@@ -16,6 +16,7 @@ export interface DataSJ {
 }
 const NAMA: Record<string, string> = { tekJualKuat: 'Teknikal Jual kuat', tekJual: 'Teknikal Jual / Jual kuat', fundJual: 'Fundamental Jual / Jual kuat', gabLemah: 'Gabungan teknikal + fundamental lemah' };
 const p = (v: number | null | undefined, d = 2) => (v == null ? '–' : `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toLocaleString('id-ID', { maximumFractionDigits: d })}%`);
+const n1 = (v: number | null | undefined) => (v == null ? '–' : `${v.toLocaleString('id-ID', { maximumFractionDigits: 1 })}%`);
 const tgl = (t: number) => new Date(t).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Jakarta' });
 
 /** Data sisi jual bersama (dimuat sekali, dipakai kotak ini & tanda "Kandidat lemah"). */
@@ -51,20 +52,21 @@ export function SisiJual({ mode }: { mode: string }) {
                     {buka && (
                         <div className="sj-rinci">
                             <div className="tbl-wrap"><table className="sj-tabel">
-                                <thead><tr><th>Kelompok ({H} hari)</th><th>vs S&P 500</th><th>Kalah dari pasar</th><th>Kalau di-short</th><th>Kejadian</th><th></th></tr></thead>
+                                <thead><tr><th>Kelompok · {H} hari</th><th>vs S&P 500</th><th>Kalah pasar</th><th>Di-short</th><th className="sj-n">Kejadian</th></tr></thead>
                                 <tbody>
-                                    {(['gabLemah', 'tekJualKuat', 'tekJual', 'fundJual'] as const).map((key) => { const x = per[key]; if (!x) return null; return (
-                                        <tr key={key}><td>{NAMA[key]}</td><td className={`mono ${(x.rataEx ?? 0) < 0 ? 'down' : 'up'}`}>{p(x.rataEx)}</td><td className="mono">{x.kalahPasar ?? '–'}%</td><td className={`mono ${(x.hasilShort ?? 0) > 0 ? 'up' : 'down'}`}>{p(x.hasilShort)}</td><td className="mono">{x.n.toLocaleString('id-ID')}</td><td>{x.terbukti ? <span className="sj-ok">terbukti</span> : <span className="sj-no">belum</span>}</td></tr>
+                                    {(['gabLemah', 'tekJualKuat', 'tekJual', 'fundJual'] as const).map((key) => { const x = per[key]; if (!x || !x.n) return null; return (
+                                        <tr key={key}><td>{NAMA[key]}<small className={x.terbukti ? 'sj-ok' : 'sj-no'}>{x.terbukti ? 'terbukti' : 'belum terbukti'}</small></td><td className={`mono ${(x.rataEx ?? 0) < 0 ? 'down' : 'up'}`}>{p(x.rataEx)}</td><td className="mono">{n1(x.kalahPasar)}</td><td className={`mono ${(x.hasilShort ?? 0) > 0 ? 'up' : 'down'}`}>{p(x.hasilShort)}</td><td className="mono sj-n">{x.n.toLocaleString('id-ID')}</td></tr>
                                     ); })}
-                                    <tr className="sj-ref"><td>Semua saham (pembanding)</td><td className="mono">{p(per.semua?.rataEx)}</td><td className="mono">{per.semua?.kalahPasar ?? '–'}%</td><td /><td className="mono">{per.semua?.n.toLocaleString('id-ID')}</td><td /></tr>
+                                    <tr className="sj-ref"><td>Semua saham (pembanding)</td><td className="mono">{p(per.semua?.rataEx)}</td><td className="mono">{n1(per.semua?.kalahPasar)}</td><td /><td className="mono sj-n">{per.semua?.n.toLocaleString('id-ID')}</td></tr>
                                 </tbody>
                             </table></div>
+                            {(!per.gabLemah?.n || !per.fundJual?.n) && <small className="sb-note">Kelompok fundamental belum bisa diuji: riwayat laporan keuangan lampau belum tersedia di uji ini.</small>}
                             {ks?.longShort && (
                                 <div className="sj-keranjang">
                                     <b>Keranjang bulanan · beli 10 teratas, short 10 terbawah</b>
                                     <div className="sj-grid">
                                         {([['Beli + short', ks.longShort], ['Beli 10 teratas saja', ks.longSaja], ['Short 10 terbawah saja', ks.shortSaja], ['Pegang S&P 500', ks.spy]] as const).map(([n, r]) => r && (
-                                            <div key={n}><small>{n}</small><b className={`mono ${r.total >= 0 ? 'up' : 'down'}`}>{p(r.total, 1)}</b><em>{r.bulan} bln · menang {r.winrate}% bln · PF {r.pf ?? '–'} · turun maks {r.ddMaks}%</em></div>
+                                            <div key={n}><small>{n}</small><b className={`mono ${r.total >= 0 ? 'up' : 'down'}`}>{p(r.total, 1)}</b><em>{r.bulan} bulan · menang {n1(r.winrate)} bulan · PF {r.pf == null ? '–' : r.pf.toLocaleString('id-ID')} · turun maks {n1(r.ddMaks)}</em></div>
                                         ))}
                                     </div>
                                     <small className="sb-note">{ks.longShort.terbukti ? 'Beli + short terbukti positif (bukan kebetulan).' : 'Beli + short belum terbukti positif.'} Biaya transaksi & pinjam sudah dikurangi.</small>
