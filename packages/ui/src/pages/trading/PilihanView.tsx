@@ -9,7 +9,7 @@ import { Info, InfoKamus } from './InfoI';
 import * as K from './kamus';
 import { cocokCari } from './aliasSaham';
 import { TambahSaham } from './TambahSaham';
-import { TandaLemah } from './SisiJual';
+import { TandaLemah, useUntungTerbukti } from './SisiJual';
 /** Label sinyal dalam huruf kalimat (Beli kuat, Tahan, …). */
 const kalimat = (l: string) => l.charAt(0).toUpperCase() + l.slice(1).toLowerCase();
 type Urut = 'skor' | 'chg1d' | 'potensi' | 'peluang' | 'rsi' | 's';
@@ -130,16 +130,25 @@ export function LabelSkor({ sk, besar = false }: { sk: { skor: number; label: st
         </span>
     );
 }
-const INFO_DISKON = 'Saham dengan fundamental Beli/Beli kuat yang harganya sedang turun (di bawah MA50 atau ≥15% di bawah puncak setahun). Tiga tahap:\n\nPantau = masih turun, belum ada tanda berhenti.\nZona beli = mendekati penyangga (MA200 atau terendah setahun) atau RSI < 35.\nMulai berbalik = tanda pertama naik: MACD memotong naik ≤5 hari, atau naik dengan volume ramai saat RSI masih rendah.\n\nLabel sinyal utama bisa tetap Jual karena trennya belum pulih. Harga masih bisa turun lagi: pakai posisi kecil & batas rugi. Prediksi statistik, bukan saran beli/jual.';
-/** Satu baris "Diskon −22% dari puncak · Mulai berbalik ⓘ" + alasan singkat. */
+const INFO_DISKON = 'Peluang pantul (balik naik). Dua jenis:\n\nKoreksi di tren naik = tren panjang masih naik (di atas MA200) tapi sedang turun tajam sebentar; fundamental minimal Tahan.\nDiskon dalam = fundamental Beli/Beli kuat dan harga sudah jauh turun (di bawah MA50 atau ≥15% di bawah puncak setahun).\n\nTahap: Pantau = masih turun · Zona beli = dekat penyangga (MA200 / terendah setahun) atau sangat jenuh jual · Mulai berbalik = tanda pertama naik (MACD memotong naik ≤5 hari, atau naik dengan volume ramai).\n\nLabel sinyal utama bisa tetap Jual karena trennya belum pulih. Harga masih bisa turun lagi: pakai posisi kecil & batas rugi. Prediksi statistik, bukan saran beli/jual.';
+const INFO_UNTUNG = 'Pantul turun: saham naik terlalu kencang (RSI > 72 dan ≥10% di atas MA50) dan mulai menunjukkan tanda berbalik turun. Untuk yang memegang, ini saat yang masuk akal untuk mengambil sebagian untung (mis. 25–50%) dan menaikkan batas rugi. Bukan perintah short. Tanda ini hanya muncul kalau uji data membuktikan saham seperti ini memang cenderung tertinggal dari pasar sesudahnya.';
+/** Satu baris "Pantul · Zona beli · koreksi di tren naik ⓘ" + alasan singkat. */
 export function BarisDiskon({ b }: { b: Baris }) {
     const d = b.diskon; if (!d) return null;
+    const jenis = d.jenis === 'koreksi' ? 'koreksi di tren naik' : `diskon dalam${d.dariPuncak >= 1 ? ` −${Math.round(d.dariPuncak)}%` : ''}`;
+    const alasan = d.alasan.filter((x) => !/puncak|tren panjang/.test(x));
     return (
         <div className={`sb-diskon t-${d.tahap}`}>
-            <span><i aria-hidden /> Diskon{d.dariPuncak >= 1 ? ` −${Math.round(d.dariPuncak)}% dari puncak` : ''} · <b>{NAMA_TAHAP[d.tahap]}</b> <Info judul="Fundamental kuat · lagi diskon" teks={INFO_DISKON} kini={`${b.s}: ${NAMA_TAHAP[d.tahap]} — ${d.alasan.join(', ')}.`} /></span>
-            {d.alasan.filter((x) => !/puncak/.test(x)).length > 0 && <small>{d.alasan.filter((x) => !/puncak/.test(x)).slice(0, 2).join(' · ')}</small>}
+            <span><i aria-hidden /> Pantul · <b>{NAMA_TAHAP[d.tahap]}</b> · {jenis} <Info judul="Peluang pantul" teks={INFO_DISKON} kini={`${b.s}: ${NAMA_TAHAP[d.tahap]}, ${jenis} — ${d.alasan.join(', ')}.`} /></span>
+            {alasan.length > 0 && <small>{alasan.slice(0, 2).join(' · ')}</small>}
         </div>
     );
+}
+/** Tanda "Ambil untung sebagian" (pantul turun) — hanya bila terbukti di uji. */
+export function TandaUntung({ b }: { b: { s: string; ambilUntung?: Baris['ambilUntung'] } }) {
+    const ok = useUntungTerbukti();
+    const a = b.ambilUntung; if (!ok || !a || a.tahap === 'pantau') return null;
+    return <span className="au-tanda">Ambil untung sebagian? <Info judul="Ambil untung sebagian" teks={INFO_UNTUNG} kini={`${b.s}: ${a.alasan.join(', ')}.`} /></span>;
 }
 
 /** Empat indikator sekilas: dua teknikal (momentum) + dua fundamental (valuasi & kualitas). */
@@ -164,7 +173,7 @@ export function Kartu({ b, faktor, onOpen, kronos = 'lencana' }: { b: Baris; fak
     return (
         <article className="sb-cardx" onClick={() => onOpen(b.s)}>
             <header>
-                <div className="kc-l"><b className="mono">{b.s}</b><small>{b.nama}{b.luar ? <em className="kc-luar" title={b.luar === 'ADR' ? 'Perusahaan asing yang sahamnya diperdagangkan di bursa AS (ADR). Data fundamental bisa kurang lengkap.' : 'Di luar S&P 500'}> · {b.luar}</em> : null}</small>{kronos === 'lencana' && <LencanaKronos s={b.s} />}<TandaLemah s={b.s} /></div>
+                <div className="kc-l"><b className="mono">{b.s}</b><small>{b.nama}{b.luar ? <em className="kc-luar" title={b.luar === 'ADR' ? 'Perusahaan asing yang sahamnya diperdagangkan di bursa AS (ADR). Data fundamental bisa kurang lengkap.' : 'Di luar S&P 500'}> · {b.luar}</em> : null}</small>{kronos === 'lencana' && <LencanaKronos s={b.s} />}<TandaLemah s={b.s} /><TandaUntung b={b} /></div>
                 <div className="kc-r"><LabelSkor sk={sk} /><Bintang s={b.s} /></div>
             </header>
             {faktor === 'semua' && sk?.asli && <div className="sb-tahan" title="Sinyal hanya keluar kalau teknikal, fundamental, berita & whales lengkap">Sinyal {sk.asli.toLowerCase()} ditahan · menunggu data {sk.kurang?.join(', ')}</div>}

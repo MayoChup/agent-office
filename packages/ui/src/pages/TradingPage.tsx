@@ -20,7 +20,7 @@ import { PasarView } from './trading/PasarView';
 import { PilihanView } from './trading/PilihanView';
 import { SahamDetail } from './trading/SahamDetail';
 import { SaranUji } from './trading/SaranUji';
-import { SisiJual, useSisiJual, lemahTerbukti, setKandidatLemah } from './trading/SisiJual';
+import { SisiJual, useSisiJual, lemahTerbukti, setKandidatLemah, setUntungTerbukti } from './trading/SisiJual';
 import { TradingChat } from './trading/TradingChat';
 import { Portofolio } from './trading/Portofolio';
 import { BeritaTerkaitKartu } from './trading/BeritaTerkait';
@@ -56,7 +56,7 @@ export function TradingPage() {
     const team = agents.filter((a) => a.id === 'trading' || a.id.startsWith('trading-'));
     const [lap, setLap] = useState(0);
     type Tab = 'pasar' | 'pilihan' | 'diskon' | 'panas' | 'berita' | 'watchlist' | 'penyaring' | 'investigasi' | 'posisi' | 'uji' | 'history';
-    const TABS: Array<{ k: Tab; label: string }> = [{ k: 'pasar', label: 'Pasar' }, { k: 'pilihan', label: 'Pilihan sinyal' }, { k: 'diskon', label: 'Diskon' }, { k: 'panas', label: 'Peta panas' }, { k: 'berita', label: 'Peta berita' }, { k: 'watchlist', label: 'Watchlist' }, { k: 'penyaring', label: 'Penyaring' }, { k: 'investigasi', label: 'Investigasi' }, { k: 'posisi', label: 'Portofolio' }, { k: 'history', label: 'History' }, { k: 'uji', label: 'Uji mundur' }];
+    const TABS: Array<{ k: Tab; label: string }> = [{ k: 'pasar', label: 'Pasar' }, { k: 'pilihan', label: 'Pilihan sinyal' }, { k: 'diskon', label: 'Pantul' }, { k: 'panas', label: 'Peta panas' }, { k: 'berita', label: 'Peta berita' }, { k: 'watchlist', label: 'Watchlist' }, { k: 'penyaring', label: 'Penyaring' }, { k: 'investigasi', label: 'Investigasi' }, { k: 'posisi', label: 'Portofolio' }, { k: 'history', label: 'History' }, { k: 'uji', label: 'Uji mundur' }];
     const [tab, setTabState] = useState<Tab>(() => { try { const v = localStorage.getItem(LS_TAB) as Tab; return TABS.some((t) => t.k === v) ? v : 'pilihan'; } catch { return 'pilihan'; } });
     // Tab yang pernah dibuka tetap hidup (disembunyikan, bukan dibongkar): pindah tab tidak memuat ulang & filter tidak hilang.
     const [pernah, setPernah] = useState<Set<Tab>>(() => new Set([tab]));
@@ -86,6 +86,8 @@ export function TradingPage() {
     // Data rusak/kosong (mis. jawaban terpotong yang sempat tersimpan) dianggap belum ada, bukan bikin halaman error.
     const scData = sc.data && Array.isArray((sc.data as any).baris) && (sc.data as any).pasar ? sc.data : null;
     // Tanda "Kandidat lemah · hindari": hanya kalau sisi jual TERBUKTI di uji data untuk horison ini.
+    // "Ambil untung sebagian": terbukti bila saham jenuh beli yang mulai berbalik turun rata-rata kalah dari S&P 500 (lebih dari 2× galat standar).
+    React.useEffect(() => { const k = scData?.diskonUji?.H?.[String(H <= 10 ? 5 : H <= 30 ? 20 : 60)]?.untung_balik; setUntungTerbukti(!!k && k.n >= 300 && k.rataEx != null && k.galatStd != null && k.rataEx < -2 * k.galatStd); }, [scData, H]);
     React.useEffect(() => { setKandidatLemah(scData && lemahTerbukti(sj.data, H) ? scData.baris.filter((b) => (b.skor?.semua?.asli || b.skor?.semua?.label) === 'Jual kuat').map((b) => b.s) : []); }, [scData, sj.data, H]); // eslint-disable-line react-hooks/exhaustive-deps
     const [infoDetail, setInfoDetail] = useState<{ bukti: any; bobot: any } | null>(null);
     // Ganti preset/horison: data dimuat ulang, tapi posisi gulir tetap & tampil efek "memuat" (skeleton) di atas isi lama.
@@ -126,7 +128,7 @@ export function TradingPage() {
     React.useEffect(() => { if (!scData?.sibuk || !terlihat) return; const t = setInterval(() => sc.reload(), 8000); return () => clearInterval(t); }, [scData?.sibuk, terlihat]);
     const setTab = (t: Tab) => { setSaham(null); setTabState(t); try { localStorage.setItem(LS_TAB, t); } catch { /* */ } document.querySelector('.page:not([hidden]) .pg')?.scrollTo({ top: 0 }); };
     // Menu bawah HP: yang paling sering dipakai di depan, sisanya masuk "Lainnya".
-    const IKON: Record<Tab, string> = { pilihan: '🎯', diskon: '🏷️', watchlist: '⭐', panas: '🟩', berita: '🪐', pasar: '🌐', penyaring: '🔍', investigasi: '🕵️', posisi: '💼', history: '📜', uji: '🧪' };
+    const IKON: Record<Tab, string> = { pilihan: '🎯', diskon: '🔄', watchlist: '⭐', panas: '🟩', berita: '🪐', pasar: '🌐', penyaring: '🔍', investigasi: '🕵️', posisi: '💼', history: '📜', uji: '🧪' };
     const PENDEK: Partial<Record<Tab, string>> = { pilihan: 'Sinyal', panas: 'Heatmap', berita: 'Berita', posisi: 'Portofolio' };
     // 10 tab dikelompokkan jadi 4 supaya tidak membingungkan; isi tiap tab tetap sama.
     const GRUP: Array<{ g: string; label: string; ico: string; tabs: Tab[] }> = [
@@ -196,7 +198,7 @@ export function TradingPage() {
             {!saham && (tab === 'pilihan' || tab === 'diskon' || tab === 'pasar' || tab === 'watchlist') && scData && scData.baris.length > 0 && <HorisonBar h={horison} setH={setHorison} bobot={(scData as any).bobot} bukti={(scData as any).teknikalBukti} />}
             {!saham && tab === 'pasar' && scData && scData.baris.length > 0 && <PasarView data={scData} faktor={faktor} setFaktor={setF} onOpen={buka} />}
             {!saham && (tab === 'pilihan' || tab === 'penyaring') && <SaranUji mode={modeAktif} presetAktif={preset.t} pakaiPreset={(t) => setPreset({ ...preset, t })} />}
-            {!saham && tab === 'pilihan' && <SisiJual mode={modeAktif} />}
+            {!saham && tab === 'pilihan' && <SisiJual mode={modeAktif} tanding={scData?.diskonUji?.tanding} />}
             {!saham && tab === 'pilihan' && scData && scData.baris.length > 0 && (
                 <details className="pr-lipat" open={!!(preset.t || preset.f) || undefined}>
                     <summary><Ikon e="🎓" /> Preset guru{preset.t || preset.f ? `: ${[preset.t, preset.f].filter(Boolean).map((id) => pd.data?.preset.find((x) => x.id === id)?.guru || id).join(' + ')}` : ' (opsional)'} <small>— ketuk untuk memilih</small></summary>

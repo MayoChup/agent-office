@@ -16,7 +16,7 @@ import { hitungInd, Ind, Fund, PRESET, evaluasi } from './preset';
 import { fundamentalNasdaq } from './nasdaq';
 import { bacaModel, hModel, skorModel, statusModel } from './bobot';
 import { BeritaTerkait, gabungBerita } from './beritaTerkait';
-import { cekDiskon, type Diskon } from './diskon';
+import { cekDiskon, cekAmbilUntung, type Diskon } from './diskon';
 export { yahooChart, statusHarga };
 const SEC_UA = 'KantorRico research kantor-rico@users.noreply.github.com';
 const SP500_CSV = 'https://raw.githubusercontent.com/datasets/s-and-p-500-companies/main/data/constituents.csv';
@@ -193,7 +193,22 @@ export class Screener {
     /** Berita terkait (global/tidak langsung) — dipasang dari index.ts. */
     terkait?: BeritaTerkait;
     bersihkanCache() { this.cacheData.clear(); }
+    private dataDirS: string;
+    /** Hasil uji tanding terakhir (dibaca dari berkas uji mundur, dicache per waktu ubah). */
+    private tanding: { m: number; pantulUnggul: boolean } = { m: -1, pantulUnggul: false };
+    pantulTerbukti(): boolean {
+        try {
+            const f = path.join(this.dataDirS, 'ujimundur.json'), m = fs.statSync(f).mtimeMs;
+            if (m !== this.tanding.m) {
+                const t = JSON.parse(fs.readFileSync(f, 'utf8'))?.tanding;
+                const p = t?.pantulNaik, a = t?.arusNaik;
+                this.tanding = { m, pantulUnggul: !!(p?.unggulTerbukti && (!a || p.vsSpyPerBulan > a.vsSpyPerBulan)) };
+            }
+        } catch { this.tanding = { m: -1, pantulUnggul: false }; }
+        return this.tanding.pantulUnggul;
+    }
     constructor(dataDir: string, private watchlist: () => string[], private deskDir = '') {
+        this.dataDirS = dataDir;
         this.presetAi = new PresetAi(dataDir);
         this.fileBobot = path.join(dataDir, 'bobot-teknikal.json');
         const dir = path.join(dataDir, 'screener');
@@ -340,7 +355,9 @@ export class Screener {
     sesiTeknikal() { return this.st.teknikalSesi; }
     spyHarga() { return this.st.spyC ?? null; }
     /** "Fundamental kuat · lagi diskon" untuk satu saham (rumus dasar fundamental, sama dengan uji mundur). */
-    diskonDari(b: any): Diskon | null { try { return cekDiskon(b, skorFundamental(b)?.skor); } catch { return null; } }
+    diskonDari(b: any): Diskon | null { try { return cekDiskon(b, skorFundamental(b)?.skor ?? null); } catch { return null; } }
+    /** Pantul turun → "Ambil untung sebagian" (untuk yang memegang; bukan short). */
+    untungDari(b: any) { try { return cekAmbilUntung(b); } catch { return null; } }
     /** Tahap diskon untuk daftar simbol (dipakai pemberitahuan watchlist). */
     diskonUntuk(simbol: string[]) {
         const set = new Set(simbol.map((x) => x.toUpperCase())), out: Record<string, Diskon | null> = {};
@@ -360,6 +377,7 @@ export class Screener {
     private hitungData(H: number, mode: string, pt: string, pf: string) {
         const sari = bacaLaporanSari(this.deskDir);
         const pT = PRESET.find((x) => x.id === pt), pF = PRESET.find((x) => x.id === pf);
+        const pantulUnggul = this.pantulTerbukti();
         const baris = this.st.baris.map((b) => {
             const sk = this.skor(b, sari, H, mode, pt, pf);
             const ringkas: Record<string, { skor: number; label: string; kurang?: string[]; asli?: string } | null> = {};
@@ -368,7 +386,18 @@ export class Screener {
             if (pT) { const e = evaluasi(pT, b.ind); preset.teknikal = { lolos: e.lolos, dinilai: e.dinilai, persen: e.persen }; }
             if (pF) { const e = evaluasi(pF, b.f); preset.fundamental = { lolos: e.lolos, dinilai: e.dinilai, persen: e.persen }; }
             const { ind, ...tanpaInd } = b;
-            return { ...tanpaInd, x: b.x ? { ...b.x, proyeksi: this.proyeksiH(b, H) } : b.x, skor: ringkas, preset, diskon: this.diskonDari(b) };
+            const dk = this.diskonDari(b);
+            // Kalau uji tanding MEMBUKTIKAN pantul naik lebih baik dari ikut arus, saham di Zona beli / Mulai berbalik ikut dinaikkan skornya
+            // (jadi tidak otomatis "Jual kuat" padahal sedang di titik pantul). Tanpa bukti → tidak diubah.
+            const g = ringkas.semua as any;
+            if (g && dk && dk.tahap !== 'pantau' && H <= 30 && pantulUnggul) {
+                const naik = dk.tahap === 'balik' ? 0.35 : 0.2;
+                const asal = g.skorAsli ?? g.skor;
+                if (g.asli) { g.skorAsli = Math.min(1, asal + naik); g.asli = label(g.skorAsli); }
+                else { g.skor = Math.min(1, g.skor + naik); g.label = label(g.skor); }
+                g.pantul = true;
+            }
+            return { ...tanpaInd, x: b.x ? { ...b.x, proyeksi: this.proyeksiH(b, H) } : b.x, skor: ringkas, preset, diskon: dk, ambilUntung: this.untungDari(b) };
         });
         // Ikhtisar pasar
         const naik = baris.filter((b) => b.chg1d > 0.05).length, turun = baris.filter((b) => b.chg1d < -0.05).length;
@@ -392,7 +421,14 @@ export class Screener {
         const b0 = this.st.baris.find((x) => x.s === s);
         if (!b0) return null;
         const b = { ...b0, x: b0.x ? { ...b0.x, proyeksi: this.proyeksiH(b0, H) } : b0.x };
-        return { horizon: H, teknikalBukti: this.teknikalTerbukti(H, mode), bobot: bobot(H, mode, this.teknikalTerbukti(H, mode).terbukti), baris: b, skor: this.skor(b0, undefined, H, mode, pt, pf), preset: this.presetSaham(b0), berita: this.st.berita?.[s] || null, orang: this.st.orang?.[s] || null, diskon: this.diskonDari(b0) };
+        const sk: any = this.skor(b0, undefined, H, mode, pt, pf), dk0 = this.diskonDari(b0);
+        // Sama dengan daftar: pantul yang terbukti ikut menaikkan skor gabungan (lihat hitungData).
+        if (sk?.semua && dk0 && dk0.tahap !== 'pantau' && H <= 30 && this.pantulTerbukti()) {
+            const g = { ...sk.semua }, naik = dk0.tahap === 'balik' ? 0.35 : 0.2;
+            if (g.asli) { g.skorAsli = Math.min(1, (g.skorAsli ?? g.skor) + naik); g.asli = label(g.skorAsli); } else { g.skor = Math.min(1, g.skor + naik); g.label = label(g.skor); }
+            g.pantul = true; g.alasan = [...(g.alasan || []), `Skor dinaikkan: saham di tahap pantul ${dk0.tahap === 'balik' ? 'Mulai berbalik' : 'Zona beli'}, dan uji tanding membuktikan pantul lebih baik dari ikut arus`]; sk.semua = g;
+        }
+        return { horizon: H, teknikalBukti: this.teknikalTerbukti(H, mode), bobot: bobot(H, mode, this.teknikalTerbukti(H, mode).terbukti), baris: b, skor: sk, preset: this.presetSaham(b0), berita: this.st.berita?.[s] || null, orang: this.st.orang?.[s] || null, diskon: this.diskonDari(b0), ambilUntung: this.untungDari(b0) };
     }
 
     /** Peta berita: berita (unik) ↔ saham yang terkait, untuk tampilan "tata surya". */

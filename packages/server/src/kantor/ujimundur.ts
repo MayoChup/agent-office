@@ -8,7 +8,7 @@ import { fitur, ridge, nilaiMask, keSkor, FITUR, Model, statusModel } from './bo
 import { skorFundamental } from './skor';
 import { maskTeknikal, maskFundamental, cariKombinasi, PresetAi, ujiArsip, HasilCari } from './presetAi';
 import { bangunFundHistori } from './fundHistori';
-import { cekDiskon, URUT_TAHAP, type Tahap } from './diskon';
+import { cekDiskon, cekAmbilUntung, URUT_TAHAP } from './diskon';
 
 /**
  * Uji mundur (backtest) skor teknikal & preset guru:
@@ -56,14 +56,16 @@ export async function ujiMundur(semesta: string[], file: string, st: StatusUji, 
         for (const H of [20, 60]) SF[H] = { tgl: [], ex: [], mask: [], dasar: [] };
         let fundPada: Awaited<ReturnType<typeof bangunFundHistori>> = null;
         try { fundPada = await bangunFundHistori(path.dirname(file), new Date().getUTCFullYear() - Math.ceil(opsi.tahun), (t) => { st.progres = t; }); } catch (e: any) { console.warn('[Uji mundur] fundamental lampau:', e?.message || e); }
-        // "Fundamental kuat · lagi diskon": hasil per tahap vs semua saham berfundamental kuat (pembanding jujur).
-        const DK: Record<number, Record<Tahap | 'fundKuat', Akum>> = {};
-        for (const H of HS) DK[H] = { fundKuat: akum(), pantau: akum(), zona: akum(), balik: akum() };
+        // Peluang pantul (naik: koreksi/diskon × tahap) & ambil untung (pantul turun), dibanding semua saham & semua berfundamental kuat.
+        const KUNCI_PT = ['semua', 'fundKuat', ...(['koreksi', 'diskon'] as const).flatMap((j) => URUT_TAHAP.map((t) => `${j}_${t}`)), 'untung_zona', 'untung_balik'];
+        const DK: Record<number, Record<string, Akum>> = {};
+        for (const H of HS) DK[H] = Object.fromEntries(KUNCI_PT.map((k) => [k, akum()]));
+        let nFund = 0;
         // Sisi jual: apakah saham berskor lemah memang kalah dari pasar? (dasar keputusan short / "hindari")
         const JL: Record<number, Record<'semua' | 'tekJualKuat' | 'tekJual' | 'fundJual' | 'gabLemah', Akum>> = {};
         for (const H of HS) JL[H] = { semua: akum(), tekJualKuat: akum(), tekJual: akum(), fundJual: akum(), gabLemah: akum() };
         // Keranjang bulanan (20 hari bursa): per jendela SPY, skor gabungan teknikal+fundamental & hasil mentah 20 hari.
-        const KR = new Map<number, Array<{ sk: number; r: number }>>(); const spyR = new Map<number, number>();
+        const KR = new Map<number, Array<{ sk: number; tek: number; r: number; pn: number; dalam: number; au: number }>>(); const spyR = new Map<number, number>();
         let ok = 0, gagal = 0, sampel = 0, dari = '', sampai = '';
         for (let si = 0; si < semesta.length; si++) {
             const s = semesta[si];
@@ -89,7 +91,9 @@ export async function ujiMundur(semesta: string[], file: string, st: StatusUji, 
                 const dasarF = rasio ? (skorFundamental({ f: rasio, sektor: '' })?.skor ?? 0) : 0;
                 const beta = betaDi(d, t, spy, spyIdx);
                 const evs = PRESET.filter((p) => p.jenis === 'teknikal').map((p) => ({ id: p.id, e: evaluasi(p, ind) }));
-                const dk = rasio ? cekDiskon({ harga: c[t], rsi: a.rsi, ma50: a.ma50, ma200: a.ma200, chg1d: a.chg1d, volX: a.volX, sinyal: a.sinyal }, dasarF) : null;
+                const masuk = { harga: c[t], rsi: a.rsi, ma50: a.ma50, ma200: a.ma200, chg1d: a.chg1d, chg1m: a.chg1m, volX: a.volX, sinyal: a.sinyal };
+                const dk = cekDiskon(masuk, rasio ? dasarF : null), au = cekAmbilUntung(masuk);
+                if (rasio) nFund++;
                 for (const H of HS) {
                     if (t + H >= d.length || js + H >= spy.length) continue;
                     // Hasil: tutup t → tutup t+H, dikurangi hasil SPY periode yang sama (selisih vs pasar).
@@ -105,7 +109,7 @@ export async function ujiMundur(semesta: string[], file: string, st: StatusUji, 
                     if (rasio && dasarF >= 0.15) tambah(DK[H].fundKuat, ex);
                     { const j = JL[H]; tambah(j.semua, ex); if (f.skor <= -0.45) tambah(j.tekJualKuat, ex); if (f.skor <= -0.15) tambah(j.tekJual, ex); if (rasio && dasarF <= -0.15) tambah(j.fundJual, ex); if (rasio && (f.skor + dasarF) / 2 <= -0.15) tambah(j.gabLemah, ex); }
                     if (H === 20 && js % 20 < opsi.langkah) {
-                        const w = Math.floor(js / 20); (KR.get(w) || KR.set(w, []).get(w)!).push({ sk: rasio ? (f.skor + dasarF) / 2 : f.skor, r: c[t + H] / c[t] - 1 });
+                        const w = Math.floor(js / 20); (KR.get(w) || KR.set(w, []).get(w)!).push({ sk: rasio ? (f.skor + dasarF) / 2 : f.skor, tek: f.skor, r: c[t + H] / c[t] - 1, pn: dk ? URUT_TAHAP.indexOf(dk.tahap) : -1, dalam: -(a.chg1m ?? 0) + (50 - (a.rsi ?? 50)), au: au ? URUT_TAHAP.indexOf(au.tahap) : -1 });
                         if (!spyR.has(w)) spyR.set(w, spy[js + H].c / spy[js].c - 1);
                     }
                     if (dk) tambah(DK[H][dk.tahap], ex);
@@ -175,7 +179,9 @@ export async function ujiMundur(semesta: string[], file: string, st: StatusUji, 
             cariF[H] = ringkasCari(c);
         }
         (hasil as any).sisiJual = ringkasSisiJual(JL, KR, spyR);
-        (hasil as any).diskon = Object.fromEntries(HS.map((H) => [H, Object.fromEntries((['fundKuat', ...URUT_TAHAP] as const).map((k) => [k, ringkas(DK[H][k])]))]));
+        (hasil as any).diskon = Object.fromEntries(HS.map((H) => [H, Object.fromEntries(KUNCI_PT.map((k) => [k, ringkas(DK[H][k])]))]));
+        (hasil as any).tanding = ujiTanding(KR, spyR);
+        (hasil as any).fundInfo = { ada: !!fundPada, sampel: nFund, catatan: fundPada ? (nFund ? '' : 'Riwayat laporan keuangan terambil, tapi tidak ada yang cocok dengan saham yang diuji.') : 'Riwayat laporan keuangan lampau (SEC) gagal diambil di server ini.' };
         (hasil as any).presetAi = { teknikal: cariT, fundamental: cariF, fundamentalSampel: Object.fromEntries(Object.entries(SF).map(([k, v]) => [k, v.tgl.length])) };
         fs.writeFileSync(fileBobot(path.dirname(file)), JSON.stringify(model));
         fs.writeFileSync(file, JSON.stringify(hasil));
@@ -315,6 +321,43 @@ function ringkasSisiJual(JL: Record<number, Record<string, Akum>>, KR: Map<numbe
         return { bulan: seri.length, total: +((eq - 1) * 100).toFixed(1), perBulan: +(rata * 100).toFixed(2), winrate: +((pos.length / seri.length) * 100).toFixed(1), pf: neg.length ? +(pos.reduce((p, q) => p + q, 0) / -neg.reduce((p, q) => p + q, 0)).toFixed(2) : null, ddMaks: +(dd * 100).toFixed(1), terbukti: seri.length >= 24 && rata > 2 * (sd / Math.sqrt(seri.length)) };
     };
     return { per, keranjang: { longShort: rapor(bulan.map((b) => b.ls)), longSaja: rapor(bulan.map((b) => b.lo)), shortSaja: rapor(bulan.map((b) => -b.sh - 0.0015)), spy: rapor(bulan.map((b) => b.spy)) }, catatan: 'Berita & whales tidak punya riwayat 5 tahun, jadi tidak ikut diuji. Daftar saham = S&P 500 hari ini (saham yang sudah keluar indeks tidak ikut), sehingga hasil short cenderung terlalu buruk dan hasil beli terlalu bagus.' };
+}
+
+/**
+ * Uji tanding 4 kuadran (keranjang bulanan 20 hari bursa, maks 10 saham, bobot sama) + pegang S&P 500:
+ *   ikut arus naik (beli skor tren teratas) · ikut arus turun (short skor tren terbawah)
+ *   pantul naik (beli tahap Zona beli / Mulai berbalik) · pantul turun (short jenuh beli yang mulai berbalik)
+ * Biaya: beli 0,10%/bulan; short 0,10% + pinjam 1%/tahun. Bulan tanpa kandidat = pegang kas (0%).
+ */
+function ujiTanding(KR: Map<number, Array<{ tek: number; r: number; pn: number; dalam: number; au: number }>>, spyR: Map<number, number>) {
+    const seri: Record<string, number[]> = { arusNaik: [], arusTurun: [], pantulNaik: [], pantulTurun: [], spy: [] };
+    const isi: Record<string, number> = { arusNaik: 0, arusTurun: 0, pantulNaik: 0, pantulTurun: 0 };
+    const rata = (z: Array<{ r: number }>) => (z.length ? z.reduce((p, q) => p + q.r, 0) / z.length : null);
+    for (const [w, xs] of [...KR.entries()].sort((a, b) => a[0] - b[0])) {
+        if (xs.length < 60) continue;
+        const pilih: Record<string, Array<{ r: number }>> = {
+            arusNaik: xs.filter((x) => x.tek >= 0.15).sort((a, b) => b.tek - a.tek).slice(0, 10),
+            arusTurun: xs.filter((x) => x.tek <= -0.15).sort((a, b) => a.tek - b.tek).slice(0, 10),
+            pantulNaik: xs.filter((x) => x.pn >= 1).sort((a, b) => b.pn - a.pn || b.dalam - a.dalam).slice(0, 10),
+            pantulTurun: xs.filter((x) => x.au >= 1).sort((a, b) => b.au - a.au).slice(0, 10)
+        };
+        for (const k of Object.keys(pilih)) {
+            const m = rata(pilih[k]); if (m != null) isi[k]++;
+            const short = k === 'arusTurun' || k === 'pantulTurun';
+            seri[k].push(m == null ? 0 : short ? -m - 0.0018 : m - 0.001);
+        }
+        seri.spy.push(spyR.get(w) ?? 0);
+    }
+    const rapor = (x: number[], k: string) => {
+        if (!x.length) return null;
+        let eq = 1, puncak = 1, dd = 0; for (const v of x) { eq *= 1 + v; puncak = Math.max(puncak, eq); dd = Math.max(dd, 1 - eq / puncak); }
+        const pos = x.filter((v) => v > 0), neg = x.filter((v) => v < 0), m = x.reduce((p, q) => p + q, 0) / x.length;
+        const sp = seri.spy, beda = x.map((v, i) => v - (sp[i] ?? 0)), mb = beda.reduce((p, q) => p + q, 0) / beda.length;
+        const sdb = Math.sqrt(beda.reduce((p, q) => p + (q - mb) ** 2, 0) / Math.max(1, beda.length - 1));
+        return { bulan: x.length, berisi: isi[k] ?? x.length, total: +((eq - 1) * 100).toFixed(1), perBulan: +(m * 100).toFixed(2), winrate: +((pos.length / x.length) * 100).toFixed(1), pf: neg.length ? +(pos.reduce((p, q) => p + q, 0) / -neg.reduce((p, q) => p + q, 0)).toFixed(2) : null, ddMaks: +(dd * 100).toFixed(1),
+            vsSpyPerBulan: +(mb * 100).toFixed(2), unggulTerbukti: k !== 'spy' && x.length >= 24 && mb > 2 * (sdb / Math.sqrt(beda.length)) };
+    };
+    return Object.fromEntries(Object.entries(seri).map(([k, x]) => [k, rapor(x, k)]));
 }
 
 function ringkasModel(m: Model) {

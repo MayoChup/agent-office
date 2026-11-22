@@ -3,6 +3,7 @@ import { useApi } from '../../kantor/api';
 import { apiPost } from '../../kantor/connection';
 import { Info } from './InfoI';
 import { H_MODE } from './Preset';
+import { PapanTanding } from './PapanTanding';
 
 /**
  * "Sisi jual": bukti dari uji mundur 5 tahun & uji kertas — apakah saham berskor lemah benar-benar kalah dari S&P 500,
@@ -46,7 +47,7 @@ function TombolUji({ selesai }: { selesai: () => void }) {
     );
 }
 
-export function SisiJual({ mode }: { mode: string }) {
+export function SisiJual({ mode, tanding }: { mode: string; tanding?: Record<string, any> | null }) {
     const d = useSisiJual();
     const [buka, setBuka] = useState(false);
     const H = String(H_MODE[mode] ?? 20) === '5' ? '5' : String(H_MODE[mode] ?? 20) === '60' ? '60' : '20';
@@ -54,7 +55,6 @@ export function SisiJual({ mode }: { mode: string }) {
     if (!d.data) return null;
     const per = u?.per[H];
     const gl = per?.gabLemah, tk = per?.tekJualKuat;
-    const ks = u?.keranjang;
     const vonis = !u ? 'Belum diuji — hasil pertama muncul setelah uji mundur mingguan berikutnya.'
         : gl?.terbukti || tk?.terbukti ? `Terbukti: saham berskor lemah rata-rata ${p((gl?.terbukti ? gl : tk)!.rataEx)} dari S&P 500 dalam ${H} hari bursa.${(gl?.terbukti ? gl : tk)!.shortUntung ? '' : ' Tapi setelah biaya, short-nya belum menguntungkan — pakai sebagai daftar "hindari", bukan short.'}`
         : 'Belum terbukti: saham berskor lemah tidak jelas kalah dari pasar. Sinyal Jual sebaiknya tidak dipakai untuk short.';
@@ -79,17 +79,7 @@ export function SisiJual({ mode }: { mode: string }) {
                                 </tbody>
                             </table></div>
                             {(!per.gabLemah?.n || !per.fundJual?.n) && <small className="sb-note">Kelompok fundamental belum bisa diuji: riwayat laporan keuangan lampau belum tersedia di uji ini.</small>}
-                            {ks?.longShort && (
-                                <div className="sj-keranjang">
-                                    <b>Keranjang bulanan · beli 10 teratas, short 10 terbawah</b>
-                                    <div className="sj-grid">
-                                        {([['Beli + short', ks.longShort], ['Beli 10 teratas saja', ks.longSaja], ['Short 10 terbawah saja', ks.shortSaja], ['Pegang S&P 500', ks.spy]] as const).map(([n, r]) => r && (
-                                            <div key={n}><small>{n}</small><b className={`mono ${r.total >= 0 ? 'up' : 'down'}`}>{p(r.total, 1)}</b><em>{r.bulan} bulan · menang {n1(r.winrate)} bulan · PF {r.pf == null ? '–' : r.pf.toLocaleString('id-ID')} · turun maks {n1(r.ddMaks)}</em></div>
-                                        ))}
-                                    </div>
-                                    <small className="sb-note">{ks.longShort.terbukti ? 'Beli + short terbukti positif (bukan kebetulan).' : 'Beli + short belum terbukti positif.'} Biaya transaksi & pinjam sudah dikurangi.</small>
-                                </div>
-                            )}
+                            <PapanTanding t={tanding} />
                             <small className="sb-note">{u.catatan} Uji {tgl(u.at)}.</small>
                         </div>
                     )}
@@ -119,3 +109,8 @@ export function TandaLemah({ s }: { s: string }) {
     if (!l.has(s)) return null;
     return <span className="sj-tanda" title="Sinyal Jual kuat, dan uji data membuktikan saham berskor lemah rata-rata kalah dari S&P 500. Pertimbangkan untuk dihindari / tidak ditambah. Bukan saran jual.">Kandidat lemah · hindari</span>;
 }
+
+/* "Ambil untung sebagian" (pantul turun) hanya tampil kalau uji membuktikan saham jenuh beli yang mulai turun memang tertinggal dari pasar. */
+let untungOk = false; const dengarU = new Set<() => void>();
+export function setUntungTerbukti(v: boolean) { if (v === untungOk) return; untungOk = v; dengarU.forEach((f) => f()); }
+export function useUntungTerbukti() { const [, setV] = useState(0); React.useEffect(() => { const f = () => setV((x) => x + 1); dengarU.add(f); return () => { dengarU.delete(f); }; }, []); return untungOk; }

@@ -91,7 +91,7 @@ export class PantauWatch {
                 if (p) {
                     if (isi.sinyal && n.label && p.label && n.label !== p.label) ubah.push({ s, t: `sinyal ${p.label} → **${n.label}** (${bar(n.skor)})`, bobot: /Beli/.test(n.label) ? 3 : 2 });
                     else if (isi.sinyal && n.skor != null && p.skor != null && Math.abs(n.skor - p.skor) >= 0.2) ubah.push({ s, t: `skor ${bar(p.skor)} → ${bar(n.skor)}`, bobot: 1 });
-                    if (isi.sinyal && n.tahap && URUT.indexOf(n.tahap) > URUT.indexOf(p.tahap || '')) ubah.push({ s, t: `naik ke **${TAHAP[n.tahap]}** (diskon ${Math.round(dk.dariPuncak)}% dari puncak; ${dk.alasan.filter((x: string) => !/puncak/.test(x)).slice(0, 2).join(', ') || 'fundamental kuat'})`, bobot: n.tahap === 'balik' ? 4 : 3 });
+                    if (isi.sinyal && n.tahap && URUT.indexOf(n.tahap) > URUT.indexOf(p.tahap || '')) ubah.push({ s, t: `pantul naik ke **${TAHAP[n.tahap]}** (${dk.jenis === 'koreksi' ? 'koreksi di tren naik' : `diskon dalam −${Math.round(dk.dariPuncak)}% dari puncak`}; ${dk.alasan.filter((x: string) => !/puncak|tren panjang/.test(x)).slice(0, 2).join(', ') || 'fundamental kuat'})`, bobot: n.tahap === 'balik' ? 4 : 3 });
                     if (isi.fundamental && n.fundL && p.fundL && n.fundL !== p.fundL) ubah.push({ s, t: `fundamental ${p.fundL} → **${n.fundL}** (Raka)`, bobot: 2 });
                     if (isi.whales && n.whL && p.whL && n.whL !== p.whL) ubah.push({ s, t: `whales ${p.whL} → **${n.whL}** (Sari)`, bobot: 2 });
                     if (isi.whales && (n.orangN || 0) > (p.orangN || 0) && or) ubah.push({ s, t: `orang dalam: ${or.n - (p.orangN || 0)} transaksi baru, bersih ${or.net >= 0 ? 'beli' : 'jual'} ${usd(Math.abs(or.net))} (Sari)`, bobot: or.net > 0 ? 3 : 1 });
@@ -103,7 +103,7 @@ export class PantauWatch {
                 if (lb && (!p || p.laba !== lb.tgl)) ubah.push({ s, t: `laporan keuangan **${tglId(lb.tgl)}**${lb.waktu ? `, ${lb.waktu}` : ''}`, bobot: 3 });
                 // Satu baris per saham
                 const bag: string[] = [];
-                if (isi.sinyal) bag.push(`${g ? `${g.label}${g.asli ? ` (asli ${g.asli})` : ''} ${bar(g.skorAsli ?? g.skor)}` : 'sinyal –'}${dk ? ` · ${TAHAP[dk.tahap]} −${Math.round(dk.dariPuncak)}%` : ''}`);
+                if (isi.sinyal) bag.push(`${g ? `${g.label}${g.asli ? ` (asli ${g.asli})` : ''} ${bar(g.skorAsli ?? g.skor)}` : 'sinyal –'}${dk ? ` · pantul ${TAHAP[dk.tahap]}` : ''}${d.ambilUntung && d.ambilUntung.tahap !== 'pantau' ? ' · ambil untung sebagian?' : ''}`);
                 if (isi.berita) bag.push(br?.n ? `berita ${br.judul.filter((j: any) => j.s > 0).length}+ ${br.judul.filter((j: any) => j.s < 0).length}−` : 'berita –');
                 if (isi.whales) bag.push(`whales ${wh?.label || '–'}${or?.n ? `, orang dalam ${or.net >= 0 ? 'beli' : 'jual'} ${usd(Math.abs(or.net))}` : ''}`);
                 if (isi.fundamental) bag.push(`fundamental ${fu?.label || '–'}${b.f?.per ? ` (PER ${Math.round(b.f.per)}×, ROE ${b.f.roe ?? '–'}%)` : ''}`);

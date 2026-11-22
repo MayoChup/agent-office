@@ -1,52 +1,63 @@
 import React, { useMemo, useState } from 'react';
 import { Kartu } from './PilihanView';
-import { Info } from './InfoI';
 import type { Baris, ScreenerData, Tahap } from './types';
+import { PapanTanding } from './PapanTanding';
+export { PapanTanding };
 
 /**
- * Segmen "Diskon" di Sinyal: saham berfundamental kuat yang harganya sedang turun, dikelompokkan per tahap.
- * Label sinyal utama tetap tampil apa adanya (bisa "Jual") supaya jelas sistem utama belum menyarankan beli.
+ * Segmen "Pantul" di Sinyal (dulu "Diskon"): saham yang berpeluang balik naik, dua jenis —
+ *   koreksi di tren naik (tren panjang masih naik, sedang turun tajam sebentar) · diskon dalam (fundamental kuat, harga jauh turun).
+ * Tahap sama: Pantau → Zona beli → Mulai berbalik. Label sinyal utama tetap tampil apa adanya.
+ * Di atasnya: papan uji tanding 4 pola (ikut arus / pantul × naik / turun) vs pegang S&P 500.
  */
-const TAHAP: Array<{ k: Tahap | ''; label: string }> = [{ k: '', label: 'Semua' }, { k: 'balik', label: 'Mulai berbalik' }, { k: 'zona', label: 'Zona beli' }, { k: 'pantau', label: 'Pantau' }];
+type Saring = Tahap | 'koreksi' | 'diskon' | '';
+const SARING: Array<{ k: Saring; label: string }> = [
+    { k: '', label: 'Semua' }, { k: 'balik', label: 'Mulai berbalik' }, { k: 'zona', label: 'Zona beli' }, { k: 'pantau', label: 'Pantau' },
+    { k: 'koreksi', label: 'Koreksi di tren naik' }, { k: 'diskon', label: 'Diskon dalam' }
+];
 const PERINGKAT: Record<Tahap, number> = { balik: 0, zona: 1, pantau: 2 };
-const LS = 'kantor:diskon:tahap';
+const LS = 'kantor:pantul:saring';
+const p = (v: number | null | undefined, d = 1) => (v == null ? '–' : `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toLocaleString('id-ID', { maximumFractionDigits: d })}%`);
 
-function pct(v: number | null | undefined) { return v == null ? '–' : `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toLocaleString('id-ID', { maximumFractionDigits: 1 })}%`; }
-
-/** Satu kalimat jujur dari uji mundur 5 tahun: tahap "Mulai berbalik" vs semua saham berfundamental kuat. */
+/** Ringkasan hasil uji per jenis pantul (20 hari). */
 function RingkasUji({ uji, H }: { uji: ScreenerData['diskonUji']; H: number }) {
-    if (!uji) return <p className="dk-uji">Belum ada hasil uji mundur untuk pola ini. Hasil pertama muncul setelah uji mundur mingguan berikutnya (akhir pekan).</p>;
+    if (!uji) return <p className="dk-uji">Belum ada hasil uji untuk pola pantul. Hasil pertama muncul setelah uji mundur berikutnya.</p>;
     const kunci = H <= 10 ? 5 : H <= 30 ? 20 : 60;
     const r = uji.H[String(kunci)]; if (!r) return null;
-    const b = r.balik, z = r.zona, f = r.fundKuat;
-    const cukup = (a: typeof b) => a && a.n >= 200 && a.rataEx != null;
-    const unggul = (a: typeof b) => cukup(a) && f.rataEx != null && a.rataEx! - f.rataEx > 2 * (a.galatStd ?? 0);
-    const teks = cukup(b)
-        ? `Uji 5 tahun, ${kunci} hari bursa ke depan: tahap Mulai berbalik rata-rata ${pct(b.rataEx)} vs S&P 500 (menang ${b.menang}% · ${b.n.toLocaleString('id-ID')} kejadian), Zona beli ${pct(z?.rataEx)}, semua saham berfundamental kuat ${pct(f.rataEx)}. ${unggul(b) ? 'Terbukti lebih baik daripada membeli asal fundamental kuat.' : 'Belum terbukti lebih baik daripada membeli asal fundamental kuat — anggap sebagai daftar pantau.'}`
-        : 'Kejadian di uji mundur belum cukup untuk menilai pola ini (butuh ≥200). Anggap sebagai daftar pantau.';
-    return <p className="dk-uji">{teks} <Info judul="Cara membaca hasil uji" teks={'Hasil dihitung dari data lampau: di setiap tanggal, saham dinilai hanya dari data sampai tanggal itu, lalu dibandingkan dengan S&P 500 pada periode yang sama (disesuaikan seberapa liar sahamnya).\n\n"Terbukti" berarti selisihnya lebih besar dari 2× galat standar, bukan kebetulan. Daftar saham = S&P 500 hari ini, jadi hasil cenderung sedikit terlalu bagus.'} /></p>;
+    const baris = (j: 'koreksi' | 'diskon', nama: string) => {
+        const b = r[`${j}_balik`], z = r[`${j}_zona`];
+        if (!b?.n && !z?.n) return null;
+        return <li key={j}><b>{nama}</b>: Mulai berbalik {p(b?.rataEx, 2)} vs S&P 500 ({(b?.n || 0).toLocaleString('id-ID')} kejadian) · Zona beli {p(z?.rataEx, 2)} ({(z?.n || 0).toLocaleString('id-ID')})</li>;
+    };
+    return (
+        <div className="dk-uji">
+            <small>Uji 5 tahun, {kunci} hari bursa ke depan, rata-rata selisih dengan S&P 500 (semua saham: {p(r.semua?.rataEx, 2)}):</small>
+            <ul>{baris('koreksi', 'Koreksi di tren naik')}{baris('diskon', 'Diskon dalam')}</ul>
+            {uji.fundInfo && !uji.fundInfo.sampel && <small className="sb-note">{uji.fundInfo.catatan} Jenis "diskon dalam" butuh data fundamental lampau, jadi belum bisa diuji.</small>}
+        </div>
+    );
 }
 
 export function DiskonView({ data, onOpen, H }: { data: ScreenerData; onOpen: (s: string) => void; H: number }) {
-    const [tahap, setTahapS] = useState<Tahap | ''>(() => { try { return (localStorage.getItem(LS) as Tahap) || ''; } catch { return ''; } });
-    const setTahap = (t: Tahap | '') => { setTahapS(t); try { localStorage.setItem(LS, t); } catch { /* */ } };
+    const [saring, setSaringS] = useState<Saring>(() => { try { return (localStorage.getItem(LS) as Saring) || ''; } catch { return ''; } });
+    const setSaring = (t: Saring) => { setSaringS(t); try { localStorage.setItem(LS, t); } catch { /* */ } };
     const semua = useMemo(() => data.baris.filter((b): b is Baris & { diskon: NonNullable<Baris['diskon']> } => !!b.diskon), [data]);
-    const hitung = (t: Tahap | '') => (t ? semua.filter((b) => b.diskon.tahap === t).length : semua.length);
-    const tampil = useMemo(() => semua
-        .filter((b) => !tahap || b.diskon.tahap === tahap)
-        .sort((a, b) => PERINGKAT[a.diskon.tahap] - PERINGKAT[b.diskon.tahap] || (b.skor?.fundamental?.skor ?? 0) * 20 + b.diskon.dariPuncak / 5 - ((a.skor?.fundamental?.skor ?? 0) * 20 + a.diskon.dariPuncak / 5)), [semua, tahap]);
+    const cocok = (b: (typeof semua)[number], t: Saring) => !t || b.diskon.tahap === t || b.diskon.jenis === t;
+    const tampil = useMemo(() => semua.filter((b) => cocok(b, saring))
+        .sort((a, b) => PERINGKAT[a.diskon.tahap] - PERINGKAT[b.diskon.tahap] || (b.skor?.fundamental?.skor ?? 0) * 20 + b.diskon.dariPuncak / 5 - ((a.skor?.fundamental?.skor ?? 0) * 20 + a.diskon.dariPuncak / 5)), [semua, saring]); // eslint-disable-line react-hooks/exhaustive-deps
     return (
         <div className="dk">
             <div className="dk-kepala">
-                <h3>Fundamental kuat · lagi diskon</h3>
-                <p>Saham berfundamental Beli/Beli kuat yang harganya sedang turun. Label sinyal di kartu bisa tetap <b>Jual</b> karena trennya belum pulih; tahap di bawah menunjukkan seberapa dekat ke titik masuk.</p>
+                <h3>Peluang pantul</h3>
+                <p>Saham yang berpeluang balik naik: <b>koreksi di tren naik</b> (tren panjang masih naik, sedang turun tajam sebentar) dan <b>diskon dalam</b> (fundamental kuat, harga sudah jauh turun). Label sinyal di kartu bisa tetap <b>Jual</b> kalau trennya belum pulih; tahap menunjukkan seberapa dekat ke titik masuk.</p>
                 <RingkasUji uji={data.diskonUji} H={H} />
+                <PapanTanding t={data.diskonUji?.tanding} />
             </div>
-            <div className="dk-saring" role="tablist" aria-label="Tahap diskon">
-                {TAHAP.map((t) => <button key={t.k || 'semua'} role="tab" aria-selected={tahap === t.k} className={tahap === t.k ? 'on' : ''} onClick={() => setTahap(t.k)}>{t.label} <span>{hitung(t.k)}</span></button>)}
+            <div className="dk-saring" role="tablist" aria-label="Saring peluang pantul">
+                {SARING.map((t) => <button key={t.k || 'semua'} role="tab" aria-selected={saring === t.k} className={saring === t.k ? 'on' : ''} onClick={() => setSaring(t.k)}>{t.label} <span>{semua.filter((b) => cocok(b, t.k)).length}</span></button>)}
             </div>
             {!tampil.length ? (
-                <div className="fin-empty">{semua.length ? 'Tidak ada saham di tahap ini sekarang.' : 'Belum ada saham berfundamental kuat yang sedang diskon.'}</div>
+                <div className="fin-empty">{semua.length ? 'Tidak ada saham di saringan ini sekarang.' : 'Belum ada saham yang sedang berpeluang pantul.'}</div>
             ) : (
                 <div className="sb-grid">{tampil.map((b) => <Kartu key={b.s} b={b} faktor="semua" onOpen={onOpen} />)}</div>
             )}

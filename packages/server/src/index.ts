@@ -627,8 +627,8 @@ app.post('/api/kantor/screener/tambah', requireToken, async (req, res) => {
     } catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
 });
 app.get('/api/kantor/screener', requireToken, (req, res) => { res.json({ ok: true, ...screener.data(...qH(req)), diskonUji: diskonUji() }); });
-/** Hasil uji mundur untuk "Fundamental kuat · lagi diskon" (per tahap, dibanding semua saham berfundamental kuat). */
-function diskonUji() { try { const h = JSON.parse(fs.readFileSync(fileUji(config.dataDir), 'utf8')); return h.diskon ? { at: h.at, H: h.diskon } : null; } catch { return null; } }
+/** Hasil uji mundur "Peluang pantul" (per jenis & tahap) + uji tanding 4 kuadran. */
+function diskonUji() { try { const h = JSON.parse(fs.readFileSync(fileUji(config.dataDir), 'utf8')); return h.diskon ? { at: h.at, H: h.diskon, tanding: h.tanding || null, fundInfo: h.fundInfo || null } : null; } catch { return null; } }
 /**
  * Pemberitahuan watchlist: saham di Watchlist Utama atau folder mana pun yang naik tahap diskon
  * (Pantau → Zona beli → Mulai berbalik) dikabarkan lewat Dito. Pertama kali hanya mencatat, tidak mengabari.
@@ -645,10 +645,10 @@ function cekTahapDiskon() {
         for (const [s, d] of Object.entries(kini)) {
             if (!d) continue; baru[s] = d.tahap;
             const sebelum = lama?.[s];
-            if (lama && d.tahap !== 'pantau' && urut.indexOf(d.tahap) > urut.indexOf(sebelum || '')) kabar.push(`- **${s}** → **${nama[d.tahap]}**${sebelum ? ` (sebelumnya ${nama[sebelum]})` : ''} · ${d.alasan.slice(0, 2).join(', ')}`);
+            if (lama && d.tahap !== 'pantau' && urut.indexOf(d.tahap) > urut.indexOf(sebelum || '')) kabar.push(`- **${s}** → **${nama[d.tahap]}** · ${d.jenis === 'koreksi' ? 'koreksi di tren naik' : 'diskon dalam'}${sebelum ? ` (sebelumnya ${nama[sebelum]})` : ''} · ${d.alasan.slice(0, 2).join(', ')}`);
         }
         fs.writeFileSync(fileTahap, JSON.stringify(baru));
-        if (kabar.length) kabarDari('trading')(`🏷️ **Fundamental kuat · lagi diskon** — naik tahap di watchlist Bapak:\n${kabar.join('\n')}\n\nDetail di Trading → Sinyal → Diskon. Harga masih bisa turun lagi: pakai posisi kecil & batas rugi. Prediksi statistik, bukan saran beli/jual.`).catch(() => {});
+        if (kabar.length) kabarDari('trading')(`🏷️ **Peluang pantul** — naik tahap di watchlist Bapak:\n${kabar.join('\n')}\n\nDetail di Trading → Sinyal → Pantul. Harga masih bisa turun lagi: pakai posisi kecil & batas rugi. Prediksi statistik, bukan saran beli/jual.`).catch(() => {});
     } catch (e: any) { console.warn('[Diskon]', e?.message || e); }
 }
 setInterval(cekTahapDiskon, 30 * 60_000);
