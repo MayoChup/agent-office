@@ -79,6 +79,8 @@ export function TradingPage() {
     const [qDaftar, setQDaftar] = useState(qApi);
     useEffect(() => { if (!saham) setQDaftar(qApi); }, [qApi, saham]);
     const sc = useApi<ScreenerData>(`/api/kantor/screener?${qDaftar}`, 600_000);
+    // Data rusak/kosong (mis. jawaban terpotong yang sempat tersimpan) dianggap belum ada, bukan bikin halaman error.
+    const scData = sc.data && Array.isArray((sc.data as any).baris) && (sc.data as any).pasar ? sc.data : null;
     const [infoDetail, setInfoDetail] = useState<{ bukti: any; bobot: any } | null>(null);
     // Ganti preset/horison: data dimuat ulang, tapi posisi gulir tetap & tampil efek "memuat" (skeleton) di atas isi lama.
     const pgRef = useRef<HTMLDivElement>(null);
@@ -115,7 +117,7 @@ export function TradingPage() {
         </section>
     );
     const terlihat = useAktif();
-    React.useEffect(() => { if (!sc.data?.sibuk || !terlihat) return; const t = setInterval(() => sc.reload(), 8000); return () => clearInterval(t); }, [sc.data?.sibuk, terlihat]);
+    React.useEffect(() => { if (!scData?.sibuk || !terlihat) return; const t = setInterval(() => sc.reload(), 8000); return () => clearInterval(t); }, [scData?.sibuk, terlihat]);
     const setTab = (t: Tab) => { setSaham(null); setTabState(t); try { localStorage.setItem(LS_TAB, t); } catch { /* */ } document.querySelector('.page:not([hidden]) .pg')?.scrollTo({ top: 0 }); };
     // Menu bawah HP: yang paling sering dipakai di depan, sisanya masuk "Lainnya".
     const IKON: Record<Tab, string> = { pilihan: '🎯', watchlist: '⭐', panas: '🟩', berita: '🪐', pasar: '🌐', penyaring: '🔍', investigasi: '🕵️', posisi: '💼', history: '📜', uji: '🧪' };
@@ -144,8 +146,8 @@ export function TradingPage() {
         <div className={`pg pg-trading ${tampilSegar ? 'pg-segar' : ''}`} ref={pgRef}>
             <div style={{ minHeight: kunciTinggi || undefined }}>
             {tampilSegar && <div className="pg-segar-pill"><Ikon e="⏳" /> Menghitung ulang sinyal…</div>}
-            {sc.data && sc.data.pasar.tape.length > 0 && (() => {
-                const isi = [...sc.data.pasar.tape, ...sc.data.baris.filter((b) => (data?.watchlist || []).includes(b.s)).map((b) => ({ s: b.s, nama: b.s, harga: b.harga, chg: b.chg1d }))];
+            {scData && (scData.pasar?.tape?.length ?? 0) > 0 && (() => {
+                const isi = [...scData.pasar.tape, ...scData.baris.filter((b) => (data?.watchlist || []).includes(b.s)).map((b) => ({ s: b.s, nama: b.s, harga: b.harga, chg: b.chg1d }))];
                 const item = (t: typeof isi[number], k: string) => (
                     <button key={k} onClick={() => !t.s.startsWith('^') && buka(t.s)}><b>{t.nama}</b> <span className="mono">{t.harga.toLocaleString('en-US', { maximumFractionDigits: 2 })}</span> <em className={`mono ${t.chg >= 0 ? 'up' : 'down'}`}>{t.chg >= 0 ? '▲' : '▼'} {Math.abs(t.chg).toFixed(2)}%</em></button>
                 );
@@ -161,47 +163,47 @@ export function TradingPage() {
                 {GRUP.map((g) => <button key={g.g} className={grupAktif.g === g.g && !saham ? 'on' : ''} onClick={() => setTab(g.g === grupAktif.g ? tab : terakhirDi(g))}>{g.label}</button>)}
                 <span className="sb-nav-judul">{grupAktif.label}</span>
                 <span className="sb-nav-sp" />
-                {sc.data?.sibuk ? <span className="sb-busy"><Ikon e="⏳" /> {sc.data.progres}</span> : <button className="sb-refresh" onClick={() => { perbarui(); reload(); }} title="Ambil data terbaru"><Ikon e="↻" /></button>}
+                {scData?.sibuk ? <span className="sb-busy"><Ikon e="⏳" /> {scData.progres}</span> : <button className="sb-refresh" onClick={() => { perbarui(); reload(); }} title="Ambil data terbaru"><Ikon e="↻" /></button>}
             </nav>
             {!saham && grupAktif.tabs.length > 1 && (
                 <div className="tr-sub" role="tablist" aria-label={`Bagian ${grupAktif.label}`}>
                     {grupAktif.tabs.map((k) => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{TABS.find((t) => t.k === k)!.label}</button>)}
                 </div>
             )}
-            {saham && <><HorisonBar h={horison} setH={setHorison} bobot={infoDetail?.bobot} bukti={infoDetail?.bukti ?? (sc.data as any)?.teknikalBukti} /><SahamDetail key={saham} onInfo={setInfoDetail} onMemuat={setDetailMemuat} simbol={saham} H={H} q={qApi} preset={preset} setPreset={setPreset} mode={modeAktif} pd={pd.data} onBack={() => setSaham(null)} /></>}
-            {!saham && ['pasar', 'pilihan', 'panas', 'watchlist'].includes(tab) && !sc.data && <div className="fin-empty">{sc.error ? `Gagal memuat: ${sc.error}` : 'Memuat data pasar…'}</div>}
-            {!saham && ['pasar', 'pilihan', 'panas'].includes(tab) && sc.data && sc.data.baris.length === 0 && (
+            {saham && <><HorisonBar h={horison} setH={setHorison} bobot={infoDetail?.bobot} bukti={infoDetail?.bukti ?? (scData as any)?.teknikalBukti} /><SahamDetail key={saham} onInfo={setInfoDetail} onMemuat={setDetailMemuat} simbol={saham} H={H} q={qApi} preset={preset} setPreset={setPreset} mode={modeAktif} pd={pd.data} onBack={() => setSaham(null)} /></>}
+            {!saham && ['pasar', 'pilihan', 'panas', 'watchlist'].includes(tab) && !scData && <div className="fin-empty">{sc.error ? `Gagal memuat: ${sc.error}` : 'Memuat data pasar…'}</div>}
+            {!saham && ['pasar', 'pilihan', 'panas'].includes(tab) && scData && scData.baris.length === 0 && (
                 <div className="sb-card sb-kosong">
-                    {sc.data.sibuk ? (<>
+                    {scData.sibuk ? (<>
                         <b><Ikon e="⏳" /> Sedang mengambil data pasar…</b>
-                        <p>{sc.data.progres || 'menyiapkan'} — biasanya 5–10 menit untuk ±500 saham. Halaman ini terisi sendiri, tidak perlu dimuat ulang.</p>
-                        <div className="sb-prog"><i style={{ width: `${(() => { const m = /(\d+)\/(\d+)/.exec(sc.data.progres || ''); return m ? Math.round((+m[1] / +m[2]) * 100) : 5; })()}%` }} /></div>
+                        <p>{scData.progres || 'menyiapkan'} — biasanya 5–10 menit untuk ±500 saham. Halaman ini terisi sendiri, tidak perlu dimuat ulang.</p>
+                        <div className="sb-prog"><i style={{ width: `${(() => { const m = /(\d+)\/(\d+)/.exec(scData.progres || ''); return m ? Math.round((+m[1] / +m[2]) * 100) : 5; })()}%` }} /></div>
                     </>) : (<>
                         <b>Data pasar belum ada</b>
                         <p>Ambil harga ±500 saham S&P 500 + watchlist (5–10 menit). Setelah itu otomatis diperbarui tiap bursa AS tutup.</p>
                         <button className="btn primary" onClick={() => { perbarui(); reload(); }}><Ikon e="↻" /> Ambil data sekarang</button>
                     </>)}
-                    {sc.data.galat && !sc.data.sibuk && <div className="error"><Ikon e="⚠" /> {sc.data.galat}</div>}
+                    {scData.galat && !scData.sibuk && <div className="error"><Ikon e="⚠" /> {scData.galat}</div>}
                 </div>
             )}
-            {!saham && sc.data && sc.data.baris.length > 0 && sc.data.galat && !sc.data.sibuk && <div className="error" style={{ margin: '0 0 12px' }}><Ikon e="⚠" /> {sc.data.galat}</div>}
-            {!saham && (tab === 'pilihan' || tab === 'pasar' || tab === 'watchlist') && sc.data && sc.data.baris.length > 0 && <HorisonBar h={horison} setH={setHorison} bobot={(sc.data as any).bobot} bukti={(sc.data as any).teknikalBukti} />}
-            {!saham && tab === 'pasar' && sc.data && sc.data.baris.length > 0 && <PasarView data={sc.data} faktor={faktor} setFaktor={setF} onOpen={buka} />}
+            {!saham && scData && scData.baris.length > 0 && scData.galat && !scData.sibuk && <div className="error" style={{ margin: '0 0 12px' }}><Ikon e="⚠" /> {scData.galat}</div>}
+            {!saham && (tab === 'pilihan' || tab === 'pasar' || tab === 'watchlist') && scData && scData.baris.length > 0 && <HorisonBar h={horison} setH={setHorison} bobot={(scData as any).bobot} bukti={(scData as any).teknikalBukti} />}
+            {!saham && tab === 'pasar' && scData && scData.baris.length > 0 && <PasarView data={scData} faktor={faktor} setFaktor={setF} onOpen={buka} />}
             {!saham && (tab === 'pilihan' || tab === 'penyaring') && <SaranUji mode={modeAktif} presetAktif={preset.t} pakaiPreset={(t) => setPreset({ ...preset, t })} />}
-            {!saham && tab === 'pilihan' && sc.data && sc.data.baris.length > 0 && (
+            {!saham && tab === 'pilihan' && scData && scData.baris.length > 0 && (
                 <details className="pr-lipat" open={!!(preset.t || preset.f) || undefined}>
                     <summary><Ikon e="🎓" /> Preset guru{preset.t || preset.f ? `: ${[preset.t, preset.f].filter(Boolean).map((id) => pd.data?.preset.find((x) => x.id === id)?.guru || id).join(' + ')}` : ' (opsional)'} <small>— ketuk untuk memilih</small></summary>
                     {presetPanel}
                 </details>
             )}
-            {!saham && tab === 'pilihan' && sc.data && sc.data.baris.length > 0 && <PilihanView data={sc.data} faktor={faktor} setFaktor={setF} onOpen={buka} watchlist={[...(data?.watchlist || []), ...(data?.positions || []).map((p) => p.symbol)]} />}
-            {!saham && tab === 'panas' && sc.data && sc.data.baris.length > 0 && <PetaPanas data={sc.data} onOpen={buka} watch={[...(data?.watchlist || []), ...(data?.positions || []).map((p) => p.symbol)]} />}
+            {!saham && tab === 'pilihan' && scData && scData.baris.length > 0 && <PilihanView data={scData} faktor={faktor} setFaktor={setF} onOpen={buka} watchlist={[...(data?.watchlist || []), ...(data?.positions || []).map((p) => p.symbol)]} />}
+            {!saham && tab === 'panas' && scData && scData.baris.length > 0 && <PetaPanas data={scData} onOpen={buka} watch={[...(data?.watchlist || []), ...(data?.positions || []).map((p) => p.symbol)]} />}
             {simpanHidup('berita', <><BeritaTerkaitKartu onUbah={() => sc.reload()} /><PetaBerita onOpen={buka} /></>)}
-            {!saham && tab === 'watchlist' && sc.data && <WatchlistView data={sc.data} faktor={faktor} onOpen={buka} />}
+            {!saham && tab === 'watchlist' && scData && <WatchlistView data={scData} faktor={faktor} onOpen={buka} />}
             {simpanHidup('investigasi', <InvestigasiView />)}
             {simpanHidup('uji', <UjiMundur />)}
             {simpanHidup('history', <HistorySinyal onOpen={buka} />)}
-            {!saham && tab === 'penyaring' && <><HorisonBar h={horison} setH={setHorison} bobot={(sc.data as any)?.bobot} bukti={(sc.data as any)?.teknikalBukti} />{presetPanel}<ScreenerView onOpen={buka} q={qApi} presetAktif={preset} pd={pd.data} sumber={sc} /></>}
+            {!saham && tab === 'penyaring' && <><HorisonBar h={horison} setH={setHorison} bobot={(scData as any)?.bobot} bukti={(scData as any)?.teknikalBukti} />{presetPanel}<ScreenerView onOpen={buka} q={qApi} presetAktif={preset} pd={pd.data} sumber={sc} /></>}
             {!saham && tab === 'posisi' && error && <div className="error">Gagal memuat: {error}</div>}
             {!saham && tab === 'posisi' && data && (
                 <>

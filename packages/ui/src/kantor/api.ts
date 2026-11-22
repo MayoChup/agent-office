@@ -6,13 +6,16 @@ import { useAktif } from './aktif';
 const SIMPAN = new Map<string, { at: number; d: any }>();
 /** Juga disimpan di perangkat (localStorage) supaya membuka aplikasi lagi langsung tampil isi terakhir, lalu disegarkan diam-diam. Dibersihkan saat keluar. */
 const LS = 'kantor:api:';
-function dariPerangkat(path: string): { at: number; d: any } | null { try { const v = localStorage.getItem(LS + path); return v ? JSON.parse(v) : null; } catch { return null; } }
+function dariPerangkat(path: string): { at: number; d: any } | null {
+    try { const v = localStorage.getItem(LS + path); const j = v ? JSON.parse(v) : null; return j && j.d && typeof j.d === 'object' && Object.keys(j.d).length ? j : null; } catch { return null; } // simpanan kosong {} = rusak → abaikan
+}
 export function simpanApi<T>(path: string): T | null {
     let c = SIMPAN.get(path);
     if (!c) { const p = dariPerangkat(path); if (p) { c = { ...p, at: 0 }; SIMPAN.set(path, c); } }
     return (c?.d as T) ?? null;
 }
 export function taruhApi(path: string, d: any) {
+    if (!d || typeof d !== 'object' || !Object.keys(d).length) return; // jangan simpan jawaban kosong
     SIMPAN.set(path, { at: Date.now(), d }); if (SIMPAN.size > 80) SIMPAN.delete(SIMPAN.keys().next().value as string);
     try {
         const isi = JSON.stringify({ at: Date.now(), d });

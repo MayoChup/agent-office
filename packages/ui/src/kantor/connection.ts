@@ -46,22 +46,24 @@ const tidur = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export async function apiGet<T = any>(pathAndQuery: string): Promise<T> {
     const server = currentServer();
     const token = safeGet(LS_TOKEN);
-    let res: Response | null = null;
+    const offline = () => typeof navigator !== 'undefined' && navigator.onLine === false;
     for (let i = 0; ; i++) {
+        let res: Response, data: any, utuh = true;
         try {
             res = await fetch(`${server}${pathAndQuery}`, { headers: { Authorization: `Bearer ${token}` } });
-            if (![502, 503, 504].includes(res.status) || i >= JEDA_ULANG.length) break;
-        } catch (e) {
-            if (i >= JEDA_ULANG.length || (typeof navigator !== 'undefined' && navigator.onLine === false)) {
-                throw new Error(typeof navigator !== 'undefined' && navigator.onLine === false ? 'HP/laptop sedang tidak terhubung ke internet. Coba lagi setelah tersambung.' : 'Server belum menjawab (mungkin sedang sibuk atau menyala ulang). Ketuk ↻ untuk mencoba lagi.');
-            }
+            // Jawaban yang terpotong di tengah jalan (sinyal putus) tidak boleh dianggap data kosong.
+            data = await res.json().catch(() => { utuh = false; return {}; });
+        } catch {
+            if (i >= JEDA_ULANG.length || offline()) throw new Error(offline() ? 'HP/laptop sedang tidak terhubung ke internet. Coba lagi setelah tersambung.' : 'Server belum menjawab (mungkin sedang sibuk atau menyala ulang). Ketuk ↻ untuk mencoba lagi.');
+            await tidur(JEDA_ULANG[i]); continue;
         }
-        await tidur(JEDA_ULANG[i]);
+        const ulang = [502, 503, 504].includes(res.status) || (res.ok && !utuh);
+        if (ulang && i < JEDA_ULANG.length) { await tidur(JEDA_ULANG[i]); continue; }
+        if (res.status === 401) { safeSet(LS_TOKEN, ''); setStatus('login'); }
+        if (res.ok && !utuh) throw new Error('Jawaban server terpotong (sinyal putus-putus). Ketuk ↻ untuk mencoba lagi.');
+        if (!res.ok || data?.ok === false) throw new Error(manusiawi(data?.error || `HTTP ${res.status}`, res.status));
+        return data as T;
     }
-    const data = await res!.json().catch(() => ({}));
-    if (res!.status === 401) { safeSet(LS_TOKEN, ''); setStatus('login'); }
-    if (!res!.ok || data?.ok === false) throw new Error(manusiawi(data?.error || `HTTP ${res!.status}`, res!.status));
-    return data as T;
 }
 /** Panggil API kantor yang butuh login (POST JSON). */
 async function apiPostAsli<T = any>(pathAndQuery: string, body: unknown): Promise<T> {
