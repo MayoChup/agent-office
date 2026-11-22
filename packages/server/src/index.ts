@@ -613,8 +613,18 @@ app.post('/api/kantor/push/lihat', requireToken, (req, res) => { notif?.lihat(re
 app.post('/api/kantor/push/uji', requireToken, (_req, res) => { notif?.uji().catch(() => undefined); res.json({ ok: !!notif }); });
 
 // ── Penyaring saham (fundamental SEC + teknikal) ─────────────────────
-const screener = new Screener(config.dataDir, () => { const st = tradingDesk.load(); return Array.from(new Set([...st.positions.map((p) => p.symbol), ...st.watchlist])); }, tradingDeskDir);
+// Semesta tambahan penyaring: posisi, Watchlist Utama, DAN semua folder watchlist (supaya saham di luar S&P 500 di folder mana pun ikut dianalisis).
+const screener = new Screener(config.dataDir, () => { const st = tradingDesk.load(); let fol: string[] = []; try { fol = watchFolder.list().flatMap((f) => f.simbol); } catch { /* belum siap */ } return Array.from(new Set([...st.positions.map((p) => p.symbol), ...st.watchlist, ...fol])); }, tradingDeskDir);
 const qH = (req: express.Request) => [Math.max(1, Math.min(120, Number(req.query.h) || 20)), String(req.query.m || ''), String(req.query.pt || ''), String(req.query.pf || '')] as const;
+// Tambah & analisis satu saham sekarang (mis. TSM): masuk Watchlist Utama supaya ikut pembaruan rutin, lalu dianalisis ±1 menit.
+app.post('/api/kantor/screener/tambah', requireToken, async (req, res) => {
+    try {
+        const s = String(req.body?.simbol || '').toUpperCase().trim();
+        const b = await screener.tambahSatu(s);
+        if (req.body?.watchlist !== false && !tradingDesk.load().watchlist.includes(b.s)) tradingDesk.watchlist('tambah', [b.s]);
+        res.json({ ok: true, simbol: b.s, nama: b.nama });
+    } catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
+});
 app.get('/api/kantor/screener', requireToken, (req, res) => { res.json({ ok: true, ...screener.data(...qH(req)), diskonUji: diskonUji() }); });
 /** Hasil uji mundur untuk "Fundamental kuat · lagi diskon" (per tahap, dibanding semua saham berfundamental kuat). */
 function diskonUji() { try { const h = JSON.parse(fs.readFileSync(fileUji(config.dataDir), 'utf8')); return h.diskon ? { at: h.at, H: h.diskon } : null; } catch { return null; } }

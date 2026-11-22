@@ -3416,3 +3416,7 @@ body.no-office #phaser-container { visibility: hidden; }
 .pw-isi span { display: flex; flex-direction: column; } .pw-isi b { font-size: 13.5px; font-weight: 500; } .pw-isi small { color: var(--muted); font-size: 11.5px; }
 .pw-catatan { color: var(--muted); font-size: 12px; }
 @media (max-width: 520px) { .pw-baris { grid-template-columns: 1fr; gap: 6px; } }
+
+.kc-luar { font-style: normal; color: var(--muted); }
+.ts-tambah { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; padding: 20px; }
+.ts-tambah b { font-size: 15px; font-weight: 600; } .ts-tambah p { margin: 4px 0 0; color: var(--muted); font-size: 13.5px; line-height: 1.5; }

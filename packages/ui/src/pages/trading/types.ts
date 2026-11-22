@@ -21,6 +21,7 @@ export interface Baris {
     industri?: string; mcap?: number | null;
     skor?: Record<FaktorKey, SkorRingkas | null>;
     diskon?: DiskonB | null;
+    luar?: string;
 }
 export const kapOf = (b: { mcap?: number | null; f: { mcap: number | null } | null }) => b.mcap ?? b.f?.mcap ?? null;
 export interface Pasar { naik: number; turun: number; tetap: number; mcap: number; sektor: Array<{ nama: string; n: number; chg: number }>; tape: Array<{ s: string; nama: string; harga: number; chg: number }> }

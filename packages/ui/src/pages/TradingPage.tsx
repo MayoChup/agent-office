@@ -80,6 +80,7 @@ export function TradingPage() {
     const [qDaftar, setQDaftar] = useState(qApi);
     useEffect(() => { if (!saham) setQDaftar(qApi); }, [qApi, saham]);
     const sc = useApi<ScreenerData>(`/api/kantor/screener?${qDaftar}`, 600_000);
+    React.useEffect(() => { const f = () => sc.reload(); window.addEventListener('kantor:screener-segarkan', f); return () => window.removeEventListener('kantor:screener-segarkan', f); }, []); // eslint-disable-line react-hooks/exhaustive-deps
     // Data rusak/kosong (mis. jawaban terpotong yang sempat tersimpan) dianggap belum ada, bukan bikin halaman error.
     const scData = sc.data && Array.isArray((sc.data as any).baris) && (sc.data as any).pasar ? sc.data : null;
     const [infoDetail, setInfoDetail] = useState<{ bukti: any; bobot: any } | null>(null);

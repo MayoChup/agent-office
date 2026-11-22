@@ -1,3 +1,4 @@
+import { ALIAS_SAHAM } from '../pages/trading/aliasSaham';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { apiGet } from '../kantor/connection';
@@ -51,6 +52,7 @@ function Palet({ tutup }: { tutup: () => void }) {
             for (const t of chat) if (`${t.nama} ${t.peran}`.toLowerCase().includes(k)) out.push({ jenis: 'Chat', judul: t.nama, sub: t.peran, ikon: '💬', buka: () => eventBus.dispatchEvent(new CustomEvent('buka-chat-global', { detail: { id: t.id } })) });
             const K = k.toUpperCase();
             for (const s of saham.filter((x) => x.startsWith(K)).slice(0, 6)) out.push({ jenis: 'Saham', judul: s, ikon: '📈', buka: () => { ke('trading'); setTimeout(() => eventBus.dispatchEvent(new CustomEvent('buka-saham', { detail: { s } })), 50); } });
+            { const al = ALIAS_SAHAM[k]; if (al && !out.some((x) => x.judul === al)) out.push({ jenis: 'Saham', judul: al, sub: `${k} → ${al} · buka detail saham`, ikon: '📈', buka: () => { ke('trading'); setTimeout(() => eventBus.dispatchEvent(new CustomEvent('buka-saham', { detail: { s: al } })), 50); } }); }
             if (/^[A-Z.]{1,6}$/.test(K) && !saham.includes(K)) out.push({ jenis: 'Saham', judul: K, sub: 'Buka detail saham', ikon: '📈', buka: () => { ke('trading'); setTimeout(() => eventBus.dispatchEvent(new CustomEvent('buka-saham', { detail: { s: K } })), 50); } });
         }
         return out;

@@ -95,6 +95,8 @@ export function konteksTrading(o: { screener: Screener; dataDir: string; H: numb
     // Detail saham yang sedang dibuka / disebut di pertanyaan (kode ATAU nama perusahaan, mis. "Nvidia", "Coca-Cola")
     const kode = new Set(baris.map((b) => b.s));
     const lewatNama = baris.filter((b) => { const n = String(b.nama || '').toLowerCase().replace(/[.,]/g, '').split(/\s+/)[0]; return n && n.length >= 4 && !['first', 'american', 'united', 'general', 'national', 'international'].includes(n) && new RegExp(`\\b${n.replace(/[^a-z0-9-]/g, '')}\\b`).test(teksK); }).map((b) => b.s);
+    const ALIAS: Record<string, string> = { tsmc: 'TSM', 'taiwan semi': 'TSM', alibaba: 'BABA', toyota: 'TM', novo: 'NVO', shopee: 'SE', garena: 'SE', temu: 'PDD', pinduoduo: 'PDD', google: 'GOOGL', alphabet: 'GOOGL', facebook: 'META', instagram: 'META', berkshire: 'BRK-B', 'coca cola': 'KO', 'coca-cola': 'KO', nubank: 'NU', mercadolibre: 'MELI', microstrategy: 'MSTR', grab: 'GRAB', unilever: 'UL', astrazeneca: 'AZN' };
+    for (const [k, v] of Object.entries(ALIAS)) if (teksK.includes(k) && kode.has(v)) lewatNama.push(v);
     const disebut = [o.saham, ...((o.teks.toUpperCase().match(/\b[A-Z]{1,5}(?:-[A-Z])?\b/g) || []).filter((k) => kode.has(k))), ...lewatNama].filter(Boolean) as string[];
     for (const s of Array.from(new Set(disebut)).slice(0, 5)) {
         const det: any = o.screener.detail(s, o.H, o.mode, o.pt, o.pf);

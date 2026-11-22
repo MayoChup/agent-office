@@ -7,6 +7,7 @@ import { PresetPilih, PresetCek, PresetData, PresetEval } from './Preset';
 import { Simulasi } from './Simulasi';
 import { Bintang, TombolFolder } from './Bintang';
 import { BarisDiskon } from './PilihanView';
+import { TambahSaham } from './TambahSaham';
 import { PegangPosisi } from './PegangPosisi';
 import type { TradingData } from '../../kantor/api';
 
@@ -30,6 +31,7 @@ export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPre
     const [d, setD] = useState<Detail | null>(null);
     const [err, setErr] = useState('');
     const [msg, setMsg] = useState('');
+    const [qKunci, setQKunci] = useState(0);
     const [tab, setTab] = useState<FaktorKey>('teknikal');
     const [pegang, setPegang] = useState(false);
     const td = useApi<TradingData>('/api/kantor/trading', 0);
@@ -46,10 +48,13 @@ export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPre
             .then((r) => { if (alive) { setD(r); onInfo?.({ bukti: (r as any).teknikalBukti, bobot: (r as any).bobot }); } }).catch((e) => alive && setErr(String(e.message || e)))
             .finally(() => alive && onMemuat?.(false));
         return () => { alive = false; onMemuat?.(false); };
-    }, [simbol, q]);
+    }, [simbol, q, qKunci]);
     const aksi = async (fn: () => Promise<any>, ok: string) => { setMsg('…'); try { await fn(); setMsg(ok); } catch (e: any) { setMsg(String(e.message || e)); } };
 
-    if (err) return <><button className="back" onClick={onBack}>‹ Kembali</button><div className="error">{err}</div></>;
+    const [ulang, setUlang] = useState(0);
+    // Saham belum ada di penyaring (mis. TSM) → tawarkan tambah & analisis, lalu muat ulang halaman ini.
+    if (err && !/penyaring|tidak ditemukan|tidak ada|404/i.test(err)) return <><button className="back" onClick={onBack}>‹ Kembali</button><div className="error">{err}</div></>;
+    if (err) return <><button className="back" onClick={onBack}>‹ Kembali</button><TambahSaham key={ulang} q={simbol} onSelesai={() => { setErr(''); setD(null); setUlang((x) => x + 1); setQKunci((x) => x + 1); }} /><small className="sb-note">{err}</small></>;
     if (!d) return <><button className="back" onClick={onBack}>‹ Kembali</button><div className="fin-empty">Memuat {simbol}…</div></>;
     const b = d.baris, all = d.skor.semua, pr = b.x?.proyeksi, f = b.f;
     const best = pr?.target.find((t) => t.nama === pr.terbaik);

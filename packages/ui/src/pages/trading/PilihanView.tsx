@@ -7,6 +7,8 @@ import { Sparkline, Mom } from './Sparkline';
 import { Ikon } from '../../components/Ikon';
 import { Info, InfoKamus } from './InfoI';
 import * as K from './kamus';
+import { cocokCari } from './aliasSaham';
+import { TambahSaham } from './TambahSaham';
 /** Label sinyal dalam huruf kalimat (Beli kuat, Tahan, …). */
 const kalimat = (l: string) => l.charAt(0).toUpperCase() + l.slice(1).toLowerCase();
 type Urut = 'skor' | 'chg1d' | 'potensi' | 'peluang' | 'rsi' | 's';
@@ -30,7 +32,7 @@ export function PilihanView({ data, faktor, setFaktor, onOpen, watchlist }: { da
     const list = useMemo(() => {
         const qq = q.trim().toUpperCase();
         const out = data.baris.filter((b) => {
-            if (qq && !b.s.includes(qq) && !b.nama.toUpperCase().includes(qq)) return false;
+            if (qq && !cocokCari(b, q)) return false;
             if (sektor === 'Sorotan' && !qq && !sorotan.has(b.s)) return false;
             if (sektor !== 'Sorotan' && sektor !== 'Semua' && b.sektor !== sektor) return false;
             if (label !== 'Semua' && b.skor?.[faktor]?.label !== label) return false;
@@ -90,7 +92,7 @@ export function PilihanView({ data, faktor, setFaktor, onOpen, watchlist }: { da
                         {list.slice(0, batas).map((b) => mode === 'grid' ? <Kartu key={b.s} b={b} faktor={faktor} onOpen={onOpen} /> : <BarisKecil key={b.s} b={b} faktor={faktor} onOpen={onOpen} />)}
                     </div>
                     {list.length > batas && <button className="sb-more" onClick={() => setBatas(batas + 24)}>Tampilkan lagi ({list.length - batas} tersisa)</button>}
-                    {list.length === 0 && <div className="fin-empty">Tidak ada saham yang cocok.</div>}
+                    {list.length === 0 && (q.trim() ? <TambahSaham q={q} onSelesai={(x) => { setQ(''); onOpen(x); }} /> : <div className="fin-empty">Tidak ada saham yang cocok.</div>)}
                 </div>
             </div>
         </>
@@ -161,7 +163,7 @@ export function Kartu({ b, faktor, onOpen, kronos = 'lencana' }: { b: Baris; fak
     return (
         <article className="sb-cardx" onClick={() => onOpen(b.s)}>
             <header>
-                <div className="kc-l"><b className="mono">{b.s}</b><small>{b.nama}</small>{kronos === 'lencana' && <LencanaKronos s={b.s} />}</div>
+                <div className="kc-l"><b className="mono">{b.s}</b><small>{b.nama}{b.luar ? <em className="kc-luar" title={b.luar === 'ADR' ? 'Perusahaan asing yang sahamnya diperdagangkan di bursa AS (ADR). Data fundamental bisa kurang lengkap.' : 'Di luar S&P 500'}> · {b.luar}</em> : null}</small>{kronos === 'lencana' && <LencanaKronos s={b.s} />}</div>
                 <div className="kc-r"><LabelSkor sk={sk} /><Bintang s={b.s} /></div>
             </header>
             {faktor === 'semua' && sk?.asli && <div className="sb-tahan" title="Sinyal hanya keluar kalau teknikal, fundamental, berita & whales lengkap">Sinyal {sk.asli.toLowerCase()} ditahan · menunggu data {sk.kurang?.join(', ')}</div>}

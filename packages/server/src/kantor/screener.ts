@@ -37,6 +37,8 @@ export interface Baris {
     rsi: number | null; ma50: number | null; ma200: number | null; volX: number; sinyal: Sinyal; f: Fundamental | null;
     x?: Ekstra; vol?: number; ind?: Ind;
     industri?: string; mcap?: number | null; // mcap: juta USD (dari Nasdaq; cadangan dari SEC)
+    /** Di luar S&P 500: 'ADR' (perusahaan asing di bursa AS) atau 'non-S&P'. */
+    luar?: string;
 }
 interface StatusLangkah { at: number; n: number; galat: string }
 interface Spark { s: string; tgl: string[]; c: number[]; ma50: (number | null)[]; ma200: (number | null)[] }
@@ -460,8 +462,8 @@ export class Screener {
         return b;
     }
 
-    private async semesta(): Promise<Array<{ s: string; nama: string; sektor: string; industri?: string }>> {
-        const list: Array<{ s: string; nama: string; sektor: string; industri?: string }> = [];
+    private async semesta(): Promise<Array<{ s: string; nama: string; sektor: string; industri?: string; luar?: string }>> {
+        const list: Array<{ s: string; nama: string; sektor: string; industri?: string; luar?: string }> = [];
         try {
             const res = await fetch(SP500_CSV, { headers: { 'User-Agent': UA } });
             if (res.ok) {
@@ -474,9 +476,36 @@ export class Screener {
                 }
             }
         } catch { /* pakai cadangan */ }
-        if (!list.length) for (const b of this.st.baris) list.push({ s: b.s, nama: b.nama, sektor: b.sektor, industri: b.industri });
-        for (const s of this.watchlist()) if (!list.some((x) => x.s === s)) list.push({ s, nama: '', sektor: '' });
+        if (!list.length) for (const b of this.st.baris) if (!b.luar) list.push({ s: b.s, nama: b.nama, sektor: b.sektor, industri: b.industri });
+        const ada = new Set(list.map((x) => x.s));
+        for (const e of EKSTRA) if (!ada.has(e.s)) { list.push(e); ada.add(e.s); }
+        for (const s of this.watchlist()) if (!ada.has(s)) { const lama = this.st.baris.find((b) => b.s === s); list.push({ s, nama: lama?.nama || '', sektor: lama?.sektor || '', industri: lama?.industri || '', luar: 'non-S&P' } as any); ada.add(s); }
         return list;
+    }
+
+    /**
+     * Tambah & analisis SATU saham sekarang (mis. TSM yang belum ada di penyaring), tanpa menunggu pembaruan berikutnya.
+     * Teknikal + fundamental Nasdaq; berita & whales menyusul di pembaruan rutin.
+     */
+    async tambahSatu(simbol: string): Promise<Baris> {
+        const s = simbol.toUpperCase().replace('.', '-').replace(/[^A-Z0-9-]/g, '').slice(0, 10);
+        if (!s) throw new Error('Kode saham kosong');
+        const ada = this.st.baris.find((b) => b.s === s); if (ada) return ada;
+        let d: Awaited<ReturnType<typeof harian>>;
+        try { d = await harian(s); } catch { throw new Error(`Kode ${s} tidak ditemukan di bursa AS. Coba kode lain (mis. TSMC = TSM).`); }
+        if (!d?.c?.length || d.c.length < 30) throw new Error(`Data harga ${s} terlalu sedikit untuk dianalisis.`);
+        const spy = await harian('SPY'); const spyMa50 = spy.c.slice(-50).reduce((a, x) => a + x, 0) / 50; const pasarNaik = spy.c[spy.c.length - 1] > spyMa50;
+        const a = analisis(d.c, d.v), e = EKSTRA.find((x) => x.s === s);
+        const b: Baris = { s, nama: e?.nama || d.nama || s, sektor: e?.sektor || '', harga: +d.c[d.c.length - 1].toFixed(2), chg1d: a.chg1d, chg1m: a.chg1m, chg3m: a.chg3m, chg1y: a.chg1y, rsi: a.rsi, ma50: a.ma50 != null ? +a.ma50.toFixed(2) : null, ma200: a.ma200 != null ? +a.ma200.toFixed(2) : null, volX: a.volX, sinyal: a.sinyal, f: null, industri: e?.industri || '', mcap: null, x: ekstra(d.o, d.h, d.l, d.c, d.v, a.ma50, a.ma200), vol: d.v[d.v.length - 1], ind: hitungInd(d, spy, pasarNaik), luar: e?.luar || 'non-S&P' };
+        const k = Math.max(0, d.c.length - 130), r2 = (x: number | null) => (x == null ? null : +x.toFixed(2));
+        try {
+            fs.writeFileSync(path.join(this.sparkDir, `${s}.hlc.json`), JSON.stringify({ h: d.h.slice(-270).map((x) => +x.toFixed(3)), l: d.l.slice(-270).map((x) => +x.toFixed(3)), c: d.c.slice(-270).map((x) => +x.toFixed(3)), o: d.o.slice(-270).map((x) => +x.toFixed(3)), v: d.v.slice(-270), tgl: d.tgl.slice(-270) }));
+            fs.writeFileSync(path.join(this.sparkDir, `${s}.json`), JSON.stringify({ s, tgl: d.tgl.slice(k), c: d.c.slice(k).map((x) => +x.toFixed(2)), ma50: a.m50.slice(k).map(r2), ma200: a.m200.slice(k).map(r2) }));
+        } catch { /* grafik menyusul */ }
+        try { const { _cek, ...f } = await fundamentalNasdaq(s, null); b.f = { ...f, tahun: '' } as Fundamental; if (f.mcap) b.mcap = f.mcap; if (!b.sektor && (f as any).sektor) b.sektor = (f as any).sektor; } catch { /* fundamental menyusul */ }
+        this.st.baris = [...this.st.baris.filter((x) => x.s !== s), b].sort((x, y) => x.s.localeCompare(y.s));
+        this.segarkanHorison(); this.simpan();
+        return b;
     }
 
     /** Harga & sinyal teknikal semua saham (±3–6 menit). */
@@ -502,7 +531,7 @@ export class Screener {
                     try {
                         const d = await harian(u.s);
                         const a = analisis(d.c, d.v);
-                        baru.push({ s: u.s, nama: u.nama || d.nama || u.s, sektor: u.sektor, harga: +d.c[d.c.length - 1].toFixed(2), chg1d: a.chg1d, chg1m: a.chg1m, chg3m: a.chg3m, chg1y: a.chg1y, rsi: a.rsi, ma50: a.ma50 != null ? +a.ma50.toFixed(2) : null, ma200: a.ma200 != null ? +a.ma200.toFixed(2) : null, volX: a.volX, sinyal: a.sinyal, f: lama.get(u.s)?.f || null, industri: u.industri || lama.get(u.s)?.industri || '', mcap: lama.get(u.s)?.mcap ?? null, x: ekstra(d.o, d.h, d.l, d.c, d.v, a.ma50, a.ma200), vol: d.v[d.v.length - 1], ind: hitungInd(d, spy, pasarNaik) });
+                        baru.push({ s: u.s, nama: u.nama || d.nama || u.s, sektor: u.sektor, harga: +d.c[d.c.length - 1].toFixed(2), chg1d: a.chg1d, chg1m: a.chg1m, chg3m: a.chg3m, chg1y: a.chg1y, rsi: a.rsi, ma50: a.ma50 != null ? +a.ma50.toFixed(2) : null, ma200: a.ma200 != null ? +a.ma200.toFixed(2) : null, volX: a.volX, sinyal: a.sinyal, f: lama.get(u.s)?.f || null, industri: u.industri || lama.get(u.s)?.industri || '', mcap: lama.get(u.s)?.mcap ?? null, x: ekstra(d.o, d.h, d.l, d.c, d.v, a.ma50, a.ma200), vol: d.v[d.v.length - 1], ind: hitungInd(d, spy, pasarNaik), ...(u.luar ? { luar: u.luar } : {}) });
                         const k = Math.max(0, d.c.length - 130);
                         const r2 = (x: number | null) => (x == null ? null : +x.toFixed(2));
                         fs.writeFileSync(path.join(this.sparkDir, `${u.s}.hlc.json`), JSON.stringify({ h: d.h.slice(-270).map((x) => +x.toFixed(3)), l: d.l.slice(-270).map((x) => +x.toFixed(3)), c: d.c.slice(-270).map((x) => +x.toFixed(3)), o: d.o.slice(-270).map((x) => +x.toFixed(3)) }));
@@ -733,6 +762,31 @@ const SEKTOR: Record<string, string> = {
     'Communication Services': 'Komunikasi', Industrials: 'Industri', 'Consumer Staples': 'Konsumen primer', Energy: 'Energi',
     Utilities: 'Utilitas', 'Real Estate': 'Properti', Materials: 'Bahan baku'
 };
+
+/** Saham besar & populer di bursa AS yang tidak masuk S&P 500 (kebanyakan ADR perusahaan asing). */
+export const EKSTRA: Array<{ s: string; nama: string; sektor: string; industri: string; luar: string }> = [
+    ['TSM', 'Taiwan Semiconductor (TSMC)', 'Teknologi', 'Semiconductors', 'ADR'], ['ASML', 'ASML Holding', 'Teknologi', 'Semiconductor Equipment', 'ADR'],
+    ['ARM', 'Arm Holdings', 'Teknologi', 'Semiconductors', 'ADR'], ['SAP', 'SAP', 'Teknologi', 'Application Software', 'ADR'],
+    ['SONY', 'Sony Group', 'Konsumen sekunder', 'Consumer Electronics', 'ADR'], ['TM', 'Toyota Motor', 'Konsumen sekunder', 'Automobile Manufacturers', 'ADR'],
+    ['BABA', 'Alibaba Group', 'Konsumen sekunder', 'Internet Retail', 'ADR'], ['PDD', 'PDD Holdings (Temu, Pinduoduo)', 'Konsumen sekunder', 'Internet Retail', 'ADR'],
+    ['JD', 'JD.com', 'Konsumen sekunder', 'Internet Retail', 'ADR'], ['BIDU', 'Baidu', 'Komunikasi', 'Interactive Media & Services', 'ADR'],
+    ['NVO', 'Novo Nordisk', 'Kesehatan', 'Pharmaceuticals', 'ADR'], ['AZN', 'AstraZeneca', 'Kesehatan', 'Pharmaceuticals', 'ADR'],
+    ['NVS', 'Novartis', 'Kesehatan', 'Pharmaceuticals', 'ADR'], ['SNY', 'Sanofi', 'Kesehatan', 'Pharmaceuticals', 'ADR'],
+    ['SHOP', 'Shopify', 'Teknologi', 'Application Software', 'non-S&P'], ['MELI', 'MercadoLibre', 'Konsumen sekunder', 'Internet Retail', 'non-S&P'],
+    ['SE', 'Sea Limited (Shopee, Garena)', 'Konsumen sekunder', 'Internet Retail', 'ADR'], ['GRAB', 'Grab Holdings', 'Industri', 'Passenger Ground Transportation', 'ADR'],
+    ['NU', 'Nu Holdings (Nubank)', 'Keuangan', 'Diversified Banks', 'ADR'], ['SPOT', 'Spotify', 'Komunikasi', 'Movies & Entertainment', 'ADR'],
+    ['HSBC', 'HSBC Holdings', 'Keuangan', 'Diversified Banks', 'ADR'], ['UL', 'Unilever', 'Konsumen primer', 'Personal Care Products', 'ADR'],
+    ['SHEL', 'Shell', 'Energi', 'Integrated Oil & Gas', 'ADR'], ['BP', 'BP', 'Energi', 'Integrated Oil & Gas', 'ADR'],
+    ['TTE', 'TotalEnergies', 'Energi', 'Integrated Oil & Gas', 'ADR'], ['RIO', 'Rio Tinto', 'Bahan baku', 'Diversified Metals & Mining', 'ADR'],
+    ['BHP', 'BHP Group', 'Bahan baku', 'Diversified Metals & Mining', 'ADR'], ['TCOM', 'Trip.com', 'Konsumen sekunder', 'Hotels, Resorts & Cruise Lines', 'ADR'],
+    ['NTES', 'NetEase', 'Komunikasi', 'Interactive Home Entertainment', 'ADR'], ['INFY', 'Infosys', 'Teknologi', 'IT Consulting', 'ADR'],
+    ['MUFG', 'Mitsubishi UFJ Financial', 'Keuangan', 'Diversified Banks', 'ADR'], ['RY', 'Royal Bank of Canada', 'Keuangan', 'Diversified Banks', 'non-S&P'],
+    ['TD', 'Toronto-Dominion Bank', 'Keuangan', 'Diversified Banks', 'non-S&P'], ['SPGI', '', '', '', ''],
+    ['MSTR', 'Strategy (MicroStrategy)', 'Teknologi', 'Application Software', 'non-S&P'], ['RIVN', 'Rivian Automotive', 'Konsumen sekunder', 'Automobile Manufacturers', 'non-S&P'],
+    ['SNOW', 'Snowflake', 'Teknologi', 'Internet Services & Infrastructure', 'non-S&P'], ['NET', 'Cloudflare', 'Teknologi', 'Internet Services & Infrastructure', 'non-S&P'],
+    ['RBLX', 'Roblox', 'Komunikasi', 'Interactive Home Entertainment', 'non-S&P'], ['SOFI', 'SoFi Technologies', 'Keuangan', 'Consumer Finance', 'non-S&P'],
+    ['ASTS', 'AST SpaceMobile', 'Komunikasi', 'Wireless Telecommunication Services', 'non-S&P'], ['RKLB', 'Rocket Lab', 'Industri', 'Aerospace & Defense', 'non-S&P']
+].filter((x) => x[4]).map(([s, nama, sektor, industri, luar]) => ({ s, nama, sektor, industri, luar }));
 
 function parseCsv(line: string): string[] {
     const out: string[] = []; let cur = '', q = false;

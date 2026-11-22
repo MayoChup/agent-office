@@ -1,3 +1,5 @@
+import { cocokCari } from './aliasSaham';
+import { TambahSaham } from './TambahSaham';
 import React, { useMemo, useState } from 'react';
 import { Baris, FaktorKey, FAKTOR, ScreenerData, kelas, usd, persen, kap, vol, kapOf } from './types';
 import { Sparkline } from './Sparkline';
@@ -22,7 +24,7 @@ export function PasarView({ data, faktor, setFaktor, onOpen }: { data: ScreenerD
     const list = useMemo(() => {
         const qq = q.trim().toUpperCase();
         const lbl = (b: Baris) => b.skor?.[faktor]?.label || '';
-        const out = data.baris.filter((b) => (!qq || b.s.includes(qq) || b.nama.toUpperCase().includes(qq)) && (!sektor || b.sektor === sektor)
+        const out = data.baris.filter((b) => (!qq || cocokCari(b, q)) && (!sektor || b.sektor === sektor)
             && (grup === 'Semua' || (grup === 'Beli' ? /Beli/.test(lbl(b)) : grup === 'Jual' ? /Jual/.test(lbl(b)) : lbl(b) === 'Tahan')));
         const val = (b: Baris): number | string => urut.k === 'mcap' ? (kapOf(b) ?? -1) : urut.k === 'vol' ? (b.vol ?? -1) : urut.k === 'sinyal' ? (b.skor?.[faktor]?.skor ?? -9) : urut.k === 's' ? b.s : urut.k === 'sektor' ? b.sektor : (b as any)[urut.k] ?? -1;
         return out.sort((a, b) => { const x = val(a), y = val(b); const r = typeof x === 'string' ? String(x).localeCompare(String(y)) : (x as number) - (y as number); return urut.asc ? r : -r; });
@@ -87,7 +89,7 @@ export function PasarView({ data, faktor, setFaktor, onOpen }: { data: ScreenerD
                     </table>
                 </div>
                 {list.length > batas && <button className="sb-more" onClick={() => setBatas(batas + 60)}>Tampilkan lagi ({list.length - batas} tersisa)</button>}
-                {list.length === 0 && <div className="fin-empty">Tidak ada saham yang cocok.</div>}
+                {list.length === 0 && (q.trim() ? <TambahSaham q={q} onSelesai={(x) => { setQ(''); onOpen(x); }} /> : <div className="fin-empty">Tidak ada saham yang cocok.</div>)}
             </section>
         </>
     );
