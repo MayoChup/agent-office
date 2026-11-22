@@ -134,7 +134,7 @@ export function BarisDiskon({ b }: { b: Baris }) {
     return (
         <div className={`sb-diskon t-${d.tahap}`}>
             <span><i aria-hidden /> Diskon{d.dariPuncak >= 1 ? ` −${Math.round(d.dariPuncak)}% dari puncak` : ''} · <b>{NAMA_TAHAP[d.tahap]}</b> <Info judul="Fundamental kuat · lagi diskon" teks={INFO_DISKON} kini={`${b.s}: ${NAMA_TAHAP[d.tahap]} — ${d.alasan.join(', ')}.`} /></span>
-            {d.alasan.length > 0 && <small>{d.alasan.slice(0, 2).join(' · ')}</small>}
+            {d.alasan.filter((x) => !/puncak/.test(x)).length > 0 && <small>{d.alasan.filter((x) => !/puncak/.test(x)).slice(0, 2).join(' · ')}</small>}
         </div>
     );
 }
@@ -161,8 +161,8 @@ export function Kartu({ b, faktor, onOpen, kronos = 'lencana' }: { b: Baris; fak
     return (
         <article className="sb-cardx" onClick={() => onOpen(b.s)}>
             <header>
-                <div><b className="mono">{b.s}</b><small>{b.nama}</small></div>
-                <div className="kc-r">{kronos === 'lencana' && <LencanaKronos s={b.s} />}<LabelSkor sk={sk} /><Bintang s={b.s} /></div>
+                <div className="kc-l"><b className="mono">{b.s}</b><small>{b.nama}</small>{kronos === 'lencana' && <LencanaKronos s={b.s} />}</div>
+                <div className="kc-r"><LabelSkor sk={sk} /><Bintang s={b.s} /></div>
             </header>
             {faktor === 'semua' && sk?.asli && <div className="sb-tahan" title="Sinyal hanya keluar kalau teknikal, fundamental, berita & whales lengkap">Sinyal {sk.asli.toLowerCase()} ditahan · menunggu data {sk.kurang?.join(', ')}</div>}
             <div className="sb-price">

@@ -3384,3 +3384,9 @@ body.no-office #phaser-container { visibility: hidden; }
 .sv-lembar footer { display: flex; justify-content: flex-end; gap: 8px; } .sv-hapus { margin-right: auto; color: var(--down) !important; }
 @keyframes sv-naik { from { transform: translateY(16px); opacity: 0; } } @keyframes sv-pudar { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .sv-latar, .sv-lembar { animation: none; } }
+
+.sb-cardx > header { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 8px; }
+.sb-cardx .kc-l { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
+.sb-cardx .kc-l small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.sb-cardx .kc-r { align-items: flex-start; gap: 4px; }
+.sb-cardx .kc-r .bintang { margin: -4px -6px 0 0; }
