@@ -34,9 +34,11 @@ export function PantauFolder({ id }: { id: string }) {
     // Folder baru dibuat / berganti folder → muat ulang daftar pantauan.
     React.useEffect(() => { if (r.data && !f) r.reload(); setPesan(''); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
     React.useEffect(() => { const g = () => r.reload(); window.addEventListener('kantor:watchlist', g); return () => window.removeEventListener('kantor:watchlist', g); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    const [lokal, setLokal] = useState<Partial<Atur> | null>(null);
     if (!f) return null;
-    const a = f.atur;
-    const ubah = async (b: Partial<Atur>) => { setPesan(''); try { await apiPost('/api/kantor/pantau-watch', { id, ...b }); r.reload(); } catch (e: any) { setPesan(String(e?.message || e)); } };
+    const a: Atur = { ...f.atur, ...(lokal || {}) };
+    // Optimis: tampilan langsung berubah, lalu disimpan ke server (dikembalikan kalau gagal).
+    const ubah = async (b: Partial<Atur>) => { setPesan(''); setLokal({ ...(lokal || {}), ...b }); try { await apiPost('/api/kantor/pantau-watch', { id, ...b }); await r.reload(); setLokal(null); } catch (e: any) { setLokal(null); setPesan(String(e?.message || e)); } };
     const kirim = async () => { setSibuk(true); setPesan(''); try { await apiPost('/api/kantor/pantau-watch/kirim', { id }); setPesan('Laporan terkirim ke chat Dito.'); r.reload(); } catch (e: any) { setPesan(String(e?.message || e)); } finally { setSibuk(false); } };
     const isiAktif = ISI.filter(([k]) => a.isi[k]).map(([, l]) => l.toLowerCase()).join(', ');
     return (
