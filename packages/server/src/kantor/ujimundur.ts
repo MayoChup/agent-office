@@ -8,6 +8,7 @@ import { fitur, ridge, nilaiMask, keSkor, FITUR, Model, statusModel } from './bo
 import { skorFundamental } from './skor';
 import { maskTeknikal, maskFundamental, cariKombinasi, PresetAi, ujiArsip, HasilCari } from './presetAi';
 import { bangunFundHistori } from './fundHistori';
+import { galatSec } from './screener';
 import { cekDiskon, cekAmbilUntung, URUT_TAHAP } from './diskon';
 
 /**
@@ -181,7 +182,7 @@ export async function ujiMundur(semesta: string[], file: string, st: StatusUji, 
         (hasil as any).sisiJual = ringkasSisiJual(JL, KR, spyR);
         (hasil as any).diskon = Object.fromEntries(HS.map((H) => [H, Object.fromEntries(KUNCI_PT.map((k) => [k, ringkas(DK[H][k])]))]));
         (hasil as any).tanding = ujiTanding(KR, spyR);
-        (hasil as any).fundInfo = { ada: !!fundPada, sampel: nFund, catatan: fundPada ? (nFund ? '' : 'Riwayat laporan keuangan terambil, tapi tidak ada yang cocok dengan saham yang diuji.') : 'Riwayat laporan keuangan lampau (SEC) gagal diambil di server ini.' };
+        (hasil as any).fundInfo = { ada: !!fundPada, sampel: nFund, catatan: fundPada ? (nFund ? '' : 'Riwayat laporan keuangan terambil, tapi tidak ada yang cocok dengan saham yang diuji.') : `Riwayat laporan keuangan lampau (SEC) gagal diambil di server ini${galatSec() ? `: ${galatSec()}` : ''}.` };
         (hasil as any).presetAi = { teknikal: cariT, fundamental: cariF, fundamentalSampel: Object.fromEntries(Object.entries(SF).map(([k, v]) => [k, v.tgl.length])) };
         fs.writeFileSync(fileBobot(path.dirname(file)), JSON.stringify(model));
         fs.writeFileSync(file, JSON.stringify(hasil));

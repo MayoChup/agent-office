@@ -152,6 +152,8 @@ async function harian(s: string) {
 }
 
 let secGalat = '';
+/** Galat SEC terakhir (untuk diagnosa uji mundur fundamental lampau). */
+export const galatSec = () => secGalat;
 export async function secJson(url: string): Promise<any | null> {
     try {
         const res = await fetch(url, { headers: { 'User-Agent': SEC_UA, Accept: 'application/json' }, signal: AbortSignal.timeout(30_000) });
