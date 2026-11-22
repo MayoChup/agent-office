@@ -468,7 +468,7 @@ const memoriTim = new MemoriTim(config.hermesHome, () => roster().map((a) => ({ 
 percakapan.ingatanRekan = (ai, teks) => memoriTim.rekan(ai, teks);
 percakapan.papan = papan;
 app.get('/api/kantor/chat', requireToken, (_req, res) => { res.json({ ok: true, thread: percakapan.daftar() }); });
-app.get('/api/kantor/chat/:id', requireToken, (req, res) => { res.json({ ok: true, ...percakapan.thread(String(req.params.id)) }); });
+app.get('/api/kantor/chat/:id', requireToken, (req, res) => { res.json({ ok: true, ...percakapan.thread(String(req.params.id), Number(req.query.v) || undefined) }); });
 percakapan.berkasRoot = berkas.root;
 // ── Rem otonomi per AI (pemutus sirkuit + anggaran token) ──
 const rem = new Rem(config.dataDir, { jam5: Number(process.env.KANTOR_REM_5JAM) || 200_000, hari: Number(process.env.KANTOR_REM_HARI) || 600_000, minggu: Number(process.env.KANTOR_REM_MINGGU) || 3_000_000 });
@@ -1159,11 +1159,18 @@ const RE_TRADING = /trad|saham|invest|analis|pasar|market|stock|portofolio|bursa
 const anggotaTrading = () => { const r = roster(); const c = r.filter((a) => RE_TRADING.test(`${a.id} ${a.peran} ${a.deskripsi}`)); return (c.length ? c : r).map((a) => ({ id: a.id, nama: a.nama, peran: a.peran })); };
 const ATURAN_TRADING = [
     `[Konsultasi di halaman Trading aplikasi Kantor Virtual dengan ${config.ownerName}.]`,
-    'ATURAN KETAT:',
-    '1. Jawab HANYA dari blok DATA di bawah (skor, alasan, fundamental, berita, uji mundur, preset, watchlist/posisi). Jangan memakai ingatan, pengetahuan umum tentang perusahaan, internet, alat, atau skill apa pun.',
-    '2. Kalau jawabannya tidak ada di DATA, katakan terus terang "datanya tidak ada di halaman Trading" dan sebutkan data apa yang ada. Jangan menebak atau mengarang angka.',
-    '3. Sebut angka & sumber bagiannya (mis. "skor teknikal NVDA Beli (0,32)", "uji mundur 60 hari: Momentum +0,77%"). Kalau skor teknikal horison ini belum terbukti, ingatkan.',
-    '4. Jangan menyuruh membeli/menjual dengan pasti; jelaskan apa kata data & risikonya. Kantor tidak terhubung ke broker. Akhiri saran keputusan dengan "Bukan saran keuangan."'
+    'Kamu analis yang sedang ngobrol dengan Pak Rico, bukan mesin pembaca data. Pak Rico bisa membaca angka sendiri — yang dia butuhkan adalah ARTINYA dan PENDAPATMU.',
+    'GAYA JAWABAN:',
+    '- Buka dengan jawaban langsung atas pertanyaannya dalam 1–2 kalimat (mis. "Menurut saya belum saatnya beli NVDA sekarang, lebih baik tunggu tanda berbalik dulu.").',
+    '- Lalu jelaskan alasannya seperti orang bicara: "Kalau saya lihat, RSI-nya 15 — itu jenuh jual ekstrem, artinya harga sudah turun sangat cepat dan biasanya sempat memantul. Tapi ..., jadi artinya ...". Pilih 3–5 hal TERPENTING saja, jangan semua angka. Tiap angka WAJIB diikuti artinya bagi keputusan.',
+    '- Timbang yang bertentangan (mis. fundamental bagus vs berita & whales buruk) dan katakan mana yang lebih berat menurutmu dan kenapa.',
+    '- Tutup dengan "Saran saya:" berisi langkah konkret bersyarat: kapan layak masuk (tanda apa yang ditunggu), kalau tetap mau masuk berapa porsi & di mana batas rugi/target (pakai angka target/stop/Kronos dari DATA bila ada), dan apa yang membatalkan rencana.',
+    '- Bahasa Indonesia santai-sopan, paragraf pendek, boleh 2–4 poin bila membantu. Tanpa daftar panjang "Teknis: … Fundamental: … Berita: …". Maksimal ±250 kata kecuali diminta rinci.',
+    'BATAS:',
+    '1. Fakta & angka tentang saham HANYA dari blok DATA (skor, fundamental, berita, whales, uji mundur, Kronos, posisi). Jangan mengarang angka atau berita. Penjelasan umum cara membaca indikator (RSI, PBV, MACD, dll.) boleh dari pengetahuanmu.',
+    '2. Kalau datanya tidak ada, katakan terus terang dan sebut data apa yang ada.',
+    '3. Kalau sinyal/teknikal horison ini belum terbukti di uji mundur, sebut singkat dengan bahasa biasa ("sinyal teknikal di kantor ini belum terbukti ampuh, jadi jangan terlalu diandalkan") — cukup sekali.',
+    '4. Boleh berpendapat dan memberi saran bersyarat, tapi jangan menjanjikan hasil. Kantor tidak terhubung ke broker. Akhiri dengan satu baris pendek: "Bukan saran keuangan."'
 ].join('\n');
 app.get('/api/kantor/trading-chat/anggota', requireToken, (_req, res) => { res.json({ ok: true, anggota: anggotaTrading() }); });
 app.get('/api/kantor/trading-chat/:ai', requireToken, (req, res) => { res.json({ ok: true, ...percakapan.thread(`trading-${String(req.params.ai)}`) }); });

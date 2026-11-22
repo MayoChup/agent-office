@@ -105,8 +105,14 @@ export class Percakapan {
 
     /* ── Penyimpanan ── */
     private file(thread: string) { return path.join(this.dir, `${thread.replace(/[^a-z0-9_-]/gi, '_')}.json`); }
+    /** Cache isi thread per waktu ubah berkas: daftar chat & polling tidak lagi membaca+mengurai berkas penuh berulang kali. */
+    private cacheBaca = new Map<string, { m: number; list: Pesan[] }>();
+    /** Versi thread (waktu ubah berkas) — klien yang sudah punya versi ini tidak perlu dikirimi ulang. */
+    versi(thread: string): number { try { return fs.statSync(this.file(thread)).mtimeMs; } catch { return 0; } }
     baca(thread: string): Pesan[] {
-        try { return JSON.parse(fs.readFileSync(this.file(thread), 'utf8')); } catch { return []; }
+        const m = this.versi(thread); if (!m) return [];
+        const c = this.cacheBaca.get(thread); if (c && c.m === m) return c.list.slice();
+        try { const list = JSON.parse(fs.readFileSync(this.file(thread), 'utf8')); this.cacheBaca.set(thread, { m, list }); return list.slice(); } catch { return []; }
     }
     private tulis(thread: string, list: Pesan[]) {
         fs.writeFileSync(this.file(thread), JSON.stringify(list.slice(-MAX_SIMPAN)));
@@ -238,8 +244,10 @@ export class Percakapan {
         return [{ ...item('grup', 'Grup Kantor', `${roster.length} anggota`), grup: true, ikon: '👥', anggota: roster.map((a) => a.id) }, ...grup, ...roster.map((a) => item(a.id, a.nama, a.peran))];
     }
 
-    thread(id: string) {
-        return { id, pesan: this.baca(id).slice(-150), menulis: Array.from(this.menulis.get(id) || []) };
+    thread(id: string, sudahV?: number) {
+        const v = this.versi(id), menulis = Array.from(this.menulis.get(id) || []);
+        if (sudahV && v && sudahV === v) return { id, sama: true, v, menulis };
+        return { id, v, pesan: this.baca(id).slice(-150), menulis };
     }
 
     /* ── Kirim pesan dari Pak Rico ── */

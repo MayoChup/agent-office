@@ -28,9 +28,21 @@ const warna = (id: string) => COLORS[Math.abs([...id].reduce((a, c) => a * 31 + 
 
 function readSeen(): Record<string, number> { try { return JSON.parse(localStorage.getItem(LS_SEEN) || '{}'); } catch { return {}; } }
 
+/* Simpanan chat di perangkat: daftar obrolan & pesan terakhir tiap thread tampil seketika, lalu diperbarui di belakang. */
+const LS_DAFTAR = 'kantor:chat:daftar', LS_THREAD = 'kantor:chat:t:';
+const cacheThread = new Map<string, { v: number; pesan: any[] }>();
+function bacaLS<T>(k: string): T | null { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch { return null; } }
+function tulisLS(k: string, v: unknown) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* penuh: abaikan */ } }
+function simpanThread(id: string, v: number, pesan: any[]) {
+    cacheThread.set(id, { v, pesan });
+    // Di perangkat cukup 40 pesan terakhir (teks dipotong) supaya ringan.
+    tulisLS(LS_THREAD + id, { v: 0, pesan: pesan.slice(-40).map((m) => ({ ...m, teks: String(m.teks || '').slice(0, 4000) })) });
+}
+function ambilThread(id: string): { v: number; pesan: any[] } | null { return cacheThread.get(id) || bacaLS(LS_THREAD + id); }
+
 export function ChatPage({ prefill }: { prefill?: string }) {
     const agents = useKantor((s) => s.agents);
-    const [threads, setThreads] = useState<ThreadInfo[]>([]);
+    const [threads, setThreads] = useState<ThreadInfo[]>(() => bacaLS<ThreadInfo[]>(LS_DAFTAR) || []);
     const [open, setOpen] = useState<string | null>(() => { try { const c = sessionStorage.getItem('kantor:buka-chat'); if (c) { sessionStorage.removeItem('kantor:buka-chat'); return c; } } catch { /* */ } return window.innerWidth >= 768 ? 'grup' : null; });
     useKembali(!!open && window.innerWidth < 768, () => setOpen(null));
     const [grupForm, setGrupForm] = useState<ThreadInfo | 'baru' | null>(null);
@@ -43,7 +55,7 @@ export function ChatPage({ prefill }: { prefill?: string }) {
     useEffect(() => {
         if (!aktif) return;
         let alive = true;
-        const load = () => apiGet<{ thread: ThreadInfo[] }>('/api/kantor/chat').then((d) => { if (alive) { setThreads(d.thread); setErr(''); } }).catch((e) => alive && setErr(String(e.message || e)));
+        const load = () => apiGet<{ thread: ThreadInfo[] }>('/api/kantor/chat').then((d) => { if (alive) { setThreads(d.thread); setErr(''); tulisLS(LS_DAFTAR, d.thread); } }).catch((e) => alive && setErr(String(e.message || e)));
         load();
         const t = setInterval(load, 5000);
         return () => { alive = false; clearInterval(t); };
@@ -108,8 +120,9 @@ export function ChatPage({ prefill }: { prefill?: string }) {
 }
 
 function Thread({ info, threads, skin, onBack, onSeen, onInfo }: { info: ThreadInfo; threads: ThreadInfo[]; skin: (id: string) => number | undefined; onBack: () => void; onSeen: (at: number) => void; onInfo: () => void }) {
-    const [pesan, setPesan] = useState<Pesan[]>([]);
+    const [pesan, setPesan] = useState<Pesan[]>(() => (ambilThread(info.id)?.pesan as Pesan[]) || []);
     const [menulis, setMenulis] = useState<string[]>([]);
+    const versi = useRef(cacheThread.get(info.id)?.v || 0);
     // Draf per obrolan: pindah thread lalu kembali, tulisan tidak hilang.
     const kunciDraf = `kantor:draf:${info.id}`;
     const [text, setTextRaw] = useState(() => { try { return sessionStorage.getItem(kunciDraf) || ''; } catch { return ''; } });
@@ -154,11 +167,19 @@ function Thread({ info, threads, skin, onBack, onSeen, onInfo }: { info: ThreadI
         return () => { clearInterval(t); document.removeEventListener('visibilitychange', lapor); laporLihat(null); };
     }, [info.id]);
 
+    const infoId = useRef(info.id);
+    // Pindah obrolan → langsung tampilkan simpanan obrolan itu (tanpa layar kosong), lalu perbarui.
+    useEffect(() => { infoId.current = info.id; const c = ambilThread(info.id); setPesan((c?.pesan as Pesan[]) || []); versi.current = cacheThread.get(info.id)?.v || 0; }, [info.id]);
     const load = async () => {
         try {
-            const d = await apiGet<{ pesan: Pesan[]; menulis: string[] }>(`/api/kantor/chat/${encodeURIComponent(info.id)}`);
-            const tunda = isiAntrean(`/api/kantor/chat/${encodeURIComponent(info.id)}`).map((it) => ({ id: it.id, dari: 'owner', nama: 'Pak Rico', teks: String((it.body as any)?.teks || ''), at: it.at, tertunda: true } as any as Pesan));
-            setPesan([...d.pesan, ...tunda]); setMenulis(d.menulis); setErr('');
+            const id0 = info.id;
+            const d = await apiGet<{ pesan?: Pesan[]; menulis: string[]; v?: number; sama?: boolean }>(`/api/kantor/chat/${encodeURIComponent(id0)}${versi.current ? `?v=${versi.current}` : ''}`);
+            if (id0 !== infoId.current) return; // sudah pindah obrolan
+            setMenulis(d.menulis); setErr('');
+            if (d.sama || !d.pesan) return; // tidak ada pesan baru sejak terakhir dimuat
+            versi.current = d.v || 0; simpanThread(id0, versi.current, d.pesan);
+            const tunda = isiAntrean(`/api/kantor/chat/${encodeURIComponent(id0)}`).map((it) => ({ id: it.id, dari: 'owner', nama: 'Pak Rico', teks: String((it.body as any)?.teks || ''), at: it.at, tertunda: true } as any as Pesan));
+            setPesan([...d.pesan, ...tunda]);
             const last = d.pesan[d.pesan.length - 1];
             if (last) onSeen(last.at);
         } catch (e: any) { setErr(String(e.message || e)); }
