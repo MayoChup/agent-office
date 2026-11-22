@@ -23,6 +23,7 @@ import { CatatanPage } from './pages/catatan/CatatanPage';
 import { BerkasPage } from './pages/BerkasPage';
 import { HomePage, StatusTim } from './pages/HomePage';
 import { TradingPage } from './pages/TradingPage';
+import { Pengaman } from './components/Pengaman';
 import { SchedulePage } from './pages/SchedulePage';
 import { SosmedPage } from './pages/SosmedPage';
 import { KnowledgeReelsPage } from './pages/kr/KnowledgeReels';
@@ -143,6 +144,7 @@ export function App() {
             {PAGES.filter((k) => k !== 'kantor' && (hidup.includes(k) || k === page)).map((k) => (
                 <main key={k} className={`page interactive page-${k}`} hidden={k !== page} aria-label={JUDUL_HAL[k] || k}>
                     <AktifCtx.Provider value={k === page}>
+                      <Pengaman nama={JUDUL_HAL[k] || k}>
                         {k === 'home' && <HomePage go={(p) => go(p)} />}
                         {k === 'keuangan' && <KeuanganApp />}
                         {k === 'trading' && <TradingPage />}
@@ -153,6 +155,7 @@ export function App() {
                         {k === 'kr' && <KnowledgeReelsPage />}
                         {k === 'tugas' && <TugasPage />}
                         {k === 'obrolan' && <ChatPage key={`chat-${prefillKe}`} prefill={prefill} />}
+                      </Pengaman>
                     </AktifCtx.Provider>
                 </main>
             ))}

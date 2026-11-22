@@ -3339,3 +3339,9 @@ body.no-office #phaser-container { visibility: hidden; }
 .sd-kv small { display: flex; align-items: center; gap: 4px; }
 .sd-kv b { font-variant-numeric: tabular-nums; }
 @media (max-width: 380px) { :root:root .sb-cardx { padding: 16px; } .sb-cardx > .sb-ind { gap: 8px; } .sb-ind b { font-size: 15px; } }
+
+/* Pengaman tampilan (error boundary) */
+.pengaman { margin: 24px 16px; padding: 20px; border-radius: 14px; border: 1px solid var(--line-strong); background: var(--panel-solid, var(--panel)); color: var(--text); display: flex; flex-direction: column; gap: 8px; max-width: 640px; }
+.pengaman p { margin: 0; color: var(--muted); font-size: 13.5px; }
+.pengaman code { font-size: 12px; padding: 8px 10px; border-radius: 8px; background: color-mix(in srgb, var(--down, #e5484d) 10%, transparent); color: var(--text); white-space: pre-wrap; word-break: break-word; }
+.pengaman-aksi { display: flex; gap: 8px; flex-wrap: wrap; }

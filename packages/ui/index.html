@@ -19,7 +19,23 @@
   </head>
   <body>
     <div id="phaser-container"></div>
-    <div id="ui-root"></div>
+    <div id="ui-root"><div id="muat-awal" style="position:fixed;inset:0;display:grid;place-items:center;font:500 15px/1.5 system-ui,sans-serif;color:#64748b;padding:24px;text-align:center"><div><div>Memuat kantor…</div><div id="muat-awal-aksi" style="display:none;margin-top:14px;max-width:320px"><div style="margin-bottom:10px">Belum terbuka juga. Mungkin sinyal lambat atau tersimpan versi lama.</div><button id="muat-awal-tombol" style="font:inherit;padding:10px 16px;border-radius:10px;border:1px solid #cbd5e1;background:#fff;color:#0f172a">Bersihkan & muat ulang</button></div></div></div></div>
+    <script>
+      // Kalau aplikasi belum tampil dalam 10 detik (atau berkas aplikasi gagal dimuat), tawarkan muat ulang bersih:
+      // hapus simpanan service worker yang mungkin berisi versi lama/rusak, lalu muat ulang.
+      (function () {
+        function tawarkan() { var a = document.getElementById('muat-awal-aksi'); if (a) a.style.display = 'block'; }
+        setTimeout(tawarkan, 10000);
+        window.addEventListener('error', function (e) { if (e && e.target && e.target.tagName === 'SCRIPT') tawarkan(); }, true);
+        document.addEventListener('click', function (e) {
+          if (!e.target || e.target.id !== 'muat-awal-tombol') return;
+          var tunggu = [];
+          try { if (window.caches) tunggu.push(caches.keys().then(function (ks) { return Promise.all(ks.map(function (k) { return caches.delete(k); })); })); } catch (x) {}
+          try { if (navigator.serviceWorker) tunggu.push(navigator.serviceWorker.getRegistrations().then(function (rs) { return Promise.all(rs.map(function (r) { return r.unregister(); })); })); } catch (x) {}
+          Promise.all(tunggu).then(function () { location.reload(); }, function () { location.reload(); });
+        });
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
