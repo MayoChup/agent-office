@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { apiGet, apiPost } from '../../kantor/connection';
 import { useApi, apiGetSimpan, simpanApi } from '../../kantor/api';
-import type { FolderData } from './WatchlistView';
 import { CandleChart } from '../../components/CandleChart';
 import { Baris, FAKTOR, FaktorKey, Label, kelas, usd, persen, kap, skorBar } from './types';
 import { PresetPilih, PresetCek, PresetData, PresetEval } from './Preset';
 import { Simulasi } from './Simulasi';
-import { Bintang, useWatch } from './Bintang';
+import { Bintang, TombolFolder } from './Bintang';
+import { BarisDiskon } from './PilihanView';
 import { PegangPosisi } from './PegangPosisi';
 import type { TradingData } from '../../kantor/api';
 
@@ -31,12 +31,9 @@ export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPre
     const [err, setErr] = useState('');
     const [msg, setMsg] = useState('');
     const [tab, setTab] = useState<FaktorKey>('teknikal');
-    const [menuWl, setMenuWl] = useState(false);
     const [pegang, setPegang] = useState(false);
     const td = useApi<TradingData>('/api/kantor/trading', 0);
     const dipegang = td.data?.positions.find((p) => p.symbol === simbol);
-    const fd = useApi<FolderData>('/api/kantor/watchlist-folder', 0);
-    const diWatch = useWatch().has(simbol) || !!fd.data?.folders?.some((f) => f.simbol.includes(simbol));
     useEffect(() => {
         let alive = true;
         const url = `/api/kantor/saham-detail/${encodeURIComponent(simbol)}?${q}`;
@@ -67,16 +64,7 @@ export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPre
                     <div className="sd-tick-row">
                         <div className="sd-tick mono">{b.s}</div>
                         <Bintang s={b.s} besar />
-                        <div className="wl-menu-wrap">
-                            <button className="sd-folder" onClick={() => setMenuWl(!menuWl)} aria-expanded={menuWl} title="Simpan ke folder watchlist">{diWatch ? 'Di Watchlist' : 'Watchlist'} ▾</button>
-                            {menuWl && (
-                                <div className="wl-menu">
-                                    {(fd.data?.folders || []).map((f) => <button key={f.id} onClick={() => { setMenuWl(false); aksi(() => apiPost('/api/kantor/watchlist-folder', { aksi: f.simbol.includes(b.s) ? 'buang' : 'tambah', id: f.id, simbol: b.s }).then(() => fd.reload()), f.simbol.includes(b.s) ? `✓ ${b.s} dikeluarkan dari folder ${f.nama}.` : `✓ ${b.s} masuk folder ${f.nama}.`); }}><Ikon e={f.ikon} /> {f.nama} {f.simbol.includes(b.s) ? '✓' : ''}</button>)}
-                                    {!(fd.data?.folders || []).length && <small>Belum ada folder. Buat folder di tab Watchlist.</small>}
-                                    <small><Ikon e="⭐" /> Bintang = Watchlist Utama (dipantau Dito).</small>
-                                </div>
-                            )}
-                        </div>
+                        <TombolFolder s={b.s} />
                     </div>
                     <div className="sd-price mono">{usd(b.harga)} <span className={b.chg1d >= 0 ? 'up' : 'down'}>{b.chg1d >= 0 ? '▲' : '▼'} {Math.abs(b.chg1d).toFixed(2)}%</span></div>
                     <div className="sd-pegang">
@@ -85,6 +73,7 @@ export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPre
                             : <button className="btn primary" onClick={() => setPegang(true)}><Ikon e="📌" /> Pegang posisi</button>}
                     </div>
                     <div className="sd-sub mono">1B {persen(b.chg1m, 1)} · 3B {persen(b.chg3m, 1)} · 1T {persen(b.chg1y, 1)} · RSI {b.rsi ?? '–'} · vol {b.volX}×</div>
+                    {(d as any).diskon && <BarisDiskon b={{ ...b, diskon: (d as any).diskon }} />}
                 </div>
                 {all && (
                     <div className="sd-score">

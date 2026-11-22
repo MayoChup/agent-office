@@ -1,6 +1,10 @@
 export type Label = 'Jual kuat' | 'Jual' | 'Tahan' | 'Beli' | 'Beli kuat';
 export type FaktorKey = 'semua' | 'teknikal' | 'fundamental' | 'berita' | 'whales';
-export interface SkorRingkas { skor: number; label: Label; /** data yang belum siap (hanya skor gabungan) */ kurang?: string[]; /** label sebelum ditahan */ asli?: Label }
+export interface SkorRingkas { skor: number; label: Label; /** data yang belum siap (hanya skor gabungan) */ kurang?: string[]; /** label sebelum ditahan */ asli?: Label; /** skor sebelum ditahan */ skorAsli?: number }
+/** "Fundamental kuat · lagi diskon" (lihat server kantor/diskon.ts). */
+export type Tahap = 'pantau' | 'zona' | 'balik';
+export interface DiskonB { tahap: Tahap; dariPuncak: number; alasan: string[] }
+export interface UjiAkum { n: number; rataEx: number | null; menang: number | null; galatStd: number | null }
 export interface Target { nama: 'Konservatif' | 'Moderat' | 'Agresif'; harga: number; pct: number; peluang: number; nilai: number }
 export interface Proyeksi { horizon: number; target: Target[]; stop: { harga: number; pct: number; peluang: number }; peluangNaik: number; terbaik: Target['nama']; rr: number }
 export interface Ekstra { spark: number[]; mom: { w1: number; m1: number; m3: number }; atr: number; cmf: number; obv: number; trenLabel: string; proyeksi: Proyeksi | null }
@@ -16,10 +20,11 @@ export interface Baris {
     rsi: number | null; ma50: number | null; ma200: number | null; volX: number; vol?: number; sinyal: Sinyal; f: F | null; x?: Ekstra;
     industri?: string; mcap?: number | null;
     skor?: Record<FaktorKey, SkorRingkas | null>;
+    diskon?: DiskonB | null;
 }
 export const kapOf = (b: { mcap?: number | null; f: { mcap: number | null } | null }) => b.mcap ?? b.f?.mcap ?? null;
 export interface Pasar { naik: number; turun: number; tetap: number; mcap: number; sektor: Array<{ nama: string; n: number; chg: number }>; tape: Array<{ s: string; nama: string; harga: number; chg: number }> }
-export interface ScreenerData { ditahan?: { n: number; per: Record<string, number> }; baris: Baris[]; pasar: Pasar; teknikalAt: number; teknikalSesi: string; fundamentalAt: number; beritaAt: number; sibuk: string; progres: string; gagal: number; galat?: string; sumber?: string }
+export interface ScreenerData { diskonUji?: { at: number; H: Record<string, Record<'fundKuat' | Tahap, UjiAkum>> } | null; ditahan?: { n: number; per: Record<string, number> }; baris: Baris[]; pasar: Pasar; teknikalAt: number; teknikalSesi: string; fundamentalAt: number; beritaAt: number; sibuk: string; progres: string; gagal: number; galat?: string; sumber?: string }
 
 export const LABELS: Label[] = ['Beli kuat', 'Beli', 'Tahan', 'Jual', 'Jual kuat'];
 export const FAKTOR: Array<{ k: FaktorKey; label: string; ico: string; info: string }> = [

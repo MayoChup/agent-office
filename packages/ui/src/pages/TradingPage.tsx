@@ -1,3 +1,4 @@
+import { DiskonView } from './trading/DiskonView';
 import { useAktif } from '../kantor/aktif';
 import { useKembali } from '../kantor/kembali';
 import { eventBus } from '../events';
@@ -53,8 +54,8 @@ export function TradingPage() {
     const agents = useKantor((s) => s.agents);
     const team = agents.filter((a) => a.id === 'trading' || a.id.startsWith('trading-'));
     const [lap, setLap] = useState(0);
-    type Tab = 'pasar' | 'pilihan' | 'panas' | 'berita' | 'watchlist' | 'penyaring' | 'investigasi' | 'posisi' | 'uji' | 'history';
-    const TABS: Array<{ k: Tab; label: string }> = [{ k: 'pasar', label: 'Pasar' }, { k: 'pilihan', label: 'Pilihan sinyal' }, { k: 'panas', label: 'Peta panas' }, { k: 'berita', label: 'Peta berita' }, { k: 'watchlist', label: 'Watchlist' }, { k: 'penyaring', label: 'Penyaring' }, { k: 'investigasi', label: 'Investigasi' }, { k: 'posisi', label: 'Portofolio' }, { k: 'history', label: 'History' }, { k: 'uji', label: 'Uji mundur' }];
+    type Tab = 'pasar' | 'pilihan' | 'diskon' | 'panas' | 'berita' | 'watchlist' | 'penyaring' | 'investigasi' | 'posisi' | 'uji' | 'history';
+    const TABS: Array<{ k: Tab; label: string }> = [{ k: 'pasar', label: 'Pasar' }, { k: 'pilihan', label: 'Pilihan sinyal' }, { k: 'diskon', label: 'Diskon' }, { k: 'panas', label: 'Peta panas' }, { k: 'berita', label: 'Peta berita' }, { k: 'watchlist', label: 'Watchlist' }, { k: 'penyaring', label: 'Penyaring' }, { k: 'investigasi', label: 'Investigasi' }, { k: 'posisi', label: 'Portofolio' }, { k: 'history', label: 'History' }, { k: 'uji', label: 'Uji mundur' }];
     const [tab, setTabState] = useState<Tab>(() => { try { const v = localStorage.getItem(LS_TAB) as Tab; return TABS.some((t) => t.k === v) ? v : 'pilihan'; } catch { return 'pilihan'; } });
     // Tab yang pernah dibuka tetap hidup (disembunyikan, bukan dibongkar): pindah tab tidak memuat ulang & filter tidak hilang.
     const [pernah, setPernah] = useState<Set<Tab>>(() => new Set([tab]));
@@ -124,7 +125,7 @@ export function TradingPage() {
     const PENDEK: Partial<Record<Tab, string>> = { pilihan: 'Sinyal', panas: 'Heatmap', berita: 'Berita', posisi: 'Portofolio' };
     // 10 tab dikelompokkan jadi 4 supaya tidak membingungkan; isi tiap tab tetap sama.
     const GRUP: Array<{ g: string; label: string; ico: string; tabs: Tab[] }> = [
-        { g: 'sinyal', label: 'Sinyal', ico: '🎯', tabs: ['pilihan', 'penyaring', 'watchlist'] },
+        { g: 'sinyal', label: 'Sinyal', ico: '🎯', tabs: ['pilihan', 'diskon', 'penyaring', 'watchlist'] },
         { g: 'pasar', label: 'Pasar', ico: '🌐', tabs: ['pasar', 'panas', 'berita'] },
         { g: 'porto', label: 'Portofolio', ico: '💼', tabs: ['posisi', 'history'] },
         { g: 'riset', label: 'Riset', ico: '🧪', tabs: ['investigasi', 'uji'] }
@@ -171,8 +172,8 @@ export function TradingPage() {
                 </div>
             )}
             {saham && <><HorisonBar h={horison} setH={setHorison} bobot={infoDetail?.bobot} bukti={infoDetail?.bukti ?? (scData as any)?.teknikalBukti} /><SahamDetail key={saham} onInfo={setInfoDetail} onMemuat={setDetailMemuat} simbol={saham} H={H} q={qApi} preset={preset} setPreset={setPreset} mode={modeAktif} pd={pd.data} onBack={() => setSaham(null)} /></>}
-            {!saham && ['pasar', 'pilihan', 'panas', 'watchlist'].includes(tab) && !scData && <div className="fin-empty">{sc.error ? `Gagal memuat: ${sc.error}` : 'Memuat data pasar…'}</div>}
-            {!saham && ['pasar', 'pilihan', 'panas'].includes(tab) && scData && scData.baris.length === 0 && (
+            {!saham && ['pasar', 'pilihan', 'diskon', 'panas', 'watchlist'].includes(tab) && !scData && <div className="fin-empty">{sc.error ? `Gagal memuat: ${sc.error}` : 'Memuat data pasar…'}</div>}
+            {!saham && ['pasar', 'pilihan', 'diskon', 'panas'].includes(tab) && scData && scData.baris.length === 0 && (
                 <div className="sb-card sb-kosong">
                     {scData.sibuk ? (<>
                         <b><Ikon e="⏳" /> Sedang mengambil data pasar…</b>
@@ -187,7 +188,7 @@ export function TradingPage() {
                 </div>
             )}
             {!saham && scData && scData.baris.length > 0 && scData.galat && !scData.sibuk && <div className="error" style={{ margin: '0 0 12px' }}><Ikon e="⚠" /> {scData.galat}</div>}
-            {!saham && (tab === 'pilihan' || tab === 'pasar' || tab === 'watchlist') && scData && scData.baris.length > 0 && <HorisonBar h={horison} setH={setHorison} bobot={(scData as any).bobot} bukti={(scData as any).teknikalBukti} />}
+            {!saham && (tab === 'pilihan' || tab === 'diskon' || tab === 'pasar' || tab === 'watchlist') && scData && scData.baris.length > 0 && <HorisonBar h={horison} setH={setHorison} bobot={(scData as any).bobot} bukti={(scData as any).teknikalBukti} />}
             {!saham && tab === 'pasar' && scData && scData.baris.length > 0 && <PasarView data={scData} faktor={faktor} setFaktor={setF} onOpen={buka} />}
             {!saham && (tab === 'pilihan' || tab === 'penyaring') && <SaranUji mode={modeAktif} presetAktif={preset.t} pakaiPreset={(t) => setPreset({ ...preset, t })} />}
             {!saham && tab === 'pilihan' && scData && scData.baris.length > 0 && (
@@ -196,6 +197,7 @@ export function TradingPage() {
                     {presetPanel}
                 </details>
             )}
+            {!saham && tab === 'diskon' && scData && scData.baris.length > 0 && <DiskonView data={scData} onOpen={buka} H={H} />}
             {!saham && tab === 'pilihan' && scData && scData.baris.length > 0 && <PilihanView data={scData} faktor={faktor} setFaktor={setF} onOpen={buka} watchlist={[...(data?.watchlist || []), ...(data?.positions || []).map((p) => p.symbol)]} />}
             {!saham && tab === 'panas' && scData && scData.baris.length > 0 && <PetaPanas data={scData} onOpen={buka} watch={[...(data?.watchlist || []), ...(data?.positions || []).map((p) => p.symbol)]} />}
             {simpanHidup('berita', <><BeritaTerkaitKartu onUbah={() => sc.reload()} /><PetaBerita onOpen={buka} /></>)}

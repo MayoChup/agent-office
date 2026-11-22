@@ -613,7 +613,33 @@ app.post('/api/kantor/push/uji', requireToken, (_req, res) => { notif?.uji().cat
 // ── Penyaring saham (fundamental SEC + teknikal) ─────────────────────
 const screener = new Screener(config.dataDir, () => { const st = tradingDesk.load(); return Array.from(new Set([...st.positions.map((p) => p.symbol), ...st.watchlist])); }, tradingDeskDir);
 const qH = (req: express.Request) => [Math.max(1, Math.min(120, Number(req.query.h) || 20)), String(req.query.m || ''), String(req.query.pt || ''), String(req.query.pf || '')] as const;
-app.get('/api/kantor/screener', requireToken, (req, res) => { res.json({ ok: true, ...screener.data(...qH(req)) }); });
+app.get('/api/kantor/screener', requireToken, (req, res) => { res.json({ ok: true, ...screener.data(...qH(req)), diskonUji: diskonUji() }); });
+/** Hasil uji mundur untuk "Fundamental kuat · lagi diskon" (per tahap, dibanding semua saham berfundamental kuat). */
+function diskonUji() { try { const h = JSON.parse(fs.readFileSync(fileUji(config.dataDir), 'utf8')); return h.diskon ? { at: h.at, H: h.diskon } : null; } catch { return null; } }
+/**
+ * Pemberitahuan watchlist: saham di Watchlist Utama atau folder mana pun yang naik tahap diskon
+ * (Pantau → Zona beli → Mulai berbalik) dikabarkan lewat Dito. Pertama kali hanya mencatat, tidak mengabari.
+ */
+const fileTahap = path.join(config.dataDir, 'diskon-tahap.json');
+function cekTahapDiskon() {
+    try {
+        const pantau = Array.from(new Set([...tradingDesk.load().watchlist, ...watchFolder.list().flatMap((f) => f.simbol)]));
+        if (!pantau.length) return;
+        const kini = screener.diskonUntuk(pantau);
+        let lama: Record<string, string> | null = null; try { lama = JSON.parse(fs.readFileSync(fileTahap, 'utf8')); } catch { /* pertama kali */ }
+        const urut = ['pantau', 'zona', 'balik'], nama: Record<string, string> = { pantau: 'Pantau', zona: 'Zona beli', balik: 'Mulai berbalik' };
+        const baru: Record<string, string> = {}, kabar: string[] = [];
+        for (const [s, d] of Object.entries(kini)) {
+            if (!d) continue; baru[s] = d.tahap;
+            const sebelum = lama?.[s];
+            if (lama && d.tahap !== 'pantau' && urut.indexOf(d.tahap) > urut.indexOf(sebelum || '')) kabar.push(`- **${s}** → **${nama[d.tahap]}**${sebelum ? ` (sebelumnya ${nama[sebelum]})` : ''} · ${d.alasan.slice(0, 2).join(', ')}`);
+        }
+        fs.writeFileSync(fileTahap, JSON.stringify(baru));
+        if (kabar.length) kabarDari('trading')(`🏷️ **Fundamental kuat · lagi diskon** — naik tahap di watchlist Bapak:\n${kabar.join('\n')}\n\nDetail di Trading → Sinyal → Diskon. Harga masih bisa turun lagi: pakai posisi kecil & batas rugi. Prediksi statistik, bukan saran beli/jual.`).catch(() => {});
+    } catch (e: any) { console.warn('[Diskon]', e?.message || e); }
+}
+setInterval(cekTahapDiskon, 30 * 60_000);
+setTimeout(cekTahapDiskon, 3 * 60_000);
 app.get('/api/kantor/candle/:s', requireToken, async (req, res) => {
     try { res.json({ ok: true, ...(await ambilCandle(String(req.params.s), String(req.query.r || '6B'))) }); }
     catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }

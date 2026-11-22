@@ -114,6 +114,31 @@ function FaktorBars({ b }: { b: Baris }) {
     );
 }
 
+const NAMA_TAHAP: Record<string, string> = { pantau: 'Pantau', zona: 'Zona beli', balik: 'Mulai berbalik' };
+const INFO_SKOR = 'Skor gabungan 0–100 dari teknikal, fundamental, berita & whales, dengan bobot sesuai rencana posisi yang aktif. 0 = jual paling kuat, 50 = netral, 100 = beli paling kuat. Label: ≥73 Beli kuat · 58–72 Beli · 43–57 Tahan · 28–42 Jual · ≤27 Jual kuat. Bobot tiap faktor tampil di bar horison di atas daftar.';
+/** Label sinyal + skor 0–100 di bawahnya (skor asli ikut tampil kalau sinyal ditahan karena data belum lengkap). */
+export function LabelSkor({ sk, besar = false }: { sk: { skor: number; label: string; asli?: string; skorAsli?: number; kurang?: string[] } | null | undefined; besar?: boolean }) {
+    if (!sk) return null;
+    const tahan = !!sk.asli;
+    return (
+        <span className={`ls ${besar ? 'besar' : ''}`}>
+            <span className={`lb ${besar ? 'big' : ''} ${kelas(sk.label)}`} title={tahan ? `Sinyal ${sk.asli} ditahan: data ${sk.kurang?.join(', ')} belum siap` : undefined}>{kalimat(sk.label)}</span>
+            <small className="ls-skor">{tahan && sk.skorAsli != null ? <>{skorBar(sk.skorAsli)}/100 tertahan</> : <>{skorBar(sk.skor)}/100</>} <Info judul="Skor sinyal" teks={INFO_SKOR} kini={tahan ? `Skor asli ${skorBar(sk.skorAsli ?? sk.skor)}/100 (${String(sk.asli).toLowerCase()}), tapi sinyalnya ditahan jadi Tahan karena data ${sk.kurang?.join(', ')} belum siap.` : undefined} /></small>
+        </span>
+    );
+}
+const INFO_DISKON = 'Saham dengan fundamental Beli/Beli kuat yang harganya sedang turun (di bawah MA50 atau ≥15% di bawah puncak setahun). Tiga tahap:\n\nPantau = masih turun, belum ada tanda berhenti.\nZona beli = mendekati penyangga (MA200 atau terendah setahun) atau RSI < 35.\nMulai berbalik = tanda pertama naik: MACD memotong naik ≤5 hari, atau naik dengan volume ramai saat RSI masih rendah.\n\nLabel sinyal utama bisa tetap Jual karena trennya belum pulih. Harga masih bisa turun lagi: pakai posisi kecil & batas rugi. Prediksi statistik, bukan saran beli/jual.';
+/** Satu baris "Diskon −22% dari puncak · Mulai berbalik ⓘ" + alasan singkat. */
+export function BarisDiskon({ b }: { b: Baris }) {
+    const d = b.diskon; if (!d) return null;
+    return (
+        <div className={`sb-diskon t-${d.tahap}`}>
+            <span><i aria-hidden /> Diskon{d.dariPuncak >= 1 ? ` −${Math.round(d.dariPuncak)}% dari puncak` : ''} · <b>{NAMA_TAHAP[d.tahap]}</b> <Info judul="Fundamental kuat · lagi diskon" teks={INFO_DISKON} kini={`${b.s}: ${NAMA_TAHAP[d.tahap]} — ${d.alasan.join(', ')}.`} /></span>
+            {d.alasan.length > 0 && <small>{d.alasan.slice(0, 2).join(' · ')}</small>}
+        </div>
+    );
+}
+
 /** Empat indikator sekilas: dua teknikal (momentum) + dua fundamental (valuasi & kualitas). */
 function Sekilas({ b }: { b: Baris }) {
     const xs = [K.rsi(b), K.macd(b), K.fundamental(b, 'per'), K.fundamental(b, 'roe')];
@@ -137,7 +162,7 @@ export function Kartu({ b, faktor, onOpen, kronos = 'lencana' }: { b: Baris; fak
         <article className="sb-cardx" onClick={() => onOpen(b.s)}>
             <header>
                 <div><b className="mono">{b.s}</b><small>{b.nama}</small></div>
-                <div className="kc-r">{kronos === 'lencana' && <LencanaKronos s={b.s} />}{sk && <span className={`lb ${kelas(sk.label)}`}>{kalimat(sk.label)}</span>}<Bintang s={b.s} /></div>
+                <div className="kc-r">{kronos === 'lencana' && <LencanaKronos s={b.s} />}<LabelSkor sk={sk} /><Bintang s={b.s} /></div>
             </header>
             {faktor === 'semua' && sk?.asli && <div className="sb-tahan" title="Sinyal hanya keluar kalau teknikal, fundamental, berita & whales lengkap">Sinyal {sk.asli.toLowerCase()} ditahan · menunggu data {sk.kurang?.join(', ')}</div>}
             <div className="sb-price">
@@ -148,6 +173,7 @@ export function Kartu({ b, faktor, onOpen, kronos = 'lencana' }: { b: Baris; fak
                 <span>Tren · <b>{b.x?.trenLabel || '–'}</b></span>
                 {b.x && <div className="moms"><Mom label="1W" v={b.x.mom.w1} /><Mom label="1M" v={b.x.mom.m1} /><Mom label="3M" v={b.x.mom.m3} /></div>}
             </div>
+            <BarisDiskon b={b} />
             <Sekilas b={b} />
             <FaktorBars b={b} />
             {pr && (
@@ -180,7 +206,7 @@ function BarisKecil({ b, faktor, onOpen }: { b: Baris; faktor: FaktorKey; onOpen
             <div className="c2 mono">{usd(b.harga)} <em className={b.chg1d >= 0 ? 'up' : 'down'}>{persen(b.chg1d)}</em></div>
             <div className="c3">{b.x && <Sparkline data={b.x.spark} w={90} h={28} />}</div>
             <div className="c4 mono">{best ? <>→ {usd(best.harga)} <small>({best.peluang}%)</small></> : '–'}</div>
-            <div className="c5">{sk && <span className={`lb ${kelas(sk.label)}`} title={sk.asli ? `Sinyal ${sk.asli} ditahan: data ${sk.kurang?.join(', ')} belum siap` : undefined}>{kalimat(sk.label)}{sk.asli ? ' ·' : ''}</span>}</div>
+            <div className="c5"><LabelSkor sk={sk} /></div>
         </div>
     );
 }

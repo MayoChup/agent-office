@@ -10,7 +10,7 @@ import path from 'path';
  */
 
 export type Label = 'Jual kuat' | 'Jual' | 'Tahan' | 'Beli' | 'Beli kuat';
-export interface Faktor { skor: number; label: Label; alasan: string[]; /** faktor yang datanya belum siap (hanya di skor gabungan) */ kurang?: string[]; /** label sebelum ditahan karena data belum lengkap */ asli?: Label }
+export interface Faktor { skor: number; label: Label; alasan: string[]; /** faktor yang datanya belum siap (hanya di skor gabungan) */ kurang?: string[]; /** label sebelum ditahan karena data belum lengkap */ asli?: Label; /** skor sebelum ditahan */ skorAsli?: number }
 export interface Target { nama: 'Konservatif' | 'Moderat' | 'Agresif'; harga: number; pct: number; peluang: number; nilai: number }
 export interface Proyeksi { horizon: number; target: Target[]; stop: { harga: number; pct: number; peluang: number }; peluangNaik: number; terbaik: Target['nama']; rr: number }
 export interface Ekstra {

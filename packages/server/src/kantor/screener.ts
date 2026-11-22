@@ -16,6 +16,7 @@ import { hitungInd, Ind, Fund, PRESET, evaluasi } from './preset';
 import { fundamentalNasdaq } from './nasdaq';
 import { bacaModel, hModel, skorModel, statusModel } from './bobot';
 import { BeritaTerkait, gabungBerita } from './beritaTerkait';
+import { cekDiskon, type Diskon } from './diskon';
 export { yahooChart, statusHarga };
 const SEC_UA = 'KantorRico research kantor-rico@users.noreply.github.com';
 const SP500_CSV = 'https://raw.githubusercontent.com/datasets/s-and-p-500-companies/main/data/constituents.csv';
@@ -299,7 +300,7 @@ export class Screener {
         const kurang = this.kesiapan(b);
         if (!kurang.length || g.label === 'Tahan') return { ...g, kurang };
         const sk = +(Math.sign(g.skor) * Math.min(Math.abs(g.skor), 0.14)).toFixed(2);
-        return { skor: sk, label: 'Tahan', asli: g.label, kurang, alasan: [`⏸ Sinyal ${g.label} ditahan: data ${kurang.join(', ')} belum siap. Sinyal baru keluar kalau teknikal, fundamental, berita & whales lengkap (skor asli ${g.skor}).`, ...g.alasan] };
+        return { skor: sk, label: 'Tahan', asli: g.label, skorAsli: g.skor, kurang, alasan: [`⏸ Sinyal ${g.label} ditahan: data ${kurang.join(', ')} belum siap. Sinyal baru keluar kalau teknikal, fundamental, berita & whales lengkap (skor asli ${g.skor}).`, ...g.alasan] };
     }
     /** Preset by AI sebagai objek preset biasa (kriteria = aturan kombinasi juara). null = juara masih rumus dasar. */
     readonly presetAi: PresetAi;
@@ -334,6 +335,14 @@ export class Screener {
     /** Kepatuhan semua preset untuk satu saham (untuk daftar centang di halaman detail). */
     presetSaham(b: Baris) { return PRESET.map((p) => ({ ...evaluasi(p, p.jenis === 'teknikal' ? b.ind : b.f), jenis: p.jenis })); }
 
+    /** "Fundamental kuat · lagi diskon" untuk satu saham (rumus dasar fundamental, sama dengan uji mundur). */
+    diskonDari(b: any): Diskon | null { try { return cekDiskon(b, skorFundamental(b)?.skor); } catch { return null; } }
+    /** Tahap diskon untuk daftar simbol (dipakai pemberitahuan watchlist). */
+    diskonUntuk(simbol: string[]) {
+        const set = new Set(simbol.map((x) => x.toUpperCase())), out: Record<string, Diskon | null> = {};
+        for (const b of this.st.baris) if (set.has(b.s)) out[b.s] = this.diskonDari(b);
+        return out;
+    }
     data(H = 20, mode = '', pt = '', pf = '') {
         H = Math.max(1, Math.min(120, Math.round(H) || 20));
         const kunci = `${H}|${mode}|${pt}|${pf}|${this.sibuk}|${this.progres}`;
@@ -350,12 +359,12 @@ export class Screener {
         const baris = this.st.baris.map((b) => {
             const sk = this.skor(b, sari, H, mode, pt, pf);
             const ringkas: Record<string, { skor: number; label: string; kurang?: string[]; asli?: string } | null> = {};
-            for (const k of Object.keys(sk)) ringkas[k] = sk[k] ? { skor: sk[k]!.skor, label: sk[k]!.label, ...(k === 'semua' && sk[k]!.kurang?.length ? { kurang: sk[k]!.kurang, asli: sk[k]!.asli } : {}) } : null;
+            for (const k of Object.keys(sk)) ringkas[k] = sk[k] ? { skor: sk[k]!.skor, label: sk[k]!.label, ...(k === 'semua' && sk[k]!.kurang?.length ? { kurang: sk[k]!.kurang, asli: sk[k]!.asli, skorAsli: (sk[k] as any).skorAsli } : {}) } : null;
             const preset: Record<string, { lolos: number; dinilai: number; persen: number | null }> = {};
             if (pT) { const e = evaluasi(pT, b.ind); preset.teknikal = { lolos: e.lolos, dinilai: e.dinilai, persen: e.persen }; }
             if (pF) { const e = evaluasi(pF, b.f); preset.fundamental = { lolos: e.lolos, dinilai: e.dinilai, persen: e.persen }; }
             const { ind, ...tanpaInd } = b;
-            return { ...tanpaInd, x: b.x ? { ...b.x, proyeksi: this.proyeksiH(b, H) } : b.x, skor: ringkas, preset };
+            return { ...tanpaInd, x: b.x ? { ...b.x, proyeksi: this.proyeksiH(b, H) } : b.x, skor: ringkas, preset, diskon: this.diskonDari(b) };
         });
         // Ikhtisar pasar
         const naik = baris.filter((b) => b.chg1d > 0.05).length, turun = baris.filter((b) => b.chg1d < -0.05).length;
@@ -379,7 +388,7 @@ export class Screener {
         const b0 = this.st.baris.find((x) => x.s === s);
         if (!b0) return null;
         const b = { ...b0, x: b0.x ? { ...b0.x, proyeksi: this.proyeksiH(b0, H) } : b0.x };
-        return { horizon: H, teknikalBukti: this.teknikalTerbukti(H, mode), bobot: bobot(H, mode, this.teknikalTerbukti(H, mode).terbukti), baris: b, skor: this.skor(b0, undefined, H, mode, pt, pf), preset: this.presetSaham(b0), berita: this.st.berita?.[s] || null, orang: this.st.orang?.[s] || null };
+        return { horizon: H, teknikalBukti: this.teknikalTerbukti(H, mode), bobot: bobot(H, mode, this.teknikalTerbukti(H, mode).terbukti), baris: b, skor: this.skor(b0, undefined, H, mode, pt, pf), preset: this.presetSaham(b0), berita: this.st.berita?.[s] || null, orang: this.st.orang?.[s] || null, diskon: this.diskonDari(b0) };
     }
 
     /** Peta berita: berita (unik) ↔ saham yang terkait, untuk tampilan "tata surya". */
