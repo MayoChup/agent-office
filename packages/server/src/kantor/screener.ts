@@ -337,6 +337,8 @@ export class Screener {
     /** Kepatuhan semua preset untuk satu saham (untuk daftar centang di halaman detail). */
     presetSaham(b: Baris) { return PRESET.map((p) => ({ ...evaluasi(p, p.jenis === 'teknikal' ? b.ind : b.f), jenis: p.jenis })); }
 
+    sesiTeknikal() { return this.st.teknikalSesi; }
+    spyHarga() { return this.st.spyC ?? null; }
     /** "Fundamental kuat · lagi diskon" untuk satu saham (rumus dasar fundamental, sama dengan uji mundur). */
     diskonDari(b: any): Diskon | null { try { return cekDiskon(b, skorFundamental(b)?.skor); } catch { return null; } }
     /** Tahap diskon untuk daftar simbol (dipakai pemberitahuan watchlist). */

@@ -3420,3 +3420,22 @@ body.no-office #phaser-container { visibility: hidden; }
 .kc-luar { font-style: normal; color: var(--muted); }
 .ts-tambah { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; padding: 20px; }
 .ts-tambah b { font-size: 15px; font-weight: 600; } .ts-tambah p { margin: 4px 0 0; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
+
+/* Sisi jual (uji short / hindari) */
+.sj { display: flex; flex-direction: column; gap: 12px; }
+.sj-h { display: flex; align-items: center; gap: 6px; } .sj-h b { font-size: 14px; font-weight: 600; }
+.sj-vonis { margin: 0; font-size: 13.5px; line-height: 1.5; }
+.sj-toggle { align-self: flex-start; background: none; border: none; padding: 0; color: var(--accent, #2563eb); font: inherit; font-size: 13px; cursor: pointer; }
+.sj-rinci { display: flex; flex-direction: column; gap: 12px; }
+.sj-tabel { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.sj-tabel th { text-align: left; color: var(--muted); font-weight: 500; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.sj-tabel td { padding: 8px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; } .sj-tabel td:not(:first-child), .sj-tabel th:not(:first-child) { text-align: right; }
+.sj-ref td { color: var(--muted); }
+.sj-ok { color: var(--up); font-weight: 600; font-size: 12px; } .sj-no { color: var(--muted); font-size: 12px; }
+.sj-keranjang { display: flex; flex-direction: column; gap: 8px; } .sj-keranjang > b { font-size: 13px; font-weight: 600; }
+.sj-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.sj-grid > div { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); }
+.sj-grid small { color: var(--muted); font-size: 11.5px; } .sj-grid b { font-size: 16px; font-weight: 600; } .sj-grid em { font-style: normal; color: var(--muted); font-size: 11px; }
+.sj-kertas { display: flex; flex-direction: column; gap: 2px; padding-top: 12px; border-top: 1px solid var(--line); } .sj-kertas b { font-size: 13px; font-weight: 600; } .sj-kertas small { color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+.sj-tanda { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 500; color: var(--down); background: color-mix(in srgb, var(--down) 12%, transparent); white-space: nowrap; font-family: inherit; }
+.tbl-wrap { overflow-x: auto; }

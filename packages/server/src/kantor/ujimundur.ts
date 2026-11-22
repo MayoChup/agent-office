@@ -59,6 +59,11 @@ export async function ujiMundur(semesta: string[], file: string, st: StatusUji, 
         // "Fundamental kuat · lagi diskon": hasil per tahap vs semua saham berfundamental kuat (pembanding jujur).
         const DK: Record<number, Record<Tahap | 'fundKuat', Akum>> = {};
         for (const H of HS) DK[H] = { fundKuat: akum(), pantau: akum(), zona: akum(), balik: akum() };
+        // Sisi jual: apakah saham berskor lemah memang kalah dari pasar? (dasar keputusan short / "hindari")
+        const JL: Record<number, Record<'semua' | 'tekJualKuat' | 'tekJual' | 'fundJual' | 'gabLemah', Akum>> = {};
+        for (const H of HS) JL[H] = { semua: akum(), tekJualKuat: akum(), tekJual: akum(), fundJual: akum(), gabLemah: akum() };
+        // Keranjang bulanan (20 hari bursa): per jendela SPY, skor gabungan teknikal+fundamental & hasil mentah 20 hari.
+        const KR = new Map<number, Array<{ sk: number; r: number }>>(); const spyR = new Map<number, number>();
         let ok = 0, gagal = 0, sampel = 0, dari = '', sampai = '';
         for (let si = 0; si < semesta.length; si++) {
             const s = semesta[si];
@@ -98,6 +103,11 @@ export async function ujiMundur(semesta: string[], file: string, st: StatusUji, 
                     for (const pe of evs) { if (pe.e.persen == null) continue; tambah(r.preset[pe.id][pe.e.persen >= 75 ? 'lolos75' : pe.e.persen >= 50 ? 'lolos50' : 'kurang'], ex); }
                     (skorPerH[H] ||= []).push({ sk: f.skor, ex });
                     if (rasio && dasarF >= 0.15) tambah(DK[H].fundKuat, ex);
+                    { const j = JL[H]; tambah(j.semua, ex); if (f.skor <= -0.45) tambah(j.tekJualKuat, ex); if (f.skor <= -0.15) tambah(j.tekJual, ex); if (rasio && dasarF <= -0.15) tambah(j.fundJual, ex); if (rasio && (f.skor + dasarF) / 2 <= -0.15) tambah(j.gabLemah, ex); }
+                    if (H === 20 && js % 20 < opsi.langkah) {
+                        const w = Math.floor(js / 20); (KR.get(w) || KR.set(w, []).get(w)!).push({ sk: rasio ? (f.skor + dasarF) / 2 : f.skor, r: c[t + H] / c[t] - 1 });
+                        if (!spyR.has(w)) spyR.set(w, spy[js + H].c / spy[js].c - 1);
+                    }
                     if (dk) tambah(DK[H][dk.tahap], ex);
                     const z = S[H]; z.tgl.push(d[t].t); z.ex.push(ex); z.mask.push(mask); z.lama.push(f.skor);
                     const za = SA[H]; za.tgl.push(d[t].t); za.ex.push(ex); za.mask.push(maskA);
@@ -164,6 +174,7 @@ export async function ujiMundur(semesta: string[], file: string, st: StatusUji, 
             pai.perbarui('fundamental', H, c, Math.max(0, dasarUnggul), (a) => ujiArsip(path.dirname(file), 'fundamental', a, H));
             cariF[H] = ringkasCari(c);
         }
+        (hasil as any).sisiJual = ringkasSisiJual(JL, KR, spyR);
         (hasil as any).diskon = Object.fromEntries(HS.map((H) => [H, Object.fromEntries((['fundKuat', ...URUT_TAHAP] as const).map((k) => [k, ringkas(DK[H][k])]))]));
         (hasil as any).presetAi = { teknikal: cariT, fundamental: cariF, fundamentalSampel: Object.fromEntries(Object.entries(SF).map(([k, v]) => [k, v.tgl.length])) };
         fs.writeFileSync(fileBobot(path.dirname(file)), JSON.stringify(model));
@@ -272,6 +283,40 @@ export function latihUji(z: { tgl: string[]; ex: number[]; mask: number[]; lama:
         at: Date.now()
     };
 }
+/**
+ * Ringkas uji sisi jual: per kelompok lemah → selisih vs S&P 500, seberapa sering kalah dari pasar, dan hasil kalau di-short
+ * (dikurangi perkiraan biaya: transaksi 0,10% bolak-balik + pinjam saham 1%/tahun). "Terbukti" bila selisih < −2× galat standar.
+ * Plus keranjang bulanan "beli 10 teratas, short 10 terbawah" (skor gabungan teknikal+fundamental) vs memegang S&P 500.
+ */
+function ringkasSisiJual(JL: Record<number, Record<string, Akum>>, KR: Map<number, Array<{ sk: number; r: number }>>, spyR: Map<number, number>) {
+    const per: Record<string, Record<string, any>> = {};
+    for (const H of Object.keys(JL).map(Number)) {
+        const biaya = 0.10 + (1 * H) / 252; // % per posisi short
+        per[H] = Object.fromEntries(Object.entries(JL[H]).map(([k, a]) => {
+            const r = ringkas(a);
+            const terbukti = r.n >= 300 && r.rataEx != null && r.galatStd != null && r.rataEx < -2 * r.galatStd;
+            return [k, { ...r, kalahPasar: r.menang == null ? null : +(100 - r.menang).toFixed(1), hasilShort: r.rataEx == null ? null : +(-r.rataEx - biaya).toFixed(3), biaya: +biaya.toFixed(3), terbukti: k !== 'semua' && terbukti, shortUntung: r.rataEx != null && -r.rataEx - biaya > 0 }];
+        }));
+    }
+    // Keranjang bulanan
+    const bulan: Array<{ ls: number; lo: number; sh: number; spy: number }> = [];
+    for (const [w, xs] of [...KR.entries()].sort((a, b) => a[0] - b[0])) {
+        if (xs.length < 60) continue;
+        const u = [...xs].sort((a, b) => b.sk - a.sk), atas = u.slice(0, 10), bawah = u.slice(-10);
+        const rata = (z: typeof xs) => z.reduce((p, q) => p + q.r, 0) / z.length;
+        const lo = rata(atas), sh = rata(bawah), sp = spyR.get(w) ?? 0;
+        bulan.push({ ls: lo - sh - 0.0025, lo, sh, spy: sp }); // 0,25%/bulan: transaksi 4 sisi + pinjam
+    }
+    const rapor = (seri: number[]) => {
+        if (!seri.length) return null;
+        let eq = 1, puncak = 1, dd = 0; for (const x of seri) { eq *= 1 + x; puncak = Math.max(puncak, eq); dd = Math.max(dd, 1 - eq / puncak); }
+        const pos = seri.filter((x) => x > 0), neg = seri.filter((x) => x < 0);
+        const rata = seri.reduce((p, q) => p + q, 0) / seri.length, sd = Math.sqrt(seri.reduce((p, q) => p + (q - rata) ** 2, 0) / Math.max(1, seri.length - 1));
+        return { bulan: seri.length, total: +((eq - 1) * 100).toFixed(1), perBulan: +(rata * 100).toFixed(2), winrate: +((pos.length / seri.length) * 100).toFixed(1), pf: neg.length ? +(pos.reduce((p, q) => p + q, 0) / -neg.reduce((p, q) => p + q, 0)).toFixed(2) : null, ddMaks: +(dd * 100).toFixed(1), terbukti: seri.length >= 24 && rata > 2 * (sd / Math.sqrt(seri.length)) };
+    };
+    return { per, keranjang: { longShort: rapor(bulan.map((b) => b.ls)), longSaja: rapor(bulan.map((b) => b.lo)), shortSaja: rapor(bulan.map((b) => -b.sh - 0.0015)), spy: rapor(bulan.map((b) => b.spy)) }, catatan: 'Berita & whales tidak punya riwayat 5 tahun, jadi tidak ikut diuji. Daftar saham = S&P 500 hari ini (saham yang sudah keluar indeks tidak ikut), sehingga hasil short cenderung terlalu buruk dan hasil beli terlalu bagus.' };
+}
+
 function ringkasModel(m: Model) {
     const w = FITUR.map((f, i) => ({ k: f.k, t: f.t, w: +(m.w[i] * 100).toFixed(3) })).sort((a, b) => b.w - a.w);
     return { lulus: m.lulus, latih: m.latih, uji: m.uji, teratas: w.slice(0, 6), terbawah: w.slice(-6).reverse() };

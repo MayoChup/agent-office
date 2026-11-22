@@ -20,6 +20,7 @@ import { PasarView } from './trading/PasarView';
 import { PilihanView } from './trading/PilihanView';
 import { SahamDetail } from './trading/SahamDetail';
 import { SaranUji } from './trading/SaranUji';
+import { SisiJual, useSisiJual, lemahTerbukti, setKandidatLemah } from './trading/SisiJual';
 import { TradingChat } from './trading/TradingChat';
 import { Portofolio } from './trading/Portofolio';
 import { BeritaTerkaitKartu } from './trading/BeritaTerkait';
@@ -80,9 +81,12 @@ export function TradingPage() {
     const [qDaftar, setQDaftar] = useState(qApi);
     useEffect(() => { if (!saham) setQDaftar(qApi); }, [qApi, saham]);
     const sc = useApi<ScreenerData>(`/api/kantor/screener?${qDaftar}`, 600_000);
+    const sj = useSisiJual();
     React.useEffect(() => { const f = () => sc.reload(); window.addEventListener('kantor:screener-segarkan', f); return () => window.removeEventListener('kantor:screener-segarkan', f); }, []); // eslint-disable-line react-hooks/exhaustive-deps
     // Data rusak/kosong (mis. jawaban terpotong yang sempat tersimpan) dianggap belum ada, bukan bikin halaman error.
     const scData = sc.data && Array.isArray((sc.data as any).baris) && (sc.data as any).pasar ? sc.data : null;
+    // Tanda "Kandidat lemah · hindari": hanya kalau sisi jual TERBUKTI di uji data untuk horison ini.
+    React.useEffect(() => { setKandidatLemah(scData && lemahTerbukti(sj.data, H) ? scData.baris.filter((b) => (b.skor?.semua?.asli || b.skor?.semua?.label) === 'Jual kuat').map((b) => b.s) : []); }, [scData, sj.data, H]); // eslint-disable-line react-hooks/exhaustive-deps
     const [infoDetail, setInfoDetail] = useState<{ bukti: any; bobot: any } | null>(null);
     // Ganti preset/horison: data dimuat ulang, tapi posisi gulir tetap & tampil efek "memuat" (skeleton) di atas isi lama.
     const pgRef = useRef<HTMLDivElement>(null);
@@ -192,6 +196,7 @@ export function TradingPage() {
             {!saham && (tab === 'pilihan' || tab === 'diskon' || tab === 'pasar' || tab === 'watchlist') && scData && scData.baris.length > 0 && <HorisonBar h={horison} setH={setHorison} bobot={(scData as any).bobot} bukti={(scData as any).teknikalBukti} />}
             {!saham && tab === 'pasar' && scData && scData.baris.length > 0 && <PasarView data={scData} faktor={faktor} setFaktor={setF} onOpen={buka} />}
             {!saham && (tab === 'pilihan' || tab === 'penyaring') && <SaranUji mode={modeAktif} presetAktif={preset.t} pakaiPreset={(t) => setPreset({ ...preset, t })} />}
+            {!saham && tab === 'pilihan' && <SisiJual mode={modeAktif} />}
             {!saham && tab === 'pilihan' && scData && scData.baris.length > 0 && (
                 <details className="pr-lipat" open={!!(preset.t || preset.f) || undefined}>
                     <summary><Ikon e="🎓" /> Preset guru{preset.t || preset.f ? `: ${[preset.t, preset.f].filter(Boolean).map((id) => pd.data?.preset.find((x) => x.id === id)?.guru || id).join(' + ')}` : ' (opsional)'} <small>— ketuk untuk memilih</small></summary>

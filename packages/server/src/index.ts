@@ -43,6 +43,7 @@ import { Papan, Kerja, bulanWib } from './kantor/papan';
 import { Kronos, BarK, hariBursaBerikut } from './kantor/kronos';
 import { KronosAntre, gayaDari, profilTerbaik } from './kantor/kronosAntre';
 import { PantauWatch } from './kantor/pantauWatch';
+import { UjiKertas } from './kantor/ujiKertas';
 import { kalenderLaba } from './kantor/nasdaq';
 import { BeritaTerkait } from './kantor/beritaTerkait';
 import ATUR_HR from './kantor/skrip/atur-hr.sh';
@@ -1317,6 +1318,12 @@ const pantauWatch = new PantauWatch(config.dataDir, {
     ringkas: async (data) => (await OfficeRoom.sharedLlm()?.complete(
         'Kamu Dito, analis trading di kantor Pak Rico. Dari daftar perubahan watchlist berikut, tulis 2–3 kalimat bahasa Indonesia sederhana: mana yang paling perlu diperhatikan dan kenapa. HANYA pakai fakta di data, jangan menambah angka. Jangan menyuruh beli/jual dengan pasti. Tanpa judul, tanpa poin.',
         data, 220, 2)) || null
+});
+// ── Uji kertas & sisi jual: bukti apakah sinyal terkuat/terlemah benar-benar mengalahkan/kalah dari pasar ──
+const ujiKertas = new UjiKertas(config.dataDir, { sesi: () => screener.sesiTeknikal(), spy: () => screener.spyHarga(), baris: () => screener.data(20).baris as any });
+app.get('/api/kantor/sisi-jual', requireToken, (_req, res) => {
+    let uji: any = null; try { const h = JSON.parse(fs.readFileSync(fileUji(config.dataDir), 'utf8')); uji = h.sisiJual ? { at: h.at, ...h.sisiJual } : null; } catch { /* belum ada */ }
+    res.json({ ok: true, uji, kertas: ujiKertas.ringkas() });
 });
 app.get('/api/kantor/pantau-watch', requireToken, (_req, res) => { res.json({ ok: true, folder: pantauWatch.semua() }); });
 app.post('/api/kantor/pantau-watch', requireToken, (req, res) => {

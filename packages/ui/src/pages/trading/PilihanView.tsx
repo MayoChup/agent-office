@@ -9,6 +9,7 @@ import { Info, InfoKamus } from './InfoI';
 import * as K from './kamus';
 import { cocokCari } from './aliasSaham';
 import { TambahSaham } from './TambahSaham';
+import { TandaLemah } from './SisiJual';
 /** Label sinyal dalam huruf kalimat (Beli kuat, Tahan, …). */
 const kalimat = (l: string) => l.charAt(0).toUpperCase() + l.slice(1).toLowerCase();
 type Urut = 'skor' | 'chg1d' | 'potensi' | 'peluang' | 'rsi' | 's';
@@ -163,7 +164,7 @@ export function Kartu({ b, faktor, onOpen, kronos = 'lencana' }: { b: Baris; fak
     return (
         <article className="sb-cardx" onClick={() => onOpen(b.s)}>
             <header>
-                <div className="kc-l"><b className="mono">{b.s}</b><small>{b.nama}{b.luar ? <em className="kc-luar" title={b.luar === 'ADR' ? 'Perusahaan asing yang sahamnya diperdagangkan di bursa AS (ADR). Data fundamental bisa kurang lengkap.' : 'Di luar S&P 500'}> · {b.luar}</em> : null}</small>{kronos === 'lencana' && <LencanaKronos s={b.s} />}</div>
+                <div className="kc-l"><b className="mono">{b.s}</b><small>{b.nama}{b.luar ? <em className="kc-luar" title={b.luar === 'ADR' ? 'Perusahaan asing yang sahamnya diperdagangkan di bursa AS (ADR). Data fundamental bisa kurang lengkap.' : 'Di luar S&P 500'}> · {b.luar}</em> : null}</small>{kronos === 'lencana' && <LencanaKronos s={b.s} />}<TandaLemah s={b.s} /></div>
                 <div className="kc-r"><LabelSkor sk={sk} /><Bintang s={b.s} /></div>
             </header>
             {faktor === 'semua' && sk?.asli && <div className="sb-tahan" title="Sinyal hanya keluar kalau teknikal, fundamental, berita & whales lengkap">Sinyal {sk.asli.toLowerCase()} ditahan · menunggu data {sk.kurang?.join(', ')}</div>}
