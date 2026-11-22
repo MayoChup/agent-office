@@ -492,7 +492,7 @@ export class Screener {
         if (!s) throw new Error('Kode saham kosong');
         const ada = this.st.baris.find((b) => b.s === s); if (ada) return ada;
         let d: Awaited<ReturnType<typeof harian>>;
-        try { d = await harian(s); } catch { throw new Error(`Kode ${s} tidak ditemukan di bursa AS. Coba kode lain (mis. TSMC = TSM).`); }
+        try { d = await harian(s); } catch { throw new Error(`Data harga ${s} tidak bisa diambil — kodenya salah, atau sumber harga sedang gangguan. Coba lagi sebentar lagi (TSMC = TSM).`); }
         if (!d?.c?.length || d.c.length < 30) throw new Error(`Data harga ${s} terlalu sedikit untuk dianalisis.`);
         const spy = await harian('SPY'); const spyMa50 = spy.c.slice(-50).reduce((a, x) => a + x, 0) / 50; const pasarNaik = spy.c[spy.c.length - 1] > spyMa50;
         const a = analisis(d.c, d.v), e = EKSTRA.find((x) => x.s === s);
