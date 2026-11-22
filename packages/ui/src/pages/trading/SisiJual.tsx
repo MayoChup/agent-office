@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApi } from '../../kantor/api';
+import { apiPost } from '../../kantor/connection';
 import { Info } from './InfoI';
 import { H_MODE } from './Preset';
 
@@ -29,6 +30,22 @@ export function lemahTerbukti(d: DataSJ | null | undefined, H: number) {
 
 const INFO = 'Uji mundur: di setiap tanggal selama ±5 tahun, saham dinilai hanya dari data sampai tanggal itu, lalu hasilnya dibandingkan dengan S&P 500 (disesuaikan seberapa liar sahamnya).\n\n"Kalah dari pasar" = berapa persen kejadian saham itu tertinggal dari S&P 500. "Kalau di-short" = hasil posisi short setelah dikurangi perkiraan biaya transaksi 0,10% + pinjam saham 1%/tahun.\n\n"Terbukti" hanya kalau selisihnya lebih dari 2× galat standar (bukan kebetulan) dengan ≥300 kejadian.\n\nUji kertas: sinyal hari ini dicatat, lalu dinilai otomatis 20 & 60 hari bursa kemudian dengan harga nyata — tanpa uang, tanpa mengintip masa depan.';
 
+/** Satu tombol: jalankan uji mundur lengkap (sisi beli + sisi jual + keranjang beli/short) sekaligus. */
+function TombolUji({ selesai }: { selesai: () => void }) {
+    const u = useApi<{ status: { jalan: boolean; progres: string } }>('/api/kantor/ujimundur', 0);
+    const [msg, setMsg] = useState('');
+    const jalan = !!u.data?.status.jalan;
+    const tadi = React.useRef(false);
+    React.useEffect(() => { if (!jalan) { if (tadi.current) { tadi.current = false; selesai(); } return; } tadi.current = true; const t = setInterval(() => u.reload(), 10_000); return () => clearInterval(t); }, [jalan]); // eslint-disable-line react-hooks/exhaustive-deps
+    const mulai = async () => { setMsg(''); try { await apiPost('/api/kantor/ujimundur/jalankan', {}); u.reload(); } catch (e: any) { setMsg(String(e?.message || e)); } };
+    return (
+        <div className="sj-jalan">
+            <button className="btn small primary" disabled={jalan} onClick={mulai}>{jalan ? 'Sedang menguji…' : 'Uji semua sekarang (beli & short)'}</button>
+            <small>{jalan ? `${u.data?.status.progres} — ±20–40 menit, boleh ditinggal` : msg || 'Satu kali jalan menguji sisi beli, sisi jual, dan keranjang beli/short sekaligus.'}</small>
+        </div>
+    );
+}
+
 export function SisiJual({ mode }: { mode: string }) {
     const d = useSisiJual();
     const [buka, setBuka] = useState(false);
@@ -46,6 +63,7 @@ export function SisiJual({ mode }: { mode: string }) {
         <section className={`sb-card sj ${gl?.terbukti || tk?.terbukti ? 'ok' : 'warn'}`}>
             <div className="sj-h"><b>Sisi jual · apakah sinyal turun bisa dipakai?</b> <Info judul="Cara membaca sisi jual" teks={INFO} /></div>
             <p className="sj-vonis">{vonis}</p>
+            <TombolUji selesai={() => d.reload()} />
             {u && per && (
                 <>
                     <button className="sj-toggle" onClick={() => setBuka(!buka)} aria-expanded={buka}>{buka ? 'Sembunyikan rincian' : 'Lihat rincian'}</button>
