@@ -107,13 +107,15 @@ export async function ujiMundur(semesta: string[], file: string, st: StatusUji, 
                     for (const al of f.alasan) { const k = kunciAlasan(al); if (!r.komp.has(k)) r.komp.set(k, akum()); tambah(r.komp.get(k)!, ex); }
                     for (const pe of evs) { if (pe.e.persen == null) continue; tambah(r.preset[pe.id][pe.e.persen >= 75 ? 'lolos75' : pe.e.persen >= 50 ? 'lolos50' : 'kurang'], ex); }
                     (skorPerH[H] ||= []).push({ sk: f.skor, ex });
+                    tambah(DK[H].semua, ex);
                     if (rasio && dasarF >= 0.15) tambah(DK[H].fundKuat, ex);
+                    if (dk) tambah(DK[H][`${dk.jenis}_${dk.tahap}`], ex);
+                    if (au && au.tahap !== 'pantau') tambah(DK[H][`untung_${au.tahap}`], ex);
                     { const j = JL[H]; tambah(j.semua, ex); if (f.skor <= -0.45) tambah(j.tekJualKuat, ex); if (f.skor <= -0.15) tambah(j.tekJual, ex); if (rasio && dasarF <= -0.15) tambah(j.fundJual, ex); if (rasio && (f.skor + dasarF) / 2 <= -0.15) tambah(j.gabLemah, ex); }
                     if (H === 20 && js % 20 < opsi.langkah) {
                         const w = Math.floor(js / 20); (KR.get(w) || KR.set(w, []).get(w)!).push({ sk: rasio ? (f.skor + dasarF) / 2 : f.skor, tek: f.skor, r: c[t + H] / c[t] - 1, pn: dk ? URUT_TAHAP.indexOf(dk.tahap) : -1, dalam: -(a.chg1m ?? 0) + (50 - (a.rsi ?? 50)), au: au ? URUT_TAHAP.indexOf(au.tahap) : -1 });
                         if (!spyR.has(w)) spyR.set(w, spy[js + H].c / spy[js].c - 1);
                     }
-                    if (dk) tambah(DK[H][dk.tahap], ex);
                     const z = S[H]; z.tgl.push(d[t].t); z.ex.push(ex); z.mask.push(mask); z.lama.push(f.skor);
                     const za = SA[H]; za.tgl.push(d[t].t); za.ex.push(ex); za.mask.push(maskA);
                     if (rasio && SF[H]) { const zf = SF[H]; zf.tgl.push(d[t].t); zf.ex.push(ex); zf.mask.push(maskF); zf.dasar.push(dasarF); }
