@@ -98,3 +98,25 @@ export async function fundamentalNasdaq(s: string, mcapJuta: number | null): Pro
     if (!rev.length && !ni.length) throw new Error('Nasdaq: laporan keuangan kosong');
     return { ...f, _cek: { baris: { laba: [...is.keys()].slice(0, 6), neraca: [...bs.keys()].slice(0, 6), kas: [...cf.keys()].slice(0, 4), rasio: [...fr.keys()].slice(0, 6) }, skala } };
 }
+
+/**
+ * Kalender laporan keuangan (earnings) Nasdaq untuk n hari bursa ke depan → Map simbol → { tgl, waktu }.
+ * waktu: 'sebelum buka' / 'setelah tutup' / '' (belum diumumkan).
+ */
+export async function kalenderLaba(hari = 8): Promise<Map<string, { tgl: string; waktu: string }>> {
+    const out = new Map<string, { tgl: string; waktu: string }>();
+    for (let i = 0; i < hari; i++) {
+        const d = new Date(Date.now() + i * 86400_000), dow = d.getUTCDay();
+        if (dow === 0 || dow === 6) continue;
+        const tgl = d.toISOString().slice(0, 10);
+        try {
+            const r = await j(`https://api.nasdaq.com/api/calendar/earnings?date=${tgl}`);
+            for (const x of r?.rows || []) {
+                const s = String(x.symbol || '').toUpperCase().replace('.', '-'); if (!s || out.has(s)) continue;
+                const w = String(x.time || ''); out.set(s, { tgl, waktu: /pre/i.test(w) ? 'sebelum bursa buka' : /after/i.test(w) ? 'setelah bursa tutup' : '' });
+            }
+        } catch { /* satu hari gagal: lewati */ }
+        await new Promise((r) => setTimeout(r, 400));
+    }
+    return out;
+}

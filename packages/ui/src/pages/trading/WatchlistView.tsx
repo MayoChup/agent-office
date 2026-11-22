@@ -1,3 +1,4 @@
+import { PantauFolder } from './PantauFolder';
 import React, { useState } from 'react';
 import { useApi } from '../../kantor/api';
 import { apiPost } from '../../kantor/connection';
@@ -44,7 +45,7 @@ export function WatchlistView({ data, faktor, onOpen }: { data: ScreenerData; fa
     return (
         <>
             <section className="sb-hero row-hero">
-                <div><h1>Watchlist</h1><p>Kelompokkan saham ke folder. Folder <b>Utama</b> dipantau Dito (strategi harian, investigasi otomatis, data orang dalam).</p></div>
+                <div><h1>Watchlist</h1><p>Kelompokkan saham ke folder. Tiap folder bisa <b>dipantau AI</b> dengan jadwal sendiri: Dito mengabari perubahan penting (sinyal, diskon, berita, whales, fundamental, laporan keuangan). Folder <b>Utama</b> juga dibuatkan strategi beli kalau ada setup.</p></div>
             </section>
             <div className="wl-folders">
                 <button className={aktif === 'utama' ? 'on' : ''} onClick={() => setAktif('utama')}><span><Ikon e="⭐" /></span>Utama <small>{fd.data?.utama.length ?? 0}</small></button>
@@ -71,6 +72,7 @@ export function WatchlistView({ data, faktor, onOpen }: { data: ScreenerData; fa
                 )}
             </div>
             {err && <div className="error">{err}</div>}
+            <PantauFolder id={aktif} />
             {simbolAsli.length > 0 && <PitaKronos simbol={simbolAsli} />}
             {simbolAsli.length > 1 && <div className="kr-alat"><PilihUrut urut={urut} setUrut={gantiUrut} />{urut === 'belum' && <small className="sb-note">{simbol.length} belum dihitung untuk gaya ini</small>}</div>}
             {simbolAsli.length === 0 && <div className="sb-card fin-empty">Folder ini masih kosong. Tambahkan kode saham di atas, atau dari halaman detail saham (tombol + Watchlist).</div>}

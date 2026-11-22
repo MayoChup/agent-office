@@ -495,14 +495,15 @@ export class TradingDesk {
         }, 30 * 60_000);
         console.log('[Trading] Pemantau harga aktif (tiap 5 menit saat bursa AS buka).');
         setInterval(() => this.check().catch((e) => console.error('[Trading]', e?.message || e)), 5 * 60_000);
-        // Strategi harian: hari kerja, jam 20.00 WIB (sebelum bursa AS buka), hanya kalau watchlist tidak kosong.
+        // Strategi harian: hari kerja, jam 20.00 WIB (sebelum bursa AS buka), hanya kalau watchlist tidak kosong & ada setup beli.
         setInterval(async () => {
             const wib = new Date(Date.now() + 7 * 3600_000);
             const today = wib.toISOString().slice(0, 10);
             const st = this.load();
             const weekday = wib.getUTCDay() >= 1 && wib.getUTCDay() <= 5;
             if (strategyHourWib < 0 || !weekday || wib.getUTCHours() < strategyHourWib || st.lastPlansDate === today || !st.watchlist.length) return;
-            try { await this.notify(await this.strategi()); } catch (e: any) { console.error('[Trading] strategi:', e?.message || e); }
+            // Hanya dikabarkan kalau ada saham yang benar-benar masuk kondisi beli (tidak lagi "belum ada" tiap hari).
+            try { const t = await this.strategi(); if (this.load().plans.length) await this.notify(t); } catch (e: any) { console.error('[Trading] strategi:', e?.message || e); }
         }, 10 * 60_000);
     }
 }

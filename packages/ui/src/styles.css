@@ -3390,3 +3390,29 @@ body.no-office #phaser-container { visibility: hidden; }
 .sb-cardx .kc-l small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 .sb-cardx .kc-r { align-items: flex-start; gap: 4px; }
 .sb-cardx .kc-r .bintang { margin: -4px -6px 0 0; }
+
+/* Pantauan AI per folder watchlist */
+.pw { display: flex; flex-direction: column; gap: 12px; padding: 12px 16px; margin: 0 0 16px; border-radius: 14px; border: 1px solid var(--line-strong); background: var(--panel); }
+.pw.nyala { border-color: color-mix(in srgb, var(--up) 35%, var(--line-strong)); }
+.pw-atas { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.pw-saklar { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.pw-saklar input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.pw-saklar > span { width: 36px; height: 20px; border-radius: 10px; background: var(--line-strong); position: relative; transition: background .15s; flex: none; }
+.pw-saklar > span::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 1px 2px rgba(0,0,0,.25); }
+.pw-saklar input:checked + span { background: var(--up); } .pw-saklar input:checked + span::after { transform: translateX(16px); }
+.pw-saklar input:focus-visible + span { outline: 2px solid var(--up); outline-offset: 2px; }
+.pw-saklar b { font-size: 14px; font-weight: 600; }
+.pw-ringkas { flex: 1 1 220px; color: var(--muted); font-size: 12.5px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.pw-aksi { display: flex; gap: 8px; flex-wrap: wrap; }
+.pw-atur { display: flex; flex-direction: column; gap: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.pw-baris { display: grid; grid-template-columns: 96px 1fr; gap: 12px; align-items: center; } .pw-baris.atas { align-items: start; }
+.pw-baris > span { color: var(--muted); font-size: 12.5px; }
+.pw-hari { display: flex; gap: 4px; flex-wrap: wrap; }
+.pw-hari button { min-width: 44px; height: 32px; border-radius: 8px; border: 1px solid var(--line-strong); background: none; color: var(--text); font: inherit; font-size: 13px; cursor: pointer; }
+.pw-hari button.on { background: var(--text); color: var(--bg, #fff); border-color: var(--text); }
+.pw-baris input[type=time] { width: 120px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line-strong); background: transparent; color: var(--text); font: inherit; }
+.pw-isi { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.pw-isi label { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; } .pw-isi input { margin-top: 3px; accent-color: var(--up); }
+.pw-isi span { display: flex; flex-direction: column; } .pw-isi b { font-size: 13.5px; font-weight: 500; } .pw-isi small { color: var(--muted); font-size: 11.5px; }
+.pw-catatan { color: var(--muted); font-size: 12px; }
+@media (max-width: 520px) { .pw-baris { grid-template-columns: 1fr; gap: 6px; } }

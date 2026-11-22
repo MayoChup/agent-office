@@ -10,6 +10,34 @@ import { PRESET } from './preset';
 const r2 = (x: any) => (x == null || !Number.isFinite(+x) ? '–' : (+x).toFixed(2));
 const sk = (f: any) => (f ? `${f.label} (${r2(f.skor)})` : '–');
 
+/** Kata Indonesia/awam → pola nama sektor/industri (data Nasdaq berbahasa Inggris). */
+const KELOMPOK: Array<[RegExp, RegExp, string]> = [
+    [/semikonduktor|semiconductor|\bchip|\bcip\b/i, /semiconductor/i, 'semikonduktor / chip'],
+    [/\bai\b|kecerdasan buatan|artificial intelligence/i, /semiconductor|software|internet|computer|data processing|interactive media/i, 'terkait AI (chip, software, internet, komputer)'],
+    [/\bbank|perbankan/i, /bank/i, 'bank'],
+    [/asuransi|insurance/i, /insurance/i, 'asuransi'],
+    [/energi|minyak|\bgas\b|\boil\b|batu ?bara/i, /energy|energi|oil|gas|coal|petroleum/i, 'energi'],
+    [/farmasi|obat|pharma|biotek|biotech/i, /pharma|biotech|drug|biological/i, 'farmasi & bioteknologi'],
+    [/kesehatan|health|rumah sakit|alat medis|medis/i, /health|kesehatan|medical|hospital|pharma/i, 'kesehatan'],
+    [/ritel|retail|\btoko|supermarket/i, /retail|stores|department/i, 'ritel'],
+    [/software|perangkat lunak|\bsaas\b|cloud|komputasi awan/i, /software|prepackaged|programming|data processing|computer/i, 'software & cloud'],
+    [/teknologi|\btech\b/i, /technology|teknologi|software|semiconductor|computer|hardware/i, 'teknologi'],
+    [/otomotif|\bmobil|kendaraan|\bev\b|listrik.*mobil/i, /auto|motor vehicle/i, 'otomotif'],
+    [/properti|\breit|real estate/i, /real estate|reit|properti/i, 'properti'],
+    [/utilitas|perusahaan listrik|\butility|\butilities/i, /utilit|electric|power generation/i, 'utilitas'],
+    [/telekomunikasi|telko|telecom|operator seluler/i, /telecom|telephone|communication|komunikasi/i, 'telekomunikasi'],
+    [/media|hiburan|streaming|game/i, /entertainment|media|broadcast|interactive|video/i, 'media & hiburan'],
+    [/pertahanan|militer|defense|aerospace|dirgantara|pesawat/i, /aerospace|defense|aircraft/i, 'dirgantara & pertahanan'],
+    [/maskapai|penerbangan|airline/i, /airline|air transport/i, 'maskapai'],
+    [/makanan|minuman|consumer staples|\bf&b\b|barang konsumsi/i, /food|beverage|consumer staples|konsumen primer|konsumen pokok|household|tobacco/i, 'makanan, minuman & barang konsumsi'],
+    [/manufaktur|industrial|mesin|alat berat/i, /industrial|industri\b|machinery|equipment/i, 'industri & mesin'],
+    [/material|tambang|mining|kimia|baja|emas/i, /material|bahan baku|mining|chemical|metal|steel|gold/i, 'material & tambang'],
+    [/keuangan|finansial|financial|investasi|broker|pembayaran|payment/i, /financ|keuangan|invest|broker|payment|capital market|bank/i, 'keuangan & pembayaran'],
+    [/e-?commerce|belanja online|marketplace/i, /internet retail|catalog|e-commerce/i, 'e-commerce'],
+    [/transportasi|logistik|kereta|truk|kapal/i, /transport|logistic|railroad|trucking|shipping|freight/i, 'transportasi & logistik'],
+    [/konsumen|consumer discretionary|restoran|hotel|travel/i, /consumer discretionary|konsumen sekunder|restaurant|hotel|travel|leisure|apparel|autos/i, 'konsumen non-pokok']
+];
+
 export function konteksTrading(o: { screener: Screener; dataDir: string; H: number; mode: string; pt: string; pf: string; saham?: string; teks: string; watch: string[]; posisi: Array<{ symbol: string; entry: number; shares: number }> }): string {
     const d = o.screener.data(o.H, o.mode, o.pt, o.pf);
     const L: string[] = [];
@@ -41,10 +69,34 @@ export function konteksTrading(o: { screener: Screener; dataDir: string; H: numb
     const milik = baris.filter((b) => o.watch.includes(b.s) || pos.has(b.s));
     if (milik.length) L.push('', '# Watchlist & posisi Pak Rico', ...milik.map((b) => `${satu(b)}${pos.has(b.s) ? ` | POSISI: beli $${pos.get(b.s)!.entry} × ${pos.get(b.s)!.shares} lembar` : ' | watchlist'}`));
 
-    // Detail saham yang sedang dibuka / disebut di pertanyaan
+    // Kelompok industri/sektor yang disebut di pertanyaan → semua sahamnya (bukan cuma watchlist).
+    const teksK = o.teks.toLowerCase();
+    const kelompok = KELOMPOK.filter(([kata]) => kata.test(teksK));
+    // Nama industri/sektor asli (Inggris) yang disebut langsung, mis. "semiconductors".
+    const namaKel = Array.from(new Set(baris.flatMap((b) => [b.industri, b.sektor]).filter(Boolean) as string[]))
+        .filter((n) => n.toLowerCase().split(/[^a-z]+/).some((w) => w.length >= 5 && new RegExp(`\\b${w}`).test(teksK)));
+    const sudah = new Set<string>();
+    for (const [, pola, label] of kelompok.slice(0, 3)) {
+        const isi = urut.filter((b) => pola.test(`${b.sektor || ''} ${b.industri || ''}`)).slice(0, 35);
+        if (!isi.length) continue; isi.forEach((b) => sudah.add(b.s));
+        L.push('', `# Semua saham kelompok "${label}" di penyaring (${isi.length}, urut skor gabungan, tertinggi dulu)`, ...isi.map(satu));
+    }
+    for (const n of namaKel.slice(0, 2)) {
+        const isi = urut.filter((b) => (b.industri === n || b.sektor === n) && !sudah.has(b.s)).slice(0, 30);
+        if (isi.length) L.push('', `# Saham ${n} (${isi.length}, urut skor gabungan)`, ...isi.map(satu));
+    }
+    // Tanpa kelompok yang disebut: peta seluruh pasar per sektor (3 terkuat & 2 terlemah tiap sektor), supaya jawaban tidak terpaku watchlist.
+    if (!kelompok.length && !namaKel.length) {
+        const perSek = new Map<string, any[]>(); for (const b of urut) { const k = b.sektor || 'Lainnya'; (perSek.get(k) || perSek.set(k, []).get(k)!).push(b); }
+        L.push('', '# Peta per sektor (3 skor tertinggi · 2 terendah)');
+        for (const [k, xs] of perSek) L.push(`- ${k} (${xs.length}): ${xs.slice(0, 3).map((b) => `${b.s} ${sk(b.skor?.semua)}`).join(', ')}${xs.length > 4 ? ` … terendah ${xs.slice(-2).map((b) => `${b.s} ${sk(b.skor?.semua)}`).join(', ')}` : ''}`);
+    }
+
+    // Detail saham yang sedang dibuka / disebut di pertanyaan (kode ATAU nama perusahaan, mis. "Nvidia", "Coca-Cola")
     const kode = new Set(baris.map((b) => b.s));
-    const disebut = [o.saham, ...((o.teks.toUpperCase().match(/\b[A-Z]{1,5}(?:-[A-Z])?\b/g) || []).filter((k) => kode.has(k)))].filter(Boolean) as string[];
-    for (const s of Array.from(new Set(disebut)).slice(0, 3)) {
+    const lewatNama = baris.filter((b) => { const n = String(b.nama || '').toLowerCase().replace(/[.,]/g, '').split(/\s+/)[0]; return n && n.length >= 4 && !['first', 'american', 'united', 'general', 'national', 'international'].includes(n) && new RegExp(`\\b${n.replace(/[^a-z0-9-]/g, '')}\\b`).test(teksK); }).map((b) => b.s);
+    const disebut = [o.saham, ...((o.teks.toUpperCase().match(/\b[A-Z]{1,5}(?:-[A-Z])?\b/g) || []).filter((k) => kode.has(k))), ...lewatNama].filter(Boolean) as string[];
+    for (const s of Array.from(new Set(disebut)).slice(0, 5)) {
         const det: any = o.screener.detail(s, o.H, o.mode, o.pt, o.pf);
         if (!det) continue;
         const b = det.baris, f = b.f || {}, pr = b.x?.proyeksi;

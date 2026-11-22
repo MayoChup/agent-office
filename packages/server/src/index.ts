@@ -41,7 +41,9 @@ import * as porto from './kantor/portofolio';
 import { PERAN_AI } from './kantor/papan';
 import { Papan, Kerja, bulanWib } from './kantor/papan';
 import { Kronos, BarK, hariBursaBerikut } from './kantor/kronos';
-import { KronosAntre, gayaDari } from './kantor/kronosAntre';
+import { KronosAntre, gayaDari, profilTerbaik } from './kantor/kronosAntre';
+import { PantauWatch } from './kantor/pantauWatch';
+import { kalenderLaba } from './kantor/nasdaq';
 import { BeritaTerkait } from './kantor/beritaTerkait';
 import ATUR_HR from './kantor/skrip/atur-hr.sh';
 import ATUR_SOSMED from './kantor/skrip/atur-sosmed.sh';
@@ -1294,6 +1296,26 @@ const kronosAntre = new KronosAntre(config.dataDir, {
     watchlist: () => tradingDesk.load().watchlist,
     kabar: (t) => { void kabarDari('trading')(t); },
     papan: (judul, detail, fn) => papan.jalankan({ ai: 'trading', judul, detail, sumber: 'trading' }, fn)
+});
+// ── Pantauan AI per folder watchlist (termasuk Utama) dengan jadwal & isi pilihan Pak Rico ──
+const pantauWatch = new PantauWatch(config.dataDir, {
+    folders: () => [{ id: 'utama', nama: 'Watchlist Utama', simbol: tradingDesk.load().watchlist }, ...watchFolder.list().map((f) => ({ id: f.id, nama: f.nama, simbol: f.simbol }))],
+    detail: (s) => { const g = kronosAntre.gaya(); return screener.detail(s.toUpperCase(), g.H, g.mode); },
+    kronos: (s) => { const g = kronosAntre.gaya(); const r = kronosAntre.daftar(g.mode, g.H).aktif[s]; const p = r ? profilTerbaik(r) : null; return p ? { id: p.id, rr: p.rr, harapan: p.harapan } : r ? { id: 'm', rr: r.rr, harapan: r.harapan } : null; },
+    kalender: () => kalenderLaba(8),
+    kirim: (t) => kabarDari('trading')(t),
+    ringkas: async (data) => (await OfficeRoom.sharedLlm()?.complete(
+        'Kamu Dito, analis trading di kantor Pak Rico. Dari daftar perubahan watchlist berikut, tulis 2–3 kalimat bahasa Indonesia sederhana: mana yang paling perlu diperhatikan dan kenapa. HANYA pakai fakta di data, jangan menambah angka. Jangan menyuruh beli/jual dengan pasti. Tanpa judul, tanpa poin.',
+        data, 220, 2)) || null
+});
+app.get('/api/kantor/pantau-watch', requireToken, (_req, res) => { res.json({ ok: true, folder: pantauWatch.semua() }); });
+app.post('/api/kantor/pantau-watch', requireToken, (req, res) => {
+    try { res.json({ ok: true, atur: pantauWatch.ubah(String(req.body?.id || ''), req.body || {}), folder: pantauWatch.semua() }); }
+    catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
+});
+app.post('/api/kantor/pantau-watch/kirim', requireToken, async (req, res) => {
+    try { const teks = await pantauWatch.laporan(String(req.body?.id || '')); res.json({ ok: true, teks }); }
+    catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
 });
 app.get('/api/kantor/trading/gaya', requireToken, (_req, res) => { res.json({ ok: true, gaya: kronosAntre.gaya(), tersimpan: kronosAntre.adaGaya() }); });
 app.post('/api/kantor/trading/gaya', requireToken, (req, res) => {
