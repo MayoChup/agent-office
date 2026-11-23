@@ -8,7 +8,8 @@ interface HasilH { semua: R; label: Record<string, R>; kuintil: R[]; komponen: A
 type UjiL = { label: Record<string, R>; semua: R; selisih: number; galat: number; t: number; tanggal: number };
 type W = { k: string; t: string; w: number };
 interface BobotH { lulus: boolean; latih: { dari: string; sampai: string; n: number }; uji: { dari: string; sampai: string; n: number; lambda: number; ic: number; baru: UjiL; lama: UjiL; alasan: string[] }; teratas: W[]; terbawah: W[] }
-interface Hasil { bobot?: { batas: string; H: Record<string, BobotH> }; at: number; saham: number; gagal: number; sampel: number; periode: { dari: string; sampai: string }; catatan: string[]; H: Record<string, HasilH> }
+interface Ambang { t: number; terbukti: boolean; rataSemua?: number; uji: Array<{ t: number; n: number; rataEx: number | null; terbukti: boolean }>; catatan?: string }
+interface Hasil { ambang?: Ambang; bobot?: { batas: string; H: Record<string, BobotH> }; at: number; saham: number; gagal: number; sampel: number; periode: { dari: string; sampai: string }; catatan: string[]; H: Record<string, HasilH> }
 interface Data { saran?: { teks: string | null } | null; berikutnya?: number; status: { jalan: boolean; progres: string; mulai: number; selesai: number; galat: string }; hasil: Hasil | null }
 
 const MODE: Array<{ H: number; label: string }> = [{ H: 1, label: 'Day trading (1 hari)' }, { H: 5, label: 'Swing pendek (5 hari)' }, { H: 20, label: 'Swing (20 hari)' }, { H: 60, label: 'Posisi/Investasi (60 hari)' }];
@@ -58,6 +59,7 @@ export function UjiMundur({ sisipan }: { sisipan?: React.ReactNode } = {}) {
                         </tbody></table>
                     <p className="sb-note">Rata-rata per posisi selama {H} hari bursa, sudah disesuaikan risiko. Contoh: +0,50% artinya rata-rata unggul 0,5% dari S&P 500 dalam {H} hari.</p>
                 </section>
+                {h.ambang && <AmbangBeliKuat a={h.ambang} />}
                 <BobotBaru b={h.bobot?.H[String(H)]} H={H} />
                 <section className="sb-card">
                     <div className="sd-h"><h3>Preset guru (teknikal) — saham yang lolos ≥75% kriteria</h3></div>
@@ -132,6 +134,20 @@ function BuktiIndikator({ r, H }: { r: HasilH; H: number }) {
                 );
             })}
             <p className="sb-note">Sinyal yang <b>berlawanan dengan skor</b> (dihitung plus tapi hasilnya buruk, atau sebaliknya) dikecilkan/dibalik otomatis oleh "Bobot baru dari data" di atas — kalau bobot baru itu LULUS ujian di data 2025 ke atas. Tanda yang sama muncul di alasan skor teknikal tiap saham.</p>
+        </section>
+    );
+}
+
+/** Batas "Beli kuat" yang dikalibrasi dari uji mundur (skor gabungan teknikal + fundamental, 20 hari bursa). */
+function AmbangBeliKuat({ a }: { a: Ambang }) {
+    const skor100 = (t: number) => Math.round((t + 1) * 50);
+    return (
+        <section className="sb-card">
+            <div className="sd-h"><h3>Batas "Beli kuat" dari bukti</h3></div>
+            <p className="um-vonis">{a.terbukti ? `✅ Beli kuat = skor gabungan ≥ ${skor100(a.t)}/100 — ambang terendah yang terbukti mengalahkan rata-rata saham.` : `Belum ada ambang yang terbukti; Beli kuat tetap skor ≥ ${skor100(0.45)}/100.`}</p>
+            <table className="um-t"><thead><tr><th>Skor gabungan ≥</th><th>Kasus</th><th>Rata-rata vs S&P 500 (20 hari)</th><th>Terbukti?</th></tr></thead>
+                <tbody>{a.uji.map((u) => <tr key={u.t} className={u.t === a.t && a.terbukti ? 'um-base' : ''}><td className="mono">{skor100(u.t)}/100</td><td className="mono">{u.n.toLocaleString('id-ID')}</td><td className={`mono ${kelasEx(u.rataEx)}`}>{p(u.rataEx)}</td><td>{u.terbukti ? '✓' : '–'}</td></tr>)}</tbody></table>
+            <p className="sb-note">Diuji pada jendela bulanan 5 tahun (rata-rata semua saham {p(a.rataSemua ?? null)}). Berita & whales tidak punya riwayat 5 tahun, jadi kalibrasi memakai skor teknikal + fundamental; batas ini lalu dipakai untuk label gabungan keempat faktor. Diperbarui tiap uji mundur mingguan.</p>
         </section>
     );
 }

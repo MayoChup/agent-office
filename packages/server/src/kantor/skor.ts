@@ -23,6 +23,11 @@ export function label(s: number): Label {
     return s >= 0.45 ? 'Beli kuat' : s >= 0.15 ? 'Beli' : s > -0.15 ? 'Tahan' : s > -0.45 ? 'Jual' : 'Jual kuat';
 }
 const clamp = (x: number) => Math.max(-1, Math.min(1, x));
+/** Batas "Beli kuat" untuk skor GABUNGAN — dikalibrasi dari uji mundur (kelompok skor terendah yang terbukti mengalahkan pasar). */
+let ambangBeliKuat = 0.45;
+export function setAmbangBeliKuat(t: number | null | undefined) { ambangBeliKuat = t != null && t >= 0.2 && t <= 0.45 ? t : 0.45; }
+export const getAmbangBeliKuat = () => ambangBeliKuat;
+export function labelGabung(s: number): Label { return s >= ambangBeliKuat ? 'Beli kuat' : label(s); }
 const pct = (a: number, b: number) => (b ? (a / b - 1) * 100 : 0);
 
 /* ── Ekstra dari OHLCV ─────────────────────────────────────── */
@@ -189,10 +194,13 @@ function bobotDasar(H: number, mode = ''): Record<string, number> {
 export function gabung(f: Record<string, Faktor | null>, H = 20, mode = '', teknikalTerbukti = true): Faktor {
     const W = bobot(H, mode, teknikalTerbukti);
     let s = 0, w = 0;
-    for (const k of Object.keys(W)) if (f[k]) { s += f[k]!.skor * W[k]; w += W[k]; }
+    // Berita & whales yang netral (skor ≈ 0) tidak boleh menyeret skor ke tengah: bobotnya diredam sampai 35%,
+    // penuh lagi bila skornya tegas (|skor| ≥ 0,3) — positif maupun negatif.
+    const efektif = (k: string, sk: number) => (k === 'berita' || k === 'whales' ? W[k] * (0.35 + 0.65 * Math.min(1, Math.abs(sk) / 0.3)) : W[k]);
+    for (const k of Object.keys(W)) if (f[k]) { const we = efektif(k, f[k]!.skor); s += f[k]!.skor * we; w += we; }
     const sk = w ? clamp(s / w) : 0;
     const ada = Object.keys(W).filter((k) => f[k] && W[k] > 0).length;
-    return { skor: +sk.toFixed(2), label: label(sk), alasan: [`gabungan ${ada} faktor untuk ${mode === 'scalping' ? 'scalping (hari ini)' : H === 1 ? 'day trading (hari ini)' : `posisi ≤${H} hari bursa`} (bobot${teknikalTerbukti ? '' : ', teknikal dikecilkan karena belum terbukti'}: ${Object.entries(W).filter(([, v]) => v > 0).map(([k, v]) => `${k} ${Math.round(v * 100)}%`).join(', ')})`] };
+    return { skor: +sk.toFixed(2), label: labelGabung(sk), alasan: [`gabungan ${ada} faktor untuk ${mode === 'scalping' ? 'scalping (hari ini)' : H === 1 ? 'day trading (hari ini)' : `posisi ≤${H} hari bursa`} (bobot${teknikalTerbukti ? '' : ', teknikal dikecilkan karena belum terbukti'}: ${Object.entries(W).filter(([, v]) => v > 0).map(([k, v]) => `${k} ${Math.round(v * 100)}%`).join(', ')})`] };
 }
 
 /* ── Sentimen berita (kamus kata, tanpa AI) ───────────────────── */

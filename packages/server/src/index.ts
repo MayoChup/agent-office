@@ -58,7 +58,8 @@ import { gantiNamaPenasihat } from './kantor/migrasi';
 import ATUR_KURATOR from './kantor/skrip/atur-kurator.sh';
 import { execFile as jalankanBerkas } from 'child_process';
 import { Hr, statistik, kunciMinggu, ambilUsulanJson, ID_HR, ID_JONI, StatAi } from './kantor/hr';
-import { ujiMundur, rekomendasiUji, fileUji, statusPreset, StatusUji, saranDariUji, fileSaran, namaH } from './kantor/ujimundur';
+import { ujiMundur, rekomendasiUji, fileUji, statusPreset, StatusUji, saranDariUji, fileSaran, namaH, ambangDariUji } from './kantor/ujimundur';
+import { setAmbangBeliKuat } from './kantor/skor';
 import { cnbcChart, hargaHarian } from './kantor/harga';
 import { HistorySinyal, type StatusH, type Profil } from './kantor/historySinyal';
 import { telegramKirim } from './kantor/telegram';
@@ -789,16 +790,17 @@ function ujiDiThread(daftar: string[]): Promise<void> {
         w.on('exit', (kode) => { if (beres) return; beres = true; statusUji.jalan = false; statusUji.galat = `thread uji berhenti (kode ${kode})`; gagal(new Error(statusUji.galat)); });
     });
 }
+setAmbangBeliKuat(ambangDariUji(fileUji(config.dataDir))); // batas Beli kuat dari uji mundur terakhir
 function jalankanUji(sebab: string) {
     if (statusUji.jalan) return false;
     const daftar = screener.daftarSimbol();
     if (!daftar.length) throw new Error('Ambil data pasar dulu (↻ di Trading).');
     console.log(`[Uji mundur] mulai (${sebab}), ${daftar.length} saham`);
     papan.jalankan({ ai: 'trading', judul: `Uji mundur ${daftar.length} saham (${sebab})`, detail: 'Menguji skor teknikal & preset di data ±5 tahun, lalu memperbarui bobot dan rekomendasi.', sumber: 'trading' },
-        () => ujiDiThread(daftar).then(() => buatSaran()), () => 'Bobot & rekomendasi di halaman Trading diperbarui.').catch((e) => console.warn('[Uji mundur]', e?.message || e));
+        () => ujiDiThread(daftar).then(() => { setAmbangBeliKuat(ambangDariUji(fileUji(config.dataDir))); return buatSaran(); }), () => 'Bobot & rekomendasi di halaman Trading diperbarui.').catch((e) => console.warn('[Uji mundur]', e?.message || e));
     return true;
 }
-// Otomatis: dicek tiap jam; jalan saat hasil terakhir ≥30 hari (atau belum ada) dan di akhir pekan WIB (bursa AS tutup).
+// Otomatis: dicek tiap jam; jalan saat hasil terakhir ≥6 hari (atau belum ada) dan di akhir pekan WIB (bursa AS tutup).
 setInterval(() => {
     try {
         const hari = new Date(Date.now() + 7 * 3600_000).getUTCDay();

@@ -184,6 +184,7 @@ export async function ujiMundur(semesta: string[], file: string, st: StatusUji, 
         (hasil as any).sisiJual = ringkasSisiJual(JL, KR, spyR);
         (hasil as any).diskon = Object.fromEntries(HS.map((H) => [H, Object.fromEntries(KUNCI_PT.map((k) => [k, ringkas(DK[H][k])]))]));
         (hasil as any).tanding = ujiTanding(KR, spyR);
+        (hasil as any).ambang = kalibrasiAmbang(KR, spyR);
         (hasil as any).fundInfo = { ada: !!fundPada, sampel: nFund, catatan: fundPada ? (nFund ? '' : 'Riwayat laporan keuangan terambil, tapi tidak ada yang cocok dengan saham yang diuji.') : `Riwayat laporan keuangan lampau (SEC) gagal diambil di server ini${galatSec() ? `: ${galatSec()}` : ''}.` };
         (hasil as any).presetAi = { teknikal: cariT, fundamental: cariF, fundamentalSampel: Object.fromEntries(Object.entries(SF).map(([k, v]) => [k, v.tgl.length])) };
         fs.writeFileSync(fileBobot(path.dirname(file)), JSON.stringify(model));
@@ -452,3 +453,26 @@ export function buktiAlasan(file: string, H: number, alasan: string[]): Array<{ 
         return { status: x.status, cocok: (plus && x.status === 'naik') || (!plus && x.status === 'turun') };
     });
 }
+
+/**
+ * Kalibrasi batas "Beli kuat": dari jendela bulanan (20 hari bursa), skor gabungan teknikal+fundamental saat itu vs hasil 20 hari
+ * dikurangi S&P 500. Batas = ambang TERENDAH (0,20–0,45) yang kelompoknya mengalahkan rata-rata semua saham > 2× galat standar,
+ * ≥300 kasus, dan positif vs pasar. Tidak ada yang lolos → tetap 0,45.
+ */
+function kalibrasiAmbang(KR: Map<number, Array<{ sk: number; r: number }>>, spyR: Map<number, number>) {
+    const xs: Array<{ sk: number; ex: number }> = [];
+    for (const [w, arr] of KR) { const sp = spyR.get(w); if (sp == null) continue; for (const a of arr) xs.push({ sk: a.sk, ex: a.r - sp }); }
+    if (xs.length < 1000) return { t: 0.45, terbukti: false, uji: [], catatan: 'Sampel terlalu sedikit untuk kalibrasi.' };
+    const rata = (a: number[]) => a.reduce((p, q) => p + q, 0) / a.length;
+    const base = rata(xs.map((x) => x.ex));
+    const uji = [0.2, 0.25, 0.3, 0.35, 0.4, 0.45].map((t) => {
+        const g = xs.filter((x) => x.sk >= t).map((x) => x.ex);
+        if (g.length < 2) return { t, n: g.length, rataEx: null as number | null, terbukti: false };
+        const m = rata(g), sd = Math.sqrt(Math.max(0, rata(g.map((v) => v * v)) - m * m)), se = sd / Math.sqrt(g.length);
+        return { t, n: g.length, rataEx: +(m * 100).toFixed(3), terbukti: g.length >= 300 && m > 0 && m - base > 2 * se };
+    });
+    const lolos = uji.find((u) => u.terbukti);
+    return { t: lolos ? lolos.t : 0.45, terbukti: !!lolos, rataSemua: +(base * 100).toFixed(3), uji, catatan: lolos ? '' : 'Belum ada ambang yang terbukti unggul; batas tetap 0,45.' };
+}
+/** Batas Beli kuat dari uji mundur terakhir (null = belum ada). */
+export function ambangDariUji(file: string): number | null { try { const a = JSON.parse(fs.readFileSync(file, 'utf8')).ambang; return a?.terbukti ? a.t : null; } catch { return null; } }
