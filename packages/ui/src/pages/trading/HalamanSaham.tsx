@@ -134,7 +134,7 @@ export function Experts({ a, galat, harga }: { a: Analis | null | undefined; gal
         <section className="sb-card hs-exp"><h3>What the experts say</h3><p className="sb-note">{galat ? `Data analis belum bisa diambil (${galat}).` : 'Data analis Wall Street untuk saham ini belum tersedia.'}</p></section>
     );
     const p = (n: number) => (a.n ? (n / a.n) * 100 : 0);
-    const targetOk = a.target != null && !(a.sumber === 'Nasdaq' && (a.target / harga > 2 || a.target / harga < 0.4));
+    const targetOk = a.target != null && !((a.sumber || '').startsWith('Nasdaq') && (a.target / harga > 2 || a.target / harga < 0.4));
     const ret = targetOk ? (a.target! / harga - 1) * 100 : null;
     const k = a.konsensus.toLowerCase() as 'buy' | 'hold' | 'sell';
     return (

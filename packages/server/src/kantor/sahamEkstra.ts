@@ -97,13 +97,16 @@ async function sesiLewatCurl(): Promise<{ cookie: string; crumb: string }> {
     return { cookie, crumb };
 }
 let lewat: 'fetch' | 'curl' = 'fetch';
+let yahooIstirahat = 0; // setelah ditolak (429/401) Yahoo tidak dicoba 1 jam, supaya tidak ikut membatasi pengambilan harga
 async function sesiYahoo(): Promise<{ cookie: string; crumb: string }> {
     if (yahooSesi && Date.now() - yahooSesi.at < 6 * 3600_000) return yahooSesi;
+    if (Date.now() < yahooIstirahat) throw new Error(`diistirahatkan sampai ${new Date(yahooIstirahat).toISOString().slice(11, 16)} UTC setelah ditolak`);
     const gal: string[] = [];
     for (const cara of ['fetch', 'curl'] as const) {
         try { const x = cara === 'fetch' ? await sesiLewatFetch() : await sesiLewatCurl(); yahooSesi = { at: Date.now(), ...x }; lewat = cara; return yahooSesi; }
         catch (e: any) { gal.push(String(e?.message || e)); }
     }
+    if (gal.some((g) => /429|401|403/.test(g))) yahooIstirahat = Date.now() + 3600_000;
     throw new Error(gal.join('; '));
 }
 async function yahooRingkasan(s: string, modules: string): Promise<any> {
@@ -114,12 +117,51 @@ async function yahooRingkasan(s: string, modules: string): Promise<any> {
         if (lewat === 'fetch') { const r = await fetch(url, { headers: { 'User-Agent': UA_BROWSER, Cookie: cookie, Accept: 'application/json' }, signal: AbortSignal.timeout(15_000) }); status = r.status; body = await r.text(); }
         else { const r = await curl(['-H', `Cookie: ${cookie}`, url]); status = r.status; body = r.body; }
         if (status === 401 || status === 403) { yahooSesi = null; continue; }
+        if (status === 429) { yahooIstirahat = Date.now() + 3600_000; throw new Error('quoteSummary HTTP 429'); }
         if (status !== 200) throw new Error(`quoteSummary HTTP ${status}`);
         const x = JSON.parse(body)?.quoteSummary?.result?.[0];
         if (!x) throw new Error('data analis kosong');
         return x;
     }
     throw new Error('Yahoo menolak sesi');
+}
+
+/* Finviz: tabel rating analis di halaman saham (tanggal · tindakan · bank · rating · target). Dibaca dari HTML. */
+let finvizIstirahat = 0;
+const BLN_EN: Record<string, string> = { Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06', Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12' };
+async function finvizBank(s: string): Promise<Analis['bank']> {
+    if (Date.now() < finvizIstirahat) throw new Error('Finviz diistirahatkan sebentar setelah menolak');
+    const url = `https://finviz.com/quote.ashx?t=${encodeURIComponent(s.replace('-', '.'))}&p=d`;
+    let status = 0, html = '';
+    try {
+        const r = await fetch(url, { headers: { 'User-Agent': UA_BROWSER, Accept: 'text/html,application/xhtml+xml', 'Accept-Language': 'en-US,en;q=0.9' }, signal: AbortSignal.timeout(15_000) });
+        status = r.status; html = await r.text();
+    } catch { /* coba curl */ }
+    if (status !== 200 || !/ratings/i.test(html)) { const r = await curl(['-L', url]).catch(() => null); if (r) { status = r.status; html = r.body; } }
+    if (status === 429 || status === 403) { finvizIstirahat = Date.now() + 30 * 60_000; throw new Error(`Finviz HTTP ${status}`); }
+    if (status !== 200) throw new Error(`Finviz HTTP ${status}`);
+    // Ambil tabel rating: class mengandung "ratings" (js-table-ratings / fullview-ratings-outer).
+    const mulai = html.search(/<table[^>]*class="[^"]*ratings[^"]*"/i);
+    if (mulai < 0) return [];
+    const tabel = html.slice(mulai, html.indexOf('</table>', mulai) + 8);
+    const teks = (x: string) => x.replace(/<[^>]+>/g, ' ').replace(/&rarr;|→|&#8594;/g, '→').replace(/&amp;/g, '&').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+    const setahun = new Date(Date.now() - 365 * 86400_000).toISOString().slice(0, 10);
+    const bank: Analis['bank'] = [];
+    for (const tr of tabel.match(/<tr[\s\S]*?<\/tr>/gi) || []) {
+        const td = (tr.match(/<td[\s\S]*?<\/td>/gi) || []).map(teks);
+        if (td.length < 4) continue;
+        const m = td[0].match(/^([A-Z][a-z]{2})-(\d{1,2})-(\d{2})$/);
+        const tgl = m ? `20${m[3]}-${BLN_EN[m[1]] || '01'}-${m[2].padStart(2, '0')}` : /today/i.test(td[0]) ? new Date().toISOString().slice(0, 10) : '';
+        if (!tgl || tgl < setahun) continue;
+        const aksi = td[1], nama = td[2], rating = (td[3].split('→').pop() || '').trim(), tgStr = (td[4] || '').split('→').pop() || '';
+        if (!nama || !rating || bank.some((b) => b.nama === nama)) continue;
+        const tg = nilai(tgStr.replace(/[^0-9.]/g, '') || null);
+        const AKSI: Record<string, string> = { upgrade: 'Upgrade', downgrade: 'Downgrade', reiterated: 'Tegaskan ulang', initiated: 'Mulai meliput', resumed: 'Lanjut meliput', main: 'Pertahankan' };
+        const a = AKSI[aksi.toLowerCase()] || aksi;
+        bank.push({ nama, analis: '', rating: a ? `${rating} (${a})` : rating, arah: arahDari(rating), tgl, target: tg && tg > 0 ? tg : null });
+        if (bank.length >= 30) break;
+    }
+    return bank;
 }
 const raw = (v: any): number | null => { const n = typeof v === 'object' && v ? v.raw : v; return typeof n === 'number' && Number.isFinite(n) ? n : null; };
 /** Analis dari Yahoo: hitungan rekomendasi bulan ini, target rata-rata, dan rating terakhir tiap bank (12 bulan). */
@@ -145,14 +187,24 @@ async function analisYahoo(s: string): Promise<Analis | null> {
 }
 export async function ambilAnalis(s: string): Promise<Analis | null> {
     return simpan(`an:${s}`, 12 * 3600_000, async () => {
-        // Yahoo dulu (ada rincian per bank); kalau gagal / tanpa rincian bank, Nasdaq.
+        // Ringkasan: Yahoo (bila tidak sedang diistirahatkan) → Nasdaq. Rincian per bank: Yahoo → Finviz.
+        const catatan: string[] = [];
         let y: Analis | null = null;
-        try { y = await analisYahoo(s); galatYahoo = ''; } catch (e: any) { galatYahoo = String(e?.message || e).slice(0, 160); console.warn('[Analis] Yahoo:', galatYahoo); }
+        try { y = await analisYahoo(s); galatYahoo = ''; } catch (e: any) { galatYahoo = String(e?.message || e).slice(0, 160); }
         if (y && y.bank.length) return y;
-        const nq = await analisNasdaq(s).catch(() => null);
-        if (!nq) return y;
-        if (y) return { ...y, bank: nq.bank.length ? nq.bank : y.bank };
-        return { ...nq, catatan: galatYahoo ? `Yahoo: ${galatYahoo}` : '' };
+        const [nq, fv] = await Promise.all([
+            analisNasdaq(s).catch(() => null),
+            finvizBank(s).catch((e: any) => { catatan.push(String(e?.message || e).slice(0, 120)); return [] as Analis['bank']; })
+        ]);
+        let dasar = y || nq;
+        if (!dasar && fv.length) {
+            const B = fv.filter((b) => b.arah === 'buy').length, Hh = fv.filter((b) => b.arah === 'hold').length, S = fv.filter((b) => b.arah === 'sell').length;
+            dasar = { buy: B, hold: Hh, sell: S, n: B + Hh + S, konsensus: B >= Hh && B >= S ? 'BUY' : S > B && S >= Hh ? 'SELL' : 'HOLD', target: null, tinggi: null, rendah: null, bank: [], sumber: 'Finviz' };
+        }
+        if (!dasar) return null;
+        const bank = fv.length ? fv : dasar.bank;
+        if (!bank.length && !catatan.length) catatan.push('Finviz tidak memuat rating untuk saham ini');
+        return { ...dasar, bank, sumber: fv.length && dasar.sumber !== 'Finviz' ? `${dasar.sumber} · rincian bank: Finviz` : dasar.sumber, catatan: bank.length ? '' : catatan.join('; ') };
     });
 }
 async function analisNasdaq(s: string): Promise<Analis | null> {
