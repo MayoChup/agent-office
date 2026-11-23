@@ -173,7 +173,7 @@ export async function buatInsight(dataDir: string, s: string, fakta: string, llm
         'PANTAU: 2–3 kalimat yang perlu dipantau ke depan (level harga penting, jadwal laporan bila ada di data, risiko)\n' +
         'Bukan saran beli/jual.';
     const bagian = (t: string, label: string) => {
-        const m = t.match(new RegExp(`(?:^|\\n)\\W*${label}\\W*:?\\**\\s*([\\s\\S]*?)(?=\\n\\W*(?:JUDUL|RINGKAS|FUNDTEK|PANTAU)\\W*:|$)`, 'i'));
+        const m = t.match(new RegExp(`(?:^|\\n)[*#\\s-]*${label}\\**\\s*:\\s*\\**\\s*([\\s\\S]*?)(?=\\n\\W*(?:JUDUL|RINGKAS|FUNDTEK|PANTAU)\\W*:|$)`, 'i'));
         return (m?.[1] || '').replace(/\*\*/g, '').trim();
     };
     let j: any = null, kosong = 0, galatCadangan = '';
