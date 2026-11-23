@@ -161,8 +161,8 @@ export function bacaInsight(dataDir: string, s: string): Insight | null {
     try { const x = JSON.parse(fs.readFileSync(path.join(dirInsight(dataDir), `${s}.json`), 'utf8')) as Insight; return Date.now() - x.dibuat < 7 * 86400_000 ? x : null; } catch { return null; }
 }
 type Llm = { complete(system: string, user: string, maxTokens?: number, attempts?: number): Promise<string | null> } | null | undefined;
-export async function buatInsight(dataDir: string, s: string, fakta: string, llm: Llm): Promise<Insight> {
-    if (!llm) throw new Error('AI belum tersedia');
+export async function buatInsight(dataDir: string, s: string, fakta: string, llm: Llm, cadangan?: (prompt: string) => Promise<string>): Promise<Insight> {
+    if (!llm && !cadangan) throw new Error('AI belum tersedia');
     // Format berlabel (lebih tahan untuk AI gratis daripada JSON): JUDUL / RINGKAS / FUNDTEK / PANTAU. Dicoba hingga 2×.
     const sistem = 'Kamu analis saham di kantor Pak Rico. Tulis "Weekly Insight" untuk satu saham AS dalam bahasa Indonesia yang jelas untuk orang awam. ' +
         'Pakai HANYA angka dan fakta dari data yang diberikan; jangan mengarang angka, tanggal, atau berita. Kalau suatu data tidak ada, jangan disebut. Bulatkan angka ke 2 desimal. ' +
@@ -176,16 +176,20 @@ export async function buatInsight(dataDir: string, s: string, fakta: string, llm
         const m = t.match(new RegExp(`(?:^|\\n)\\W*${label}\\W*:?\\**\\s*([\\s\\S]*?)(?=\\n\\W*(?:JUDUL|RINGKAS|FUNDTEK|PANTAU)\\W*:|$)`, 'i'));
         return (m?.[1] || '').replace(/\*\*/g, '').trim();
     };
-    let j: any = null, kosong = 0;
+    let j: any = null, kosong = 0, galatCadangan = '';
+    // Percobaan 1: AI gratis. Percobaan 2: AI tim trading lewat Hermes (jalur chat) — tidak bergantung kuota AI gratis.
     for (let coba = 0; coba < 2 && !j; coba++) {
-        const out = String((await llm.complete(sistem, fakta, 1400, 2)) || '');
+        let out = '';
+        if (coba === 0 && llm) out = String((await llm.complete(sistem, fakta, 1400, 2)) || '');
+        else if (cadangan) { try { out = await cadangan(`${sistem}\n\nDATA:\n${fakta}`); } catch (e: any) { galatCadangan = String(e?.message || e).slice(0, 160); } }
+        else if (llm) out = String((await llm.complete(sistem, fakta, 1400, 2)) || '');
         if (!out.trim()) { kosong++; continue; }
         const r = { judul: bagian(out, 'JUDUL'), ringkas: bagian(out, 'RINGKAS'), fundTek: bagian(out, 'FUNDTEK'), pantau: bagian(out, 'PANTAU') };
         if (r.ringkas) { j = r; break; }
         // Cadangan: AI membalas JSON.
         try { const m = out.match(/\{[\s\S]*\}/); const x = m ? JSON.parse(m[0]) : null; if (x?.ringkas) j = x; } catch { /* coba lagi */ }
     }
-    if (!j) throw new Error(kosong === 2 ? 'AI gratis sedang penuh. Coba lagi beberapa menit lagi.' : 'AI tidak memberi jawaban yang bisa dibaca. Coba lagi sebentar.');
+    if (!j) throw new Error(galatCadangan ? `AI gratis penuh dan AI tim trading gagal (${galatCadangan}). Coba lagi beberapa menit lagi.` : kosong === 2 ? 'AI sedang penuh. Coba lagi beberapa menit lagi.' : 'AI tidak memberi jawaban yang bisa dibaca. Coba lagi sebentar.');
     const x: Insight = { s, judul: String(j.judul || '').slice(0, 160), ringkas: String(j.ringkas || ''), fundTek: String(j.fundTek || ''), pantau: String(j.pantau || ''), dibuat: Date.now(), model: 'AI kantor' };
     fs.mkdirSync(dirInsight(dataDir), { recursive: true });
     fs.writeFileSync(path.join(dirInsight(dataDir), `${s}.json`), JSON.stringify(x));

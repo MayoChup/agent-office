@@ -429,6 +429,9 @@ export class Percakapan {
         }
         if (iz.tundaMs > 0) await new Promise((r) => setTimeout(r, Math.min(iz.tundaMs, 10 * 60_000)));
     }
+    /** Satu permintaan sekali jalan ke AI Hermes (di luar chat), mis. Weekly Insight saat AI gratis penuh. */
+    sekali(aiId: string, prompt: string): Promise<string> { return this.jalankanAi(`insight-${aiId}`, aiId, prompt, false, ''); }
+
     private async jalankanAi(thread: string, aiId: string, prompt: string, berat: boolean, kerja?: string): Promise<string> {
         const idK = kerja ?? this.catatKerja(thread, aiId);
         const sig = thread.startsWith('kerja-') ? `tugas:${prompt.replace(/\s+/g, ' ').slice(0, 80)}` : `chat:${thread}`;

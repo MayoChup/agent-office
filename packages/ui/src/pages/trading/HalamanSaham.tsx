@@ -28,12 +28,21 @@ export function BarisStat({ x }: { x: K.Bacaan }) {
 interface Insight { judul: string; ringkas: string; fundTek: string; pantau: string; dibuat: number }
 const ikonKilau = <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" aria-hidden><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" /><path d="M19 15l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z" /></svg>;
 export function WeeklyInsight({ s }: { s: string }) {
-    const q = useApi<{ insight: Insight | null }>(`/api/kantor/insight/${encodeURIComponent(s)}`, 0);
+    const q = useApi<{ insight: Insight | null; jalan?: boolean; galat?: string }>(`/api/kantor/insight/${encodeURIComponent(s)}`, 0);
     const [buka, setBuka] = useState(false);
-    const [jalan, setJalan] = useState(false);
-    const [err, setErr] = useState('');
+    const [minta, setMinta] = useState(false);
+    const [errKirim, setErrKirim] = useState('');
     const x = q.data?.insight;
-    const buat = async () => { setJalan(true); setErr(''); try { await apiPost(`/api/kantor/insight/${encodeURIComponent(s)}`, {}); await q.reload(); setBuka(true); } catch (e: any) { setErr(String(e?.message || e)); } setJalan(false); };
+    const jalan = minta || !!q.data?.jalan;
+    const err = errKirim || (!jalan ? q.data?.galat || '' : '');
+    // Dibuat di latar server: pantau tiap 4 detik sampai selesai.
+    React.useEffect(() => {
+        if (!jalan) return;
+        const t = setInterval(async () => { await q.reload(); }, 4000);
+        return () => clearInterval(t);
+    }, [jalan]); // eslint-disable-line react-hooks/exhaustive-deps
+    React.useEffect(() => { if (minta && q.data && !q.data.jalan) { setMinta(false); if (q.data.insight) setBuka(true); } }, [q.data]); // eslint-disable-line react-hooks/exhaustive-deps
+    const buat = async () => { setErrKirim(''); setMinta(true); try { await apiPost(`/api/kantor/insight/${encodeURIComponent(s)}`, {}); await q.reload(); } catch (e: any) { setErrKirim(String(e?.message || e)); setMinta(false); } };
     const tgl = x ? new Date(x.dibuat).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
     return (
         <section className="sb-card hs-insight">
@@ -41,7 +50,7 @@ export function WeeklyInsight({ s }: { s: string }) {
             {!x ? (
                 <div className="hs-ins-kosong">
                     <p>Ringkasan mingguan dari AI: apa yang terjadi minggu ini, posisi teknikal & fundamental, dan yang perlu dipantau. Disusun hanya dari data kantor.</p>
-                    <button className="btn primary" disabled={jalan} onClick={buat}>{jalan ? 'Menyusun insight… ±20–40 detik' : 'Buat insight'}</button>
+                    <button className="btn primary" disabled={jalan} onClick={buat}>{jalan ? 'Menyusun insight… bisa sampai ±1–2 menit' : 'Buat insight'}</button>
                     {err && <small className="down">{err}</small>}
                 </div>
             ) : (

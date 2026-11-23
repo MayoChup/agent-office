@@ -694,13 +694,17 @@ app.get('/api/kantor/aksi-korporasi/:s', requireToken, async (req, res) => {
     const s = kodeOk(req.params.s);
     try { res.json({ ok: true, ...(await ambilAksi(s, (screener.detail(s)?.baris as any)?.harga ?? null)) }); } catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
 });
-app.get('/api/kantor/insight/:s', requireToken, (req, res) => { res.json({ ok: true, insight: bacaInsight(config.dataDir, kodeOk(req.params.s)) }); });
-const insightJalan = new Set<string>();
-app.post('/api/kantor/insight/:s', requireToken, async (req, res) => {
+// Weekly Insight dibuat di latar (AI bisa butuh 1–2 menit); halaman memantau lewat GET sampai jadi.
+const insightJalan = new Map<string, { mulai: number }>(), insightGalat = new Map<string, string>();
+app.get('/api/kantor/insight/:s', requireToken, (req, res) => {
     const s = kodeOk(req.params.s);
-    if (insightJalan.has(s)) { res.status(409).json({ ok: false, error: 'Insight sedang dibuat, tunggu sebentar.' }); return; }
-    insightJalan.add(s);
-    try {
+    res.json({ ok: true, insight: bacaInsight(config.dataDir, s), jalan: insightJalan.has(s), galat: insightGalat.get(s) || '' });
+});
+app.post('/api/kantor/insight/:s', requireToken, (req, res) => {
+    const s = kodeOk(req.params.s);
+    if (!insightJalan.has(s)) {
+        insightJalan.set(s, { mulai: Date.now() }); insightGalat.delete(s);
+        (async () => {
         const d: any = screener.detail(s);
         if (!d) throw new Error('Saham belum ada di data penyaring');
         const b = d.baris, f = b.f || {};
@@ -716,9 +720,10 @@ app.post('/api/kantor/insight/:s', requireToken, async (req, res) => {
             berita7hari: (d.berita?.judul || []).slice(0, 8).map((j: any) => `${j.tgl}: ${j.t}`),
             statistik: v(ek), analis: v(an) ? { ...v(an)!, bank: v(an)!.bank.slice(0, 5) } : null, sentimen: v(se)?.jendela
         }, bulat);
-        res.json({ ok: true, insight: await buatInsight(config.dataDir, s, fakta, OfficeRoom.sharedLlm()) });
-    } catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
-    finally { insightJalan.delete(s); }
+            await buatInsight(config.dataDir, s, fakta, OfficeRoom.sharedLlm(), (p) => percakapan.sekali(roster().some((a) => a.id === 'trading') ? 'trading' : 'default', p));
+        })().catch((e: any) => { insightGalat.set(s, String(e?.message || e)); }).finally(() => { insightJalan.delete(s); });
+    }
+    res.json({ ok: true, jalan: true });
 });
 app.get('/api/kantor/preset', requireToken, (_req, res) => { res.json({ ok: true, preset: presetInfo(), rekomendasi: REKOMENDASI, rekomendasiUji: rekomendasiUji(fileUji(config.dataDir)), statusUji: statusPreset(fileUji(config.dataDir)) }); });
 // Uji mundur (backtest) — berjalan di latar belakang ±20–40 menit untuk ±500 saham.
