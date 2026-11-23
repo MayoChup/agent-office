@@ -42,7 +42,7 @@ export function UjiMundur({ sisipan }: { sisipan?: React.ReactNode } = {}) {
                     <small className="sb-note">{st?.jalan ? `${st.progres} — ±20–40 menit, bisa ditinggal` : h ? `Terakhir: ${new Date(h.at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} · ${h.saham} saham · ${h.sampel.toLocaleString('id-ID')} sampel · ${h.periode.dari} s/d ${h.periode.sampai}` : 'Belum pernah dijalankan.'}</small>
                 </div>
                 {(st?.galat || msg) && <div className="error">{st?.galat || msg}</div>}
-                {!!d.data?.berikutnya && !st?.jalan && <small className="sb-note"><Ikon e="🔁" /> Berjalan otomatis tiap ±30 hari (akhir pekan). Berikutnya: ±{new Date(d.data.berikutnya).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Jakarta' })}. Bobot & rekomendasi di halaman Trading ikut diperbarui sendiri.</small>}
+                {!!d.data?.berikutnya && !st?.jalan && <small className="sb-note"><Ikon e="🔁" /> Berjalan otomatis tiap minggu (akhir pekan, saat bursa tutup). Berikutnya: ±{new Date(d.data.berikutnya).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Jakarta' })}. Bobot & rekomendasi di halaman Trading ikut diperbarui sendiri.</small>}
                 {d.data?.saran?.teks && <div className="su-ai-box"><b><Ikon e="✨" /> Ringkasan AI</b><p>{d.data.saran.teks}</p></div>}
             </section>
             {sisipan}
