@@ -8,14 +8,14 @@ import type { Fund } from './preset';
  *  - profil perusahaan (deskripsi & situs web)
  */
 const H = { 'User-Agent': UA, Accept: 'application/json, text/plain, */*', 'Accept-Language': 'en-US,en;q=0.9', Origin: 'https://www.nasdaq.com', Referer: 'https://www.nasdaq.com/' };
-async function j(url: string): Promise<any> {
+export async function j(url: string): Promise<any> {
     const res = await fetch(url, { headers: H, signal: AbortSignal.timeout(20_000) });
     if (!res.ok) throw new Error(`Nasdaq HTTP ${res.status}`);
     const d: any = await res.json();
     if (d?.status?.rCode && d.status.rCode !== 200) throw new Error(`Nasdaq: ${d.status?.bCodeMessage?.[0]?.errorMessage || 'tidak ada data'}`);
     return d?.data;
 }
-const sym = (s: string) => encodeURIComponent(s.replace('-', '.'));
+export const sym = (s: string) => encodeURIComponent(s.replace('-', '.'));
 /** "$1,234,000" / "-$5" / "(12)" / "36.6%" / "--" → angka */
 export function nilai(v: any): number | null {
     if (v == null) return null;
@@ -27,7 +27,7 @@ export function nilai(v: any): number | null {
     return Number.isFinite(n) ? (neg ? -n : n) : null;
 }
 /** Tabel Nasdaq {headers:{value1..}, rows:[{value1: label, value2: thn terbaru, ...}]} → Map label → [terbaru, ..., terlama] */
-function tabel(t: any): Map<string, Array<number | null>> {
+export function tabel(t: any): Map<string, Array<number | null>> {
     const m = new Map<string, Array<number | null>>();
     for (const r of t?.rows || []) {
         const keys = Object.keys(r).filter((k) => /^value\d+$/.test(k)).sort((a, b) => +a.slice(5) - +b.slice(5));
@@ -36,7 +36,7 @@ function tabel(t: any): Map<string, Array<number | null>> {
     }
     return m;
 }
-const cari = (m: Map<string, Array<number | null>>, ...pola: RegExp[]) => { for (const p of pola) for (const [k, v] of m) if (p.test(k)) return v; return [] as Array<number | null>; };
+export const cari = (m: Map<string, Array<number | null>>, ...pola: RegExp[]) => { for (const p of pola) for (const [k, v] of m) if (p.test(k)) return v; return [] as Array<number | null>; };
 
 export async function profil(s: string): Promise<{ nama: string; deskripsi: string; situs: string; sektor: string; industri: string; alamat: string }> {
     const d = await j(`https://api.nasdaq.com/api/company/${sym(s)}/company-profile`);

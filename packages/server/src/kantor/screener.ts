@@ -751,7 +751,15 @@ export class Screener {
 }
 
 /* ── Candle untuk grafik (langsung dari Yahoo, cache 3 menit) ── */
-const RENTANG: Record<string, { range: string; interval: string; tampil: number; harian: boolean }> = {
+const RENTANG: Record<string, { range: string; interval: string; tampil: number; harian: boolean; prepost?: boolean }> = {
+    '1D': { range: '1d', interval: '5m', tampil: 400, harian: false, prepost: true },
+    '1W': { range: '5d', interval: '15m', tampil: 400, harian: false },
+    '1M': { range: '1mo', interval: '60m', tampil: 400, harian: false },
+    '3M': { range: '2y', interval: '1d', tampil: 64, harian: true },
+    'YTD': { range: '2y', interval: '1d', tampil: 0, harian: true },
+    '1Y': { range: '2y', interval: '1d', tampil: 252, harian: true },
+    '5Y': { range: '10y', interval: '1wk', tampil: 261, harian: true },
+    // nama lama (tetap diterima)
     '1H': { range: '1d', interval: '5m', tampil: 80, harian: false },
     '5H': { range: '5d', interval: '15m', tampil: 140, harian: false },
     '1B': { range: '2y', interval: '1d', tampil: 22, harian: true },
@@ -764,20 +772,26 @@ const candleCache = new Map<string, { at: number; data: any }>();
 export async function ambilCandle(simbol: string, rentang: string) {
     const s = simbol.toUpperCase().replace(/[^A-Z0-9.^-]/g, '').slice(0, 12);
     const r = RENTANG[rentang] || RENTANG['6B'];
-    const key = `${s}|${r.range}|${r.interval}`;
+    const key = `${s}|${r.range}|${r.interval}|${r.prepost ? 'pp' : ''}`;
     const hit = candleCache.get(key);
-    if (hit && Date.now() - hit.at < 180_000) return { ...hit.data, tampil: r.tampil };
+    // YTD: tampilkan sejak hari bursa pertama tahun ini.
+    const tampilDari = (data: any) => r.tampil || Math.max(1, data.candles.filter((k: any) => String(k.t) >= `${new Date().getUTCFullYear()}-01-01`).length);
+    if (hit && Date.now() - hit.at < (r.prepost ? 60_000 : 180_000)) return { ...hit.data, tampil: tampilDari(hit.data) };
     let j: any;
-    try { j = await yahooChart(s, r.range, r.interval); } catch (e: any) {
+    try { j = await yahooChart(s, r.range, r.interval, !!r.prepost); } catch (e: any) {
         // Yahoo diblokir → CNBC (menit / mingguan) atau harga harian dari sumber cadangan.
-        if (r.interval !== '1d') { j = await cnbcChart(s, r.range === '1d' ? '1D' : r.range === '5d' ? '5D' : '5Y'); }
+        if (r.interval !== '1d') { j = await cnbcChart(s, r.range === '1d' ? '1D' : r.range === '5d' || r.range === '1mo' ? '5D' : '5Y'); }
         else {
         const h = await hargaHarian(s);
         j = { meta: { currency: 'USD', longName: h.nama || s }, timestamp: h.rows.map((x) => Date.parse(x.t + 'T00:00:00Z') / 1000), indicators: { quote: [{ open: h.rows.map((x) => x.o), high: h.rows.map((x) => x.h), low: h.rows.map((x) => x.l), close: h.rows.map((x) => x.c), volume: h.rows.map((x) => x.v) }] } };
         }
     }
     const q = j.indicators?.quote?.[0] || {};
+    // Sesi tiap candle (pre-market / reguler / after-hours) untuk arsiran di grafik 1D.
+    const reg = j.meta?.currentTradingPeriod?.regular;
+    const sesiDari = (t: number) => (!reg || r.harian ? 'reg' : t < reg.start ? 'pre' : t >= reg.end ? 'post' : 'reg');
     const candles = (j.timestamp || []).map((t: number, i: number) => ({
+        sesi: sesiDari(t),
         t: r.harian ? new Date((t + (j.meta?.gmtoffset || 0)) * 1000).toISOString().slice(0, 10) : t + 7 * 3600, // intraday ditampilkan dalam WIB
         o: q.open?.[i], h: q.high?.[i], l: q.low?.[i], c: q.close?.[i], v: q.volume?.[i] || 0
     })).filter((k: any) => [k.o, k.h, k.l, k.c].every((x) => Number.isFinite(x)));
@@ -790,11 +804,18 @@ export async function ambilCandle(simbol: string, rentang: string) {
         s, nama: String(j.meta?.longName || j.meta?.shortName || s), mataUang: j.meta?.currency || 'USD', bursa: j.meta?.fullExchangeName || j.meta?.exchangeName || '',
         harian: r.harian, interval: r.interval,
         candles: uniq.map((k) => ({ ...k, o: +k.o.toFixed(4), h: +k.h.toFixed(4), l: +k.l.toFixed(4), c: +k.c.toFixed(4) })),
+        prevClose: Number.isFinite(j.meta?.chartPreviousClose) ? +j.meta.chartPreviousClose : Number.isFinite(j.meta?.previousClose) ? +j.meta.previousClose : null,
+        ext: (() => { // harga di luar jam bursa (pre-market / after-hours), dibanding penutupan reguler terakhir
+            const akhir = uniq[uniq.length - 1]; if (!akhir || akhir.sesi === 'reg') return null;
+            const regT = [...uniq].reverse().find((k) => k.sesi === 'reg'), tutup = regT?.c ?? j.meta?.regularMarketPrice;
+            if (!(tutup > 0)) return null;
+            return { sesi: akhir.sesi, harga: +akhir.c.toFixed(4), chg: +(akhir.c - tutup).toFixed(4), pct: +((akhir.c / tutup - 1) * 100).toFixed(2) };
+        })(),
         ma20: sma(closes, 20).map(r2), ma50: sma(closes, 50).map(r2), ma200: sma(closes, 200).map(r2)
     };
     candleCache.set(key, { at: Date.now(), data });
     if (candleCache.size > 200) candleCache.delete(candleCache.keys().next().value as string);
-    return { ...data, tampil: r.tampil };
+    return { ...data, tampil: tampilDari(data) };
 }
 
 const SEKTOR: Record<string, string> = {

@@ -47,10 +47,10 @@ class Galat extends Error { constructor(msg: string, public keras = false, publi
 const httpGalat = (nama: string, st: number) => new Galat(st === 429 ? `${nama} membatasi permintaan (HTTP 429)` : `${nama} HTTP ${st}`, st === 429 || st === 403 || st === 401);
 
 /* ── Yahoo ── */
-async function yahooMentah(lewat: 'fetch' | 'curl', s: string, range: string, interval: string) {
+async function yahooMentah(lewat: 'fetch' | 'curl', s: string, range: string, interval: string, prepost = false) {
     let terakhir: Galat | null = null;
     for (const host of ['query1', 'query2']) {
-        const url = `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(s)}?range=${range}&interval=${interval}&includePrePost=false`;
+        const url = `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(s)}?range=${range}&interval=${interval}&includePrePost=${prepost}`;
         const j = await (lewat === 'fetch' ? ambilFetch(url) : ambilCurl(url));
         if (j.status === 404) throw new Galat(`Saham ${s} tidak ditemukan`, false, true);
         if (j.status !== 200) { terakhir = httpGalat(lewat === 'fetch' ? 'Yahoo' : 'Yahoo (curl)', j.status); await tidur(400); continue; }
@@ -62,12 +62,12 @@ async function yahooMentah(lewat: 'fetch' | 'curl', s: string, range: string, in
 }
 
 /** Grafik Yahoo mentah (dipakai candle & harga terkini): fetch dulu, lalu curl. */
-export async function yahooChart(s: string, range: string, interval: string): Promise<any> {
+export async function yahooChart(s: string, range: string, interval: string, prepost = false): Promise<any> {
     const pesan: string[] = [];
     for (const lewat of ['fetch', 'curl'] as const) {
         const nama = lewat === 'fetch' ? 'Yahoo' : 'Yahoo (curl)';
         if (sedangIstirahat(nama)) { pesan.push(`${nama}: ${galatSumber.get(nama) || 'diistirahatkan'}`); continue; }
-        try { const r = await yahooMentah(lewat, s, range, interval); catatBerhasil(nama); return r; } catch (e: any) {
+        try { const r = await yahooMentah(lewat, s, range, interval, prepost); catatBerhasil(nama); return r; } catch (e: any) {
             if (e?.tetap) throw e;
             const m = e?.name === 'TimeoutError' ? `${nama} tidak menjawab` : e?.cause?.code ? `${nama} tidak bisa dihubungi (${e.cause.code})` : String(e?.message || e);
             catatGagal(nama, m, !!e?.keras); pesan.push(m);

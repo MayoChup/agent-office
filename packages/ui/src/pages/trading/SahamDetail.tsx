@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { apiGet, apiPost } from '../../kantor/connection';
 import { useApi, apiGetSimpan, simpanApi } from '../../kantor/api';
-import { CandleChart } from '../../components/CandleChart';
+import { GrafikSaham, DataCandle } from '../../components/GrafikSaham';
+import { WeeklyInsight, MarketStats, FundLengkap, Experts, NewsSentiment, Seasonality, DataEkstra } from './HalamanSaham';
 import { Baris, FAKTOR, FaktorKey, Label, kelas, usd, persen, kap, skorBar } from './types';
 import { PresetPilih, PresetCek, PresetData, PresetEval } from './Preset';
 import { Simulasi } from './Simulasi';
@@ -32,7 +33,12 @@ export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPre
     const [err, setErr] = useState('');
     const [msg, setMsg] = useState('');
     const [qKunci, setQKunci] = useState(0);
-    const [tab, setTab] = useState<FaktorKey>('teknikal');
+    type Tab = 'overview' | 'fundamental' | 'teknikal' | 'berita' | 'whales' | 'musiman';
+    const [tab, setTabS] = useState<Tab>(() => { try { return (localStorage.getItem('kantor:saham:tab') as Tab) || 'overview'; } catch { return 'overview'; } });
+    const setTab = (t: Tab) => { setTabS(t); try { localStorage.setItem('kantor:saham:tab', t); } catch { /* */ } };
+    const ek = useApi<DataEkstra>(`/api/kantor/saham-ekstra/${encodeURIComponent(simbol)}`, 0);
+    const [ext, setExt] = useState<DataCandle['ext']>(null);
+    useEffect(() => { let a = true; setExt(null); apiGet<DataCandle>(`/api/kantor/candle/${encodeURIComponent(simbol)}?r=1D`).then((r) => a && setExt(r.ext)).catch(() => { /* tidak wajib */ }); return () => { a = false; }; }, [simbol]);
     const [pegang, setPegang] = useState(false);
     const td = useApi<TradingData>('/api/kantor/trading', 0);
     const dipegang = td.data?.positions.find((p) => p.symbol === simbol);
@@ -60,18 +66,23 @@ export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPre
     const best = pr?.target.find((t) => t.nama === pr.terbaik);
     const atr = b.x?.atr || 0;
 
+    const TABS: Array<[Tab, string]> = [['overview', 'Overview'], ['fundamental', 'Fundamentals'], ['teknikal', 'Technical'], ['berita', 'News'], ['whales', 'Whales'], ['musiman', 'Seasonality']];
     return (
         <>
             <button className="back" onClick={onBack}>‹ Kembali</button>
             <section className="sb-card sd-hero">
                 <div className="sd-id">
-                    <div className="sd-kick">{b.sektor || 'Saham AS'} · {b.nama}</div>
+                    <div className="sd-kick">{b.sektor || 'Saham AS'}</div>
                     <div className="sd-tick-row">
-                        <div className="sd-tick mono">{b.s}</div>
+                        <div className="hs-nama"><h2>{prof?.nama || b.nama}</h2><span className="mono">{b.s}</span></div>
                         <Bintang s={b.s} besar />
                         <TombolFolder s={b.s} />
                     </div>
-                    <div className="sd-price mono">{usd(b.harga)} <span className={b.chg1d >= 0 ? 'up' : 'down'}>{b.chg1d >= 0 ? '▲' : '▼'} {Math.abs(b.chg1d).toFixed(2)}%</span></div>
+                    <div className="hs-harga mono">${Math.floor(b.harga).toLocaleString('en-US')}<sup>.{b.harga.toFixed(2).split('.')[1]}</sup></div>
+                    <div className="hs-ubah">
+                        {ext && <div className={ext.chg >= 0 ? 'up' : 'down'}>{ext.chg >= 0 ? '↗' : '↘'} ${Math.abs(ext.chg).toFixed(2)} ({Math.abs(ext.pct).toFixed(2)}%) <span>· {ext.sesi === 'pre' ? 'Pre-market' : 'After-hours'}</span></div>}
+                        {(() => { const c = b.harga - b.harga / (1 + b.chg1d / 100); return <div className={b.chg1d >= 0 ? 'up' : 'down'}>{b.chg1d >= 0 ? '↗' : '↘'} ${Math.abs(c).toFixed(2)} ({Math.abs(b.chg1d).toFixed(2)}%) <span>· At close</span></div>; })()}
+                    </div>
                     <div className="sd-pegang">
                         {dipegang
                             ? <span className="sd-dipegang"><Ikon e="📌" /> Dipegang {dipegang.shares} lembar @ {usd(dipegang.entry)}{dipegang.pnl != null && <b className={dipegang.pnl >= 0 ? 'up' : 'down'}> {dipegang.pnl >= 0 ? '+' : '−'}{usd(Math.abs(dipegang.pnl))}</b>} · target {usd(dipegang.target)} · stop {usd(dipegang.stop)}</span>
@@ -92,21 +103,14 @@ export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPre
             {pegang && <PegangPosisi simbol={b.s} harga={b.harga} proyeksi={pr as any} kas={null}
                 ai={{ label: all?.label, skor: all?.skor, mode, H, pt: preset?.t || '', pf: preset?.f || '' }}
                 onTutup={() => setPegang(false)} onSelesai={(m) => { setPegang(false); setMsg(m); td.reload(); }} />}
-            <section className="sb-card sd-prof">
-                <div className="sd-h"><h3>Tentang {prof?.nama || b.nama}</h3></div>
-                {prof ? (<>
-                    <p>{prof.ringkas || prof.deskripsi.slice(0, 400)}</p>
-                    <div className="sd-prof-meta">{[prof.sektor, prof.industri, prof.alamat].filter(Boolean).join(' · ')}</div>
-                    <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-                        {prof.situs && <a className="btn" href={prof.situs} target="_blank" rel="noreferrer"><Ikon e="🌐" /> Situs resmi perusahaan</a>}
-                        <a className="btn" href={`https://www.nasdaq.com/market-activity/stocks/${b.s.toLowerCase().replace('-', '.')}`} target="_blank" rel="noreferrer"><Ikon e="📄" /> Profil di Nasdaq</a>
-                        <a className="btn" href={`https://www.google.com/finance/quote/${b.s.replace('-', '.')}`} target="_blank" rel="noreferrer"><Ikon e="🔎" /> Google Finance</a>
-                    </div>
-                </>) : <p className="sb-note">{profErr ? `Profil belum bisa diambil (${profErr}).` : 'Memuat profil perusahaan…'}</p>}
-            </section>
+            <section className="sb-card gs-card"><GrafikSaham key={b.s} simbol={b.s} /></section>
 
-            <section className="sb-card cc-card"><CandleChart simbol={b.s} /></section>
+            <nav className="hs-tabs" role="tablist" aria-label="Bagian halaman saham">
+                {TABS.map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>)}
+            </nav>
 
+            {tab === 'overview' && (<>
+                <WeeklyInsight key={b.s} s={b.s} />
             {sim ? <Simulasi simbol={b.s} q={q.replace(/&p[tf]=[^&]*/g, '')} onTutup={() => setSim(false)} /> : (
                 <section className="sb-card sim-cta">
                     <div><b><Ikon e="🔮" /> Prediksi Kronos</b><small>Model AI candlestick memperkirakan jalur harga ke depan: peluang naik, perkiraan tengah, serta peluang kena target/stop untuk profil Konservatif, Moderat & Agresif.</small></div>
@@ -114,6 +118,7 @@ export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPre
                 </section>
             )}
 
+                <MarketStats b={b} e={ek.data?.ekstra} />
             {pr && (
                 <section className="sb-card sd-proj">
                     <div className="sd-h"><h3>Eksekusi & proyeksi <small>posisi ≤{pr.horizon} hari bursa · peluang dari pola harga 1 tahun terakhir</small></h3></div>
@@ -140,10 +145,28 @@ export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPre
                 </section>
             )}
 
+                <Experts a={ek.data?.analis} galat={ek.data?.analisGalat || ek.error} harga={b.harga} />
+            <section className="sb-card sd-prof">
+                <div className="sd-h"><h3>Tentang {prof?.nama || b.nama}</h3></div>
+                {prof ? (<>
+                    <p>{prof.ringkas || prof.deskripsi.slice(0, 400)}</p>
+                    <div className="sd-prof-meta">{[prof.sektor, prof.industri, prof.alamat].filter(Boolean).join(' · ')}</div>
+                    <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+                        {prof.situs && <a className="btn" href={prof.situs} target="_blank" rel="noreferrer"><Ikon e="🌐" /> Situs resmi perusahaan</a>}
+                        <a className="btn" href={`https://www.nasdaq.com/market-activity/stocks/${b.s.toLowerCase().replace('-', '.')}`} target="_blank" rel="noreferrer"><Ikon e="📄" /> Profil di Nasdaq</a>
+                        <a className="btn" href={`https://www.google.com/finance/quote/${b.s.replace('-', '.')}`} target="_blank" rel="noreferrer"><Ikon e="🔎" /> Google Finance</a>
+                    </div>
+                </>) : <p className="sb-note">{profErr ? `Profil belum bisa diambil (${profErr}).` : 'Memuat profil perusahaan…'}</p>}
+            </section>
+
+            </>)}
+
+            {tab === 'berita' && <section className="sb-card"><NewsSentiment key={b.s} s={b.s} /></section>}
+            {tab === 'musiman' && <section className="sb-card"><Seasonality key={b.s} s={b.s} /></section>}
+            {tab !== 'overview' && tab !== 'musiman' && (
             <section className="sb-card sd-faktor">
-                <div className="sb-seg">{FAKTOR.filter((x) => x.k !== 'semua').map((x) => <button key={x.k} className={tab === x.k ? 'on' : ''} onClick={() => setTab(x.k)}><Ikon e={x.ico} /> {x.label}</button>)}</div>
                 {(() => {
-                    const s = d.skor[tab];
+                    const s = d.skor[tab as FaktorKey];
                     const info = FAKTOR.find((x) => x.k === tab)!;
                     return (
                         <div className="sd-fbody">
@@ -188,16 +211,12 @@ export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPre
                                     <div><small>Orang dalam jual <Info judul="Penjualan orang dalam" teks={`${K.ORANG_DALAM.apa}\n\n${K.ORANG_DALAM.baca}`} /></small><b className="mono">{d.orang ? usd(d.orang.jual, 0) : '–'}</b></div>
                                 </div>
                             )}
-                            {tab === 'fundamental' && f && (
-                                <div className="sd-kv">
-                                    {(['roe', 'roa', 'per', 'pbv', 'der', 'npm', 'revGrowth', 'ps', 'cr', 'epsCagr3', 'fcf'] as const).map((k) => <KV key={k} x={K.fundamental(b, k)} />)}
-                                    <KV x={K.kapitalisasi(b, kap(b.mcap ?? f.mcap))} />
-                                </div>
-                            )}
+                            {tab === 'fundamental' && <FundLengkap b={b} e={ek.data?.ekstra} />}
                         </div>
                     );
                 })()}
             </section>
+            )}
 
             <section className="sb-card">
                 <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>

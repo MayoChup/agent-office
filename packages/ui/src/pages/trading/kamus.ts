@@ -179,3 +179,45 @@ export const INFO_KRONOS: Record<'target' | 'stop' | 'rr' | 'harapan' | 'naik', 
     harapan: 'Rata-rata hasil per posisi kalau profil ini diambil berkali-kali: peluang kena target × untung + peluang kena stop × rugi + sisanya ditutup di akhir periode. Plus = secara statistik menguntungkan, minus = merugikan. Belum termasuk biaya broker.',
     naik: 'Porsi jalur Kronos yang harganya di akhir periode lebih tinggi dari harga sekarang, tanpa memperhitungkan target atau stop. Sama untuk ketiga profil.'
 };
+
+/* ── Statistik tambahan halaman saham (Nasdaq) ─────────────── */
+export interface EkstraData { eps: number | null; peg: number | null; ebitda: number | null; yieldDiv: number | null; avgVol: number | null; beta: number | null; fwdPe: number | null; hi52: number | null; lo52: number | null; target1y: number | null }
+type KE = 'eps' | 'peg' | 'ebitda' | 'yieldDiv' | 'avgVol' | 'beta' | 'fwdPe' | 'gm' | 'hi52' | 'lo52';
+const E: Record<KE, { judul: string; apa: string; baca: string; tulis: (v: number) => string; nilai: (v: number, b: Baris) => [string, Nada, string] }> = {
+    eps: { judul: 'EPS', apa: 'EPS (Earnings per Share) = laba bersih setahun dibagi jumlah saham beredar. Berapa dolar laba yang "dihasilkan" tiap lembar saham.',
+        baca: 'Angka mutlaknya tidak bisa dibandingkan antar-perusahaan; yang penting arahnya: EPS yang naik dari tahun ke tahun = laba per lembar makin besar. EPS negatif = perusahaan rugi.',
+        tulis: (v) => d$(v), nilai: (v) => v < 0 ? ['Rugi', 'down', 'perusahaan sedang rugi.'] : ['Laba', 'up', 'perusahaan mencetak laba.'] },
+    peg: { judul: 'PEG', apa: 'PEG = PER dibagi pertumbuhan laba tahunan (%). Menilai apakah harga mahal masih "pantas" mengingat secepat apa labanya tumbuh.',
+        baca: 'Di bawah 1 = murah dibanding pertumbuhannya. 1–2 = wajar. Di atas 2 = mahal dibanding pertumbuhannya. Dihitung dari pertumbuhan laba 3 tahun (atau pendapatan bila tidak ada).',
+        tulis: (v) => a(v, 2), nilai: (v) => v < 1 ? ['Murah', 'up', 'harga murah dibanding laju pertumbuhan labanya.'] : v <= 2 ? ['Wajar', 'netral', 'harga wajar dibanding pertumbuhannya.'] : ['Mahal', 'down', 'harga mahal dibanding laju pertumbuhan labanya.'] },
+    ebitda: { judul: 'EBITDA', apa: 'EBITDA = laba sebelum bunga, pajak, penyusutan, dan amortisasi. Gambaran kasar laba dari operasi inti, sebelum urusan utang & akuntansi aset.',
+        baca: 'Positif dan naik = bisnis inti menghasilkan uang. Negatif = operasi inti pun masih rugi. Bandingkan dengan kapitalisasi pasar: makin kecil kelipatannya, makin murah.',
+        tulis: (v) => (Math.abs(v) >= 1000 ? `${v < 0 ? '−' : ''}$${a(Math.abs(v) / 1000)} M` : `${v < 0 ? '−' : ''}$${a(Math.abs(v), 0)} jt`), nilai: (v) => v > 0 ? ['Positif', 'up', 'operasi inti menghasilkan laba.'] : ['Negatif', 'down', 'operasi inti masih rugi.'] },
+    yieldDiv: { judul: 'Dividend yield', apa: 'Dividen setahun dibagi harga saham. Berapa persen "bunga" tunai yang Bapak terima per tahun dari memegang saham ini.',
+        baca: 'Rata-rata S&P 500 sekitar 1,3–1,5%. Di atas 3% = tinggi (cocok untuk pendapatan rutin), tapi yield yang sangat tinggi bisa tanda harga jatuh. 0% = tidak membagi dividen (laba ditanam kembali).',
+        tulis: (v) => `${a(v, 2)}%`, nilai: (v) => v <= 0 ? ['Tidak ada', 'netral', 'tidak membagi dividen.'] : v < 1 ? ['Kecil', 'netral', 'dividen kecil.'] : v <= 4 ? ['Baik', 'up', 'dividen menarik.'] : ['Sangat tinggi', 'netral', 'dividen sangat tinggi — cek apakah karena harga jatuh.'] },
+    avgVol: { judul: 'Rata-rata volume', apa: 'Rata-rata jumlah lembar saham yang diperdagangkan per hari (3 bulan).',
+        baca: 'Makin besar = makin likuid: mudah beli/jual di harga wajar tanpa selisih besar. Di bawah ±500 ribu lembar/hari mulai kurang likuid.',
+        tulis: (v) => (v >= 1e6 ? `${a(v / 1e6, 2)} jt` : `${a(v / 1e3, 0)} rb`), nilai: (v) => v >= 2e6 ? ['Sangat likuid', 'up', 'sangat mudah diperdagangkan.'] : v >= 5e5 ? ['Likuid', 'netral', 'cukup mudah diperdagangkan.'] : ['Kurang likuid', 'down', 'kurang likuid; selisih harga beli/jual bisa lebar.'] },
+    beta: { judul: 'Beta', apa: 'Beta mengukur seberapa liar saham ini dibanding pasar (S&P 500 = 1).',
+        baca: 'Beta 1,5 = biasanya bergerak 1,5× gerakan pasar (naik lebih kencang, turun lebih dalam). Di bawah 1 = lebih tenang dari pasar.',
+        tulis: (v) => a(v, 2), nilai: (v) => v > 1.3 ? ['Liar', 'down', 'lebih liar dari pasar.'] : v < 0.8 ? ['Tenang', 'up', 'lebih tenang dari pasar.'] : ['Sejalan pasar', 'netral', 'bergerak kurang lebih seperti pasar.'] },
+    fwdPe: { judul: 'Forward PER', apa: 'PER yang dihitung dari perkiraan laba setahun ke depan (bukan laba yang sudah lewat).',
+        baca: 'Lebih kecil dari PER sekarang = analis memperkirakan laba naik. Dibaca seperti PER: <15× murah, 15–25× wajar, >30× mahal.',
+        tulis: (v) => `${a(v)}×`, nilai: (v) => v < 0 ? ['Rugi', 'down', 'diperkirakan masih rugi.'] : v < 15 ? ['Murah', 'up', 'murah dari perkiraan laba.'] : v <= 25 ? ['Wajar', 'netral', 'wajar.'] : ['Mahal', 'down', 'mahal dari perkiraan laba.'] },
+    gm: { judul: 'Margin kotor', apa: 'Laba kotor dibagi pendapatan: sisa uang setelah biaya membuat produk, sebelum biaya operasional.',
+        baca: 'Di atas 40% = punya daya tawar harga yang kuat (merek, teknologi). 20–40% = wajar. Di bawah 20% = bisnis bermargin tipis (ritel, manufaktur).',
+        tulis: (v) => `${a(v)}%`, nilai: (v) => v >= 40 ? ['Kuat', 'up', 'margin kotor tinggi.'] : v >= 20 ? ['Wajar', 'netral', 'margin kotor wajar.'] : ['Tipis', 'down', 'margin kotor tipis.'] },
+    hi52: { judul: 'Tertinggi 52 minggu', apa: 'Harga tertinggi selama setahun terakhir.', baca: 'Harga dekat puncak = tren kuat tapi ruang naik jangka pendek bisa terbatas. Jauh di bawah puncak = sedang koreksi / diskon.',
+        tulis: (v) => d$(v), nilai: (v, b) => { const j = (b.harga / v - 1) * 100; return j > -5 ? ['Dekat puncak', 'up', `harga ${a(Math.abs(j))}% di bawah puncak.`] : [`${a(Math.abs(j), 0)}% di bawah`, 'netral', `harga ${a(Math.abs(j))}% di bawah puncak setahun.`]; } },
+    lo52: { judul: 'Terendah 52 minggu', apa: 'Harga terendah selama setahun terakhir.', baca: 'Jarak harga dari titik terendah menunjukkan seberapa jauh sudah naik dari dasar setahun.',
+        tulis: (v) => d$(v), nilai: (v, b) => { const j = (b.harga / v - 1) * 100; return j < 5 ? ['Dekat dasar', 'down', `harga hanya ${a(j)}% di atas dasar setahun.`] : [`+${a(j, 0)}% dari dasar`, 'netral', `harga ${a(j)}% di atas dasar setahun.`]; } }
+};
+export function ekstra(b: Baris, e: EkstraData | null | undefined, k: KE): Bacaan {
+    const d = E[k];
+    const v = k === 'gm' ? (b.f as any)?.gm : k === 'hi52' ? (e?.hi52 ?? (b as any).sinyal?.hi52) : k === 'lo52' ? (e?.lo52 ?? (b as any).sinyal?.lo52) : (e as any)?.[k];
+    if (!ada(v)) return kosong(d.judul, d.apa, d.baca);
+    const [status, nada, kini] = d.nilai(v, b);
+    const nilai = d.tulis(v);
+    return { judul: d.judul, nilai, status, nada, apa: d.apa, baca: d.baca, kini: `${b.s}: ${d.judul} ${nilai}, ${kini}` };
+}

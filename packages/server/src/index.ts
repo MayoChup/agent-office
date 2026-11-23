@@ -63,6 +63,7 @@ import { HermesBridge } from './kantor/hermes';
 import { slidesCli } from './kantor/slides';
 import { WaJanji, WaReader, waLoginCli, waLogoutCli, waLinked } from './kantor/wa';
 import { FreeLlm } from './kantor/freeLlm';
+import { ambilEkstra, ambilAnalis, ambilSentimen, ambilMusiman, bacaInsight, buatInsight } from './kantor/sahamEkstra';
 import { spawn } from 'child_process';
 import os from 'os';
 
@@ -675,6 +676,44 @@ app.get('/api/kantor/saham-detail/:s', requireToken, (req, res) => {
     const d = screener.detail(String(req.params.s).toUpperCase(), ...qH(req));
     if (!d) { res.status(404).json({ ok: false, error: 'Belum ada di data penyaring' }); return; }
     res.json({ ok: true, ...d });
+});
+// Halaman saham: statistik tambahan + pendapat analis, sentimen berita 7/14/30 hari, musiman, Weekly Insight (AI, manual).
+const kodeOk = (x: string) => String(x || '').toUpperCase().replace(/[^A-Z0-9.^-]/g, '').slice(0, 12);
+app.get('/api/kantor/saham-ekstra/:s', requireToken, async (req, res) => {
+    const s = kodeOk(req.params.s), b: any = screener.detail(s)?.baris;
+    const [e, a] = await Promise.allSettled([ambilEkstra(s, { per: b?.f?.per, epsCagr3: b?.f?.epsCagr3, revGrowth: b?.f?.revGrowth }), ambilAnalis(s)]);
+    res.json({ ok: true, ekstra: e.status === 'fulfilled' ? e.value : null, ekstraGalat: e.status === 'rejected' ? String(e.reason?.message || e.reason) : '', analis: a.status === 'fulfilled' ? a.value : null, analisGalat: a.status === 'rejected' ? String(a.reason?.message || a.reason) : '' });
+});
+app.get('/api/kantor/sentimen/:s', requireToken, async (req, res) => {
+    try { res.json({ ok: true, ...(await ambilSentimen(kodeOk(req.params.s))) }); } catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
+});
+app.get('/api/kantor/musiman/:s', requireToken, async (req, res) => {
+    try { res.json({ ok: true, ...(await ambilMusiman(kodeOk(req.params.s))) }); } catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
+});
+app.get('/api/kantor/insight/:s', requireToken, (req, res) => { res.json({ ok: true, insight: bacaInsight(config.dataDir, kodeOk(req.params.s)) }); });
+const insightJalan = new Set<string>();
+app.post('/api/kantor/insight/:s', requireToken, async (req, res) => {
+    const s = kodeOk(req.params.s);
+    if (insightJalan.has(s)) { res.status(409).json({ ok: false, error: 'Insight sedang dibuat, tunggu sebentar.' }); return; }
+    insightJalan.add(s);
+    try {
+        const d: any = screener.detail(s);
+        if (!d) throw new Error('Saham belum ada di data penyaring');
+        const b = d.baris, f = b.f || {};
+        const [ek, an, se] = await Promise.allSettled([ambilEkstra(s, { per: f.per, epsCagr3: f.epsCagr3, revGrowth: f.revGrowth }), ambilAnalis(s), ambilSentimen(s)]);
+        const v = <T,>(x: PromiseSettledResult<T>) => (x.status === 'fulfilled' ? x.value : null);
+        const fakta = JSON.stringify({
+            saham: `${b.nama} (${s})`, sektor: b.sektor, tanggal: new Date().toISOString().slice(0, 10),
+            harga: b.harga, ubah: { hari: b.chg1d, bulan1: b.chg1m, bulan3: b.chg3m, tahun1: b.chg1y }, rsi: b.rsi, ma50: b.ma50, ma200: b.ma200, volVsRata: b.volX,
+            puncak52: b.sinyal?.hi52, lembah52: b.sinyal?.lo52,
+            fundamental: { per: f.per, pbv: f.pbv, roe: f.roe, npm: f.npm, revGrowth: f.revGrowth, der: f.der, mcapJuta: b.mcap ?? f.mcap },
+            skor4Faktor: Object.fromEntries(Object.entries(d.skor || {}).filter(([, x]) => x).map(([k, x]: any) => [k, { label: x.label, alasan: (x.alasan || []).slice(0, 4) }])),
+            berita7hari: (d.berita?.judul || []).slice(0, 8).map((j: any) => `${j.tgl}: ${j.t}`),
+            statistik: v(ek), analis: v(an) ? { ...v(an)!, bank: v(an)!.bank.slice(0, 5) } : null, sentimen: v(se)?.jendela
+        });
+        res.json({ ok: true, insight: await buatInsight(config.dataDir, s, fakta, OfficeRoom.sharedLlm()) });
+    } catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
+    finally { insightJalan.delete(s); }
 });
 app.get('/api/kantor/preset', requireToken, (_req, res) => { res.json({ ok: true, preset: presetInfo(), rekomendasi: REKOMENDASI, rekomendasiUji: rekomendasiUji(fileUji(config.dataDir)), statusUji: statusPreset(fileUji(config.dataDir)) }); });
 // Uji mundur (backtest) — berjalan di latar belakang ±20–40 menit untuk ±500 saham.

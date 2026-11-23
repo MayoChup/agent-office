@@ -204,7 +204,7 @@ export function sentimen(t: string): number {
     for (const x of w) { if (POS.includes(x)) s++; else if (NEG.includes(x)) s--; }
     return Math.max(-1, Math.min(1, s / 2));
 }
-const UA_BROWSER = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+export const UA_BROWSER = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 let yahooRssIstirahat = 0;
 /** RSS berita: Yahoo dulu; kalau server diblokir Yahoo, pakai Google News (gratis, tanpa kunci). */
 export async function rssBerita(simbol: string): Promise<{ xml: string; sumber: string }> {
