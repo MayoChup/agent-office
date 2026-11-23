@@ -1,3 +1,4 @@
+import { buktiAlasan } from './ujimundur';
 import fs from 'fs';
 import { PresetAi, aturanDari, maskTeknikal, maskFundamental } from './presetAi';
 import path from 'path';
@@ -430,7 +431,7 @@ export class Screener {
             if (g.asli) { g.skorAsli = Math.min(1, (g.skorAsli ?? g.skor) + naik); g.asli = label(g.skorAsli); } else { g.skor = Math.min(1, g.skor + naik); g.label = label(g.skor); }
             g.pantul = true; g.alasan = [...(g.alasan || []), `Skor dinaikkan: saham di tahap pantul ${dk0.tahap === 'balik' ? 'Mulai berbalik' : 'Zona beli'}, dan uji tanding membuktikan pantul lebih baik dari ikut arus`]; sk.semua = g;
         }
-        return { horizon: H, teknikalBukti: this.teknikalTerbukti(H, mode), bobot: bobot(H, mode, this.teknikalTerbukti(H, mode).terbukti), baris: b, skor: sk, preset: this.presetSaham(b0), berita: this.st.berita?.[s] || null, orang: this.st.orang?.[s] || null, diskon: this.diskonDari(b0), ambilUntung: this.untungDari(b0) };
+        return { horizon: H, buktiTeknikal: sk?.teknikal?.alasan ? buktiAlasan(path.join(path.dirname(this.fileBobot), 'ujimundur.json'), H, sk.teknikal.alasan) : null, teknikalBukti: this.teknikalTerbukti(H, mode), bobot: bobot(H, mode, this.teknikalTerbukti(H, mode).terbukti), baris: b, skor: sk, preset: this.presetSaham(b0), berita: this.st.berita?.[s] || null, orang: this.st.orang?.[s] || null, diskon: this.diskonDari(b0), ambilUntung: this.untungDari(b0) };
     }
 
     /** Peta berita: berita (unik) ↔ saham yang terkait, untuk tampilan "tata surya". */

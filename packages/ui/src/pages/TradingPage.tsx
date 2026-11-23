@@ -1,4 +1,4 @@
-import { DiskonView } from './trading/DiskonView';
+import { DiskonView, RingkasUji, PapanTanding } from './trading/DiskonView';
 import { useAktif } from '../kantor/aktif';
 import { useKembali } from '../kantor/kembali';
 import { eventBus } from '../events';
@@ -56,7 +56,7 @@ export function TradingPage() {
     const team = agents.filter((a) => a.id === 'trading' || a.id.startsWith('trading-'));
     const [lap, setLap] = useState(0);
     type Tab = 'pasar' | 'pilihan' | 'diskon' | 'panas' | 'berita' | 'watchlist' | 'penyaring' | 'investigasi' | 'posisi' | 'uji' | 'history';
-    const TABS: Array<{ k: Tab; label: string }> = [{ k: 'pasar', label: 'Pasar' }, { k: 'pilihan', label: 'Pilihan sinyal' }, { k: 'diskon', label: 'Pantul' }, { k: 'panas', label: 'Peta panas' }, { k: 'berita', label: 'Peta berita' }, { k: 'watchlist', label: 'Watchlist' }, { k: 'penyaring', label: 'Penyaring' }, { k: 'investigasi', label: 'Investigasi' }, { k: 'posisi', label: 'Portofolio' }, { k: 'history', label: 'History' }, { k: 'uji', label: 'Uji mundur' }];
+    const TABS: Array<{ k: Tab; label: string }> = [{ k: 'pasar', label: 'Pasar' }, { k: 'pilihan', label: 'Pilihan sinyal' }, { k: 'diskon', label: 'Pantul' }, { k: 'panas', label: 'Peta panas' }, { k: 'berita', label: 'Peta berita' }, { k: 'watchlist', label: 'Watchlist' }, { k: 'penyaring', label: 'Penyaring' }, { k: 'investigasi', label: 'Investigasi' }, { k: 'posisi', label: 'Portofolio' }, { k: 'history', label: 'History' }, { k: 'uji', label: 'Uji & bukti' }];
     const [tab, setTabState] = useState<Tab>(() => { try { const v = localStorage.getItem(LS_TAB) as Tab; return TABS.some((t) => t.k === v) ? v : 'pilihan'; } catch { return 'pilihan'; } });
     // Tab yang pernah dibuka tetap hidup (disembunyikan, bukan dibongkar): pindah tab tidak memuat ulang & filter tidak hilang.
     const [pernah, setPernah] = useState<Set<Tab>>(() => new Set([tab]));
@@ -197,21 +197,27 @@ export function TradingPage() {
             {!saham && scData && scData.baris.length > 0 && scData.galat && !scData.sibuk && <div className="error" style={{ margin: '0 0 12px' }}><Ikon e="⚠" /> {scData.galat}</div>}
             {!saham && (tab === 'pilihan' || tab === 'diskon' || tab === 'pasar' || tab === 'watchlist') && scData && scData.baris.length > 0 && <HorisonBar h={horison} setH={setHorison} bobot={(scData as any).bobot} bukti={(scData as any).teknikalBukti} />}
             {!saham && tab === 'pasar' && scData && scData.baris.length > 0 && <PasarView data={scData} faktor={faktor} setFaktor={setF} onOpen={buka} />}
-            {!saham && (tab === 'pilihan' || tab === 'penyaring') && <SaranUji mode={modeAktif} presetAktif={preset.t} pakaiPreset={(t) => setPreset({ ...preset, t })} />}
-            {!saham && tab === 'pilihan' && <SisiJual mode={modeAktif} tanding={scData?.diskonUji?.tanding} />}
             {!saham && tab === 'pilihan' && scData && scData.baris.length > 0 && (
                 <details className="pr-lipat" open={!!(preset.t || preset.f) || undefined}>
                     <summary><Ikon e="🎓" /> Preset guru{preset.t || preset.f ? `: ${[preset.t, preset.f].filter(Boolean).map((id) => pd.data?.preset.find((x) => x.id === id)?.guru || id).join(' + ')}` : ' (opsional)'} <small>— ketuk untuk memilih</small></summary>
                     {presetPanel}
                 </details>
             )}
-            {!saham && tab === 'diskon' && scData && scData.baris.length > 0 && <DiskonView data={scData} onOpen={buka} H={H} />}
+            {!saham && tab === 'diskon' && scData && scData.baris.length > 0 && <DiskonView data={scData} onOpen={buka} H={H} keRiset={() => setTab('uji')} />}
             {!saham && tab === 'pilihan' && scData && scData.baris.length > 0 && <PilihanView data={scData} faktor={faktor} setFaktor={setF} onOpen={buka} watchlist={[...(data?.watchlist || []), ...(data?.positions || []).map((p) => p.symbol)]} />}
             {!saham && tab === 'panas' && scData && scData.baris.length > 0 && <PetaPanas data={scData} onOpen={buka} watch={[...(data?.watchlist || []), ...(data?.positions || []).map((p) => p.symbol)]} />}
             {simpanHidup('berita', <><BeritaTerkaitKartu onUbah={() => sc.reload()} /><PetaBerita onOpen={buka} /></>)}
             {!saham && tab === 'watchlist' && scData && <WatchlistView data={scData} faktor={faktor} onOpen={buka} />}
             {simpanHidup('investigasi', <InvestigasiView />)}
-            {simpanHidup('uji', <UjiMundur />)}
+            {simpanHidup('uji', <UjiMundur sisipan={<>
+                <SaranUji mode={modeAktif} presetAktif={preset.t} pakaiPreset={(t) => setPreset({ ...preset, t })} />
+                <SisiJual mode={modeAktif} tanding={scData?.diskonUji?.tanding} tanpaTombol />
+                <section className="sb-card">
+                    <div className="sd-h"><h3>Pola pantul & papan tanding 4 pola</h3></div>
+                    <RingkasUji uji={scData?.diskonUji} H={H} />
+                    <PapanTanding t={scData?.diskonUji?.tanding} />
+                </section>
+            </>} />)}
             {simpanHidup('history', <HistorySinyal onOpen={buka} />)}
             {!saham && tab === 'penyaring' && <><HorisonBar h={horison} setH={setHorison} bobot={(scData as any)?.bobot} bukti={(scData as any)?.teknikalBukti} />{presetPanel}<ScreenerView onOpen={buka} q={qApi} presetAktif={preset} pd={pd.data} sumber={sc} /></>}
             {!saham && tab === 'posisi' && error && <div className="error">Gagal memuat: {error}</div>}

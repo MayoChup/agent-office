@@ -47,7 +47,7 @@ function TombolUji({ selesai }: { selesai: () => void }) {
     );
 }
 
-export function SisiJual({ mode, tanding }: { mode: string; tanding?: Record<string, any> | null }) {
+export function SisiJual({ mode, tanding, tanpaTombol }: { mode: string; tanding?: Record<string, any> | null; tanpaTombol?: boolean }) {
     const d = useSisiJual();
     const [buka, setBuka] = useState(false);
     const H = String(H_MODE[mode] ?? 20) === '5' ? '5' : String(H_MODE[mode] ?? 20) === '60' ? '60' : '20';
@@ -63,7 +63,7 @@ export function SisiJual({ mode, tanding }: { mode: string; tanding?: Record<str
         <section className={`sb-card sj ${gl?.terbukti || tk?.terbukti ? 'ok' : 'warn'}`}>
             <div className="sj-h"><b>Sisi jual · apakah sinyal turun bisa dipakai?</b> <Info judul="Cara membaca sisi jual" teks={INFO} /></div>
             <p className="sj-vonis">{vonis}</p>
-            <TombolUji selesai={() => d.reload()} />
+            {!tanpaTombol && <TombolUji selesai={() => d.reload()} />}
             {u && per && (
                 <>
                     <button className="sj-toggle" onClick={() => setBuka(!buka)} aria-expanded={buka}>{buka ? 'Sembunyikan rincian' : 'Lihat rincian'}</button>
@@ -79,7 +79,7 @@ export function SisiJual({ mode, tanding }: { mode: string; tanding?: Record<str
                                 </tbody>
                             </table></div>
                             {(!per.gabLemah?.n || !per.fundJual?.n) && <small className="sb-note">Kelompok fundamental belum bisa diuji: riwayat laporan keuangan lampau belum tersedia di uji ini.</small>}
-                            <PapanTanding t={tanding} />
+                            {!tanpaTombol && <PapanTanding t={tanding} />}
                             <small className="sb-note">{u.catatan} Uji {tgl(u.at)}.</small>
                         </div>
                     )}

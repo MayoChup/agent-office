@@ -35,7 +35,7 @@ function betaDi(d: Bar[], t: number, spy: Bar[], spyIdx: Map<string, number>) {
     return v > 0 ? Math.max(0.2, Math.min(3, cov / v)) : 1;
 }
 const ringkas = (a: Akum) => ({ n: a.n, rataEx: a.n ? +((a.ex / a.n) * 100).toFixed(3) : null, menang: a.n ? +((a.menang / a.n) * 100).toFixed(1) : null, galatStd: a.n > 1 ? +((Math.sqrt(Math.max(0, a.ex2 / a.n - (a.ex / a.n) ** 2)) / Math.sqrt(a.n)) * 100).toFixed(3) : null });
-const kunciAlasan = (s: string) => `${s[0]} ${s.slice(1).replace(/\(.*$/, '').replace(/(^|\s)[\d][\d.,]*\s*([%×]\s*)?/g, '$1# ').replace(/\s+/g, ' ').trim()}`;
+export const kunciAlasan = (s: string) => `${s[0]} ${s.slice(1).replace(/\(.*$/, '').replace(/(^|\s)[\d][\d.,]*\s*([%×]\s*)?/g, '$1# ').replace(/\s+/g, ' ').trim()}`;
 
 export interface StatusUji { jalan: boolean; progres: string; mulai: number; selesai: number; galat: string }
 
@@ -416,3 +416,39 @@ export function saranDariUji(dataDir: string): { at: number; H: Record<number, S
     return { at: h.at, H: out };
 }
 export const namaH = (H: number) => NAMA_H[H] || `${H} hari`;
+
+/* ── Bukti per indikator: status tiap sinyal teknikal dari uji mundur terakhir ── */
+export type StatusBukti = 'naik' | 'turun' | 'tidak';
+let buktiCache: { m: number; v: Record<string, Record<string, { status: StatusBukti; rataEx: number | null; n: number }>> } | null = null;
+/** Map per horison: kunci alasan → status. "naik/turun" = selisih dari rata-rata semua saham > 2× galat standar, ≥300 kasus. */
+export function buktiKomponen(file: string) {
+    try {
+        const m = fs.statSync(file).mtimeMs;
+        if (buktiCache?.m === m) return buktiCache.v;
+        const h = JSON.parse(fs.readFileSync(file, 'utf8'));
+        const v: Record<string, Record<string, { status: StatusBukti; rataEx: number | null; n: number }>> = {};
+        for (const H of Object.keys(h.H || {})) {
+            const r = h.H[H], base = r.semua?.rataEx ?? 0;
+            v[H] = {};
+            for (const k of r.komponen || []) {
+                const beda = (k.rataEx ?? 0) - base, cukup = k.n >= 300 && Math.abs(beda) > 2 * (k.galatStd ?? 0);
+                v[H][k.nama.slice(2)] = { status: cukup ? (beda > 0 ? 'naik' : 'turun') : 'tidak', rataEx: k.rataEx, n: k.n };
+            }
+        }
+        buktiCache = { m, v };
+        return v;
+    } catch { return null; }
+}
+/** Status bukti untuk daftar alasan skor teknikal (urut sama dengan alasan). */
+export function buktiAlasan(file: string, H: number, alasan: string[]): Array<{ status: StatusBukti | 'belum'; cocok: boolean } | null> {
+    const b = buktiKomponen(file); if (!b) return alasan.map(() => null);
+    const Hk = String(H <= 2 ? 1 : H <= 10 ? 5 : H <= 40 ? 20 : 60);
+    const t = b[Hk] || {};
+    return alasan.map((al) => {
+        const x = t[kunciAlasan(al).slice(2)];
+        if (!x) return { status: 'belum', cocok: false };
+        // "cocok" = arah bukti sama dengan arah sumbangan skor (+ menambah & terbukti naik, − mengurangi & terbukti turun).
+        const plus = al.startsWith('+');
+        return { status: x.status, cocok: (plus && x.status === 'naik') || (!plus && x.status === 'turun') };
+    });
+}

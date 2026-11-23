@@ -23,7 +23,7 @@ function KV({ x }: { x: K.Bacaan }) {
 }
 interface FaktorFull { skor: number; label: Label; alasan: string[] }
 interface Profil { nama: string; ringkas: string; deskripsi: string; situs: string; sektor: string; industri: string; alamat: string }
-interface Detail { preset?: PresetEval[]; baris: Baris; skor: Record<FaktorKey, FaktorFull | null>; berita: { n: number; judul: Array<{ t: string; s: number; tgl: string; url: string }> } | null; orang: { net: number; beli: number; jual: number; n: number } | null }
+interface Detail { buktiTeknikal?: Array<{ status: 'naik' | 'turun' | 'tidak' | 'belum'; cocok: boolean } | null> | null; preset?: PresetEval[]; baris: Baris; skor: Record<FaktorKey, FaktorFull | null>; berita: { n: number; judul: Array<{ t: string; s: number; tgl: string; url: string }> } | null; orang: { net: number; beli: number; jual: number; n: number } | null }
 
 export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPreset, mode = 'swing', pd, onMemuat, onInfo }: { simbol: string; onBack: () => void; H?: number; q?: string; preset?: { t: string; f: string }; setPreset?: (x: { t: string; f: string }) => void; mode?: string; pd?: PresetData | null; onMemuat?: (x: boolean) => void; onInfo?: (x: { bukti: any; bobot: any }) => void }) {
     const [prof, setProf] = useState<Profil | null>(null);
@@ -196,7 +196,8 @@ export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPre
                                     </div>
                                 );
                             })()}
-                            <ul className="sd-alasan">{(s?.alasan || ['Data untuk faktor ini belum tersedia.']).map((a, i) => <li key={i} className={a.startsWith('+') ? 'pos' : a.startsWith('−') ? 'neg' : ''}>{a.replace(/^[+−]\s*/, '')}</li>)}</ul>
+                            <ul className="sd-alasan">{(s?.alasan || ['Data untuk faktor ini belum tersedia.']).map((a, i) => { const bk = tab === 'teknikal' ? d.buktiTeknikal?.[i] : null; return <li key={i} className={a.startsWith('+') ? 'pos' : a.startsWith('−') ? 'neg' : ''}>{a.replace(/^[+−]\s*/, '')}{bk && bk.status !== 'belum' && <span className={`bk-tanda ${bk.cocok ? 'ok' : bk.status === 'tidak' ? 'no' : 'lawan'}`} title={bk.cocok ? 'Uji mundur 5 tahun membuktikan sinyal ini searah dengan hasilnya.' : bk.status === 'tidak' ? 'Uji mundur belum membuktikan sinyal ini berguna (bisa kebetulan).' : 'Uji mundur menunjukkan hasilnya justru berlawanan dengan arah skor ini.'}>{bk.cocok ? '✓ terbukti' : bk.status === 'tidak' ? 'belum terbukti' : '⚠ berlawanan'}</span>}</li>; })}</ul>
+                            {tab === 'teknikal' && !!d.buktiTeknikal?.some((x) => x && x.status !== 'belum') && <small className="sb-note">Tanda di tiap alasan = hasil uji mundur 5 tahun untuk sinyal itu (Riset → Uji mundur).</small>}
                             {tab === 'berita' && d.berita && d.berita.judul.length > 0 && (
                                 <div className="sd-news">{d.berita.judul.map((j, i) => (
                                     <a key={i} href={j.url} target="_blank" rel="noreferrer"><span className={`sent ${j.s > 0 ? 'pos' : j.s < 0 ? 'neg' : ''}`}>{j.s > 0 ? 'Positif' : j.s < 0 ? 'Negatif' : 'Netral'}</span><b>{j.t}</b><small>{j.tgl}</small></a>

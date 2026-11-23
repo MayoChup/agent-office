@@ -18,7 +18,7 @@ const bermakna = (a: R, base: R) => a.n >= 300 && a.rataEx != null && base.rataE
 const kelasEx = (x: number | null) => (x == null ? '' : x > 0 ? 'up' : x < 0 ? 'down' : '');
 
 /** Hasil uji mundur: apakah skor & preset benar-benar mengalahkan pasar di masa lalu. */
-export function UjiMundur() {
+export function UjiMundur({ sisipan }: { sisipan?: React.ReactNode } = {}) {
     const d = useApi<Data>('/api/kantor/ujimundur', 0);
     const [H, setH] = useState(20);
     const [msg, setMsg] = useState('');
@@ -45,6 +45,7 @@ export function UjiMundur() {
                 {!!d.data?.berikutnya && !st?.jalan && <small className="sb-note"><Ikon e="🔁" /> Berjalan otomatis tiap ±30 hari (akhir pekan). Berikutnya: ±{new Date(d.data.berikutnya).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Jakarta' })}. Bobot & rekomendasi di halaman Trading ikut diperbarui sendiri.</small>}
                 {d.data?.saran?.teks && <div className="su-ai-box"><b><Ikon e="✨" /> Ringkasan AI</b><p>{d.data.saran.teks}</p></div>}
             </section>
+            {sisipan}
             {h && r && (<>
                 <div className="sb-seg scroll">{MODE.map((m) => <button key={m.H} className={H === m.H ? 'on' : ''} onClick={() => setH(m.H)}>{m.label}</button>)}</div>
                 <section className="sb-card">
@@ -67,16 +68,7 @@ export function UjiMundur() {
                         })}</tbody></table>
                     <p className="sb-note">"Terbukti" = mengalahkan pasar DAN rata-rata semua saham dengan selisih lebih dari 2× galat standar (kecil kemungkinan kebetulan), minimal 300 kasus. Preset yang terbukti dipakai sebagai rekomendasi berbasis data di panel preset.</p>
                 </section>
-                <section className="sb-card">
-                    <div className="sd-h"><h3>Sinyal mana yang benar-benar membantu?</h3></div>
-                    <div className="um-komp">
-                        {r.komponen.slice(0, 8).map((k) => <div key={k.nama}><span>{k.nama.slice(2)}</span><b className={`mono ${kelasEx(k.rataEx)}`}>{p(k.rataEx)}</b><small>{k.n.toLocaleString('id-ID')} kasus · {k.nama[0] === '+' ? 'dihitung plus' : 'dihitung minus'}</small></div>)}
-                    </div>
-                    <details className="scr-legend"><summary>Lihat semua {r.komponen.length} sinyal</summary>
-                        {r.komponen.map((k) => <div key={k.nama}><b className={kelasEx(k.rataEx)}>{p(k.rataEx)}</b> · {k.nama.slice(2)} <small>({k.n} kasus, {k.nama[0] === '+' ? 'skor menambah' : 'skor mengurangi'})</small></div>)}
-                    </details>
-                    <p className="sb-note">Sinyal yang dihitung <b>plus</b> tapi hasilnya negatif (atau sebaliknya) adalah kandidat untuk dikecilkan/dibalik bobotnya.</p>
-                </section>
+                <BuktiIndikator r={r} H={H} />
                 <section className="sb-card"><div className="sd-h"><h3>Catatan kejujuran</h3></div><ul className="sd-alasan">{h.catatan.map((c) => <li key={c}>{c}</li>)}</ul></section>
             </>)}
         </div>
@@ -105,6 +97,41 @@ function BobotBaru({ b, H }: { b?: BobotH; H: number }) {
                 <div><b>Ciri yang paling menurunkan skor</b>{b.terbawah.filter((x) => x.w < 0).map((x) => <div key={x.k}><span>{x.t}</span><b className="mono down">{p(x.w, 3)}</b></div>)}</div>
             </div>
             <p className="sb-note">Angka = pengaruh rata-rata ciri itu terhadap hasil vs saham lain dalam {H} hari bursa (sudah diperhitungkan bersama ciri lain).</p>
+        </section>
+    );
+}
+
+/** Bukti per indikator: tiap sinyal teknikal dikelompokkan menurut hasil uji mundur (dibanding rata-rata semua saham). */
+function BuktiIndikator({ r, H }: { r: HasilH; H: number }) {
+    const base = r.semua.rataEx ?? 0;
+    const st = (k: HasilH['komponen'][number]) => { const beda = (k.rataEx ?? 0) - base; return k.n >= 300 && Math.abs(beda) > 2 * (k.galatStd ?? 0) ? (beda > 0 ? 'naik' : 'turun') : 'tidak'; };
+    const grup: Array<{ k: 'naik' | 'turun' | 'tidak'; judul: string; ket: string }> = [
+        { k: 'naik', judul: 'Terbukti naik', ket: 'diikuti hasil lebih baik dari rata-rata saham' },
+        { k: 'turun', judul: 'Terbukti turun', ket: 'diikuti hasil lebih buruk dari rata-rata saham' },
+        { k: 'tidak', judul: 'Belum terbukti', ket: 'bedanya terlalu kecil / kasusnya terlalu sedikit — bisa kebetulan' }
+    ];
+    const arahCocok = (k: HasilH['komponen'][number]) => { const s0 = st(k); return (k.nama[0] === '+' && s0 === 'naik') || (k.nama[0] !== '+' && s0 === 'turun'); };
+    return (
+        <section className="sb-card bk">
+            <div className="sd-h"><h3>Bukti per indikator · {H} hari bursa</h3></div>
+            <p className="sb-note">Setiap sinyal teknikal diuji sendiri-sendiri: saat sinyal itu muncul, bagaimana hasil saham {H} hari kemudian dibanding S&P 500 (disesuaikan risiko), lalu dibandingkan dengan rata-rata semua saham ({base >= 0 ? '+' : '−'}{Math.abs(base).toFixed(2)}%). <b>Terbukti</b> = selisihnya lebih dari 2× galat standar dengan minimal 300 kasus.</p>
+            {grup.map((g) => {
+                const xs = r.komponen.filter((k) => st(k) === g.k).sort((a, b) => (b.rataEx ?? 0) - (a.rataEx ?? 0));
+                if (!xs.length) return null;
+                return (
+                    <div key={g.k} className={`bk-grup ${g.k}`}>
+                        <h4>{g.judul} <small>{xs.length} sinyal · {g.ket}</small></h4>
+                        {xs.map((k) => (
+                            <div key={k.nama} className="bk-r">
+                                <span>{k.nama.slice(2)}{g.k !== 'tidak' && <em className={arahCocok(k) ? 'ok' : 'lawan'}>{arahCocok(k) ? 'searah skor' : 'berlawanan dengan skor'}</em>}</span>
+                                <b className={`mono ${kelasEx(k.rataEx)}`}>{p(k.rataEx)}</b>
+                                <small className="mono">{k.n.toLocaleString('id-ID')} kasus</small>
+                            </div>
+                        ))}
+                    </div>
+                );
+            })}
+            <p className="sb-note">Sinyal yang <b>berlawanan dengan skor</b> (dihitung plus tapi hasilnya buruk, atau sebaliknya) dikecilkan/dibalik otomatis oleh "Bobot baru dari data" di atas — kalau bobot baru itu LULUS ujian di data 2025 ke atas. Tanda yang sama muncul di alasan skor teknikal tiap saham.</p>
         </section>
     );
 }

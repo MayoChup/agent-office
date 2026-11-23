@@ -21,7 +21,7 @@ const LS = 'kantor:pantul:saring';
 const p = (v: number | null | undefined, d = 1) => (v == null ? '–' : `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toLocaleString('id-ID', { maximumFractionDigits: d })}%`);
 
 /** Ringkasan hasil uji per jenis pantul (20 hari). */
-function RingkasUji({ uji, H }: { uji: ScreenerData['diskonUji']; H: number }) {
+export function RingkasUji({ uji, H }: { uji: ScreenerData['diskonUji']; H: number }) {
     if (!uji) return <p className="dk-uji">Belum ada hasil uji untuk pola pantul. Hasil pertama muncul setelah uji mundur berikutnya.</p>;
     const kunci = H <= 10 ? 5 : H <= 30 ? 20 : 60;
     const r = uji.H[String(kunci)]; if (!r) return null;
@@ -39,7 +39,7 @@ function RingkasUji({ uji, H }: { uji: ScreenerData['diskonUji']; H: number }) {
     );
 }
 
-export function DiskonView({ data, onOpen, H }: { data: ScreenerData; onOpen: (s: string) => void; H: number }) {
+export function DiskonView({ data, onOpen, H, keRiset }: { data: ScreenerData; onOpen: (s: string) => void; H: number; keRiset?: () => void }) {
     const [saring, setSaringS] = useState<Saring>(() => { try { return (localStorage.getItem(LS) as Saring) || ''; } catch { return ''; } });
     const setSaring = (t: Saring) => { setSaringS(t); try { localStorage.setItem(LS, t); } catch { /* */ } };
     const semua = useMemo(() => data.baris.filter((b): b is Baris & { diskon: NonNullable<Baris['diskon']> } => !!b.diskon), [data]);
@@ -52,8 +52,7 @@ export function DiskonView({ data, onOpen, H }: { data: ScreenerData; onOpen: (s
             <div className="dk-kepala">
                 <h3>Peluang pantul</h3>
                 <p>Saham yang berpeluang balik naik: <b>koreksi di tren naik</b> (tren panjang masih naik, sedang turun tajam sebentar) dan <b>diskon dalam</b> (fundamental kuat, harga sudah jauh turun). Label sinyal di kartu bisa tetap <b>Jual</b> kalau trennya belum pulih; tahap menunjukkan seberapa dekat ke titik masuk.</p>
-                <RingkasUji uji={data.diskonUji} H={H} />
-                <PapanTanding t={data.diskonUji?.tanding} />
+                {keRiset && <button className="hs-link dk-riset" onClick={keRiset}>Lihat hasil uji pola pantul di Riset → Uji mundur</button>}
             </div>
             <PitaAcara />
             <div className="dk-saring" role="tablist" aria-label="Saring peluang pantul">
