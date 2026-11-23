@@ -97,12 +97,13 @@ export function GrafikSaham({ simbol }: { simbol: string }) {
 
         // Arsiran sesi (1D): pre-market & after-hours.
         if (data.candles.some((k) => k.sesi && k.sesi !== 'reg')) {
-            chart.priceScale('sesi').applyOptions({ scaleMargins: { top: 0, bottom: 0 }, visible: false });
             for (const [ss, w] of [['pre', alpha(aksen, 0.09)], ['post', 'rgba(168,85,247,0.09)']] as const) {
                 const bg = chart.addAreaSeries({ priceScaleId: 'sesi', lineColor: 'transparent', topColor: w, bottomColor: w, lineWidth: 1, lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false });
                 bg.setData(data.candles.map((k) => (k.sesi === ss ? { time: t(k.t), value: 1 } : { time: t(k.t) })) as any);
                 bg.applyOptions({ autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 1 } }) } as any);
             }
+            chart.priceScale('sesi').applyOptions({ scaleMargins: { top: 0, bottom: 0 }, visible: false });
+
         }
         // Harga dasar (garis putus-putus): penutupan sebelumnya untuk 1D, harga awal rentang untuk lainnya.
         const basis = rentang === '1D' && data.prevClose ? data.prevClose : data.candles[Math.max(0, dari - 1)].c;
