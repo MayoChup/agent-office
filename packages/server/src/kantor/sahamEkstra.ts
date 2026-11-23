@@ -186,13 +186,13 @@ async function beritaBank(s: string, nama: string): Promise<Analis['bank']> {
         t = t.replace(/\s+-\s+[^-]{2,40}$/, '').trim();
         if (!soalIni(t)) continue;
         // Bank: "… at <Bank>" di akhir, atau kata-kata sebelum kata kerja (upgrades/raises/…).
-        let firm = '';
-        const akhir = t.match(/\b(?:at|by|from)\s+([A-Z][A-Za-z&.' ]{1,40}?)(?:[;,.]|$)/);
+        const akhir = t.match(/\b(?:at|by)\s+([A-Z][A-Za-z&.' ]{1,40}?)(?:[;,.]|$)/);
         const m = t.match(VERB_RE);
-        if (m && m.index != null && m.index > 1 && m.index < 45) firm = t.slice(0, m.index).trim();
-        else if (akhir) firm = akhir[1].trim();
-        firm = firm.replace(/^(analyst|analysts|wall street)\s+/i, '').replace(/['’]s$/, '');
-        if (!firm || firm.split(' ').length > 5 || !/^[A-Z]/.test(firm) || soalIni(firm) || /\b(stock|shares|price|target|analyst|investors?)\b/i.test(firm)) continue;
+        const rapikan = (x: string) => x.trim().replace(/^(analyst|analysts|wall street)\s+/i, '').replace(/['’]s$/, '');
+        const sah = (x: string) => !!x && x.split(' ').length <= 5 && /^[A-Z]/.test(x) && !soalIni(x) && !/\b(stock|shares|price|target|analyst|investors?|rating)\b/i.test(x);
+        const calon = [m && m.index != null && m.index > 1 && m.index < 45 ? rapikan(t.slice(0, m.index)) : '', akhir ? rapikan(akhir[1]) : ''];
+        const firm = calon.find(sah) || '';
+        if (!firm) continue;
         // Rating: setelah "to …" / "with a …" / "keeps a …"; kalau tidak ada, kata rating pertama di judul.
         const sesudah = t.match(/\b(?:to|with an?|keeps an?|keeps|maintains an?|maintains|reiterates an?|reiterates|at an?|rated)\s+(strong buy|strong sell|market outperform|sector outperform|market perform|sector perform|peer perform|equal[- ]weight|in[- ]line|outperform|overweight|underweight|underperform|accumulate|neutral|positive|negative|reduce|hold|buy|sell)\b/i);
         const r = (sesudah?.[1] || t.match(RATING_RE)?.[1] || '').trim();
