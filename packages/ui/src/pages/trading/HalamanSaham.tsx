@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useApi } from '../../kantor/api';
 import { apiPost } from '../../kantor/connection';
 import { InfoKamus, Info } from './InfoI';
@@ -149,13 +150,13 @@ export function Experts({ a, galat, harga }: { a: Analis | null | undefined; gal
                     {a.bank.length > 5 && <button className="hs-more" onClick={() => setSemua(true)}>Show more</button>}
                 </div>
             )}
-            {semua && (
+            {semua && createPortal(
                 <div className="hs-modal-bg" onClick={() => setSemua(false)}>
                     <div className="hs-modal" role="dialog" aria-modal="true" aria-label="Analyst overview" onClick={(e) => e.stopPropagation()}>
                         <div className="hs-modal-h"><h3>Analyst overview</h3><button aria-label="Tutup" onClick={() => setSemua(false)}>×</button></div>
                         <div className="hs-modal-isi">{a.bank.map((x) => <KartuBank key={x.nama} x={x} harga={harga} />)}</div>
                     </div>
-                </div>
+                </div>, document.body
             )}
         </section>
     );
