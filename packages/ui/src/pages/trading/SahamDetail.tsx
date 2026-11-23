@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { apiGet, apiPost } from '../../kantor/connection';
 import { useApi, apiGetSimpan, simpanApi } from '../../kantor/api';
 import { GrafikSaham, DataCandle } from '../../components/GrafikSaham';
+import { TandaLaba } from './Acara';
 import { WeeklyInsight, MarketStats, FundLengkap, Experts, NewsSentiment, Seasonality, CorporateActions, DataEkstra } from './HalamanSaham';
 import { Baris, FAKTOR, FaktorKey, Label, kelas, usd, persen, kap, skorBar } from './types';
 import { PresetPilih, PresetCek, PresetData, PresetEval } from './Preset';
@@ -77,6 +78,7 @@ export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPre
                         <div className="hs-nama"><h2>{prof?.nama || b.nama}</h2><span className="mono">{b.s}</span></div>
                         <Bintang s={b.s} besar />
                         <TombolFolder s={b.s} />
+                        <TandaLaba s={b.s} />
                     </div>
                     <div className="hs-harga mono">${Math.floor(b.harga).toLocaleString('en-US')}<sup>.{b.harga.toFixed(2).split('.')[1]}</sup></div>
                     <div className="hs-ubah">

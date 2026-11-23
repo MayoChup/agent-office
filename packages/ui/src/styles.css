@@ -3635,3 +3635,19 @@ body.no-office #phaser-container { visibility: hidden; }
 .hs-ins-berita b { font-weight: 600; }
 .hs-ins-saran { margin-top: 14px; padding: 10px 14px 12px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 8%, transparent); }
 .hs-ins-saran h4 { margin: 0 !important; color: var(--accent); }
+/* Penanda acara besar */
+.ac-tanda { display: inline-block; font-size: 10.5px; font-weight: 600; padding: 2px 7px; border-radius: 6px; color: #b45309; background: rgba(245,158,11,.15); white-space: nowrap; cursor: help; }
+.ac-pita { display: flex; justify-content: space-between; align-items: center; gap: 10px 16px; flex-wrap: wrap; padding: 10px 14px; margin: 4px 0 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--sb-card); }
+.ac-makro { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; }
+.ac-m { padding: 3px 9px; border-radius: 7px; background: rgba(245,158,11,.13); color: var(--text); }
+.ac-m b { color: #b45309; font-weight: 600; margin-right: 2px; }
+.ac-kosong { color: var(--muted); }
+.ac-saring { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--muted); cursor: pointer; }
+.ac-saring input { accent-color: var(--accent); width: 15px; height: 15px; }
+.ac-pasar { margin: 4px 0 14px; padding: 10px 12px; border-radius: 10px; background: rgba(245,158,11,.08); }
+.ac-pasar h4 { margin: 0 0 6px; font-size: 13.5px; font-weight: 600; display: flex; gap: 8px; align-items: baseline; }
+.ac-pasar h4 small { font-weight: 400; font-size: 11.5px; color: var(--muted); }
+.ac-pasar-r { display: grid; grid-template-columns: 110px 1fr; gap: 10px; font-size: 12.5px; padding: 3px 0; }
+.ac-pasar-r b { font-weight: 600; }
+.ac-jam { font: inherit; font-size: 12px; padding: 1px 4px; border: 1px solid var(--line); border-radius: 6px; background: none; color: var(--text); }
+@media (max-width: 720px) { .ac-pasar-r { grid-template-columns: 1fr; gap: 0; padding: 5px 0; } }

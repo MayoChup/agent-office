@@ -5,6 +5,7 @@ import { apiPost } from '../../kantor/connection';
 import { InfoKamus, Info } from './InfoI';
 import * as K from './kamus';
 import { Baris, kap, usd } from './types';
+import { AcaraPasar } from './Acara';
 
 /**
  * Bagian-bagian halaman saham versi bertab: Weekly Insight (AI, manual), Market stats, What the experts say,
@@ -281,6 +282,7 @@ export function CorporateActions({ s, harga }: { s: string; harga: number }) {
             {q.error && !d ? <p className="sb-note">Corporate actions belum bisa diambil ({q.error}).</p> : !d ? <p className="sb-note">Memuat…</p> : (
                 <>
                     <h3>Upcoming</h3>
+                    <AcaraPasar />
                     {d.akanDatang.length ? <div className="hs-aksi-list">{d.akanDatang.map((x, i) => <BarisAksi key={i} x={x} />)}</div> : kosong('Tidak ada corporate action yang akan datang.')}
                     <h3 className="hs-aksi-h3">Past <small>12 bulan terakhir</small></h3>
                     {d.dividen12 != null && <p className="hs-aksi-sum">Total dividen 12 bulan: <b className="mono">${d.dividen12.toFixed(2)}</b> per lembar{harga > 0 && <> · yield <b className="mono">{((d.dividen12 / harga) * 100).toFixed(2)}%</b></>}</p>}

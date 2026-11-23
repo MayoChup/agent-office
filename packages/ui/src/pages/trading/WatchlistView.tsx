@@ -1,4 +1,5 @@
 import { PantauFolder } from './PantauFolder';
+import { LaporanPagiAtur } from './Acara';
 import React, { useState } from 'react';
 import { useApi } from '../../kantor/api';
 import { apiPost } from '../../kantor/connection';
@@ -72,6 +73,7 @@ export function WatchlistView({ data, faktor, onOpen }: { data: ScreenerData; fa
                 )}
             </div>
             {err && <div className="error">{err}</div>}
+            <LaporanPagiAtur />
             <PantauFolder id={aktif} />
             {simbolAsli.length > 0 && <PitaKronos simbol={simbolAsli} />}
             {simbolAsli.length > 1 && <div className="kr-alat"><PilihUrut urut={urut} setUrut={gantiUrut} />{urut === 'belum' && <small className="sb-note">{simbol.length} belum dihitung untuk gaya ini</small>}</div>}

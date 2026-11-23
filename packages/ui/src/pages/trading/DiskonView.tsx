@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Kartu } from './PilihanView';
 import type { Baris, ScreenerData, Tahap } from './types';
 import { PapanTanding } from './PapanTanding';
+import { PitaAcara, useSaringLaba } from './Acara';
 export { PapanTanding };
 
 /**
@@ -42,7 +43,8 @@ export function DiskonView({ data, onOpen, H }: { data: ScreenerData; onOpen: (s
     const [saring, setSaringS] = useState<Saring>(() => { try { return (localStorage.getItem(LS) as Saring) || ''; } catch { return ''; } });
     const setSaring = (t: Saring) => { setSaringS(t); try { localStorage.setItem(LS, t); } catch { /* */ } };
     const semua = useMemo(() => data.baris.filter((b): b is Baris & { diskon: NonNullable<Baris['diskon']> } => !!b.diskon), [data]);
-    const cocok = (b: (typeof semua)[number], t: Saring) => !t || b.diskon.tahap === t || b.diskon.jenis === t;
+    const disaringLaba = useSaringLaba();
+    const cocok = (b: (typeof semua)[number], t: Saring) => !disaringLaba(b.s) && (!t || b.diskon.tahap === t || b.diskon.jenis === t);
     const tampil = useMemo(() => semua.filter((b) => cocok(b, saring))
         .sort((a, b) => PERINGKAT[a.diskon.tahap] - PERINGKAT[b.diskon.tahap] || (b.skor?.fundamental?.skor ?? 0) * 20 + b.diskon.dariPuncak / 5 - ((a.skor?.fundamental?.skor ?? 0) * 20 + a.diskon.dariPuncak / 5)), [semua, saring]); // eslint-disable-line react-hooks/exhaustive-deps
     return (
@@ -53,6 +55,7 @@ export function DiskonView({ data, onOpen, H }: { data: ScreenerData; onOpen: (s
                 <RingkasUji uji={data.diskonUji} H={H} />
                 <PapanTanding t={data.diskonUji?.tanding} />
             </div>
+            <PitaAcara />
             <div className="dk-saring" role="tablist" aria-label="Saring peluang pantul">
                 {SARING.map((t) => <button key={t.k || 'semua'} role="tab" aria-selected={saring === t.k} className={saring === t.k ? 'on' : ''} onClick={() => setSaring(t.k)}>{t.label} <span>{semua.filter((b) => cocok(b, t.k)).length}</span></button>)}
             </div>

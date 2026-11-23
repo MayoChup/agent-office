@@ -43,6 +43,8 @@ import { Papan, Kerja, bulanWib } from './kantor/papan';
 import { Kronos, BarK, hariBursaBerikut } from './kantor/kronos';
 import { KronosAntre, gayaDari, profilTerbaik } from './kantor/kronosAntre';
 import { PantauWatch } from './kantor/pantauWatch';
+import { LaporanPagi } from './kantor/laporanPagi';
+import { makroMendatang } from './kantor/acara';
 import { UjiKertas } from './kantor/ujiKertas';
 import { kalenderLaba } from './kantor/nasdaq';
 import { BeritaTerkait } from './kantor/beritaTerkait';
@@ -63,7 +65,7 @@ import { HermesBridge } from './kantor/hermes';
 import { slidesCli } from './kantor/slides';
 import { WaJanji, WaReader, waLoginCli, waLogoutCli, waLinked } from './kantor/wa';
 import { FreeLlm } from './kantor/freeLlm';
-import { ambilEkstra, ambilAnalis, ambilSentimen, ambilMusiman, bacaInsight, buatInsight, ambilAksi } from './kantor/sahamEkstra';
+import { ambilEkstra, ambilAnalis, ambilSentimen, ambilMusiman, bacaInsight, buatInsight, ambilAksi, petaLaba } from './kantor/sahamEkstra';
 import { spawn } from 'child_process';
 import os from 'os';
 
@@ -1414,6 +1416,23 @@ const pantauWatch = new PantauWatch(config.dataDir, {
     ringkas: async (data) => (await OfficeRoom.sharedLlm()?.complete(
         'Kamu Dito, analis trading di kantor Pak Rico. Dari daftar perubahan watchlist berikut, tulis 2–3 kalimat bahasa Indonesia sederhana: mana yang paling perlu diperhatikan dan kenapa. HANYA pakai fakta di data, jangan menambah angka. Jangan menyuruh beli/jual dengan pasti. Tanpa judul, tanpa poin.',
         data, 220, 2)) || null
+});
+// ── Laporan sinyal pagi (Selasa–Sabtu, ke chat Dito) & penanda acara besar (laporan laba, FOMC, CPI, NFP) ──
+const laporanPagi = new LaporanPagi(config.dataDir, {
+    baris: () => { const g = kronosAntre.gaya(); return (screener.data(g.H, g.mode) as any).baris; },
+    simbolPantau: () => { const st = tradingDesk.load(); return { watch: [...new Set([...(st.watchlist || []), ...watchFolder.list().flatMap((f) => f.simbol)])], pegang: (st.positions || []).map((p: any) => String(p.symbol || p.s || '').toUpperCase()).filter(Boolean) }; },
+    kronos: (s) => { const g = kronosAntre.gaya(); const r = kronosAntre.daftar(g.mode, g.H).aktif[s]; const p = r ? profilTerbaik(r) : null; return p ? { id: p.id, rr: p.rr, harapan: p.harapan } : null; },
+    laba: () => petaLaba(),
+    kirim: (t) => kabarDari('trading')(t)
+});
+app.get('/api/kantor/laporan-pagi', requireToken, (_req, res) => { res.json({ ok: true, atur: laporanPagi.atur() }); });
+app.post('/api/kantor/laporan-pagi', requireToken, (req, res) => { res.json({ ok: true, atur: laporanPagi.ubah(req.body || {}) }); });
+app.post('/api/kantor/laporan-pagi/kirim', requireToken, async (_req, res) => {
+    try { res.json({ ok: true, teks: await laporanPagi.kirimSekarang() }); } catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
+});
+app.get('/api/kantor/acara', requireToken, async (_req, res) => {
+    const m = await petaLaba().catch(() => new Map());
+    res.json({ ok: true, makro: makroMendatang(14), laba: Object.fromEntries(m) });
 });
 // ── Uji kertas & sisi jual: bukti apakah sinyal terkuat/terlemah benar-benar mengalahkan/kalah dari pasar ──
 const ujiKertas = new UjiKertas(config.dataDir, { sesi: () => screener.sesiTeknikal(), spy: () => screener.spyHarga(), baris: () => screener.data(20).baris as any });

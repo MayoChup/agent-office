@@ -9,6 +9,7 @@ import { Info, InfoKamus } from './InfoI';
 import * as K from './kamus';
 import { cocokCari } from './aliasSaham';
 import { TambahSaham } from './TambahSaham';
+import { TandaLaba, PitaAcara, useSaringLaba } from './Acara';
 import { TandaLemah, useUntungTerbukti } from './SisiJual';
 /** Label sinyal dalam huruf kalimat (Beli kuat, Tahan, …). */
 const kalimat = (l: string) => l.charAt(0).toUpperCase() + l.slice(1).toLowerCase();
@@ -30,10 +31,12 @@ export function PilihanView({ data, faktor, setFaktor, onOpen, watchlist }: { da
         return new Set([...watchlist, ...kuat]);
     }, [data, faktor, watchlist]);
 
+    const disaringLaba = useSaringLaba();
     const list = useMemo(() => {
         const qq = q.trim().toUpperCase();
         const out = data.baris.filter((b) => {
             if (qq && !cocokCari(b, q)) return false;
+            if (!qq && disaringLaba(b.s)) return false;
             if (sektor === 'Sorotan' && !qq && !sorotan.has(b.s)) return false;
             if (sektor !== 'Sorotan' && sektor !== 'Semua' && b.sektor !== sektor) return false;
             if (label !== 'Semua' && b.skor?.[faktor]?.label !== label) return false;
@@ -42,7 +45,7 @@ export function PilihanView({ data, faktor, setFaktor, onOpen, watchlist }: { da
         const best = (b: Baris) => b.x?.proyeksi?.target.find((t) => t.nama === b.x?.proyeksi?.terbaik);
         const v = (b: Baris): number => urut === 'skor' ? (b.skor?.[faktor]?.skor ?? -9) : urut === 'potensi' ? (best(b)?.pct ?? -99) : urut === 'peluang' ? (b.x?.proyeksi?.peluangNaik ?? -1) : urut === 'rsi' ? (b.rsi ?? 0) : urut === 'chg1d' ? b.chg1d : 0;
         return out.sort((a, b) => (urut === 's' ? a.s.localeCompare(b.s) : v(b) - v(a)));
-    }, [data, label, sektor, urut, q, faktor, sorotan]);
+    }, [data, label, sektor, urut, q, faktor, sorotan, disaringLaba]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const hitung = (l: Label | 'Semua') => data.baris.filter((b) => (sektor === 'Sorotan' ? sorotan.has(b.s) : sektor === 'Semua' || b.sektor === sektor) && (l === 'Semua' || b.skor?.[faktor]?.label === l)).length;
     const sektorList = ['Sorotan', 'Semua', ...data.pasar.sektor.map((s) => s.nama)];
@@ -57,6 +60,7 @@ export function PilihanView({ data, faktor, setFaktor, onOpen, watchlist }: { da
                 </div>
                 <div className="sb-counts">{ringkas.map((r) => <button key={r.l} className={`sb-count ${kelas(r.l)} ${label === r.l ? 'on' : ''}`} onClick={() => setLabel(label === r.l ? 'Semua' : r.l)}><b>{r.n}</b><span>{r.l}</span></button>)}</div>
             </section>
+            <PitaAcara />
 
             <div className="sb-layout">
                 <aside className={`sb-card sb-filter ${filterHp ? 'open' : ''}`}>
@@ -173,7 +177,7 @@ export function Kartu({ b, faktor, onOpen, kronos = 'lencana' }: { b: Baris; fak
     return (
         <article className="sb-cardx" onClick={() => onOpen(b.s)}>
             <header>
-                <div className="kc-l"><b className="mono">{b.s}</b><small>{b.nama}{b.luar ? <em className="kc-luar" title={b.luar === 'ADR' ? 'Perusahaan asing yang sahamnya diperdagangkan di bursa AS (ADR). Data fundamental bisa kurang lengkap.' : 'Di luar S&P 500'}> · {b.luar}</em> : null}</small>{kronos === 'lencana' && <LencanaKronos s={b.s} />}<TandaLemah s={b.s} /><TandaUntung b={b} /></div>
+                <div className="kc-l"><b className="mono">{b.s}</b><small>{b.nama}{b.luar ? <em className="kc-luar" title={b.luar === 'ADR' ? 'Perusahaan asing yang sahamnya diperdagangkan di bursa AS (ADR). Data fundamental bisa kurang lengkap.' : 'Di luar S&P 500'}> · {b.luar}</em> : null}</small>{kronos === 'lencana' && <LencanaKronos s={b.s} />}<TandaLemah s={b.s} /><TandaUntung b={b} /><TandaLaba s={b.s} /></div>
                 <div className="kc-r"><LabelSkor sk={sk} /><Bintang s={b.s} /></div>
             </header>
             {faktor === 'semua' && sk?.asli && <div className="sb-tahan" title="Sinyal hanya keluar kalau teknikal, fundamental, berita & whales lengkap">Sinyal {sk.asli.toLowerCase()} ditahan · menunggu data {sk.kurang?.join(', ')}</div>}

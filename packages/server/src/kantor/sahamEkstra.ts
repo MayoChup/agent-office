@@ -511,3 +511,9 @@ export async function ambilAksi(s: string, harga: number | null): Promise<AksiDa
         return { akanDatang: akan, lampau: lampau.slice(0, 60), dividen12: tot > 0 ? +tot.toFixed(4) : null, sumber };
     });
 }
+
+/** Peta laporan laba 3 minggu ke depan untuk semua saham (dipakai penanda acara & laporan pagi). */
+export async function petaLaba(): Promise<Map<string, { tgl: string; waktu: string }>> {
+    await labaUntuk('__');
+    return labaCache?.m || new Map();
+}
