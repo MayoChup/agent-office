@@ -681,7 +681,7 @@ app.get('/api/kantor/saham-detail/:s', requireToken, (req, res) => {
 const kodeOk = (x: string) => String(x || '').toUpperCase().replace(/[^A-Z0-9.^-]/g, '').slice(0, 12);
 app.get('/api/kantor/saham-ekstra/:s', requireToken, async (req, res) => {
     const s = kodeOk(req.params.s), b: any = screener.detail(s)?.baris;
-    const [e, a] = await Promise.allSettled([ambilEkstra(s, { per: b?.f?.per, epsCagr3: b?.f?.epsCagr3, revGrowth: b?.f?.revGrowth }), ambilAnalis(s)]);
+    const [e, a] = await Promise.allSettled([ambilEkstra(s, { per: b?.f?.per, epsCagr3: b?.f?.epsCagr3, revGrowth: b?.f?.revGrowth }), ambilAnalis(s, b?.nama || '')]);
     res.json({ ok: true, ekstra: e.status === 'fulfilled' ? e.value : null, ekstraGalat: e.status === 'rejected' ? String(e.reason?.message || e.reason) : '', analis: a.status === 'fulfilled' ? a.value : null, analisGalat: a.status === 'rejected' ? String(a.reason?.message || a.reason) : '' });
 });
 app.get('/api/kantor/sentimen/:s', requireToken, async (req, res) => {
@@ -708,7 +708,7 @@ app.post('/api/kantor/insight/:s', requireToken, (req, res) => {
         const d: any = screener.detail(s);
         if (!d) throw new Error('Saham belum ada di data penyaring');
         const b = d.baris, f = b.f || {};
-        const [ek, an, se, ak, cs, cspy] = await Promise.allSettled([ambilEkstra(s, { per: f.per, epsCagr3: f.epsCagr3, revGrowth: f.revGrowth }), ambilAnalis(s), ambilSentimen(s), ambilAksi(s, b.harga), ambilCandle(s, '3M'), ambilCandle('SPY', '3M')]);
+        const [ek, an, se, ak, cs, cspy] = await Promise.allSettled([ambilEkstra(s, { per: f.per, epsCagr3: f.epsCagr3, revGrowth: f.revGrowth }), ambilAnalis(s, b.nama), ambilSentimen(s), ambilAksi(s, b.harga), ambilCandle(s, '3M'), ambilCandle('SPY', '3M')]);
         const v = <T,>(x: PromiseSettledResult<T>) => (x.status === 'fulfilled' ? x.value : null);
         const bulat = (_k: string, x: any) => (typeof x === 'number' && !Number.isInteger(x) ? +x.toFixed(2) : x);
         const pct = (a: number | null | undefined, b: number | null | undefined) => (a != null && b ? +((a / b - 1) * 100).toFixed(2) : null);

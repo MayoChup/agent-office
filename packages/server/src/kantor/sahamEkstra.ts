@@ -163,6 +163,50 @@ async function finvizBank(s: string): Promise<Analis['bank']> {
     }
     return bank;
 }
+
+/* Rating per bank dari JUDUL BERITA (Google News 90 hari) — mis. "JPMorgan upgrades Apple (AAPL) to Overweight, PT $250",
+   "Apple price target raised to $250 from $230 at Barclays". Sumber gratis yang bisa diakses server; cakupan bergantung pada berita. */
+const RATING_RE = /\b(strong buy|strong sell|market outperform|sector outperform|market perform|sector perform|peer perform|equal[- ]weight|in[- ]line|outperform|overweight|underweight|underperform|accumulate|neutral|positive|negative|reduce|hold|buy|sell)\b/i;
+const VERB_RE = /\s(upgrades?|downgrades?|raises|lifts|boosts|hikes|lowers|cuts|trims|slashes|initiates|starts|begins|resumes|reiterates|reaffirms|maintains|keeps|sets|assumes|upgraded|downgraded)\s/i;
+const judulRating = (r: string) => r.toLowerCase().replace(/[- ]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+async function beritaBank(s: string, nama: string): Promise<Analis['bank']> {
+    const q = encodeURIComponent(`${s.replace('-', '.')} (upgrade OR downgrade OR "price target" OR initiates OR reiterates OR maintains)`);
+    const res = await fetch(`https://news.google.com/rss/search?q=${q}+when:90d&hl=en-US&gl=US&ceid=US:en`, { headers: { 'User-Agent': UA_BROWSER }, signal: AbortSignal.timeout(15_000) });
+    if (!res.ok) throw new Error(`Google News HTTP ${res.status}`);
+    const xml = await res.text();
+    const un = (x: string) => x.replace(/<!\[CDATA\[|\]\]>/g, '').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&#39;|&apos;/g, "'").replace(/&quot;/g, '"').trim();
+    const kataNama = (nama || '').replace(/,?\s+(inc\.?|corp\.?|corporation|co\.?|ltd\.?|plc|holdings?|group|company|technologies|the)\b.*$/i, '').trim().toLowerCase();
+    const soalIni = (t: string) => new RegExp(`\\(${s.replace('-', '[.-]')}\\)|\\b${s.replace('-', '[.-]')}\\b`).test(t) || (kataNama.length >= 3 && t.toLowerCase().includes(kataNama));
+    const kunci = (x: string) => x.toLowerCase().replace(/&/g, 'and').replace(/[^a-z]/g, '').replace(/(securities|capital|markets|research|group|partners|company|co|llc|inc)$/g, '');
+    const bank: Analis['bank'] = [];
+    const items = (xml.match(/<item>[\s\S]*?<\/item>/g) || []).map((it) => ({ t: un((it.match(/<title>([\s\S]*?)<\/title>/) || [])[1] || ''), at: Date.parse(un((it.match(/<pubDate>([\s\S]*?)<\/pubDate>/) || [])[1] || '')) || 0, media: un((it.match(/<source[^>]*>([\s\S]*?)<\/source>/) || [])[1] || '') }))
+        .filter((x) => x.t && x.at).sort((a, b) => b.at - a.at);
+    for (const it of items) {
+        let t = it.media ? it.t.replace(new RegExp(`\\s+-\\s+${it.media.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`), '') : it.t;
+        t = t.replace(/\s+-\s+[^-]{2,40}$/, '').trim();
+        if (!soalIni(t)) continue;
+        // Bank: "… at <Bank>" di akhir, atau kata-kata sebelum kata kerja (upgrades/raises/…).
+        let firm = '';
+        const akhir = t.match(/\b(?:at|by|from)\s+([A-Z][A-Za-z&.' ]{1,40}?)(?:[;,.]|$)/);
+        const m = t.match(VERB_RE);
+        if (m && m.index != null && m.index > 1 && m.index < 45) firm = t.slice(0, m.index).trim();
+        else if (akhir) firm = akhir[1].trim();
+        firm = firm.replace(/^(analyst|analysts|wall street)\s+/i, '').replace(/['’]s$/, '');
+        if (!firm || firm.split(' ').length > 5 || !/^[A-Z]/.test(firm) || soalIni(firm) || /\b(stock|shares|price|target|analyst|investors?)\b/i.test(firm)) continue;
+        // Rating: setelah "to …" / "with a …" / "keeps a …"; kalau tidak ada, kata rating pertama di judul.
+        const sesudah = t.match(/\b(?:to|with an?|keeps an?|keeps|maintains an?|maintains|reiterates an?|reiterates|at an?|rated)\s+(strong buy|strong sell|market outperform|sector outperform|market perform|sector perform|peer perform|equal[- ]weight|in[- ]line|outperform|overweight|underweight|underperform|accumulate|neutral|positive|negative|reduce|hold|buy|sell)\b/i);
+        const r = (sesudah?.[1] || t.match(RATING_RE)?.[1] || '').trim();
+        if (!r) continue;
+        const tg = t.match(/(?:price target|PT|target)[^$]{0,40}?\$\s?([\d,]+(?:\.\d+)?)/i) || t.match(/\$\s?([\d,]+(?:\.\d+)?)\s*(?:price )?target/i) || t.match(/\bto\s+\$\s?([\d,]+(?:\.\d+)?)/i);
+        const v = m?.[1]?.toLowerCase() || '';
+        const aksi = /^upgrade/.test(v) ? 'Upgrade' : /^downgrade/.test(v) ? 'Downgrade' : /initiat|starts|begins|assumes/.test(v) ? 'Mulai meliput' : /resumes/.test(v) ? 'Lanjut meliput' : /raises|lifts|boosts|hikes/.test(v) || /raised/i.test(t) ? 'Target dinaikkan' : /lowers|cuts|trims|slashes/.test(v) || /lowered|cut/i.test(t) ? 'Target diturunkan' : 'Tegaskan ulang';
+        if (bank.some((b) => kunci(b.nama) === kunci(firm))) continue;
+        const nilaiT = tg ? Number(tg[1].replace(/,/g, '')) : null;
+        bank.push({ nama: firm, analis: '', rating: `${judulRating(r)} (${aksi})`, arah: arahDari(r), tgl: new Date(it.at).toISOString().slice(0, 10), target: nilaiT && nilaiT > 0 ? nilaiT : null });
+        if (bank.length >= 30) break;
+    }
+    return bank;
+}
 const raw = (v: any): number | null => { const n = typeof v === 'object' && v ? v.raw : v; return typeof n === 'number' && Number.isFinite(n) ? n : null; };
 /** Analis dari Yahoo: hitungan rekomendasi bulan ini, target rata-rata, dan rating terakhir tiap bank (12 bulan). */
 async function analisYahoo(s: string): Promise<Analis | null> {
@@ -185,26 +229,30 @@ async function analisYahoo(s: string): Promise<Analis | null> {
     const B = n ? buy : bank.filter((b) => b.arah === 'buy').length, Hh = n ? hold : bank.filter((b) => b.arah === 'hold').length, S = n ? sell : bank.filter((b) => b.arah === 'sell').length;
     return { buy: B, hold: Hh, sell: S, n: B + Hh + S, konsensus: B >= Hh && B >= S ? 'BUY' : S > B && S >= Hh ? 'SELL' : 'HOLD', target: raw(fd.targetMeanPrice), tinggi: raw(fd.targetHighPrice), rendah: raw(fd.targetLowPrice), bank: bank.slice(0, 30), sumber: 'Yahoo Finance' };
 }
-export async function ambilAnalis(s: string): Promise<Analis | null> {
+export async function ambilAnalis(s: string, nama = ''): Promise<Analis | null> {
     return simpan(`an:${s}`, 12 * 3600_000, async () => {
         // Ringkasan: Yahoo (bila tidak sedang diistirahatkan) → Nasdaq. Rincian per bank: Yahoo → Finviz.
         const catatan: string[] = [];
         let y: Analis | null = null;
         try { y = await analisYahoo(s); galatYahoo = ''; } catch (e: any) { galatYahoo = String(e?.message || e).slice(0, 160); }
         if (y && y.bank.length) return y;
-        const [nq, fv] = await Promise.all([
+        const [nq, fv0] = await Promise.all([
             analisNasdaq(s).catch(() => null),
             finvizBank(s).catch((e: any) => { catatan.push(String(e?.message || e).slice(0, 120)); return [] as Analis['bank']; })
         ]);
+        // Finviz kosong/diblokir → rating per bank dari judul berita.
+        let fv = fv0, dariBerita = false;
+        if (!fv.length) { try { fv = await beritaBank(s, nama); dariBerita = fv.length > 0; } catch (e: any) { catatan.push(String(e?.message || e).slice(0, 80)); } }
+        if (!fv.length) catatan.push('belum ada aksi analis di judul berita 90 hari terakhir');
         let dasar = y || nq;
         if (!dasar && fv.length) {
             const B = fv.filter((b) => b.arah === 'buy').length, Hh = fv.filter((b) => b.arah === 'hold').length, S = fv.filter((b) => b.arah === 'sell').length;
-            dasar = { buy: B, hold: Hh, sell: S, n: B + Hh + S, konsensus: B >= Hh && B >= S ? 'BUY' : S > B && S >= Hh ? 'SELL' : 'HOLD', target: null, tinggi: null, rendah: null, bank: [], sumber: 'Finviz' };
+            dasar = { buy: B, hold: Hh, sell: S, n: B + Hh + S, konsensus: B >= Hh && B >= S ? 'BUY' : S > B && S >= Hh ? 'SELL' : 'HOLD', target: null, tinggi: null, rendah: null, bank: [], sumber: dariBerita ? 'judul berita' : 'Finviz' };
         }
         if (!dasar) return null;
         const bank = fv.length ? fv : dasar.bank;
-        if (!bank.length && !catatan.length) catatan.push('Finviz tidak memuat rating untuk saham ini');
-        return { ...dasar, bank, sumber: fv.length && dasar.sumber !== 'Finviz' ? `${dasar.sumber} · rincian bank: Finviz` : dasar.sumber, catatan: bank.length ? '' : catatan.join('; ') };
+        const asal = dariBerita ? 'judul berita' : 'Finviz';
+        return { ...dasar, bank, sumber: fv.length && dasar.sumber !== 'Finviz' ? `${dasar.sumber} · rincian bank: ${asal}` : dasar.sumber, catatan: bank.length ? '' : catatan.join('; ') };
     });
 }
 async function analisNasdaq(s: string): Promise<Analis | null> {
