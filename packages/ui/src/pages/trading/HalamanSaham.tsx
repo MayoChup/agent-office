@@ -254,7 +254,7 @@ function BarisAksi({ x }: { x: Aksi }) {
             <div className="hs-aksi-isi">
                 <div className="hs-aksi-h"><span className={`hs-aksi-j j-${x.jenis}`}>{label}</span><Info judul={label} teks={info} /></div>
                 <b>{x.judul}</b>
-                <small>{x.detail}{x.url && <> · <a href={x.url} target="_blank" rel="noreferrer">Dokumen asli</a></>}</small>
+                <small>{x.detail.replace(/\d{4}-\d{2}-\d{2}/g, (t) => tglEn(t))}{x.url && <> · <a href={x.url} target="_blank" rel="noreferrer">Dokumen asli</a></>}</small>
             </div>
         </div>
     );

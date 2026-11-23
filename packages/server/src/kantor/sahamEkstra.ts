@@ -216,6 +216,15 @@ async function cikDari(s: string): Promise<number | null> {
     return cikCache?.m.get(s) ?? null;
 }
 let labaCache: { at: number; m: Map<string, { tgl: string; waktu: string }> } | null = null;
+let labaJalan: Promise<void> | null = null;
+/** Kalender laba 3 minggu (±15 permintaan) diambil di latar; halaman menunggu paling lama 3 detik. */
+async function labaUntuk(s: string) {
+    if ((!labaCache || Date.now() - labaCache.at > 12 * 3600_000) && !labaJalan) {
+        labaJalan = kalenderLaba(21).then((m) => { labaCache = { at: Date.now(), m }; }).catch(() => { /* coba lagi lain kali */ }).finally(() => { labaJalan = null; });
+    }
+    if (!labaCache && labaJalan) await Promise.race([labaJalan, new Promise((r) => setTimeout(r, 3000))]);
+    return labaCache?.m.get(s) ?? null;
+}
 export async function ambilAksi(s: string, harga: number | null): Promise<AksiData> {
     return simpan(`ak:${s}`, 6 * 3600_000, async () => {
         const kini = new Date().toISOString().slice(0, 10), setahun = new Date(Date.now() - 365 * 86400_000).toISOString().slice(0, 10);
@@ -258,8 +267,7 @@ export async function ambilAksi(s: string, harga: number | null): Promise<AksiDa
         } catch { /* lewati */ }
         // Jadwal laporan laba berikutnya (kalender Nasdaq 3 minggu, disimpan 12 jam untuk semua saham).
         try {
-            if (!labaCache || Date.now() - labaCache.at > 12 * 3600_000) labaCache = { at: Date.now(), m: await kalenderLaba(21) };
-            const l = labaCache.m.get(s);
+            const l = await labaUntuk(s);
             if (l) akan.push({ jenis: 'laba', tgl: l.tgl, judul: 'Laporan laba kuartalan', detail: `Diumumkan ${l.tgl}${l.waktu ? `, ${l.waktu}` : ''}. Harga biasanya bergerak lebih liar di sekitar tanggal ini.` });
         } catch { /* lewati */ }
         // Peristiwa resmi 8-K (SEC), 12 bulan.
