@@ -1420,6 +1420,7 @@ const pantauWatch = new PantauWatch(config.dataDir, {
 // ── Laporan sinyal pagi (Selasa–Sabtu, ke chat Dito) & penanda acara besar (laporan laba, FOMC, CPI, NFP) ──
 const laporanPagi = new LaporanPagi(config.dataDir, {
     baris: () => { const g = kronosAntre.gaya(); return (screener.data(g.H, g.mode) as any).baris; },
+    spy: () => screener.spyHarga() as any,
     simbolPantau: () => { const st = tradingDesk.load(); return { watch: [...new Set([...(st.watchlist || []), ...watchFolder.list().flatMap((f) => f.simbol)])], pegang: (st.positions || []).map((p: any) => String(p.symbol || p.s || '').toUpperCase()).filter(Boolean) }; },
     kronos: (s) => { const g = kronosAntre.gaya(); const r = kronosAntre.daftar(g.mode, g.H).aktif[s]; const p = r ? profilTerbaik(r) : null; return p ? { id: p.id, rr: p.rr, harapan: p.harapan } : null; },
     laba: () => petaLaba(),

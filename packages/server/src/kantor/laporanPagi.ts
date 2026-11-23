@@ -9,6 +9,8 @@ import { makroMendatang, hariLagi } from './acara';
 export interface AturPagi { nyala: boolean; jam: string; terakhir: string }
 interface Sumber {
     baris: () => any[];
+    /** Harga penutupan SPY (S&P 500) urut lama → baru. */
+    spy: () => number[] | null;
     simbolPantau: () => { watch: string[]; pegang: string[] };
     kronos: (s: string) => { id: string; rr: number | null; harapan: number | null } | null;
     laba: () => Promise<Map<string, { tgl: string; waktu: string }>>;
@@ -50,12 +52,13 @@ export class LaporanPagi {
         const L: string[] = [`☀️ Laporan sinyal pagi · ${wib().toLocaleDateString('id-ID', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' })}`];
 
         // 1) Pasar semalam
-        const spy = cari.get('SPY');
+        const sc = this.src.spy() || [];
+        const spyChg = sc.length >= 2 ? (sc[sc.length - 1] / sc[sc.length - 2] - 1) * 100 : cari.get('SPY')?.chg1d ?? null;
         const sek = new Map<string, number[]>();
         for (const b of baris) if (b.sektor && b.s !== 'SPY') { const xs = sek.get(b.sektor) || []; xs.push(b.chg1d); sek.set(b.sektor, xs); }
         const rata = [...sek.entries()].filter(([, xs]) => xs.length >= 5).map(([k, xs]) => [k, xs.reduce((a, c) => a + c, 0) / xs.length] as [string, number]).sort((a, b) => b[1] - a[1]);
         L.push('', '📊 Pasar semalam');
-        L.push(`S&P 500 ${spy ? P(spy.chg1d, 2) : '–'}${rata.length ? ` · terkuat ${rata[0][0]} ${P(rata[0][1])} · terlemah ${rata[rata.length - 1][0]} ${P(rata[rata.length - 1][1])}` : ''}`);
+        L.push(`S&P 500 ${P(spyChg, 2)}${rata.length ? ` · terkuat ${rata[0][0]} ${P(rata[0][1])} · terlemah ${rata[rata.length - 1][0]} ${P(rata[rata.length - 1][1])}` : ''}`);
 
         // 2) Beli kuat (sinyal tidak ditahan = 4 faktor lengkap)
         const kuat = baris.filter((b) => b.skor?.semua?.label === 'Beli kuat' && !b.skor.semua.asli).sort((a, b) => b.skor.semua.skor - a.skor.semua.skor).slice(0, 5);
