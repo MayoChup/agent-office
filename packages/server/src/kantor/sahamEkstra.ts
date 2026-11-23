@@ -161,16 +161,29 @@ export function bacaInsight(dataDir: string, s: string): Insight | null {
 type Llm = { complete(system: string, user: string, maxTokens?: number, attempts?: number): Promise<string | null> } | null | undefined;
 export async function buatInsight(dataDir: string, s: string, fakta: string, llm: Llm): Promise<Insight> {
     if (!llm) throw new Error('AI belum tersedia');
-    const out = await llm.complete(
-        'Kamu analis saham di kantor Pak Rico. Tulis "Weekly Insight" untuk satu saham AS dalam bahasa Indonesia yang jelas untuk orang awam. ' +
-        'Pakai HANYA angka dan fakta dari data yang diberikan; jangan mengarang angka, tanggal, atau berita. Kalau data tidak ada, jangan disebut. ' +
-        'Balas JSON saja: {"judul": "satu kalimat judul ringkas minggu ini (≤14 kata)", "ringkas": "3–4 kalimat: apa yang terjadi minggu ini (harga, berita penting)", ' +
-        '"fundTek": "3–4 kalimat: posisi teknikal (tren, MA, RSI) dan fundamental (valuasi, laba) dengan angkanya", "pantau": "2–3 kalimat: yang perlu dipantau ke depan (level harga penting, jadwal laporan bila ada di data, risiko)"}. ' +
-        'Bukan saran beli/jual.',
-        fakta, 900, 2);
-    const m = String(out || '').match(/\{[\s\S]*\}/);
-    let j: any = null; try { j = m ? JSON.parse(m[0]) : null; } catch { /* */ }
-    if (!j?.ringkas) throw new Error('AI tidak memberi jawaban yang bisa dibaca. Coba lagi sebentar.');
+    // Format berlabel (lebih tahan untuk AI gratis daripada JSON): JUDUL / RINGKAS / FUNDTEK / PANTAU. Dicoba hingga 2×.
+    const sistem = 'Kamu analis saham di kantor Pak Rico. Tulis "Weekly Insight" untuk satu saham AS dalam bahasa Indonesia yang jelas untuk orang awam. ' +
+        'Pakai HANYA angka dan fakta dari data yang diberikan; jangan mengarang angka, tanggal, atau berita. Kalau suatu data tidak ada, jangan disebut. Bulatkan angka ke 2 desimal. ' +
+        'Balas PERSIS dengan 4 bagian berlabel berikut, tanpa teks lain:\n' +
+        'JUDUL: satu kalimat judul ringkas minggu ini (maks 14 kata)\n' +
+        'RINGKAS: 3–4 kalimat tentang apa yang terjadi minggu ini (harga, berita penting)\n' +
+        'FUNDTEK: 3–4 kalimat posisi teknikal (tren, MA, RSI) dan fundamental (valuasi, laba) dengan angkanya\n' +
+        'PANTAU: 2–3 kalimat yang perlu dipantau ke depan (level harga penting, jadwal laporan bila ada di data, risiko)\n' +
+        'Bukan saran beli/jual.';
+    const bagian = (t: string, label: string) => {
+        const m = t.match(new RegExp(`(?:^|\\n)\\W*${label}\\W*:?\\**\\s*([\\s\\S]*?)(?=\\n\\W*(?:JUDUL|RINGKAS|FUNDTEK|PANTAU)\\W*:|$)`, 'i'));
+        return (m?.[1] || '').replace(/\*\*/g, '').trim();
+    };
+    let j: any = null, kosong = 0;
+    for (let coba = 0; coba < 2 && !j; coba++) {
+        const out = String((await llm.complete(sistem, fakta, 1400, 2)) || '');
+        if (!out.trim()) { kosong++; continue; }
+        const r = { judul: bagian(out, 'JUDUL'), ringkas: bagian(out, 'RINGKAS'), fundTek: bagian(out, 'FUNDTEK'), pantau: bagian(out, 'PANTAU') };
+        if (r.ringkas) { j = r; break; }
+        // Cadangan: AI membalas JSON.
+        try { const m = out.match(/\{[\s\S]*\}/); const x = m ? JSON.parse(m[0]) : null; if (x?.ringkas) j = x; } catch { /* coba lagi */ }
+    }
+    if (!j) throw new Error(kosong === 2 ? 'AI gratis sedang penuh. Coba lagi beberapa menit lagi.' : 'AI tidak memberi jawaban yang bisa dibaca. Coba lagi sebentar.');
     const x: Insight = { s, judul: String(j.judul || '').slice(0, 160), ringkas: String(j.ringkas || ''), fundTek: String(j.fundTek || ''), pantau: String(j.pantau || ''), dibuat: Date.now(), model: 'AI kantor' };
     fs.mkdirSync(dirInsight(dataDir), { recursive: true });
     fs.writeFileSync(path.join(dirInsight(dataDir), `${s}.json`), JSON.stringify(x));
