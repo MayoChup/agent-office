@@ -123,7 +123,7 @@ function BuktiIndikator({ r, H }: { r: HasilH; H: number }) {
                         <h4>{g.judul} <small>{xs.length} sinyal · {g.ket}</small></h4>
                         {xs.map((k) => (
                             <div key={k.nama} className="bk-r">
-                                <span>{k.nama.slice(2)}{g.k !== 'tidak' && <em className={arahCocok(k) ? 'ok' : 'lawan'}>{arahCocok(k) ? 'searah skor' : 'berlawanan dengan skor'}</em>}</span>
+                                <span>{k.nama.slice(2).replace(/#/g, '…')}{g.k !== 'tidak' && <em className={arahCocok(k) ? 'ok' : 'lawan'}>{arahCocok(k) ? 'searah skor' : 'berlawanan dengan skor'}</em>}</span>
                                 <b className={`mono ${kelasEx(k.rataEx)}`}>{p(k.rataEx)}</b>
                                 <small className="mono">{k.n.toLocaleString('id-ID')} kasus</small>
                             </div>
