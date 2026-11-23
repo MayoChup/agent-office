@@ -56,8 +56,70 @@ export interface Analis { buy: number; hold: number; sell: number; n: number; ko
 const arahDari = (t: string): 'buy' | 'hold' | 'sell' => /sell|under|reduce|negative/i.test(t) ? 'sell' : /buy|outperform|overweight|positive|accumulate|add/i.test(t) ? 'buy' : 'hold';
 /** Cari semua objek di dalam JSON (Nasdaq kadang mengubah susunan) — dipakai untuk mengambil angka & tabel secara longgar. */
 function jelajah(x: any, fn: (o: any) => void, d = 0) { if (!x || d > 6 || typeof x !== 'object') return; if (!Array.isArray(x)) fn(x); for (const v of Object.values(x)) jelajah(v, fn, d + 1); }
+/* Yahoo quoteSummary butuh cookie + "crumb" (seperti yfinance). Disimpan 6 jam. */
+let yahooSesi: { at: number; cookie: string; crumb: string } | null = null;
+async function sesiYahoo(): Promise<{ cookie: string; crumb: string }> {
+    if (yahooSesi && Date.now() - yahooSesi.at < 6 * 3600_000) return yahooSesi;
+    const h = { 'User-Agent': UA_BROWSER, Accept: 'text/html,application/json,*/*' };
+    const r1 = await fetch('https://fc.yahoo.com/', { headers: h, redirect: 'manual', signal: AbortSignal.timeout(12_000) }).catch(() => null);
+    const sc: string[] = (r1?.headers as any)?.getSetCookie?.() || [];
+    const cookie = sc.map((c) => c.split(';')[0]).filter(Boolean).join('; ');
+    if (!cookie) throw new Error('Yahoo: cookie tidak didapat');
+    const r2 = await fetch('https://query2.finance.yahoo.com/v1/test/getcrumb', { headers: { ...h, Cookie: cookie }, signal: AbortSignal.timeout(12_000) });
+    const crumb = (await r2.text()).trim();
+    if (!r2.ok || !crumb || crumb.length > 40 || /</.test(crumb)) throw new Error(`Yahoo: crumb gagal (HTTP ${r2.status})`);
+    yahooSesi = { at: Date.now(), cookie, crumb };
+    return yahooSesi;
+}
+async function yahooRingkasan(s: string, modules: string): Promise<any> {
+    for (let coba = 0; coba < 2; coba++) {
+        const { cookie, crumb } = await sesiYahoo();
+        const r = await fetch(`https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(s)}?modules=${modules}&crumb=${encodeURIComponent(crumb)}`, { headers: { 'User-Agent': UA_BROWSER, Cookie: cookie, Accept: 'application/json' }, signal: AbortSignal.timeout(15_000) });
+        if (r.status === 401 || r.status === 403) { yahooSesi = null; continue; }
+        if (!r.ok) throw new Error(`Yahoo quoteSummary HTTP ${r.status}`);
+        const j: any = await r.json();
+        const x = j?.quoteSummary?.result?.[0];
+        if (!x) throw new Error('Yahoo: data analis kosong');
+        return x;
+    }
+    throw new Error('Yahoo menolak sesi');
+}
+const raw = (v: any): number | null => { const n = typeof v === 'object' && v ? v.raw : v; return typeof n === 'number' && Number.isFinite(n) ? n : null; };
+/** Analis dari Yahoo: hitungan rekomendasi bulan ini, target rata-rata, dan rating terakhir tiap bank (12 bulan). */
+async function analisYahoo(s: string): Promise<Analis | null> {
+    const x = await yahooRingkasan(s, 'recommendationTrend,financialData,upgradeDowngradeHistory');
+    const tr = (x.recommendationTrend?.trend || []).find((t: any) => t.period === '0m') || x.recommendationTrend?.trend?.[0];
+    const fd = x.financialData || {};
+    const buy = tr ? (tr.strongBuy || 0) + (tr.buy || 0) : 0, hold = tr ? tr.hold || 0 : 0, sell = tr ? (tr.sell || 0) + (tr.strongSell || 0) : 0;
+    const setahun = Date.now() / 1000 - 365 * 86400;
+    const bank: Analis['bank'] = [];
+    for (const h of (x.upgradeDowngradeHistory?.history || []).slice().sort((a: any, b: any) => b.epochGradeDate - a.epochGradeDate)) {
+        if (h.epochGradeDate < setahun) break;
+        const nama = String(h.firm || '').trim(), rating = String(h.toGrade || '').trim();
+        if (!nama || !rating || bank.some((b) => b.nama === nama)) continue;
+        const tg = raw(h.currentPriceTarget);
+        const aksi = ({ up: 'Upgrade', down: 'Downgrade', main: 'Pertahankan', init: 'Mulai meliput', reit: 'Tegaskan ulang' } as Record<string, string>)[String(h.action || '')] || '';
+        bank.push({ nama, analis: '', rating: aksi ? `${rating} (${aksi})` : rating, arah: arahDari(rating), tgl: new Date(h.epochGradeDate * 1000).toISOString().slice(0, 10), target: tg && tg > 0 ? tg : null });
+    }
+    const n = buy + hold + sell;
+    if (!n && !bank.length) return null;
+    const B = n ? buy : bank.filter((b) => b.arah === 'buy').length, Hh = n ? hold : bank.filter((b) => b.arah === 'hold').length, S = n ? sell : bank.filter((b) => b.arah === 'sell').length;
+    return { buy: B, hold: Hh, sell: S, n: B + Hh + S, konsensus: B >= Hh && B >= S ? 'BUY' : S > B && S >= Hh ? 'SELL' : 'HOLD', target: raw(fd.targetMeanPrice), tinggi: raw(fd.targetHighPrice), rendah: raw(fd.targetLowPrice), bank: bank.slice(0, 30), sumber: 'Yahoo Finance' };
+}
 export async function ambilAnalis(s: string): Promise<Analis | null> {
     return simpan(`an:${s}`, 12 * 3600_000, async () => {
+        // Yahoo dulu (ada rincian per bank); kalau gagal / tanpa rincian bank, Nasdaq.
+        let y: Analis | null = null;
+        try { y = await analisYahoo(s); } catch (e: any) { console.warn('[Analis] Yahoo:', String(e?.message || e).slice(0, 120)); }
+        if (y && y.bank.length) return y;
+        const nq = await analisNasdaq(s).catch(() => null);
+        if (!nq) return y;
+        if (y) return { ...y, bank: nq.bank.length ? nq.bank : y.bank };
+        return nq;
+    });
+}
+async function analisNasdaq(s: string): Promise<Analis | null> {
+    {
         const [tp, rt] = await Promise.all([
             nasdaq(`https://api.nasdaq.com/api/analyst/${sym(s)}/targetprice`).catch(() => null),
             nasdaq(`https://api.nasdaq.com/api/analyst/${sym(s)}/ratings`).catch(() => null)
@@ -95,7 +157,7 @@ export async function ambilAnalis(s: string): Promise<Analis | null> {
         if (!n && target == null) return null;
         const konsensus = B >= Hh && B >= S ? 'BUY' : S > B && S >= Hh ? 'SELL' : 'HOLD';
         return { buy: B, hold: Hh, sell: S, n, konsensus, target, tinggi, rendah, bank: bank.slice(0, 30), sumber: 'Nasdaq' };
-    });
+    }
 }
 
 /* ── Sentimen berita 7/14/30 hari ── */

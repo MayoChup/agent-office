@@ -10,7 +10,7 @@ import { Baris, kap, usd } from './types';
  * Bagian-bagian halaman saham versi bertab: Weekly Insight (AI, manual), Market stats, What the experts say,
  * Fundamentals lengkap, News sentiment (speedometer), Seasonality. Data dari /saham-ekstra, /sentimen, /musiman, /insight.
  */
-export interface Analis { buy: number; hold: number; sell: number; n: number; konsensus: 'BUY' | 'HOLD' | 'SELL'; target: number | null; tinggi: number | null; rendah: number | null; bank: Array<{ nama: string; analis?: string; rating: string; arah: 'buy' | 'hold' | 'sell'; tgl: string; target: number | null }> }
+export interface Analis { sumber?: string; buy: number; hold: number; sell: number; n: number; konsensus: 'BUY' | 'HOLD' | 'SELL'; target: number | null; tinggi: number | null; rendah: number | null; bank: Array<{ nama: string; analis?: string; rating: string; arah: 'buy' | 'hold' | 'sell'; tgl: string; target: number | null }> }
 export interface DataEkstra { ekstra: K.EkstraData | null; ekstraGalat: string; analis: Analis | null; analisGalat: string }
 const pct = (v: number, d = 1) => `${v.toLocaleString('en-US', { maximumFractionDigits: d, minimumFractionDigits: d })}%`;
 
@@ -137,7 +137,7 @@ export function Experts({ a, galat, harga }: { a: Analis | null | undefined; gal
     return (
         <section className="sb-card hs-exp">
             <h3>What the experts say <Info judul="Pendapat analis" teks={'Rating dari analis bank & sekuritas Wall Street (data Nasdaq). Target price = rata-rata perkiraan harga 12 bulan ke depan.\n\nAnalis sering terlambat dan cenderung optimistis; pakai sebagai pembanding, bukan alasan utama.'} /></h3>
-            <small className="hs-exp-n">{a.n} Wall Street Analyst Ratings</small>
+            <small className="hs-exp-n">{a.n} Wall Street Analyst Ratings{a.sumber ? ` · ${a.sumber}` : ''}</small>
             <div className="hs-exp-body">
                 <div className={`hs-exp-bulat ${k}`}>{a.konsensus}</div>
                 <div className="hs-exp-bar">
@@ -153,6 +153,7 @@ export function Experts({ a, galat, harga }: { a: Analis | null | undefined; gal
                     <div><span className={`hs-ico ${ret != null && ret < 0 ? 'down' : 'up'}`} aria-hidden>{ret != null && ret < 0 ? '↘' : '↗'}</span><small>Estimated return</small><b className={`mono ${ret != null && ret < 0 ? 'down' : 'up'}`}>{ret != null ? `${ret < 0 ? '−' : '+'}${pct(Math.abs(ret), 2)}` : '–'}</b></div>
                 </div>
             </div>
+            {!a.bank.length && <p className="sb-note">Rincian rating per bank untuk saham ini belum tersedia dari sumber data.</p>}
             {a.bank.length > 0 && (
                 <div className="hs-bank">
                     {a.bank.slice(0, 5).map((x) => <KartuBank key={x.nama} x={x} harga={harga} />)}
