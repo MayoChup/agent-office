@@ -65,6 +65,14 @@ export function konteksTrading(o: { screener: Screener; dataDir: string; H: numb
     const urut = [...baris].filter((b) => b.skor?.semua).sort((a, b) => b.skor.semua.skor - a.skor.semua.skor);
     L.push('', `# Skor gabungan teratas (dari ${baris.length} saham)`, ...urut.slice(0, 15).map(satu));
     L.push('', '# Skor gabungan terbawah', ...urut.slice(-8).reverse().map(satu));
+    // Peluang pantul (segmen Pantul di Sinyal): urut tahap Mulai berbalik → Zona beli → Pantau, lalu fundamental.
+    const TAHAP: Record<string, [number, string]> = { balik: [0, 'Mulai berbalik'], zona: [1, 'Zona beli'], pantau: [2, 'Pantau'] };
+    const pantul = baris.filter((b) => b.diskon).sort((a, b) => TAHAP[a.diskon.tahap][0] - TAHAP[b.diskon.tahap][0] || (b.skor?.fundamental?.skor ?? 0) - (a.skor?.fundamental?.skor ?? 0));
+    if (pantul.length) {
+        const nT = (t: string) => pantul.filter((b) => b.diskon.tahap === t).length;
+        L.push('', `# Peluang pantul (segmen Pantul): ${pantul.length} saham — ${nT('balik')} mulai berbalik, ${nT('zona')} zona beli, ${nT('pantau')} pantau. Jenis: "koreksi di tren naik" (tren panjang masih naik, turun tajam sebentar) / "diskon dalam" (fundamental kuat, harga jauh turun). Urutan = paling dekat titik masuk dulu.`,
+            ...pantul.slice(0, 20).map((b) => `${TAHAP[b.diskon.tahap][1]} · ${b.diskon.jenis === 'koreksi' ? 'koreksi di tren naik' : 'diskon dalam'} · ${b.diskon.dariPuncak}% di bawah puncak setahun · ${b.diskon.alasan.slice(0, 3).join('; ')} || ${satu(b)}`));
+    } else L.push('', '# Peluang pantul: saat ini tidak ada saham yang masuk segmen Pantul.');
     const pos = new Map(o.posisi.map((p) => [p.symbol, p]));
     const milik = baris.filter((b) => o.watch.includes(b.s) || pos.has(b.s));
     if (milik.length) L.push('', '# Watchlist & posisi Pak Rico', ...milik.map((b) => `${satu(b)}${pos.has(b.s) ? ` | POSISI: beli $${pos.get(b.s)!.entry} × ${pos.get(b.s)!.shares} lembar` : ' | watchlist'}`));

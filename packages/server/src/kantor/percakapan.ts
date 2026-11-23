@@ -23,6 +23,7 @@ type Llm = { complete(system: string, user: string, maxTokens?: number, attempts
 
 const MAX_SIMPAN = 300;
 const RIWAYAT_PROMPT = 14;
+const RIWAYAT_LAMA = 6 * 3600_000;
 const BATAS_WAKTU = 6 * 60_000;
 /** Prompt yang menyuruh memakai skill / web harus tetap lewat Hermes (punya alat). */
 const BUTUH_ALAT = /pakai skill|buka web|cari di web|\/ig-[a-z]|\/reels-cepat|\/video-edit/i;
@@ -328,10 +329,28 @@ export class Percakapan {
         return roster.filter((a) => new RegExp(`@(${esc(a.nama)}|${esc(a.id)})\\b`, 'i').test(teks)).slice(0, 4).map((a) => a.id);
     }
 
+    /** Riwayat untuk prompt: tiap pesan berjam; yang lebih lama dari 6 jam ditandai "sudah lewat" supaya tidak dibahas ulang. */
     private riwayat(thread: string) {
-        return this.baca(thread).filter((p) => p.dari !== 'sistem').slice(-RIWAYAT_PROMPT)
-            .map((p) => `${p.dari === 'owner' ? this.ownerName : p.nama}: ${p.teks.slice(0, 1200)}${p.lampiran?.length ? ` [lampiran: ${p.lampiran.map((l) => l.nama).join(', ')}]` : ''}`).join('\n');
+        const list = this.baca(thread).filter((p) => p.dari !== 'sistem').slice(-RIWAYAT_PROMPT);
+        const kini = Date.now();
+        const jam = (t: number) => new Date(t + 7 * 3600_000).toISOString().slice(5, 16).replace('T', ' ');
+        const satu = (p: Pesan, maks: number) => `[${jam(p.at)}] ${p.dari === 'owner' ? this.ownerName : p.nama}: ${p.teks.slice(0, maks)}${p.lampiran?.length ? ` [lampiran: ${p.lampiran.map((l) => l.nama).join(', ')}]` : ''}`;
+        const lama = list.filter((p) => kini - p.at > RIWAYAT_LAMA), baru = list.filter((p) => kini - p.at <= RIWAYAT_LAMA);
+        const out: string[] = [];
+        if (lama.length) out.push(`(Percakapan LAMA — lebih dari 6 jam lalu, SUDAH LEWAT. Jangan dibahas, ditagih, atau dilaporkan lagi kecuali ${this.ownerName} menanyakannya sekarang.)`, ...lama.map((p) => satu(p, 300)));
+        if (baru.length) out.push(lama.length ? '(Percakapan sekarang:)' : '', ...baru.map((p) => satu(p, 1200)));
+        return out.filter(Boolean).join('\n');
     }
+    /** Pesan terakhir Pak Rico di thread — ditulis ulang di akhir prompt sebagai satu-satunya yang harus dijawab. */
+    private terakhirDari(thread: string) { return [...this.baca(thread)].reverse().find((m) => m.dari === 'owner')?.teks || ''; }
+    private fokus(thread: string) {
+        const t = this.terakhirDari(thread);
+        return t ? `PESAN TERAKHIR ${this.ownerName} yang harus kamu jawab SEKARANG (jawab ini saja, bukan topik lama): "${t.slice(0, 1500)}"` : '';
+    }
+    /** Data Sinyal terbaru untuk pertanyaan soal saham (diisi index.ts). null = bukan soal saham / AI ini bukan tim trading. */
+    dataSaham?: (aiId: string, teks: string) => { data: string; aturan: string } | null;
+    /** AI yang paling tepat menjawab soal saham di grup (diisi index.ts). */
+    ahliSaham?: string;
 
     private async balasGrup(teks: string, thread = 'grup') {
         const sebut = this.disebut(teks, thread);
@@ -343,11 +362,15 @@ export class Percakapan {
         // Tanpa tag: moderator (Joni kalau ada di grup; kalau tidak, kepala divisi pertama / anggota pertama) membaca, lalu menjawab atau menugaskan.
         const joni = roster.find((a) => a.id === 'default') || roster.find((a) => !a.id.includes('-')) || roster[0];
         if (!joni) return;
+        const ahli = this.ahliSaham && joni.id !== this.ahliSaham && this.dataSaham?.(this.ahliSaham, teks) ? roster.find((a) => a.id === this.ahliSaham) : undefined;
+        // Pertanyaan soal saham → langsung ke ahli trading (dia menerima data Sinyal terbaru), tanpa perantara.
+        if (ahli) { await this.balas(thread, ahli.id); return; }
         const daftar = roster.filter((a) => a.id !== joni.id).map((a) => `- ${a.id}: ${a.nama} (${a.peran}) — ${a.deskripsi}`.slice(0, 220)).join('\n');
         const prompt = [
             `[Grup chat "${namaGrup}" di aplikasi Kantor Virtual. Kamu ${joni.nama} (${joni.peran}), moderator grup ini.]`,
             'Riwayat terakhir:', this.riwayat(thread), '',
             'Anggota & jobdesk:', daftar, '',
+            this.fokus(thread), '',
             `Tentukan cara terbaik menanggapi pesan terakhir ${this.ownerName}:`,
             '- Kalau sapaan/umum/koordinasi atau tidak cocok untuk siapa pun → jawab sendiri.',
             '- Kalau cocok dengan jobdesk anggota → tugaskan 1–3 anggota (urut: yang hasilnya dibutuhkan yang lain lebih dulu), beri instruksi lengkap & jelas.',
@@ -358,19 +381,23 @@ export class Percakapan {
         const out = await this.jalankanAi(thread, joni.id, prompt, false).catch((e) => { this.gagal(thread, joni, e); return null; });
         if (out === null) return;
         const j = extractJson(out);
+        // Id anggota dicocokkan longgar (id persis, nama, atau "Nama - Peran") supaya penyerahan tidak terbuang.
+        const cari = (x: string) => { const k = x.toLowerCase().trim(); return roster.find((a) => a.id.toLowerCase() === k) || roster.find((a) => a.nama.toLowerCase() === k) || roster.find((a) => k.includes(a.nama.toLowerCase()) || (a.id.length >= 5 && k.includes(a.id.toLowerCase()))); };
         const tugas: Array<{ id: string; instruksi: string; berat: boolean }> = (Array.isArray(j?.tugaskan) ? j.tugaskan : [])
-            .map((t: any) => ({ id: String(t?.id || ''), instruksi: String(t?.instruksi || '').slice(0, 1500), berat: t?.berat === true }))
-            .filter((t: any) => t.id !== joni.id && roster.some((a) => a.id === t.id)).slice(0, 3);
-        if (!j || (!tugas.length && !String(j.jawaban || j.pesan || '').trim())) {
-            this.tambah(thread, { dari: joni.id, nama: joni.nama, teks: out || '(tidak ada jawaban)', at: Date.now() });
-            return;
-        }
+            .map((t: any) => ({ id: cari(String(t?.id || t?.nama || ''))?.id || '', instruksi: String(t?.instruksi || '').slice(0, 1500), berat: t?.berat === true }))
+            .filter((t: any) => t.id && t.id !== joni.id).slice(0, 3);
+        const ownerT = this.terakhirDari(thread);
+        const jawaban = String(j?.jawaban || '').trim(), pengantar = String(j?.pesan || '').trim();
         if (!tugas.length) {
-            this.tambah(thread, { dari: joni.id, nama: joni.nama, teks: String(j.jawaban || j.pesan).trim(), at: Date.now() });
+            const isi = j ? jawaban || pengantar : String(out || '').trim();
+            // Jangan pernah memantulkan pertanyaan Pak Rico / pengantar kosong: minta Joni menjawab langsung.
+            if (!isi || samaDengan(isi, ownerT) || (!jawaban && j && pengantar.length < 80)) { await this.balas(thread, joni.id); return; }
+            this.tambah(thread, { dari: joni.id, nama: joni.nama, teks: isi, at: Date.now() });
             return;
         }
+        if (j) j.pesan = samaDengan(pengantar, ownerT) ? '' : pengantar;
         const nama = (id: string) => roster.find((a) => a.id === id)?.nama || id;
-        this.tambah(thread, { dari: joni.id, nama: joni.nama, teks: String(j.pesan || '').trim() || `${tugas.map((t) => nama(t.id)).join(' & ')}, tolong ditangani ya.`, at: Date.now() });
+        this.tambah(thread, { dari: joni.id, nama: joni.nama, teks: String(j?.pesan || '').trim() || `${tugas.map((t) => nama(t.id)).join(' & ')}, tolong ditangani ya.`, at: Date.now() });
         for (const t of tugas) this.catatSerah(joni.id, t.id, t.instruksi, 'tugas');
         for (const t of tugas) { await this.balas(thread, t.id, { instruksi: t.instruksi, berat: t.berat }); this.catatSerah(t.id, joni.id, t.instruksi, 'laporan'); }
     }
@@ -439,18 +466,22 @@ export class Percakapan {
         }
     }
 
-    private async balasSekarang(thread: string, aiId: string, opts: { instruksi?: string; berat?: boolean; data?: string; aturan?: string; kerja?: string }) {
+    private async balasSekarang(thread: string, aiId: string, opts: { instruksi?: string; berat?: boolean; data?: string; aturan?: string; kerja?: string; bebas?: boolean }) {
         const ai = this.roster().find((a) => a.id === aiId);
         if (!ai) { this.papan?.ubah(opts.kerja, 'gagal', 'AI tidak ditemukan.'); return; }
         const grup = thread === 'grup' || !!this.grupCari(thread);
         const info = this.infoThread(thread);
         const lampOwner = [...this.baca(thread)].reverse().find((m) => m.dari === 'owner')?.lampiran;
         const isiGambar = await this.bacaGambar(aiId, ai.nama, lampOwner);
+        if (!opts.data) { const ds = this.dataSaham?.(aiId, this.terakhirDari(thread)); if (ds) opts = { ...opts, data: ds.data, aturan: ds.aturan, bebas: true }; }
         const berat = Boolean(opts.berat); // jalur berat dipilih di jalankanAi (langganan Claude → OpenRouter → gratis)
         const prompt = opts.data ? [
             opts.aturan || '',
             '', '=== DATA (satu-satunya sumber yang boleh dipakai) ===', opts.data, '=== AKHIR DATA ===', '',
-            'Riwayat chat konsultasi ini:', this.riwayat(thread), '',
+            'Riwayat chat ini:', this.riwayat(thread), '',
+            opts.instruksi ? `Instruksi dari ${this.roster().find((a) => a.id === 'default')?.nama || 'kepala kantor'} untukmu: ${opts.instruksi}` : '',
+            opts.bebas ? `${grup ? `[Ini grup chat "${info.nama}".] ` : ''}Kalau ${this.ownerName} memintamu MENGERJAKAN sesuatu (bukan bertanya soal saham), kerjakan dengan alat/skill-mu seperti biasa lalu laporkan; data di atas tetap acuan fakta saham.` : '',
+            this.fokus(thread), '',
             `Balas pesan terakhir ${this.ownerName} sebagai ${ai.nama} (${ai.peran}) dalam Bahasa Indonesia, singkat & jelas.`, GAYA_MANUSIA, PAGAR_SISTEM
         ].join('\n') : [
             grup
@@ -459,6 +490,7 @@ export class Percakapan {
             'Riwayat terakhir:',
             this.riwayat(thread),
             '',
+            this.fokus(thread),
             opts.instruksi ? `Instruksi dari ${this.roster().find((a) => a.id === 'default')?.nama || 'kepala kantor'} untukmu: ${opts.instruksi}` : '',
             `Balas sebagai ${ai.nama} (${ai.peran}) dalam Bahasa Indonesia. Gaya chat: singkat, jelas, tanpa basa-basi.`,
             GAYA_MANUSIA,
@@ -476,6 +508,13 @@ export class Percakapan {
             this.tambah(thread, { dari: aiId, nama: ai.nama, teks: teks || (lampiran.length ? '' : '(tidak ada jawaban)'), at: Date.now(), ...(berat ? { berat: true } : {}), ...(lampiran.length ? { lampiran } : {}) });
         } catch (e: any) { this.gagal(thread, ai, e); }
     }
+}
+
+/** true kalau teks (praktis) sama dengan pesan Pak Rico — tanda AI hanya memantulkan pertanyaan. */
+export function samaDengan(a: string, b: string) {
+    const n = (x: string) => x.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const x = n(a), y = n(b);
+    return !!x && !!y && (x === y || (x.includes(y) && x.length <= y.length + 12));
 }
 
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

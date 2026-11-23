@@ -1172,6 +1172,22 @@ const ATURAN_TRADING = [
     '3. Kalau sinyal/teknikal horison ini belum terbukti di uji mundur, sebut singkat dengan bahasa biasa ("sinyal teknikal di kantor ini belum terbukti ampuh, jadi jangan terlalu diandalkan") — cukup sekali.',
     '4. Boleh berpendapat dan memberi saran bersyarat, tapi jangan menjanjikan hasil. Kantor tidak terhubung ke broker. Akhiri dengan satu baris pendek: "Bukan saran keuangan."'
 ].join('\n');
+// Chat biasa (grup & pribadi): pertanyaan soal saham ikut diberi data Sinyal terbaru — Joni & tim trading tidak lagi menjawab dari ingatan/skrip lama.
+const RE_SOAL_SAHAM = /saham|pantul|sinyal|signal|\bbeli\b|\bjual\b|watchlist|portofolio|bursa|sektor|emiten|ticker|kronos|rebound|diskon|cuan|\bshort\b|nasdaq|s&p|\bstock/i;
+let kodeSaham: { at: number; set: Set<string> } = { at: 0, set: new Set() };
+const adaKode = (teks: string) => {
+    if (Date.now() - kodeSaham.at > 600_000) { try { kodeSaham = { at: Date.now(), set: new Set((screener.data(20) as any).baris.map((b: any) => b.s)) }; } catch { /* penyaring belum siap */ } }
+    return (teks.match(/\b[A-Z]{2,5}\b/g) || []).some((k) => !['OK', 'AI', 'ATM', 'CEO', 'USD', 'IDR', 'WIB', 'PDF', 'API'].includes(k) && kodeSaham.set.has(k));
+};
+percakapan.ahliSaham = roster().some((a) => a.id === 'trading') ? 'trading' : undefined;
+percakapan.dataSaham = (aiId, teks) => {
+    if (!teks || !(aiId === 'default' || anggotaTrading().some((a) => a.id === aiId))) return null;
+    if (!RE_SOAL_SAHAM.test(teks) && !adaKode(teks)) return null;
+    try {
+        const st = tradingDesk.load();
+        return { data: konteksTrading({ screener, dataDir: config.dataDir, H: 20, mode: '', pt: '', pf: '', teks, watch: st.watchlist, posisi: st.positions }), aturan: ATURAN_TRADING.replace('[Konsultasi di halaman Trading', '[Chat') };
+    } catch { return null; }
+};
 app.get('/api/kantor/trading-chat/anggota', requireToken, (_req, res) => { res.json({ ok: true, anggota: anggotaTrading() }); });
 app.get('/api/kantor/trading-chat/:ai', requireToken, (req, res) => { res.json({ ok: true, ...percakapan.thread(`trading-${String(req.params.ai)}`) }); });
 app.post('/api/kantor/trading-chat/:ai', requireToken, (req, res) => {
