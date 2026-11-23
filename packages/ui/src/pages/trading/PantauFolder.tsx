@@ -34,6 +34,7 @@ export function PantauFolder({ id }: { id: string }) {
     // Folder baru dibuat / berganti folder → muat ulang daftar pantauan.
     React.useEffect(() => { if (r.data && !f) r.reload(); setPesan(''); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
     React.useEffect(() => { const g = () => r.reload(); window.addEventListener('kantor:watchlist', g); return () => window.removeEventListener('kantor:watchlist', g); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    React.useEffect(() => { const g = () => { if (document.visibilityState === 'visible') r.reload(); }; document.addEventListener('visibilitychange', g); return () => document.removeEventListener('visibilitychange', g); }, []); // eslint-disable-line react-hooks/exhaustive-deps
     const [lokal, setLokal] = useState<Partial<Atur> | null>(null);
     if (!f) return null;
     const a: Atur = { ...f.atur, ...(lokal || {}) };

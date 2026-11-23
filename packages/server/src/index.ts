@@ -45,6 +45,7 @@ import { KronosAntre, gayaDari, profilTerbaik } from './kantor/kronosAntre';
 import { PantauWatch } from './kantor/pantauWatch';
 import { LaporanPagi } from './kantor/laporanPagi';
 import { makroMendatang } from './kantor/acara';
+import { bacaPerintah, ringkasHari } from './kantor/perintahJadwal';
 import { UjiKertas } from './kantor/ujiKertas';
 import { kalenderLaba } from './kantor/nasdaq';
 import { BeritaTerkait } from './kantor/beritaTerkait';
@@ -1426,6 +1427,27 @@ const laporanPagi = new LaporanPagi(config.dataDir, {
     laba: () => petaLaba(),
     kirim: (t) => kabarDari('trading')(t)
 });
+// Perintah jadwal lewat chat → pengaturan yang sama dengan tombol di Trading → Watchlist (tersinkron dua arah).
+percakapan.perintahJadwal = (teks) => {
+    const folder = watchFolder.list().map((f) => ({ id: f.id, nama: f.nama }));
+    const p = bacaPerintah(teks, folder);
+    if (!p) return null;
+    const baris = () => {
+        const a = laporanPagi.atur();
+        const L = [`• Laporan sinyal pagi: ${a.nyala ? `${ringkasHari(a.hari)} · ${a.jam} WIB` : 'mati'}`];
+        for (const f of pantauWatch.semua()) L.push(`• Pantauan ${f.id === 'utama' ? 'Watchlist Utama' : `folder ${f.nama}`}: ${f.atur.nyala ? `${ringkasHari(f.atur.hari)} · ${f.atur.jam} WIB` : 'mati'}`);
+        return L.join('\n');
+    };
+    if (p.aksi === 'daftar') return `Jadwal laporan yang aktif sekarang:\n${baris()}\n\nBisa diubah lewat chat (mis. "laporan pagi jam 06.30, Selasa sampai Jumat") atau di Trading → Watchlist.`;
+    if (p.aksi === 'tanya') return p.pesan;
+    try {
+        const u = p.ubah;
+        const hasil = p.target.jenis === 'pagi' ? laporanPagi.ubah(u) : pantauWatch.ubah(p.target.id!, u as any);
+        const nama = p.target.nama;
+        if (!hasil.nyala) return `Siap, ${nama} dimatikan. Nyalakan lagi kapan saja dengan "nyalakan ${p.target.jenis === 'pagi' ? 'laporan pagi' : nama}" atau lewat tombol di Trading → Watchlist.`;
+        return `Siap, ${nama} sekarang ${ringkasHari(hasil.hari)} · ${hasil.jam} WIB. Pengaturan di Trading → Watchlist ikut berubah.`;
+    } catch (e: any) { return `Jadwal belum bisa diubah: ${String(e?.message || e)}`; }
+};
 app.get('/api/kantor/laporan-pagi', requireToken, (_req, res) => { res.json({ ok: true, atur: laporanPagi.atur() }); });
 app.post('/api/kantor/laporan-pagi', requireToken, (req, res) => { res.json({ ok: true, atur: laporanPagi.ubah(req.body || {}) }); });
 app.post('/api/kantor/laporan-pagi/kirim', requireToken, async (_req, res) => {

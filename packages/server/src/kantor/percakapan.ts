@@ -259,6 +259,13 @@ export class Percakapan {
         const t = teks.trim().slice(0, 2000);
         if (!t && !lampiran.length) throw new Error('Pesan kosong.');
         const msg = this.tambah(thread, { dari: 'owner', nama: this.ownerName, teks: t, at: Date.now(), ...(lampiran.length ? { lampiran: lampiran.slice(0, 10) } : {}) });
+        // Perintah jadwal ("laporan pagi jam 06.30", "matikan pantauan folder X") dikerjakan kantor langsung, tanpa AI.
+        const jawabJadwal = t && !lampiran.length ? this.perintahJadwal?.(t) : null;
+        if (jawabJadwal) {
+            const ai = roster.find((a) => a.id === thread) || roster.find((a) => a.id === 'trading') || roster.find((a) => a.id === 'default') || roster[0];
+            setTimeout(() => this.tambah(thread, { dari: ai.id, nama: ai.nama, teks: jawabJadwal, at: Date.now() }), 400);
+            return msg;
+        }
         if (thread === 'grup' || kustom) this.balasGrup(t || '(mengirim lampiran)', thread).catch((e) => console.warn('[Chat] grup:', e?.message || e));
         else this.balas(thread, thread).catch((e) => console.warn('[Chat]', e?.message || e));
         return msg;
@@ -349,6 +356,8 @@ export class Percakapan {
     }
     /** Data Sinyal terbaru untuk pertanyaan soal saham (diisi index.ts). null = bukan soal saham / AI ini bukan tim trading. */
     dataSaham?: (aiId: string, teks: string) => { data: string; aturan: string } | null;
+    /** Perintah jadwal laporan lewat chat (diisi index.ts). Mengembalikan balasan, atau null kalau bukan perintah jadwal. */
+    perintahJadwal?: (teks: string) => string | null;
     /** AI yang paling tepat menjawab soal saham di grup (diisi index.ts). */
     ahliSaham?: string;
 

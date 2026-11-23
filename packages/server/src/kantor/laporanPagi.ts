@@ -6,7 +6,7 @@ import { makroMendatang, hariLagi } from './acara';
  * Laporan sinyal pagi: dikirim ke chat Dito (dan notifikasi) Selasa–Sabtu, setelah bursa AS tutup.
  * Disusun langsung dari data kantor (tanpa AI): pasar semalam, Beli kuat (4 faktor lengkap), Pantul, watchlist/portofolio, acara pekan ini.
  */
-export interface AturPagi { nyala: boolean; jam: string; terakhir: string }
+export interface AturPagi { nyala: boolean; jam: string; hari: number[]; terakhir: string }
 interface Sumber {
     baris: () => any[];
     /** Harga penutupan SPY (S&P 500) urut lama → baru. */
@@ -16,7 +16,7 @@ interface Sumber {
     laba: () => Promise<Map<string, { tgl: string; waktu: string }>>;
     kirim: (teks: string) => Promise<void>;
 }
-const HARI_KIRIM = [2, 3, 4, 5, 6]; // Selasa–Sabtu WIB (bursa AS Senin–Jumat)
+const HARI_BAWAAN = [2, 3, 4, 5, 6]; // Selasa–Sabtu WIB (bursa AS Senin–Jumat); 0 = Minggu
 const P = (v: number | null | undefined, d = 1) => (v == null ? '–' : `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toLocaleString('id-ID', { maximumFractionDigits: d })}%`);
 const $ = (v: number) => `$${v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const tglId = (t: string) => new Date(`${t}T00:00:00Z`).toLocaleDateString('id-ID', { timeZone: 'UTC', weekday: 'short', day: 'numeric', month: 'short' });
@@ -29,17 +29,18 @@ export class LaporanPagi {
         this.f = path.join(dataDir, 'laporan-pagi.json');
         setInterval(() => { this.cek().catch((e) => console.warn('[Laporan pagi]', e?.message || e)); }, 60_000).unref?.();
     }
-    atur(): AturPagi { try { return { nyala: true, jam: '07:00', terakhir: '', ...JSON.parse(fs.readFileSync(this.f, 'utf8')) }; } catch { return { nyala: true, jam: '07:00', terakhir: '' }; } }
+    atur(): AturPagi { try { return { nyala: true, jam: '07:00', hari: HARI_BAWAAN, terakhir: '', ...JSON.parse(fs.readFileSync(this.f, 'utf8')) }; } catch { return { nyala: true, jam: '07:00', hari: HARI_BAWAAN, terakhir: '' }; } }
     ubah(x: Partial<AturPagi>): AturPagi {
         const a = this.atur();
         if (typeof x.nyala === 'boolean') a.nyala = x.nyala;
         if (typeof x.jam === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(x.jam)) a.jam = x.jam;
+        if (Array.isArray(x.hari)) { const h = [...new Set(x.hari.map(Number).filter((d) => d >= 0 && d <= 6))].sort(); if (h.length) a.hari = h; }
         fs.writeFileSync(this.f, JSON.stringify(a)); return a;
     }
     private async cek() {
         const a = this.atur(), w = wib(), hari = w.toISOString().slice(0, 10), jam = w.toISOString().slice(11, 16);
-        if (!a.nyala || this.jalan || a.terakhir === hari || !HARI_KIRIM.includes(w.getUTCDay()) || jam < a.jam) return;
-        if (jam > '12:00') return; // jangan kirim laporan "pagi" kalau server baru menyala siang hari
+        if (!a.nyala || this.jalan || a.terakhir === hari || !a.hari.includes(w.getUTCDay()) || jam < a.jam) return;
+        if (jam > a.jam.replace(/^(\d\d)/, (h) => String(Math.min(23, +h + 5)).padStart(2, '0'))) return; // server baru menyala jauh setelah jadwal → lewati hari ini
         this.jalan = true;
         try { await this.src.kirim(await this.susun()); fs.writeFileSync(this.f, JSON.stringify({ ...a, terakhir: hari })); }
         finally { this.jalan = false; }

@@ -76,22 +76,33 @@ export function AcaraPasar() {
 }
 
 /* ── Pengaturan Laporan sinyal pagi ── */
-interface AturPagi { nyala: boolean; jam: string; terakhir: string }
+interface AturPagi { nyala: boolean; jam: string; hari: number[]; terakhir: string }
+const HARI = [[1, 'Sen'], [2, 'Sel'], [3, 'Rab'], [4, 'Kam'], [5, 'Jum'], [6, 'Sab'], [0, 'Min']] as const;
+const ringkasHari = (h: number[]) => { const s = [...h].sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)); if (s.length === 7) return 'tiap hari'; if (s.join() === '1,2,3,4,5') return 'Sen–Jum'; if (s.join() === '2,3,4,5,6') return 'Sel–Sab'; return s.map((x) => HARI.find((y) => y[0] === x)![1]).join(', '); };
 export function LaporanPagiAtur() {
     const r = useApi<{ atur: AturPagi }>('/api/kantor/laporan-pagi', 0);
     const [lokal, setLokal] = useState<Partial<AturPagi> | null>(null);
-    const [pesan, setPesan] = useState(''), [sibuk, setSibuk] = useState(false);
+    const [pesan, setPesan] = useState(''), [sibuk, setSibuk] = useState(false), [buka, setBuka] = useState(false);
+    // Bisa berubah lewat chat ("laporan pagi jam 06.30") → muat ulang saat kembali ke halaman ini.
+    React.useEffect(() => { const f = () => { if (document.visibilityState === 'visible') r.reload(); }; document.addEventListener('visibilitychange', f); return () => document.removeEventListener('visibilitychange', f); }, []); // eslint-disable-line react-hooks/exhaustive-deps
     if (!r.data) return null;
-    const a = { ...r.data.atur, ...(lokal || {}) };
+    const a = { hari: [2, 3, 4, 5, 6], ...r.data.atur, ...(lokal || {}) };
     const ubah = async (b: Partial<AturPagi>) => { setPesan(''); setLokal({ ...(lokal || {}), ...b }); try { await apiPost('/api/kantor/laporan-pagi', b); await r.reload(); } catch (e: any) { setPesan(String(e?.message || e)); } setLokal(null); };
     const kirim = async () => { setSibuk(true); setPesan(''); try { await apiPost('/api/kantor/laporan-pagi/kirim', {}); setPesan('Laporan terkirim ke chat Dito.'); } catch (e: any) { setPesan(String(e?.message || e)); } setSibuk(false); };
     return (
         <section className={`pw ${a.nyala ? 'nyala' : ''}`}>
             <div className="pw-atas">
                 <label className="pw-saklar"><input type="checkbox" role="switch" checked={a.nyala} onChange={(e) => ubah({ nyala: e.target.checked })} /><span aria-hidden /><b>Laporan sinyal pagi</b></label>
-                <small className="pw-ringkas">{a.nyala ? <>Sel–Sab · <input className="ac-jam" type="time" value={a.jam} onChange={(e) => e.target.value && ubah({ jam: e.target.value })} aria-label="Jam kirim (WIB)" /> WIB ke chat Dito</> : 'Mati'} <Info judul="Laporan sinyal pagi" teks={'Setiap Selasa–Sabtu pagi (setelah bursa AS tutup), Dito mengirim ringkasan ke chat + notifikasi HP:\n\n• Pasar semalam (S&P 500, sektor terkuat & terlemah)\n• Beli kuat dengan keempat faktor lengkap (maks 5)\n• Pantul tahap Zona beli / Mulai berbalik (maks 5)\n• Watchlist & portofolio: gerakan ±3%, tanda ambil untung, Jual kuat pada saham yang Bapak pegang\n• Acara pekan ini: laporan laba & FOMC/CPI/NFP\n\nDisusun dari data kantor tanpa AI, jadi cepat dan tidak memakai kuota.'} /></small>
-                <div className="pw-aksi"><button className="btn small" onClick={kirim} disabled={sibuk}>{sibuk ? 'Menyusun…' : 'Kirim sekarang'}</button></div>
+                <small className="pw-ringkas">{a.nyala ? <>Laporan {ringkasHari(a.hari)} · {a.jam} WIB ke chat Dito</> : 'Mati — tidak ada laporan pagi'} <Info judul="Laporan sinyal pagi" teks={'Di hari & jam yang Bapak pilih (bawaan Selasa–Sabtu 07:00, setelah bursa AS tutup), Dito mengirim ringkasan ke chat + notifikasi HP:\n\n• Pasar semalam (S&P 500, sektor terkuat & terlemah)\n• Beli kuat dengan keempat faktor lengkap (maks 5)\n• Pantul tahap Zona beli / Mulai berbalik (maks 5)\n• Watchlist & portofolio: gerakan ±3%, tanda ambil untung, Jual kuat pada saham yang Bapak pegang\n• Acara pekan ini: laporan laba & FOMC/CPI/NFP\n\nDisusun dari data kantor tanpa AI, jadi cepat dan tidak memakai kuota.'} /></small>
+                <div className="pw-aksi"><button className="btn small" onClick={() => setBuka(!buka)} aria-expanded={buka}>{buka ? 'Tutup' : 'Atur'}</button><button className="btn small" onClick={kirim} disabled={sibuk}>{sibuk ? 'Menyusun…' : 'Kirim sekarang'}</button></div>
             </div>
+            {buka && (
+                <div className="pw-atur">
+                    <div className="pw-baris"><span>Hari</span><div className="pw-hari">{HARI.map(([k, l]) => <button key={k} className={a.hari.includes(k) ? 'on' : ''} aria-pressed={a.hari.includes(k)} onClick={() => { const h = a.hari.includes(k) ? a.hari.filter((x) => x !== k) : [...a.hari, k]; if (h.length) ubah({ hari: h }); else setPesan('Pilih minimal satu hari, atau matikan laporannya.'); }}>{l}</button>)}</div></div>
+                    <div className="pw-baris"><span>Jam (WIB)</span><input type="time" value={a.jam} onChange={(e) => e.target.value && ubah({ jam: e.target.value })} /></div>
+                    <small className="pw-catatan">Bisa juga lewat chat, mis. "laporan pagi jam 06.30, Selasa sampai Jumat" atau "matikan laporan pagi". Keduanya tersinkron.</small>
+                </div>
+            )}
             {(pesan || a.terakhir) && <small className="pw-catatan">{pesan || `Terakhir dikirim ${tglId(a.terakhir)}`}</small>}
         </section>
     );
