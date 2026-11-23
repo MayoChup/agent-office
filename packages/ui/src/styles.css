@@ -3514,9 +3514,10 @@ body.no-office #phaser-container { visibility: hidden; }
 .hs-fund { margin-top: 14px; display: flex; flex-direction: column; gap: 18px; }
 .hs-fgrup h4 { margin: 0 0 2px; font-size: 15px; font-weight: 600; }
 
-.hs-insight { border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line)); background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 9%, var(--sb-card)), var(--sb-card) 60%); }
+.hs-insight { border-left: 3px solid var(--accent); }
 .hs-ins-h { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.hs-ins-t { display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 15px; color: var(--accent); }
+.hs-ins-t { display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 15px; }
+.hs-ins-t svg { color: var(--accent); }
 .hs-ins-h small { font-size: 11px; color: var(--muted); }
 .hs-ins-judul { display: block; margin-top: 8px; font-size: 14.5px; font-weight: 600; }
 .hs-ins-cuplik { margin: 6px 0 0; font-size: 13px; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -3531,7 +3532,7 @@ body.no-office #phaser-container { visibility: hidden; }
 
 .hs-exp-n { font-size: 12px; color: var(--muted); }
 .hs-exp-body { display: grid; grid-template-columns: auto 1fr auto; gap: 20px; align-items: center; margin-top: 12px; }
-.hs-exp-bulat { width: 96px; height: 96px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 16px; letter-spacing: .5px; }
+.hs-exp-bulat { width: 96px; height: 96px; border-radius: 50%; display: grid; place-items: center; font-weight: 600; font-size: 16px; letter-spacing: .5px; }
 .hs-exp-bulat.buy { color: #16a34a; background: rgba(34,197,94,.13); }
 .hs-exp-bulat.hold { color: var(--muted); background: var(--sb-soft); }
 .hs-exp-bulat.sell { color: #dc2626; background: rgba(239,68,68,.13); }
@@ -3546,20 +3547,21 @@ body.no-office #phaser-container { visibility: hidden; }
 .hs-exp-kanan > div { display: grid; grid-template-columns: 32px auto; column-gap: 10px; align-items: center; }
 .hs-exp-kanan small { font-size: 11.5px; color: var(--muted); grid-column: 2; }
 .hs-exp-kanan b { font-size: 14px; grid-column: 2; }
-.hs-ico { grid-row: span 2; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-size: 15px; font-weight: 700; }
+.hs-ico { grid-row: span 2; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-size: 15px; font-weight: 600; }
 .hs-ico.target { color: #2563eb; background: rgba(37,99,235,.12); }
 .hs-ico.up { color: #16a34a; background: rgba(34,197,94,.13); }
 .hs-ico.down { color: #dc2626; background: rgba(239,68,68,.12); }
 .hs-bank { display: flex; gap: 8px; overflow-x: auto; margin-top: 16px; padding-bottom: 2px; scrollbar-width: thin; }
 .hs-bank > div { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 14px; min-width: 170px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; font-size: 13px; }
 .hs-bank em { font-style: normal; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 6px; }
-.hs-bank em.buy { color: #16a34a; background: rgba(34,197,94,.13); } .hs-bank em.sell { color: #dc2626; background: rgba(239,68,68,.12); } .hs-bank em.hold { color: var(--muted); background: var(--sb-soft); }
+.hs-bk em { font-style: normal; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 6px; }
+.hs-bk em.buy { color: #16a34a; background: rgba(34,197,94,.13); } .hs-bk em.sell { color: #dc2626; background: rgba(239,68,68,.12); } .hs-bk em.hold { color: var(--muted); background: var(--sb-soft); }
 
 .hs-sent { display: flex; flex-direction: column; }
 .hs-sent-h small { font-size: 12px; color: var(--muted); }
 .hs-sent-b { display: flex; flex-direction: column; align-items: center; margin-top: 10px; }
 .hs-speedo { width: 230px; max-width: 80%; }
-.hs-speedo-n { font-size: 34px; font-weight: 700; fill: var(--text); font-variant-numeric: tabular-nums; }
+.hs-speedo-n { font-size: 34px; font-weight: 600; fill: var(--text); font-variant-numeric: tabular-nums; }
 .hs-sent-l { font-size: 15px; margin-top: 2px; }
 .hs-sent-b small { font-size: 12px; color: var(--muted); margin-top: 4px; text-align: center; }
 .hs-sent-p { text-align: center; font-size: 12px; color: var(--muted); margin-top: 10px; }

@@ -112,7 +112,7 @@ function KartuBank({ x, harga }: { x: Analis['bank'][number]; harga: number }) {
                 <div><small>Target price</small><span className="mono">{x.target ? usd(x.target) : '–'}</span></div>
                 <div className="r"><small>Estimated return</small><span className={`mono ${r == null ? '' : r < 0 ? 'down' : 'up'}`}>{r == null ? '–' : `${r < 0 ? '↘' : '↗'} ${pct(Math.abs(r), 2)}`}</span></div>
             </div>
-            {x.tgl && <small className="hs-bk-t">{x.rating} · {x.tgl}</small>}
+            {x.tgl && <small className="hs-bk-t">{x.rating} · {(() => { const d = Date.parse(x.tgl); return Number.isFinite(d) ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : x.tgl; })()}</small>}
         </div>
     );
 }
@@ -141,7 +141,7 @@ export function Experts({ a, galat, harga }: { a: Analis | null | undefined; gal
                 </div>
                 <div className="hs-exp-kanan">
                     <div><span className="hs-ico target" aria-hidden><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="4" /></svg></span><small>Target price</small><b className="mono">{a.target != null ? usd(a.target) : '–'}</b></div>
-                    <div><span className={`hs-ico ${ret != null && ret < 0 ? 'down' : 'up'}`} aria-hidden>{ret != null && ret < 0 ? '↘' : '↗'}</span><small>Estimated return</small><b className={`mono ${ret != null && ret < 0 ? 'down' : 'up'}`}>{ret != null ? `${ret < 0 ? '↘' : '↗'} ${pct(Math.abs(ret), 2)}` : '–'}</b></div>
+                    <div><span className={`hs-ico ${ret != null && ret < 0 ? 'down' : 'up'}`} aria-hidden>{ret != null && ret < 0 ? '↘' : '↗'}</span><small>Estimated return</small><b className={`mono ${ret != null && ret < 0 ? 'down' : 'up'}`}>{ret != null ? `${ret < 0 ? '−' : '+'}${pct(Math.abs(ret), 2)}` : '–'}</b></div>
                 </div>
             </div>
             {a.bank.length > 0 && (
