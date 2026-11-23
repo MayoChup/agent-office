@@ -195,7 +195,12 @@ export async function buatInsight(dataDir: string, s: string, fakta: string, llm
 /* ── Corporate actions: akan datang & 12 bulan terakhir ── */
 export interface Aksi { jenis: 'dividen' | 'split' | 'laba' | 'akuisisi' | 'perjanjian' | 'direksi' | 'saham' | 'utang' | 'restrukturisasi' | 'rups' | 'lain'; tgl: string; judul: string; detail: string; url?: string }
 export interface AksiData { akanDatang: Aksi[]; lampau: Aksi[]; dividen12: number | null; sumber: string[] }
-const tglIso = (x: any) => { const t = Date.parse(String(x || '')); return Number.isFinite(t) ? new Date(t).toISOString().slice(0, 10) : ''; };
+const tglIso = (x: any) => {
+    const v = String(x || '').trim(), m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); // format Nasdaq MM/DD/YYYY — dibaca apa adanya, tanpa zona waktu
+    if (m) return `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`;
+    if (/^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0, 10);
+    const t = Date.parse(v); return Number.isFinite(t) ? new Date(t).toISOString().slice(0, 10) : '';
+};
 const ITEM_8K: Record<string, [Aksi['jenis'], string]> = {
     '1.01': ['perjanjian', 'Perjanjian material'], '1.02': ['perjanjian', 'Perjanjian material diakhiri'], '2.01': ['akuisisi', 'Akuisisi / penjualan aset selesai'],
     '2.02': ['laba', 'Laporan laba kuartalan'], '2.03': ['utang', 'Utang / kewajiban baru'], '2.05': ['restrukturisasi', 'Restrukturisasi / PHK'],
