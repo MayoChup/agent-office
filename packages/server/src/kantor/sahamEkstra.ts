@@ -74,7 +74,8 @@ export async function ambilAnalis(s: string): Promise<Analis | null> {
             for (const v of Object.values(o)) {
                 if (!Array.isArray(v) || !v.length || typeof v[0] !== 'object') continue;
                 const k = Object.keys(v[0] || {});
-                const kf = k.find((x) => /firm|broker|analyst|institution|company/i.test(x)), kr = k.find((x) => /rating|grade|action|recommend/i.test(x) && !/date/i.test(x));
+                const kf = k.find((x) => /firm|broker|analyst|institution|company/i.test(x));
+                const kr = [/rating/i, /grade/i, /recommend/i, /action/i].map((re) => k.find((x) => re.test(x) && !/date|prior|from/i.test(x))).find(Boolean);
                 if (!kf || !kr) continue;
                 const kt = k.find((x) => /date/i.test(x)), kp = k.find((x) => /target|price/i.test(x));
                 for (const r of v.slice(0, 40)) {

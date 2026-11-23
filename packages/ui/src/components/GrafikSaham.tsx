@@ -84,7 +84,7 @@ export function GrafikSaham({ simbol }: { simbol: string }) {
             layout: { background: { type: ColorType.Solid, color: 'transparent' }, textColor: teks, fontSize: 11 },
             localization: { locale: 'en-US' },
             grid: { vertLines: { visible: false }, horzLines: { color: 'rgba(148,163,184,0.07)' } },
-            rightPriceScale: { borderVisible: false },
+            rightPriceScale: { borderVisible: false, minimumWidth: 64 },
             timeScale: { borderVisible: false, timeVisible: !data.harian, secondsVisible: false, rightOffset: 2 },
             crosshair: { mode: CrosshairMode.Magnet },
             handleScale: { axisPressedMouseMove: true, mouseWheel: true, pinch: true },
@@ -97,9 +97,12 @@ export function GrafikSaham({ simbol }: { simbol: string }) {
 
         // Arsiran sesi (1D): pre-market & after-hours.
         if (data.candles.some((k) => k.sesi && k.sesi !== 'reg')) {
-            const bg = chart.addHistogramSeries({ priceScaleId: 'sesi', lastValueVisible: false, priceLineVisible: false, base: 0 });
             chart.priceScale('sesi').applyOptions({ scaleMargins: { top: 0, bottom: 0 }, visible: false });
-            bg.setData(data.candles.map((k) => ({ time: t(k.t), value: k.sesi === 'reg' ? 0 : 1, color: k.sesi === 'pre' ? alpha(aksen, 0.08) : k.sesi === 'post' ? 'rgba(168,85,247,0.08)' : 'transparent' })));
+            for (const [ss, w] of [['pre', alpha(aksen, 0.09)], ['post', 'rgba(168,85,247,0.09)']] as const) {
+                const bg = chart.addAreaSeries({ priceScaleId: 'sesi', lineColor: 'transparent', topColor: w, bottomColor: w, lineWidth: 1, lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false });
+                bg.setData(data.candles.map((k) => (k.sesi === ss ? { time: t(k.t), value: 1 } : { time: t(k.t) })) as any);
+                bg.applyOptions({ autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 1 } }) } as any);
+            }
         }
         // Harga dasar (garis putus-putus): penutupan sebelumnya untuk 1D, harga awal rentang untuk lainnya.
         const basis = rentang === '1D' && data.prevClose ? data.prevClose : data.candles[Math.max(0, dari - 1)].c;
@@ -117,19 +120,19 @@ export function GrafikSaham({ simbol }: { simbol: string }) {
         }
         const garis = (vals: Array<number | null>, warna: string, w: 1 | 2 = 1, ch = chart, gaya: LineStyle = LineStyle.Solid) => {
             const s = ch.addLineSeries({ color: warna, lineWidth: w, lineStyle: gaya, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
-            s.setData(data.candles.map((k, i) => ({ time: t(k.t), value: vals[i] })).filter((p) => p.value != null) as any);
+            s.setData(data.candles.map((k, i) => (vals[i] == null ? { time: t(k.t) } : { time: t(k.t), value: vals[i] })) as any); // titik kosong menjaga urutan sejajar antar panel
             return s;
         };
         for (const m of IND) if (ind[m.k] && (m.k === 'ma20' || m.k === 'ma50' || m.k === 'ma200' || m.k === 'ema')) garis(hitung[m.k], m.warna);
         if (ind.bb) { garis(hitung.bb.map((x) => x?.atas ?? null), '#94a3b8', 1, chart, LineStyle.Dotted); garis(hitung.bb.map((x) => x?.bawah ?? null), '#94a3b8', 1, chart, LineStyle.Dotted); }
 
         // Panel bawah (MACD / RSI) — waktu disinkronkan dengan grafik utama.
-        const sub = (el: HTMLDivElement | null) => { if (!el) return null; const c = createChart(el, { ...dasar, timeScale: { ...dasar.timeScale, visible: false }, handleScroll: false, handleScale: false }); semua.push(c); return c; };
+        const sub = (el: HTMLDivElement | null) => { if (!el) return null; const c = createChart(el, { ...dasar, layout: { ...dasar.layout, attributionLogo: false } as any, timeScale: { ...dasar.timeScale, visible: false }, handleScroll: false, handleScale: false }); semua.push(c); return c; };
         if (ind.macd) {
             const c = sub(boxMacd.current);
             if (c) {
                 const h = c.addHistogramSeries({ priceLineVisible: false, lastValueVisible: false });
-                h.setData(data.candles.map((k, i) => ({ time: t(k.t), value: hitung.macd.hist[i], color: (hitung.macd.hist[i] ?? 0) >= 0 ? 'rgba(34,197,94,0.55)' : 'rgba(239,68,68,0.55)' })).filter((p) => p.value != null) as any);
+                h.setData(data.candles.map((k, i) => (hitung.macd.hist[i] == null ? { time: t(k.t) } : { time: t(k.t), value: hitung.macd.hist[i], color: hitung.macd.hist[i]! >= 0 ? 'rgba(34,197,94,0.55)' : 'rgba(239,68,68,0.55)' })) as any);
                 garis(hitung.macd.line, '#60a5fa', 1, c); garis(hitung.macd.sig, '#f59e0b', 1, c);
             }
         }

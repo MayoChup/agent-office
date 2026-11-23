@@ -702,6 +702,7 @@ app.post('/api/kantor/insight/:s', requireToken, async (req, res) => {
         const b = d.baris, f = b.f || {};
         const [ek, an, se] = await Promise.allSettled([ambilEkstra(s, { per: f.per, epsCagr3: f.epsCagr3, revGrowth: f.revGrowth }), ambilAnalis(s), ambilSentimen(s)]);
         const v = <T,>(x: PromiseSettledResult<T>) => (x.status === 'fulfilled' ? x.value : null);
+        const bulat = (_k: string, x: any) => (typeof x === 'number' && !Number.isInteger(x) ? +x.toFixed(2) : x);
         const fakta = JSON.stringify({
             saham: `${b.nama} (${s})`, sektor: b.sektor, tanggal: new Date().toISOString().slice(0, 10),
             harga: b.harga, ubah: { hari: b.chg1d, bulan1: b.chg1m, bulan3: b.chg3m, tahun1: b.chg1y }, rsi: b.rsi, ma50: b.ma50, ma200: b.ma200, volVsRata: b.volX,
@@ -710,7 +711,7 @@ app.post('/api/kantor/insight/:s', requireToken, async (req, res) => {
             skor4Faktor: Object.fromEntries(Object.entries(d.skor || {}).filter(([, x]) => x).map(([k, x]: any) => [k, { label: x.label, alasan: (x.alasan || []).slice(0, 4) }])),
             berita7hari: (d.berita?.judul || []).slice(0, 8).map((j: any) => `${j.tgl}: ${j.t}`),
             statistik: v(ek), analis: v(an) ? { ...v(an)!, bank: v(an)!.bank.slice(0, 5) } : null, sentimen: v(se)?.jendela
-        });
+        }, bulat);
         res.json({ ok: true, insight: await buatInsight(config.dataDir, s, fakta, OfficeRoom.sharedLlm()) });
     } catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
     finally { insightJalan.delete(s); }
