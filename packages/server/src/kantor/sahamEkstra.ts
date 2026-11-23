@@ -50,7 +50,7 @@ export async function ambilEkstra(s: string, ctx: { per?: number | null; epsCagr
 }
 
 /* ── Pendapat analis ── */
-export interface Analis { buy: number; hold: number; sell: number; n: number; konsensus: 'BUY' | 'HOLD' | 'SELL'; target: number | null; tinggi: number | null; rendah: number | null; bank: Array<{ nama: string; rating: string; arah: 'buy' | 'hold' | 'sell'; tgl: string; target: number | null }>; sumber: string }
+export interface Analis { buy: number; hold: number; sell: number; n: number; konsensus: 'BUY' | 'HOLD' | 'SELL'; target: number | null; tinggi: number | null; rendah: number | null; bank: Array<{ nama: string; analis: string; rating: string; arah: 'buy' | 'hold' | 'sell'; tgl: string; target: number | null }>; sumber: string }
 const arahDari = (t: string): 'buy' | 'hold' | 'sell' => /sell|under|reduce|negative/i.test(t) ? 'sell' : /buy|outperform|overweight|positive|accumulate|add/i.test(t) ? 'buy' : 'hold';
 /** Cari semua objek di dalam JSON (Nasdaq kadang mengubah susunan) — dipakai untuk mengambil angka & tabel secara longgar. */
 function jelajah(x: any, fn: (o: any) => void, d = 0) { if (!x || d > 6 || typeof x !== 'object') return; if (!Array.isArray(x)) fn(x); for (const v of Object.values(x)) jelajah(v, fn, d + 1); }
@@ -74,14 +74,16 @@ export async function ambilAnalis(s: string): Promise<Analis | null> {
             for (const v of Object.values(o)) {
                 if (!Array.isArray(v) || !v.length || typeof v[0] !== 'object') continue;
                 const k = Object.keys(v[0] || {});
-                const kf = k.find((x) => /firm|broker|analyst|institution|company/i.test(x));
+                const kf = k.find((x) => /firm|broker|institution|company/i.test(x)) || k.find((x) => /analyst/i.test(x));
+                const ka = k.find((x) => x !== kf && /analyst|person|name/i.test(x));
                 const kr = [/rating/i, /grade/i, /recommend/i, /action/i].map((re) => k.find((x) => re.test(x) && !/date|prior|from/i.test(x))).find(Boolean);
                 if (!kf || !kr) continue;
-                const kt = k.find((x) => /date/i.test(x)), kp = k.find((x) => /target|price/i.test(x));
-                for (const r of v.slice(0, 40)) {
+                const kt = k.find((x) => /date/i.test(x)), kp = k.find((x) => /target|price/i.test(x) && !/date|prior|from|old/i.test(x));
+                for (const r of v.slice(0, 60)) {
                     const nama = String(r[kf] || '').trim(), rating = String(r[kr] || '').replace(/.*(?:to|→)\s*/i, '').trim();
                     if (!nama || !rating || bank.some((b) => b.nama === nama)) continue;
-                    bank.push({ nama, rating, arah: arahDari(rating), tgl: String(r[kt!] || ''), target: kp ? nilai(String(r[kp]).split(/to|→/i).pop()) : null });
+                    const tg = kp ? nilai(String(r[kp] ?? '').split(/to|→/i).pop()) : null;
+                    bank.push({ nama, analis: ka ? String(r[ka] || '').trim() : '', rating, arah: arahDari(rating), tgl: String(r[kt!] || ''), target: tg && tg > 0 ? tg : null });
                 }
             }
         });
@@ -90,7 +92,7 @@ export async function ambilAnalis(s: string): Promise<Analis | null> {
         const B = buy ?? 0, Hh = hold ?? 0, S = sell ?? 0, n = B + Hh + S;
         if (!n && target == null) return null;
         const konsensus = B >= Hh && B >= S ? 'BUY' : S > B && S >= Hh ? 'SELL' : 'HOLD';
-        return { buy: B, hold: Hh, sell: S, n, konsensus, target, tinggi, rendah, bank: bank.slice(0, 12), sumber: 'Nasdaq' };
+        return { buy: B, hold: Hh, sell: S, n, konsensus, target, tinggi, rendah, bank: bank.slice(0, 30), sumber: 'Nasdaq' };
     });
 }
 

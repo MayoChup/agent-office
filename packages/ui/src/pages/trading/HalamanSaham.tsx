@@ -9,7 +9,7 @@ import { Baris, kap, usd } from './types';
  * Bagian-bagian halaman saham versi bertab: Weekly Insight (AI, manual), Market stats, What the experts say,
  * Fundamentals lengkap, News sentiment (speedometer), Seasonality. Data dari /saham-ekstra, /sentimen, /musiman, /insight.
  */
-export interface Analis { buy: number; hold: number; sell: number; n: number; konsensus: 'BUY' | 'HOLD' | 'SELL'; target: number | null; tinggi: number | null; rendah: number | null; bank: Array<{ nama: string; rating: string; arah: 'buy' | 'hold' | 'sell'; tgl: string; target: number | null }> }
+export interface Analis { buy: number; hold: number; sell: number; n: number; konsensus: 'BUY' | 'HOLD' | 'SELL'; target: number | null; tinggi: number | null; rendah: number | null; bank: Array<{ nama: string; analis?: string; rating: string; arah: 'buy' | 'hold' | 'sell'; tgl: string; target: number | null }> }
 export interface DataEkstra { ekstra: K.EkstraData | null; ekstraGalat: string; analis: Analis | null; analisGalat: string }
 const pct = (v: number, d = 1) => `${v.toLocaleString('en-US', { maximumFractionDigits: d, minimumFractionDigits: d })}%`;
 
@@ -102,7 +102,22 @@ export function FundLengkap({ b, e }: { b: Baris; e: K.EkstraData | null | undef
 
 /* ── What the experts say ── */
 const RATING_ID: Record<string, string> = { buy: 'Buy', hold: 'Hold', sell: 'Sell' };
+function KartuBank({ x, harga }: { x: Analis['bank'][number]; harga: number }) {
+    const r = x.target ? (x.target / harga - 1) * 100 : null;
+    return (
+        <div className="hs-bk">
+            <div className="hs-bk-h"><div><b>{x.nama}</b>{x.analis && <small>{x.analis}</small>}</div><em className={x.arah}>{RATING_ID[x.arah]}</em></div>
+            <div className="hs-bk-b">
+                <div><small>Target price</small><span className="mono">{x.target ? usd(x.target) : '–'}</span></div>
+                <div className="r"><small>Estimated return</small><span className={`mono ${r == null ? '' : r < 0 ? 'down' : 'up'}`}>{r == null ? '–' : `${r < 0 ? '↘' : '↗'} ${pct(Math.abs(r), 2)}`}</span></div>
+            </div>
+            {x.tgl && <small className="hs-bk-t">{x.rating} · {x.tgl}</small>}
+        </div>
+    );
+}
 export function Experts({ a, galat, harga }: { a: Analis | null | undefined; galat?: string; harga: number }) {
+    const [semua, setSemua] = useState(false);
+    React.useEffect(() => { if (!semua) return; const f = (e: KeyboardEvent) => { if (e.key === 'Escape') setSemua(false); }; document.addEventListener('keydown', f); return () => document.removeEventListener('keydown', f); }, [semua]);
     if (!a) return (
         <section className="sb-card hs-exp"><h3>What the experts say</h3><p className="sb-note">{galat ? `Data analis belum bisa diambil (${galat}).` : 'Data analis Wall Street untuk saham ini belum tersedia.'}</p></section>
     );
@@ -129,9 +144,18 @@ export function Experts({ a, galat, harga }: { a: Analis | null | undefined; gal
                 </div>
             </div>
             {a.bank.length > 0 && (
-                <div className="hs-bank">{a.bank.map((x) => (
-                    <div key={x.nama} title={`${x.rating}${x.tgl ? ` · ${x.tgl}` : ''}${x.target ? ` · target ${usd(x.target)}` : ''}`}><span>{x.nama}</span><em className={x.arah}>{RATING_ID[x.arah]}</em></div>
-                ))}</div>
+                <div className="hs-bank">
+                    {a.bank.slice(0, 5).map((x) => <KartuBank key={x.nama} x={x} harga={harga} />)}
+                    {a.bank.length > 5 && <button className="hs-more" onClick={() => setSemua(true)}>Show more</button>}
+                </div>
+            )}
+            {semua && (
+                <div className="hs-modal-bg" onClick={() => setSemua(false)}>
+                    <div className="hs-modal" role="dialog" aria-modal="true" aria-label="Analyst overview" onClick={(e) => e.stopPropagation()}>
+                        <div className="hs-modal-h"><h3>Analyst overview</h3><button aria-label="Tutup" onClick={() => setSemua(false)}>×</button></div>
+                        <div className="hs-modal-isi">{a.bank.map((x) => <KartuBank key={x.nama} x={x} harga={harga} />)}</div>
+                    </div>
+                </div>
             )}
         </section>
     );
