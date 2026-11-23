@@ -86,7 +86,7 @@ export function LaporanPagiAtur() {
     // Bisa berubah lewat chat ("laporan pagi jam 06.30") → muat ulang saat kembali ke halaman ini.
     React.useEffect(() => { const f = () => { if (document.visibilityState === 'visible') r.reload(); }; document.addEventListener('visibilitychange', f); return () => document.removeEventListener('visibilitychange', f); }, []); // eslint-disable-line react-hooks/exhaustive-deps
     if (!r.data) return null;
-    const a = { hari: [2, 3, 4, 5, 6], ...r.data.atur, ...(lokal || {}) };
+    const a: AturPagi = { ...r.data.atur, ...(lokal || {}) }; if (!Array.isArray(a.hari)) a.hari = [2, 3, 4, 5, 6];
     const ubah = async (b: Partial<AturPagi>) => { setPesan(''); setLokal({ ...(lokal || {}), ...b }); try { await apiPost('/api/kantor/laporan-pagi', b); await r.reload(); } catch (e: any) { setPesan(String(e?.message || e)); } setLokal(null); };
     const kirim = async () => { setSibuk(true); setPesan(''); try { await apiPost('/api/kantor/laporan-pagi/kirim', {}); setPesan('Laporan terkirim ke chat Dito.'); } catch (e: any) { setPesan(String(e?.message || e)); } setSibuk(false); };
     return (
