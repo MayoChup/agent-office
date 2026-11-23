@@ -3,6 +3,8 @@ import path from 'node:path';
 import { j as nasdaq, sym, tabel, cari, nilai } from './nasdaq';
 import { yahooChart, hargaPanjang } from './harga';
 import { sentimen, UA_BROWSER } from './skor';
+import { secJson } from './screener';
+import { kalenderLaba } from './nasdaq';
 
 /**
  * Data tambahan halaman saham (tab Overview / Fundamentals / News / Seasonality):
@@ -188,4 +190,93 @@ export async function buatInsight(dataDir: string, s: string, fakta: string, llm
     fs.mkdirSync(dirInsight(dataDir), { recursive: true });
     fs.writeFileSync(path.join(dirInsight(dataDir), `${s}.json`), JSON.stringify(x));
     return x;
+}
+
+/* ── Corporate actions: akan datang & 12 bulan terakhir ── */
+export interface Aksi { jenis: 'dividen' | 'split' | 'laba' | 'akuisisi' | 'perjanjian' | 'direksi' | 'saham' | 'utang' | 'restrukturisasi' | 'rups' | 'lain'; tgl: string; judul: string; detail: string; url?: string }
+export interface AksiData { akanDatang: Aksi[]; lampau: Aksi[]; dividen12: number | null; sumber: string[] }
+const tglIso = (x: any) => { const t = Date.parse(String(x || '')); return Number.isFinite(t) ? new Date(t).toISOString().slice(0, 10) : ''; };
+const ITEM_8K: Record<string, [Aksi['jenis'], string]> = {
+    '1.01': ['perjanjian', 'Perjanjian material'], '1.02': ['perjanjian', 'Perjanjian material diakhiri'], '2.01': ['akuisisi', 'Akuisisi / penjualan aset selesai'],
+    '2.02': ['laba', 'Laporan laba kuartalan'], '2.03': ['utang', 'Utang / kewajiban baru'], '2.05': ['restrukturisasi', 'Restrukturisasi / PHK'],
+    '3.02': ['saham', 'Penerbitan saham baru'], '3.03': ['saham', 'Perubahan hak pemegang saham'], '5.01': ['akuisisi', 'Perubahan pengendali perusahaan'],
+    '5.02': ['direksi', 'Pergantian direksi / eksekutif'], '5.03': ['lain', 'Perubahan anggaran dasar'], '5.07': ['rups', 'Hasil rapat pemegang saham (RUPS)']
+};
+let cikCache: { at: number; m: Map<string, number> } | null = null;
+async function cikDari(s: string): Promise<number | null> {
+    if (!cikCache || Date.now() - cikCache.at > 7 * 86400_000) {
+        const map = await secJson('https://www.sec.gov/files/company_tickers.json');
+        if (map) { const m = new Map<string, number>(); for (const k of Object.keys(map)) m.set(String(map[k].ticker).toUpperCase().replace('.', '-'), Number(map[k].cik_str)); cikCache = { at: Date.now(), m }; }
+    }
+    return cikCache?.m.get(s) ?? null;
+}
+let labaCache: { at: number; m: Map<string, { tgl: string; waktu: string }> } | null = null;
+export async function ambilAksi(s: string, harga: number | null): Promise<AksiData> {
+    return simpan(`ak:${s}`, 6 * 3600_000, async () => {
+        const kini = new Date().toISOString().slice(0, 10), setahun = new Date(Date.now() - 365 * 86400_000).toISOString().slice(0, 10);
+        const akan: Aksi[] = [], lampau: Aksi[] = [], sumber: string[] = [];
+        const usd = (v: number) => `$${v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
+        // Dividen (Nasdaq: termasuk yang sudah diumumkan tapi belum dibayar).
+        const dividenTgl = new Set<string>();
+        try {
+            const d = await nasdaq(`https://api.nasdaq.com/api/quote/${sym(s)}/dividends?assetclass=stocks`);
+            for (const r of d?.dividends?.rows || []) {
+                const ex = tglIso(r.exOrEffDate), bayar = tglIso(r.paymentDate), umum = tglIso(r.declarationDate), v = nilai(r.amount);
+                if (!ex || v == null) continue;
+                const it: Aksi = { jenis: 'dividen', tgl: ex, judul: `Dividen ${usd(v)} per lembar`, detail: [`Ex-dividend ${ex}`, bayar && `dibayar ${bayar}`, umum && `diumumkan ${umum}`, r.type && String(r.type).toLowerCase() !== 'cash' && String(r.type)].filter(Boolean).join(' · ') };
+                if (ex >= kini || (bayar && bayar >= kini)) akan.push(it); else if (ex >= setahun) lampau.push(it);
+                dividenTgl.add(ex);
+            }
+            sumber.push('Nasdaq');
+        } catch { /* cadangan Yahoo di bawah */ }
+        // Dividen & split lampau (Yahoo, 1 tahun).
+        try {
+            const r = await yahooChart(s, '1y', '1d');
+            for (const x of Object.values<any>(r.events?.dividends || {})) {
+                const t = new Date(x.date * 1000).toISOString().slice(0, 10);
+                if (!dividenTgl.has(t) && t >= setahun) lampau.push({ jenis: 'dividen', tgl: t, judul: `Dividen ${usd(x.amount)} per lembar`, detail: `Ex-dividend ${t}` });
+            }
+            for (const x of Object.values<any>(r.events?.splits || {})) {
+                const t = new Date(x.date * 1000).toISOString().slice(0, 10), rev = x.numerator < x.denominator;
+                lampau.push({ jenis: 'split', tgl: t, judul: `${rev ? 'Reverse split' : 'Stock split'} ${x.numerator} : ${x.denominator}`, detail: rev ? `${x.denominator} lembar digabung jadi ${x.numerator}; harga per lembar naik sebanding.` : `1 lembar menjadi ${x.numerator / x.denominator}; harga per lembar turun sebanding.` });
+            }
+            if (!sumber.includes('Yahoo')) sumber.push('Yahoo');
+        } catch { /* lewati */ }
+        // Split yang akan datang (kalender split Nasdaq).
+        try {
+            const c = await nasdaq('https://api.nasdaq.com/api/calendar/splits');
+            for (const r of c?.rows || []) {
+                if (String(r.symbol || '').toUpperCase().replace('.', '-') !== s) continue;
+                const t = tglIso(r.executionDate || r.payableDate);
+                if (t && t >= kini) akan.push({ jenis: 'split', tgl: t, judul: `Stock split ${r.ratio || ''}`.trim(), detail: [`Berlaku ${t}`, tglIso(r.announcedDate) && `diumumkan ${tglIso(r.announcedDate)}`].filter(Boolean).join(' · ') });
+            }
+        } catch { /* lewati */ }
+        // Jadwal laporan laba berikutnya (kalender Nasdaq 3 minggu, disimpan 12 jam untuk semua saham).
+        try {
+            if (!labaCache || Date.now() - labaCache.at > 12 * 3600_000) labaCache = { at: Date.now(), m: await kalenderLaba(21) };
+            const l = labaCache.m.get(s);
+            if (l) akan.push({ jenis: 'laba', tgl: l.tgl, judul: 'Laporan laba kuartalan', detail: `Diumumkan ${l.tgl}${l.waktu ? `, ${l.waktu}` : ''}. Harga biasanya bergerak lebih liar di sekitar tanggal ini.` });
+        } catch { /* lewati */ }
+        // Peristiwa resmi 8-K (SEC), 12 bulan.
+        try {
+            const cik = await cikDari(s);
+            if (cik) {
+                const f: any = (await secJson(`https://data.sec.gov/submissions/CIK${String(cik).padStart(10, '0')}.json`))?.filings?.recent;
+                if (f) {
+                    for (let i = 0; i < (f.form || []).length && i < 400; i++) {
+                        if (f.form[i] !== '8-K' || f.filingDate[i] < setahun) continue;
+                        const items = String(f.items?.[i] || '').split(',').map((x: string) => x.trim()).filter((x: string) => ITEM_8K[x]);
+                        if (!items.length) continue;
+                        const [jenis] = ITEM_8K[items[0]];
+                        const url = `https://www.sec.gov/Archives/edgar/data/${cik}/${String(f.accessionNumber[i]).replace(/-/g, '')}/${f.primaryDocument[i]}`;
+                        lampau.push({ jenis, tgl: f.filingDate[i], judul: items.map((x: string) => ITEM_8K[x][1]).join(' · '), detail: `Laporan 8-K ke SEC`, url });
+                    }
+                    sumber.push('SEC');
+                }
+            }
+        } catch { /* lewati */ }
+        akan.sort((a, b) => a.tgl.localeCompare(b.tgl)); lampau.sort((a, b) => b.tgl.localeCompare(a.tgl));
+        const tot = lampau.filter((x) => x.jenis === 'dividen').reduce((a, x) => a + (nilai(x.judul.match(/\$[\d.,]+/)?.[0]) ?? 0), 0);
+        return { akanDatang: akan, lampau: lampau.slice(0, 60), dividen12: tot > 0 ? +tot.toFixed(4) : null, sumber };
+    });
 }

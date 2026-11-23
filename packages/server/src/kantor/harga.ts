@@ -50,7 +50,7 @@ const httpGalat = (nama: string, st: number) => new Galat(st === 429 ? `${nama} 
 async function yahooMentah(lewat: 'fetch' | 'curl', s: string, range: string, interval: string, prepost = false) {
     let terakhir: Galat | null = null;
     for (const host of ['query1', 'query2']) {
-        const url = `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(s)}?range=${range}&interval=${interval}&includePrePost=${prepost}`;
+        const url = `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(s)}?range=${range}&interval=${interval}&includePrePost=${prepost}&events=div%7Csplit`;
         const j = await (lewat === 'fetch' ? ambilFetch(url) : ambilCurl(url));
         if (j.status === 404) throw new Galat(`Saham ${s} tidak ditemukan`, false, true);
         if (j.status !== 200) { terakhir = httpGalat(lewat === 'fetch' ? 'Yahoo' : 'Yahoo (curl)', j.status); await tidur(400); continue; }

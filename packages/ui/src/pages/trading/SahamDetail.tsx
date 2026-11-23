@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { apiGet, apiPost } from '../../kantor/connection';
 import { useApi, apiGetSimpan, simpanApi } from '../../kantor/api';
 import { GrafikSaham, DataCandle } from '../../components/GrafikSaham';
-import { WeeklyInsight, MarketStats, FundLengkap, Experts, NewsSentiment, Seasonality, DataEkstra } from './HalamanSaham';
+import { WeeklyInsight, MarketStats, FundLengkap, Experts, NewsSentiment, Seasonality, CorporateActions, DataEkstra } from './HalamanSaham';
 import { Baris, FAKTOR, FaktorKey, Label, kelas, usd, persen, kap, skorBar } from './types';
 import { PresetPilih, PresetCek, PresetData, PresetEval } from './Preset';
 import { Simulasi } from './Simulasi';
@@ -33,7 +33,7 @@ export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPre
     const [err, setErr] = useState('');
     const [msg, setMsg] = useState('');
     const [qKunci, setQKunci] = useState(0);
-    type Tab = 'overview' | 'fundamental' | 'teknikal' | 'berita' | 'whales' | 'musiman';
+    type Tab = 'overview' | 'fundamental' | 'teknikal' | 'berita' | 'whales' | 'aksi' | 'musiman';
     const [tab, setTabS] = useState<Tab>(() => { try { return (localStorage.getItem('kantor:saham:tab') as Tab) || 'overview'; } catch { return 'overview'; } });
     const setTab = (t: Tab) => { setTabS(t); try { localStorage.setItem('kantor:saham:tab', t); } catch { /* */ } };
     const ek = useApi<DataEkstra>(`/api/kantor/saham-ekstra/${encodeURIComponent(simbol)}`, 0);
@@ -66,7 +66,7 @@ export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPre
     const best = pr?.target.find((t) => t.nama === pr.terbaik);
     const atr = b.x?.atr || 0;
 
-    const TABS: Array<[Tab, string]> = [['overview', 'Overview'], ['fundamental', 'Fundamentals'], ['teknikal', 'Technical'], ['berita', 'News'], ['whales', 'Whales'], ['musiman', 'Seasonality']];
+    const TABS: Array<[Tab, string]> = [['overview', 'Overview'], ['fundamental', 'Fundamentals'], ['teknikal', 'Technical'], ['berita', 'News'], ['whales', 'Whales'], ['aksi', 'Corporate actions'], ['musiman', 'Seasonality']];
     return (
         <>
             <button className="back" onClick={onBack}>‹ Kembali</button>
@@ -162,8 +162,9 @@ export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPre
             </>)}
 
             {tab === 'berita' && <section className="sb-card"><NewsSentiment key={b.s} s={b.s} /></section>}
+            {tab === 'aksi' && <section className="sb-card"><CorporateActions key={b.s} s={b.s} harga={b.harga} /></section>}
             {tab === 'musiman' && <section className="sb-card"><Seasonality key={b.s} s={b.s} /></section>}
-            {tab !== 'overview' && tab !== 'musiman' && (
+            {tab !== 'overview' && tab !== 'musiman' && tab !== 'aksi' && (
             <section className="sb-card sd-faktor">
                 {(() => {
                     const s = d.skor[tab as FaktorKey];

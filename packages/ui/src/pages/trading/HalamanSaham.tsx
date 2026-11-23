@@ -228,3 +228,53 @@ export function Seasonality({ s }: { s: string }) {
         </div>
     );
 }
+
+/* ── Corporate actions ── */
+interface Aksi { jenis: string; tgl: string; judul: string; detail: string; url?: string }
+interface AksiData { akanDatang: Aksi[]; lampau: Aksi[]; dividen12: number | null; sumber: string[] }
+const JENIS: Record<string, [string, string]> = {
+    dividen: ['Dividen', 'Pembagian sebagian laba ke pemegang saham dalam bentuk tunai.\n\nEx-dividend = batas tanggal: Bapak harus sudah memegang saham SEBELUM tanggal ini agar dapat dividen. Di tanggal ex-dividend harga biasanya turun kira-kira sebesar dividennya.'],
+    split: ['Stock split', 'Stock split 4 : 1 artinya 1 lembar dipecah jadi 4, harga per lembar jadi ¼. Nilai total kepemilikan Bapak tidak berubah.\n\nReverse split kebalikannya (beberapa lembar digabung jadi 1, harga per lembar naik) — sering dilakukan perusahaan yang harganya sudah sangat rendah.'],
+    laba: ['Laporan laba', 'Pengumuman kinerja kuartalan (pendapatan, laba, perkiraan ke depan). Harga sering bergerak tajam di hari-hari sekitar tanggal ini.'],
+    akuisisi: ['Akuisisi', 'Perusahaan membeli/menjual perusahaan atau aset besar, atau terjadi perubahan pengendali (laporan 8-K ke SEC).'],
+    perjanjian: ['Perjanjian', 'Perusahaan menandatangani atau mengakhiri perjanjian penting (kontrak besar, kerja sama, rencana merger) — laporan 8-K ke SEC.'],
+    direksi: ['Direksi', 'Pergantian direksi, CEO, CFO, atau eksekutif penting, atau perubahan kompensasinya (laporan 8-K ke SEC).'],
+    saham: ['Saham baru', 'Penerbitan saham baru atau perubahan hak pemegang saham. Penerbitan saham baru bisa mengencerkan (dilusi) kepemilikan pemegang lama.'],
+    utang: ['Utang', 'Perusahaan menanggung utang atau kewajiban keuangan baru yang material.'],
+    restrukturisasi: ['Restrukturisasi', 'Rencana restrukturisasi, penutupan unit, atau PHK yang material.'],
+    rups: ['RUPS', 'Hasil pemungutan suara rapat umum pemegang saham (pemilihan direksi, persetujuan rencana perusahaan).'],
+    lain: ['Lainnya', 'Peristiwa resmi lain yang dilaporkan ke SEC lewat formulir 8-K.']
+};
+const tglEn = (t: string) => { const d = Date.parse(`${t}T00:00:00Z`); return Number.isFinite(d) ? new Date(d).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric' }) : t; };
+function BarisAksi({ x }: { x: Aksi }) {
+    const [label, info] = JENIS[x.jenis] || JENIS.lain;
+    return (
+        <div className="hs-aksi-r">
+            <div className="hs-aksi-tgl mono">{tglEn(x.tgl)}</div>
+            <div className="hs-aksi-isi">
+                <div className="hs-aksi-h"><span className={`hs-aksi-j j-${x.jenis}`}>{label}</span><Info judul={label} teks={info} /></div>
+                <b>{x.judul}</b>
+                <small>{x.detail}{x.url && <> · <a href={x.url} target="_blank" rel="noreferrer">Dokumen asli</a></>}</small>
+            </div>
+        </div>
+    );
+}
+export function CorporateActions({ s, harga }: { s: string; harga: number }) {
+    const q = useApi<AksiData>(`/api/kantor/aksi-korporasi/${encodeURIComponent(s)}`, 0);
+    const d = q.data;
+    const kosong = (t: string) => <div className="hs-aksi-kosong"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" /></svg><span>{t}</span></div>;
+    return (
+        <div className="hs-aksi">
+            {q.error && !d ? <p className="sb-note">Corporate actions belum bisa diambil ({q.error}).</p> : !d ? <p className="sb-note">Memuat…</p> : (
+                <>
+                    <h3>Upcoming</h3>
+                    {d.akanDatang.length ? <div className="hs-aksi-list">{d.akanDatang.map((x, i) => <BarisAksi key={i} x={x} />)}</div> : kosong('Tidak ada corporate action yang akan datang.')}
+                    <h3 className="hs-aksi-h3">Past <small>12 bulan terakhir</small></h3>
+                    {d.dividen12 != null && <p className="hs-aksi-sum">Total dividen 12 bulan: <b className="mono">${d.dividen12.toFixed(2)}</b> per lembar{harga > 0 && <> · yield <b className="mono">{((d.dividen12 / harga) * 100).toFixed(2)}%</b></>}</p>}
+                    {d.lampau.length ? <div className="hs-aksi-list">{d.lampau.map((x, i) => <BarisAksi key={i} x={x} />)}</div> : kosong('Tidak ada corporate action dalam 12 bulan terakhir.')}
+                    {d.sumber.length > 0 && <small className="sb-note">Sumber: {d.sumber.join(', ')}. Peristiwa 8-K = laporan resmi perusahaan ke SEC.</small>}
+                </>
+            )}
+        </div>
+    );
+}

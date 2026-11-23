@@ -63,7 +63,7 @@ import { HermesBridge } from './kantor/hermes';
 import { slidesCli } from './kantor/slides';
 import { WaJanji, WaReader, waLoginCli, waLogoutCli, waLinked } from './kantor/wa';
 import { FreeLlm } from './kantor/freeLlm';
-import { ambilEkstra, ambilAnalis, ambilSentimen, ambilMusiman, bacaInsight, buatInsight } from './kantor/sahamEkstra';
+import { ambilEkstra, ambilAnalis, ambilSentimen, ambilMusiman, bacaInsight, buatInsight, ambilAksi } from './kantor/sahamEkstra';
 import { spawn } from 'child_process';
 import os from 'os';
 
@@ -689,6 +689,10 @@ app.get('/api/kantor/sentimen/:s', requireToken, async (req, res) => {
 });
 app.get('/api/kantor/musiman/:s', requireToken, async (req, res) => {
     try { res.json({ ok: true, ...(await ambilMusiman(kodeOk(req.params.s))) }); } catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
+});
+app.get('/api/kantor/aksi-korporasi/:s', requireToken, async (req, res) => {
+    const s = kodeOk(req.params.s);
+    try { res.json({ ok: true, ...(await ambilAksi(s, (screener.detail(s)?.baris as any)?.harga ?? null)) }); } catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
 });
 app.get('/api/kantor/insight/:s', requireToken, (req, res) => { res.json({ ok: true, insight: bacaInsight(config.dataDir, kodeOk(req.params.s)) }); });
 const insightJalan = new Set<string>();
