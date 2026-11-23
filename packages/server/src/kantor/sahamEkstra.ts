@@ -1,3 +1,5 @@
+import { execFile } from 'child_process';
+import os from 'node:os';
 import fs from 'node:fs';
 import path from 'node:path';
 import { j as nasdaq, sym, tabel, cari, nilai } from './nasdaq';
@@ -52,34 +54,69 @@ export async function ambilEkstra(s: string, ctx: { per?: number | null; epsCagr
 }
 
 /* ── Pendapat analis ── */
-export interface Analis { buy: number; hold: number; sell: number; n: number; konsensus: 'BUY' | 'HOLD' | 'SELL'; target: number | null; tinggi: number | null; rendah: number | null; bank: Array<{ nama: string; analis: string; rating: string; arah: 'buy' | 'hold' | 'sell'; tgl: string; target: number | null }>; sumber: string }
+export interface Analis { buy: number; hold: number; sell: number; n: number; konsensus: 'BUY' | 'HOLD' | 'SELL'; target: number | null; tinggi: number | null; rendah: number | null; bank: Array<{ nama: string; analis: string; rating: string; arah: 'buy' | 'hold' | 'sell'; tgl: string; target: number | null }>; sumber: string; catatan?: string }
 const arahDari = (t: string): 'buy' | 'hold' | 'sell' => /sell|under|reduce|negative/i.test(t) ? 'sell' : /buy|outperform|overweight|positive|accumulate|add/i.test(t) ? 'buy' : 'hold';
 /** Cari semua objek di dalam JSON (Nasdaq kadang mengubah susunan) — dipakai untuk mengambil angka & tabel secara longgar. */
 function jelajah(x: any, fn: (o: any) => void, d = 0) { if (!x || d > 6 || typeof x !== 'object') return; if (!Array.isArray(x)) fn(x); for (const v of Object.values(x)) jelajah(v, fn, d + 1); }
-/* Yahoo quoteSummary butuh cookie + "crumb" (seperti yfinance). Disimpan 6 jam. */
+/* Yahoo quoteSummary butuh cookie + "crumb" (seperti yfinance). Dicoba lewat fetch Node, lalu curl
+   (sidik TLS berbeda — cara yang sama dengan pengambilan harga). Sesi disimpan 6 jam. */
 let yahooSesi: { at: number; cookie: string; crumb: string } | null = null;
-async function sesiYahoo(): Promise<{ cookie: string; crumb: string }> {
-    if (yahooSesi && Date.now() - yahooSesi.at < 6 * 3600_000) return yahooSesi;
-    const h = { 'User-Agent': UA_BROWSER, Accept: 'text/html,application/json,*/*' };
-    const r1 = await fetch('https://fc.yahoo.com/', { headers: h, redirect: 'manual', signal: AbortSignal.timeout(12_000) }).catch(() => null);
-    const sc: string[] = (r1?.headers as any)?.getSetCookie?.() || [];
-    const cookie = sc.map((c) => c.split(';')[0]).filter(Boolean).join('; ');
-    if (!cookie) throw new Error('Yahoo: cookie tidak didapat');
+export let galatYahoo = '';
+function curl(args: string[]): Promise<{ status: number; body: string }> {
+    return new Promise((resolve, reject) => execFile('curl', ['-sS', '--compressed', '-m', '20', '-A', UA_BROWSER, '-H', 'Accept: */*', '-H', 'Accept-Language: en-US,en;q=0.9', '-w', '\n%{http_code}', ...args], { timeout: 25_000, maxBuffer: 20 * 1024 * 1024 }, (e, out) => {
+        if (e && !out) { reject(new Error((e as any).code === 'ENOENT' ? 'curl tidak terpasang' : e.message)); return; }
+        const k = out.lastIndexOf('\n'); resolve({ status: Number(out.slice(k + 1)) || 0, body: out.slice(0, k) });
+    }));
+}
+async function sesiLewatFetch(): Promise<{ cookie: string; crumb: string }> {
+    const h = { 'User-Agent': UA_BROWSER, Accept: 'text/html,application/json,*/*', 'Accept-Language': 'en-US,en;q=0.9' };
+    let cookie = '';
+    for (const u of ['https://fc.yahoo.com/', 'https://finance.yahoo.com/quote/AAPL/']) {
+        const r = await fetch(u, { headers: h, redirect: 'manual', signal: AbortSignal.timeout(12_000) }).catch(() => null);
+        const sc: string[] = (r?.headers as any)?.getSetCookie?.() || [];
+        cookie = sc.map((c) => c.split(';')[0]).filter((c) => /^(A1|A3|A1S|B|GUC|cmp)=/.test(c) || c.includes('=')).join('; ');
+        if (cookie) break;
+    }
+    if (!cookie) throw new Error('cookie tidak didapat (fetch)');
     const r2 = await fetch('https://query2.finance.yahoo.com/v1/test/getcrumb', { headers: { ...h, Cookie: cookie }, signal: AbortSignal.timeout(12_000) });
     const crumb = (await r2.text()).trim();
-    if (!r2.ok || !crumb || crumb.length > 40 || /</.test(crumb)) throw new Error(`Yahoo: crumb gagal (HTTP ${r2.status})`);
-    yahooSesi = { at: Date.now(), cookie, crumb };
-    return yahooSesi;
+    if (!r2.ok || !crumb || crumb.length > 40 || /[<{]/.test(crumb)) throw new Error(`crumb gagal lewat fetch (HTTP ${r2.status})`);
+    return { cookie, crumb };
+}
+async function sesiLewatCurl(): Promise<{ cookie: string; crumb: string }> {
+    const jar = path.join(os.tmpdir(), `kantor-yahoo-${process.pid}.txt`);
+    try { fs.unlinkSync(jar); } catch { /* */ }
+    await curl(['-c', jar, '-b', jar, 'https://fc.yahoo.com/']).catch(() => null);
+    let isi = ''; try { isi = fs.readFileSync(jar, 'utf8'); } catch { /* */ }
+    if (!/\tA[13]\t|\tA1S\t/.test(isi)) { await curl(['-L', '-c', jar, '-b', jar, '-o', '/dev/null', 'https://finance.yahoo.com/quote/AAPL/']).catch(() => null); try { isi = fs.readFileSync(jar, 'utf8'); } catch { /* */ } }
+    const cookie = isi.split('\n').filter((l) => l && (!l.startsWith('#') || l.startsWith('#HttpOnly_'))).map((l) => l.split('\t')).filter((c) => c.length >= 7).map((c) => `${c[5]}=${c[6]}`).join('; ');
+    if (!cookie) throw new Error('cookie tidak didapat (curl)');
+    const r = await curl(['-H', `Cookie: ${cookie}`, 'https://query2.finance.yahoo.com/v1/test/getcrumb']);
+    const crumb = r.body.trim();
+    if (r.status !== 200 || !crumb || crumb.length > 40 || /[<{]/.test(crumb)) throw new Error(`crumb gagal lewat curl (HTTP ${r.status})`);
+    return { cookie, crumb };
+}
+let lewat: 'fetch' | 'curl' = 'fetch';
+async function sesiYahoo(): Promise<{ cookie: string; crumb: string }> {
+    if (yahooSesi && Date.now() - yahooSesi.at < 6 * 3600_000) return yahooSesi;
+    const gal: string[] = [];
+    for (const cara of ['fetch', 'curl'] as const) {
+        try { const x = cara === 'fetch' ? await sesiLewatFetch() : await sesiLewatCurl(); yahooSesi = { at: Date.now(), ...x }; lewat = cara; return yahooSesi; }
+        catch (e: any) { gal.push(String(e?.message || e)); }
+    }
+    throw new Error(gal.join('; '));
 }
 async function yahooRingkasan(s: string, modules: string): Promise<any> {
     for (let coba = 0; coba < 2; coba++) {
         const { cookie, crumb } = await sesiYahoo();
-        const r = await fetch(`https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(s)}?modules=${modules}&crumb=${encodeURIComponent(crumb)}`, { headers: { 'User-Agent': UA_BROWSER, Cookie: cookie, Accept: 'application/json' }, signal: AbortSignal.timeout(15_000) });
-        if (r.status === 401 || r.status === 403) { yahooSesi = null; continue; }
-        if (!r.ok) throw new Error(`Yahoo quoteSummary HTTP ${r.status}`);
-        const j: any = await r.json();
-        const x = j?.quoteSummary?.result?.[0];
-        if (!x) throw new Error('Yahoo: data analis kosong');
+        const url = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(s)}?modules=${modules}&crumb=${encodeURIComponent(crumb)}`;
+        let status = 0, body = '';
+        if (lewat === 'fetch') { const r = await fetch(url, { headers: { 'User-Agent': UA_BROWSER, Cookie: cookie, Accept: 'application/json' }, signal: AbortSignal.timeout(15_000) }); status = r.status; body = await r.text(); }
+        else { const r = await curl(['-H', `Cookie: ${cookie}`, url]); status = r.status; body = r.body; }
+        if (status === 401 || status === 403) { yahooSesi = null; continue; }
+        if (status !== 200) throw new Error(`quoteSummary HTTP ${status}`);
+        const x = JSON.parse(body)?.quoteSummary?.result?.[0];
+        if (!x) throw new Error('data analis kosong');
         return x;
     }
     throw new Error('Yahoo menolak sesi');
@@ -110,12 +147,12 @@ export async function ambilAnalis(s: string): Promise<Analis | null> {
     return simpan(`an:${s}`, 12 * 3600_000, async () => {
         // Yahoo dulu (ada rincian per bank); kalau gagal / tanpa rincian bank, Nasdaq.
         let y: Analis | null = null;
-        try { y = await analisYahoo(s); } catch (e: any) { console.warn('[Analis] Yahoo:', String(e?.message || e).slice(0, 120)); }
+        try { y = await analisYahoo(s); galatYahoo = ''; } catch (e: any) { galatYahoo = String(e?.message || e).slice(0, 160); console.warn('[Analis] Yahoo:', galatYahoo); }
         if (y && y.bank.length) return y;
         const nq = await analisNasdaq(s).catch(() => null);
         if (!nq) return y;
         if (y) return { ...y, bank: nq.bank.length ? nq.bank : y.bank };
-        return nq;
+        return { ...nq, catatan: galatYahoo ? `Yahoo: ${galatYahoo}` : '' };
     });
 }
 async function analisNasdaq(s: string): Promise<Analis | null> {

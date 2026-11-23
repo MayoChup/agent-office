@@ -10,7 +10,7 @@ import { Baris, kap, usd } from './types';
  * Bagian-bagian halaman saham versi bertab: Weekly Insight (AI, manual), Market stats, What the experts say,
  * Fundamentals lengkap, News sentiment (speedometer), Seasonality. Data dari /saham-ekstra, /sentimen, /musiman, /insight.
  */
-export interface Analis { sumber?: string; buy: number; hold: number; sell: number; n: number; konsensus: 'BUY' | 'HOLD' | 'SELL'; target: number | null; tinggi: number | null; rendah: number | null; bank: Array<{ nama: string; analis?: string; rating: string; arah: 'buy' | 'hold' | 'sell'; tgl: string; target: number | null }> }
+export interface Analis { sumber?: string; catatan?: string; buy: number; hold: number; sell: number; n: number; konsensus: 'BUY' | 'HOLD' | 'SELL'; target: number | null; tinggi: number | null; rendah: number | null; bank: Array<{ nama: string; analis?: string; rating: string; arah: 'buy' | 'hold' | 'sell'; tgl: string; target: number | null }> }
 export interface DataEkstra { ekstra: K.EkstraData | null; ekstraGalat: string; analis: Analis | null; analisGalat: string }
 const pct = (v: number, d = 1) => `${v.toLocaleString('en-US', { maximumFractionDigits: d, minimumFractionDigits: d })}%`;
 
@@ -134,7 +134,8 @@ export function Experts({ a, galat, harga }: { a: Analis | null | undefined; gal
         <section className="sb-card hs-exp"><h3>What the experts say</h3><p className="sb-note">{galat ? `Data analis belum bisa diambil (${galat}).` : 'Data analis Wall Street untuk saham ini belum tersedia.'}</p></section>
     );
     const p = (n: number) => (a.n ? (n / a.n) * 100 : 0);
-    const ret = a.target != null ? (a.target / harga - 1) * 100 : null;
+    const targetOk = a.target != null && !(a.sumber === 'Nasdaq' && (a.target / harga > 2 || a.target / harga < 0.4));
+    const ret = targetOk ? (a.target! / harga - 1) * 100 : null;
     const k = a.konsensus.toLowerCase() as 'buy' | 'hold' | 'sell';
     return (
         <section className="sb-card hs-exp">
@@ -151,11 +152,11 @@ export function Experts({ a, galat, harga }: { a: Analis | null | undefined; gal
                     ))}
                 </div>
                 <div className="hs-exp-kanan">
-                    <div><span className="hs-ico target" aria-hidden><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="4" /></svg></span><small>Target price</small><b className="mono">{a.target != null ? usd(a.target) : '–'}</b></div>
+                    <div><span className="hs-ico target" aria-hidden><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="4" /></svg></span><small>Target price</small><b className="mono">{targetOk ? usd(a.target!) : '–'}</b></div>
                     <div><span className={`hs-ico ${ret != null && ret < 0 ? 'down' : 'up'}`} aria-hidden>{ret != null && ret < 0 ? '↘' : '↗'}</span><small>Estimated return</small><b className={`mono ${ret != null && ret < 0 ? 'down' : 'up'}`}>{ret != null ? `${ret < 0 ? '−' : '+'}${pct(Math.abs(ret), 2)}` : '–'}</b></div>
                 </div>
             </div>
-            {!a.bank.length && <p className="sb-note">Rincian rating per bank untuk saham ini belum tersedia dari sumber data.</p>}
+            {!a.bank.length && <p className="sb-note">Rincian rating per bank untuk saham ini belum tersedia dari sumber data.{a.catatan ? ` (${a.catatan})` : ''}</p>}
             {a.bank.length > 0 && (
                 <div className="hs-bank">
                     {a.bank.slice(0, 5).map((x) => <KartuBank key={x.nama} x={x} harga={harga} />)}
