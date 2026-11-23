@@ -983,16 +983,13 @@ async function perbaruiBeritaTerkait(sebab: string) {
     const st = tradingDesk.load();
     const pantau = Array.from(new Set([...st.positions.map((p) => p.symbol), ...st.watchlist])).slice(0, 40);
     const nina = roster().find((a) => a.id === ID_NINA);
-    await beritaTerkait.perbarui(sektor, industri, pantau, async (prompt) => {
-        // Utama: Nina (profil Hermes pembaca berita). Cadangan: otak AI gratis kantor, tetap dicatat sebagai kerja tim berita.
-        if (nina) {
-            try { return { teks: await percakapan.tugas(ID_NINA, 'Memetakan berita dunia ke saham (berita terkait)', prompt, `Mencari efek domino dari berita global (${sebab}).`, 'trading'), oleh: nina.nama }; }
-            catch (e: any) { console.warn('[Berita terkait] Nina gagal, pakai cadangan:', e?.message || e); }
-        }
-        const teks = await papan.jalankan({ ai: ID_NINA, nama: `${nina?.nama || 'Nina'} · otak cadangan`, judul: 'Memetakan berita dunia ke saham (berita terkait)', detail: `Mencari efek domino dari berita global (${sebab}).`, sumber: 'trading' },
-            async () => { const o = await OfficeRoom.sharedLlm()?.complete('Kamu analis berita pasar saham. Jawab hanya JSON valid.', prompt, 1800, 3); if (!o) throw new Error('AI gratis tidak menjawab.'); return o; });
-        return { teks, oleh: `${nina?.nama || 'Nina'} (otak cadangan)` };
-    });
+    const kerjaCadangan = (prompt: string) => papan.jalankan({ ai: ID_NINA, nama: `${nina?.nama || 'Nina'} · otak cadangan`, judul: 'Memetakan berita dunia ke saham (berita terkait)', detail: `Mencari efek domino dari berita global (${sebab}).`, sumber: 'trading' },
+        async () => { const o = await OfficeRoom.sharedLlm()?.complete('Kamu analis berita pasar saham. Jawab hanya JSON valid, tanpa teks lain dan tanpa ```.', prompt, 3000, 3); if (!o) throw new Error('AI gratis tidak menjawab.'); return o; });
+    await beritaTerkait.perbarui(sektor, industri, pantau, [
+        // Utama: Nina (profil Hermes pembaca berita). Kalau jawabannya tidak bisa dibaca / gagal → otak AI gratis kantor.
+        ...(nina ? [async (prompt: string) => ({ teks: await percakapan.tugas(ID_NINA, 'Memetakan berita dunia ke saham (berita terkait)', `${prompt}\n\nPENTING: balas dengan JSON SAJA, dimulai { dan diakhiri }, tanpa penjelasan, tanpa \`\`\`.`, `Mencari efek domino dari berita global (${sebab}).`, 'trading'), oleh: nina.nama })] : []),
+        async (prompt: string) => ({ teks: String(await kerjaCadangan(prompt)), oleh: `${nina?.nama || 'Nina'} (otak cadangan)` })
+    ]);
     screener.bersihkanCache();
 }
 // Tiap jam: kalau peta berita terkait sudah basi (>30 jam) dan fitur aktif → perbarui.

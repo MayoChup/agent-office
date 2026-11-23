@@ -75,9 +75,25 @@ export function susunPrompt(berita: JudulDunia[], sektor: string[], industri: st
 }
 
 function ambilJson(raw: string): any {
-    const a = raw.indexOf('{'), b = raw.lastIndexOf('}');
-    if (a < 0 || b <= a) return null;
-    try { return JSON.parse(raw.slice(a, b + 1)); } catch { return null; }
+    // Jawaban AI sering dibungkus ```json, diberi teks pembuka, ada koma berlebih, atau terpotong di tengah. Coba perbaiki bertahap.
+    const t = String(raw || '').replace(/```(?:json)?/gi, '');
+    const a = t.indexOf('{'); if (a < 0) return null;
+    const coba = (x: string) => { try { return JSON.parse(x.replace(/,\s*([}\]])/g, '$1')); } catch { return null; } };
+    const b = t.lastIndexOf('}');
+    const utuh = b > a ? coba(t.slice(a, b + 1)) : null;
+    if (utuh) return utuh;
+    // Terpotong: ambil semua objek tema yang lengkap, lalu tutup array & objeknya.
+    const mulai = t.indexOf('[', t.indexOf('"tema"')); if (mulai < 0) return null;
+    let dalam = 0, str = false, esc = false, awal = -1; const tema: any[] = [];
+    for (let i = mulai + 1; i < t.length; i++) {
+        const c = t[i];
+        if (str) { if (esc) esc = false; else if (c === '\\') esc = true; else if (c === '"') str = false; continue; }
+        if (c === '"') { str = true; continue; }
+        if (c === '{') { if (dalam === 0) awal = i; dalam++; }
+        else if (c === '}') { dalam--; if (dalam === 0 && awal >= 0) { const o = coba(t.slice(awal, i + 1)); if (o) tema.push(o); awal = -1; } }
+        else if (c === ']' && dalam === 0) break;
+    }
+    return tema.length ? { tema } : null;
 }
 /** Saring jawaban AI: hanya nama & id yang benar-benar ada. */
 export function validasi(raw: string, berita: JudulDunia[], sektor: string[], industri: string[], pantau: string[]): Tema[] {
@@ -119,15 +135,20 @@ export class BeritaTerkait {
         fs.writeFileSync(this.fileAtur, JSON.stringify(this.atur));
     }
     /** Perbarui peta dampak. `tanya` = fungsi yang menjalankan AI (Nina lewat Hermes; cadangan: AI gratis kantor). */
-    async perbarui(sektor: string[], industri: string[], pantau: string[], tanya: (prompt: string) => Promise<{ teks: string; oleh: string }>): Promise<DataTerkait> {
+    async perbarui(sektor: string[], industri: string[], pantau: string[], tanya: Array<(prompt: string) => Promise<{ teks: string; oleh: string }>>): Promise<DataTerkait> {
         if (this.sibuk) return this.data!;
         this.sibuk = true;
         try {
             const berita = await ambilJudulDunia();
             if (berita.length < 8) throw new Error('Judul berita dunia tidak bisa diambil (Google News menolak / kosong).');
-            const r = await tanya(susunPrompt(berita, sektor, industri, pantau));
-            const tema = validasi(r.teks, berita, sektor, industri, pantau);
-            if (!tema.length) throw new Error('AI tidak menghasilkan peta dampak yang valid.');
+            // Coba tiap AI berurutan (Nina → AI cadangan) sampai ada peta dampak yang lolos pemeriksaan.
+            const prompt = susunPrompt(berita, sektor, industri, pantau), gagal: string[] = [];
+            let r: { teks: string; oleh: string } | null = null, tema: Tema[] = [];
+            for (const f of tanya) {
+                try { const x = await f(prompt); const t = validasi(x.teks, berita, sektor, industri, pantau); if (t.length) { r = x; tema = t; break; } gagal.push(`${x.oleh}: jawaban tidak bisa dibaca sebagai peta dampak`); }
+                catch (e: any) { gagal.push(String(e?.message || e).slice(0, 120)); }
+            }
+            if (!r || !tema.length) throw new Error(`AI tidak menghasilkan peta dampak yang valid (${gagal.join('; ')}).`);
             this.data = { at: Date.now(), oleh: r.oleh, tema, berita };
             fs.writeFileSync(this.file, JSON.stringify(this.data));
             try { this.catatRiwayat(this.data); } catch (e: any) { console.warn('[Berita terkait] riwayat:', e?.message || e); }
