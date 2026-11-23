@@ -161,7 +161,7 @@ async function analisNasdaq(s: string): Promise<Analis | null> {
 }
 
 /* ── Sentimen berita 7/14/30 hari ── */
-export interface Sentimen { at: number; jendela: Record<'7' | '14' | '30', { n: number; pos: number; neg: number; netral: number; skor: number | null }>; sumber: string }
+export interface Sentimen { at: number; jendela: Record<'7' | '14' | '30', { n: number; pos: number; neg: number; netral: number; skor: number | null }>; sumber: string; judul?: Array<{ t: string; tgl: string; media: string; nada: number }> }
 export async function ambilSentimen(s: string): Promise<Sentimen> {
     return simpan(`se:${s}`, 3 * 3600_000, async () => {
         const q = encodeURIComponent(`${s.replace('-', '.')} stock`);
@@ -170,7 +170,7 @@ export async function ambilSentimen(s: string): Promise<Sentimen> {
         const xml = await res.text();
         const tag = (it: string, t: string) => (it.match(new RegExp(`<${t}>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?</${t}>`)) || [])[1]?.trim() || '';
         const un = (x: string) => x.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&#39;|&apos;/g, "'").replace(/&quot;/g, '"');
-        const item = (xml.match(/<item>[\s\S]*?<\/item>/g) || []).map((it) => ({ at: Date.parse(tag(it, 'pubDate')) || 0, s: sentimen(un(tag(it, 'title'))) })).filter((x) => x.at);
+        const item = (xml.match(/<item>[\s\S]*?<\/item>/g) || []).map((it) => { const t = un(tag(it, 'title')); const media = un((it.match(/<source[^>]*>([\s\S]*?)<\/source>/) || [])[1] || ''); return { at: Date.parse(tag(it, 'pubDate')) || 0, s: sentimen(t), t: media ? t.replace(new RegExp(`\\s+-\\s+${media.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`), '') : t, media }; }).filter((x) => x.at);
         const jendela = {} as Sentimen['jendela'];
         for (const h of ['7', '14', '30'] as const) {
             const xs = item.filter((x) => x.at >= Date.now() - +h * 86400_000);
@@ -178,7 +178,8 @@ export async function ambilSentimen(s: string): Promise<Sentimen> {
             // 0–100: 50 = seimbang; tiap berita positif/negatif menggeser ke arahnya (berita netral meredam).
             jendela[h] = { n: xs.length, pos, neg, netral: xs.length - pos - neg, skor: xs.length ? Math.round(50 + 50 * (pos - neg) / xs.length) : null };
         }
-        return { at: Date.now(), jendela, sumber: 'Google News' };
+        const judul = item.filter((x) => x.at >= Date.now() - 8 * 86400_000).sort((a, b) => b.at - a.at).slice(0, 18).map((x) => ({ t: x.t, tgl: new Date(x.at).toISOString().slice(0, 10), media: x.media, nada: x.s }));
+        return { at: Date.now(), jendela, sumber: 'Google News', judul };
     });
 }
 
@@ -217,7 +218,7 @@ export async function ambilMusiman(s: string): Promise<Musiman> {
 }
 
 /* ── Weekly Insight (AI, dibuat manual, tersimpan 7 hari) ── */
-export interface Insight { s: string; judul: string; ringkas: string; fundTek: string; pantau: string; dibuat: number; model: string }
+export interface Insight { s: string; judul: string; ringkas: string; berita?: string[]; fundTek: string; pantau: string; saran?: string; dibuat: number; model: string }
 const dirInsight = (dataDir: string) => path.join(dataDir, 'insight');
 export function bacaInsight(dataDir: string, s: string): Insight | null {
     try { const x = JSON.parse(fs.readFileSync(path.join(dirInsight(dataDir), `${s}.json`), 'utf8')) as Insight; return Date.now() - x.dibuat < 7 * 86400_000 ? x : null; } catch { return null; }
@@ -226,33 +227,47 @@ type Llm = { complete(system: string, user: string, maxTokens?: number, attempts
 export async function buatInsight(dataDir: string, s: string, fakta: string, llm: Llm, cadangan?: (prompt: string) => Promise<string>): Promise<Insight> {
     if (!llm && !cadangan) throw new Error('AI belum tersedia');
     // Format berlabel (lebih tahan untuk AI gratis daripada JSON): JUDUL / RINGKAS / FUNDTEK / PANTAU. Dicoba hingga 2×.
-    const sistem = 'Kamu analis saham di kantor Pak Rico. Tulis "Weekly Insight" untuk satu saham AS dalam bahasa Indonesia yang jelas untuk orang awam. ' +
-        'Pakai HANYA angka dan fakta dari data yang diberikan; jangan mengarang angka, tanggal, atau berita. Kalau suatu data tidak ada, jangan disebut. Bulatkan angka ke 2 desimal. ' +
-        'Balas PERSIS dengan 4 bagian berlabel berikut, tanpa teks lain:\n' +
-        'JUDUL: satu kalimat judul ringkas minggu ini (maks 14 kata)\n' +
-        'RINGKAS: 3–4 kalimat tentang apa yang terjadi minggu ini (harga, berita penting)\n' +
-        'FUNDTEK: 3–4 kalimat posisi teknikal (tren, MA, RSI) dan fundamental (valuasi, laba) dengan angkanya\n' +
-        'PANTAU: 2–3 kalimat yang perlu dipantau ke depan (level harga penting, jadwal laporan bila ada di data, risiko)\n' +
-        'Bukan saran beli/jual.';
+    const sistem = [
+        'Kamu analis saham senior di kantor Pak Rico. Tulis "Weekly Insight" untuk satu saham AS dalam bahasa Indonesia: hidup, bercerita, dan bisa ditindaklanjuti — seperti catatan analis untuk klien, bukan daftar angka.',
+        '',
+        'GAYA (wajib):',
+        '- Ceritakan SEBAB-AKIBAT: apa yang terjadi, kenapa (sebut peristiwa/berita/pihaknya dengan nama), dan apa artinya bagi pemegang saham. Contoh nada: "Harga turun 8,7% minggu ini, terseret aturan ekspor chip baru ke China dan aksi ambil untung di saham AI."',
+        '- Angka selalu dengan satuan yang benar: harga pakai $ (mis. $457,01), perubahan pakai % (bukan "poin"). Bulatkan 2 desimal.',
+        '- Bandingkan dengan konteks: kinerja vs S&P 500 & sektor, posisi terhadap MA50/MA200 dalam %, jarak dari puncak/dasar 52 minggu.',
+        '- Berita: pilih yang PALING berdampak (laporan laba, regulasi, pergantian pimpinan, akuisisi, kontrak besar, langkah institusi/orang dalam, perubahan rating analis). Jelaskan dampaknya, jangan menghitung jumlah berita positif/negatif.',
+        '- Yang perlu dipantau: kalimat arahan yang jelas ("Pantau…", "Waspadai jika…", "Konfirmasi naik kalau…"), dengan TANGGAL katalis bila ada di data (laporan laba, ex-dividend) dan LEVEL harga dari data (penyangga/hambatan dari MA, terendah/tertinggi 20 & 52 hari, target analis). Beri skenario: "kalau tembus $X → …, kalau jatuh di bawah $Y → …".',
+        '- Saran kantor: sikap praktis untuk dua orang — yang BELUM punya dan yang SUDAH pegang — dikaitkan dengan sinyal 4 faktor kantor, tahap pantul (bila ada), dan risikonya. Singkat, tegas, tanpa janji untung.',
+        '',
+        'KEJUJURAN (wajib): pakai HANYA fakta & angka dari DATA. Jangan mengarang peristiwa, nama, tanggal, atau angka. Klaim dari judul berita tulis sebagai "menurut berita …". Kalau suatu data tidak ada, lewati — jangan menebak.',
+        '',
+        'Balas PERSIS dengan bagian berlabel berikut, tanpa teks lain:',
+        'JUDUL: satu kalimat headline yang menangkap inti minggu ini (sebab → akibat), maks 16 kata',
+        'RINGKAS: 4–5 kalimat cerita minggu ini: gerak harga (minggu & bulan), pemicu utamanya, gerak institusi/orang dalam/analis bila ada, dan konteks sektor/pasar',
+        'BERITA: 2–4 butir, tiap butir diawali "- ": judul peristiwa singkat → dampaknya bagi saham (1 kalimat)',
+        'FUNDTEK: 4–5 kalimat: posisi teknikal (MA50/MA200 dalam %, golden/death cross, RSI, MACD, volume) lalu valuasi & kualitas (PER/forward PER/PEG, ROE, margin, pertumbuhan, utang) dibanding wajar',
+        'PANTAU: 3–4 kalimat arahan: katalis bertanggal, level harga kunci + skenario tembus/jatuh, dan risiko utama',
+        'SARAN: 2–3 kalimat sikap kantor: "Belum punya: …" dan "Sudah pegang: …", plus satu syarat yang membatalkan pandangan ini',
+        'Ini analisis, bukan saran keuangan.'
+    ].join('\n');
     const bagian = (t: string, label: string) => {
-        const m = t.match(new RegExp(`(?:^|\\n)[*#\\s-]*${label}\\**\\s*:\\s*\\**\\s*([\\s\\S]*?)(?=\\n\\W*(?:JUDUL|RINGKAS|FUNDTEK|PANTAU)\\W*:|$)`, 'i'));
+        const m = t.match(new RegExp(`(?:^|\\n)[*#\\s-]*${label}\\**\\s*:\\s*\\**\\s*([\\s\\S]*?)(?=\\n\\W*(?:JUDUL|RINGKAS|BERITA|FUNDTEK|PANTAU|SARAN)\\W*:|$)`, 'i'));
         return (m?.[1] || '').replace(/\*\*/g, '').trim();
     };
     let j: any = null, kosong = 0, galatCadangan = '';
     // Percobaan 1: AI gratis. Percobaan 2: AI tim trading lewat Hermes (jalur chat) — tidak bergantung kuota AI gratis.
     for (let coba = 0; coba < 2 && !j; coba++) {
         let out = '';
-        if (coba === 0 && llm) out = String((await llm.complete(sistem, fakta, 1400, 2)) || '');
+        if (coba === 0 && llm) out = String((await llm.complete(sistem, fakta, 2200, 2)) || '');
         else if (cadangan) { try { out = await cadangan(`${sistem}\n\nDATA:\n${fakta}`); } catch (e: any) { galatCadangan = String(e?.message || e).slice(0, 160); } }
-        else if (llm) out = String((await llm.complete(sistem, fakta, 1400, 2)) || '');
+        else if (llm) out = String((await llm.complete(sistem, fakta, 2200, 2)) || '');
         if (!out.trim()) { kosong++; continue; }
-        const r = { judul: bagian(out, 'JUDUL'), ringkas: bagian(out, 'RINGKAS'), fundTek: bagian(out, 'FUNDTEK'), pantau: bagian(out, 'PANTAU') };
+        const r = { judul: bagian(out, 'JUDUL'), ringkas: bagian(out, 'RINGKAS'), berita: bagian(out, 'BERITA').split('\n').map((x) => x.replace(/^[\s*•\-–]+/, '').trim()).filter(Boolean).slice(0, 5), fundTek: bagian(out, 'FUNDTEK'), pantau: bagian(out, 'PANTAU'), saran: bagian(out, 'SARAN') };
         if (r.ringkas) { j = r; break; }
         // Cadangan: AI membalas JSON.
         try { const m = out.match(/\{[\s\S]*\}/); const x = m ? JSON.parse(m[0]) : null; if (x?.ringkas) j = x; } catch { /* coba lagi */ }
     }
     if (!j) throw new Error(galatCadangan ? `AI gratis penuh dan AI tim trading gagal (${galatCadangan}). Coba lagi beberapa menit lagi.` : kosong === 2 ? 'AI sedang penuh. Coba lagi beberapa menit lagi.' : 'AI tidak memberi jawaban yang bisa dibaca. Coba lagi sebentar.');
-    const x: Insight = { s, judul: String(j.judul || '').slice(0, 160), ringkas: String(j.ringkas || ''), fundTek: String(j.fundTek || ''), pantau: String(j.pantau || ''), dibuat: Date.now(), model: 'AI kantor' };
+    const x: Insight = { s, judul: String(j.judul || '').slice(0, 180), ringkas: String(j.ringkas || ''), berita: Array.isArray(j.berita) ? j.berita.map(String) : [], fundTek: String(j.fundTek || ''), pantau: String(j.pantau || ''), saran: String(j.saran || ''), dibuat: Date.now(), model: 'AI kantor' };
     fs.mkdirSync(dirInsight(dataDir), { recursive: true });
     fs.writeFileSync(path.join(dirInsight(dataDir), `${s}.json`), JSON.stringify(x));
     return x;

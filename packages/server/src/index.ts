@@ -708,17 +708,41 @@ app.post('/api/kantor/insight/:s', requireToken, (req, res) => {
         const d: any = screener.detail(s);
         if (!d) throw new Error('Saham belum ada di data penyaring');
         const b = d.baris, f = b.f || {};
-        const [ek, an, se] = await Promise.allSettled([ambilEkstra(s, { per: f.per, epsCagr3: f.epsCagr3, revGrowth: f.revGrowth }), ambilAnalis(s), ambilSentimen(s)]);
+        const [ek, an, se, ak, cs, cspy] = await Promise.allSettled([ambilEkstra(s, { per: f.per, epsCagr3: f.epsCagr3, revGrowth: f.revGrowth }), ambilAnalis(s), ambilSentimen(s), ambilAksi(s, b.harga), ambilCandle(s, '3M'), ambilCandle('SPY', '3M')]);
         const v = <T,>(x: PromiseSettledResult<T>) => (x.status === 'fulfilled' ? x.value : null);
         const bulat = (_k: string, x: any) => (typeof x === 'number' && !Number.isInteger(x) ? +x.toFixed(2) : x);
+        const pct = (a: number | null | undefined, b: number | null | undefined) => (a != null && b ? +((a / b - 1) * 100).toFixed(2) : null);
+        // Gerak harga minggu ini (5 sesi) + penyangga/hambatan 20 hari, dibanding S&P 500.
+        const cc: any[] = (v(cs) as any)?.candles || [], cp: any[] = (v(cspy) as any)?.candles || [];
+        const tutup = (k: any[], mundur: number) => k[k.length - 1 - mundur]?.c ?? null;
+        const k20 = cc.slice(-20);
+        const minggu = pct(tutup(cc, 0), tutup(cc, 5)), mingguSpy = pct(tutup(cp, 0), tutup(cp, 5));
+        // Sektor: rata-rata gerak saham satu sektor di penyaring.
+        const sek = (screener.data(20) as any).baris.filter((x: any) => x.sektor && x.sektor === b.sektor && x.s !== s);
+        const rata = (xs: number[]) => (xs.length ? +(xs.reduce((a2, c) => a2 + c, 0) / xs.length).toFixed(2) : null);
+        const an0 = v(an), se0 = v(se), ak0 = v(ak), sk: any = d.skor || {};
         const fakta = JSON.stringify({
-            saham: `${b.nama} (${s})`, sektor: b.sektor, tanggal: new Date().toISOString().slice(0, 10),
-            harga: b.harga, ubah: { hari: b.chg1d, bulan1: b.chg1m, bulan3: b.chg3m, tahun1: b.chg1y }, rsi: b.rsi, ma50: b.ma50, ma200: b.ma200, volVsRata: b.volX,
-            puncak52: b.sinyal?.hi52, lembah52: b.sinyal?.lo52,
-            fundamental: { per: f.per, pbv: f.pbv, roe: f.roe, npm: f.npm, revGrowth: f.revGrowth, der: f.der, mcapJuta: b.mcap ?? f.mcap },
-            skor4Faktor: Object.fromEntries(Object.entries(d.skor || {}).filter(([, x]) => x).map(([k, x]: any) => [k, { label: x.label, alasan: (x.alasan || []).slice(0, 4) }])),
-            berita7hari: (d.berita?.judul || []).slice(0, 8).map((j: any) => `${j.tgl}: ${j.t}`),
-            statistik: v(ek), analis: v(an) ? { ...v(an)!, bank: v(an)!.bank.slice(0, 5) } : null, sentimen: v(se)?.jendela
+            saham: `${b.nama} (${s})`, sektor: b.sektor, industri: b.industri, tanggalData: new Date().toISOString().slice(0, 10),
+            harga_usd: b.harga,
+            perubahan_persen: { hariIni: b.chg1d, mingguIni_5sesi: minggu, sebulan: b.chg1m, tigaBulan: b.chg3m, setahun: b.chg1y },
+            pembanding_persen: { sp500_mingguIni: mingguSpy, sp500_sebulan: (screener.data(20) as any).baris.find((x: any) => x.s === 'SPY')?.chg1m ?? null, rataSektor_sebulan: rata(sek.map((x: any) => x.chg1m)), rataSektor_hariIni: rata(sek.map((x: any) => x.chg1d)), jumlahSahamSektor: sek.length },
+            teknikal: {
+                ma50_usd: b.ma50, ma200_usd: b.ma200, hargaVsMa50_persen: pct(b.harga, b.ma50), hargaVsMa200_persen: pct(b.harga, b.ma200),
+                silang: b.ma50 != null && b.ma200 != null ? (b.ma50 > b.ma200 ? 'golden cross (MA50 di atas MA200)' : 'death cross (MA50 di bawah MA200)') : null,
+                rsi14: b.rsi, macd: b.sinyal?.macdAtas == null ? null : `${b.sinyal.macdAtas ? 'di atas' : 'di bawah'} garis sinyal sejak ${b.sinyal.macdHari} hari`, volumeVsRata2: b.volX,
+                tertinggi20hari_usd: k20.length ? Math.max(...k20.map((x) => x.h)) : null, terendah20hari_usd: k20.length ? Math.min(...k20.map((x) => x.l)) : null,
+                tertinggi52minggu_usd: b.sinyal?.hi52, terendah52minggu_usd: b.sinyal?.lo52, dariPuncak52_persen: pct(b.harga, b.sinyal?.hi52)
+            },
+            fundamental: { per: f.per, forwardPer: v(ek)?.fwdPe, peg: v(ek)?.peg, pbv: f.pbv, roe_persen: f.roe, marginBersih_persen: f.npm, marginKotor_persen: f.gm, pertumbuhanPendapatan_persen: f.revGrowth, pertumbuhanLaba3th_persen: f.epsCagr3, der: f.der, eps_usd: v(ek)?.eps, dividendYield_persen: v(ek)?.yieldDiv, beta: v(ek)?.beta, kapitalisasi_jutaUsd: b.mcap ?? f.mcap },
+            sinyalKantor4Faktor: Object.fromEntries(Object.entries(sk).filter(([, x]) => x).map(([k, x]: any) => [k, { label: x.asli || x.label, skor: x.skorAsli ?? x.skor, alasan: (x.alasan || []).slice(0, 4) }])),
+            pantul: d.diskon ? { tahap: d.diskon.tahap === 'balik' ? 'Mulai berbalik' : d.diskon.tahap === 'zona' ? 'Zona beli' : 'Pantau', jenis: d.diskon.jenis === 'koreksi' ? 'koreksi di tren naik' : 'diskon dalam', alasan: d.diskon.alasan } : null,
+            ambilUntungSebagian: d.ambilUntung ? { tahap: d.ambilUntung.tahap, alasan: d.ambilUntung.alasan } : null,
+            orangDalam_SEC: d.orang ? { beliTransaksi: d.orang.beli, jualTransaksi: d.orang.jual, netUsd: d.orang.net } : null,
+            beritaTerbaru: [...(se0?.judul || []).map((x) => `${x.tgl} · ${x.media || 'berita'} · ${x.t}`), ...(d.berita?.judul || []).map((x: any) => `${x.tgl} · ${x.t}`)].filter((x, i2, arr) => arr.findIndex((y) => y.slice(13).toLowerCase() === x.slice(13).toLowerCase()) === i2).slice(0, 20),
+            sentimenBerita7hari: se0?.jendela?.['7'] || null,
+            analis: an0 ? { konsensus: an0.konsensus, buy: an0.buy, hold: an0.hold, sell: an0.sell, targetRata2_usd: an0.target, targetTertinggi_usd: an0.tinggi, targetTerendah_usd: an0.rendah, ruangKeTarget_persen: pct(an0.target, b.harga), ratingTerbaru: an0.bank.slice(0, 6).map((x) => `${x.tgl} ${x.nama}: ${x.rating}${x.target ? `, target $${x.target}` : ''}`) } : null,
+            katalisAkanDatang: (ak0?.akanDatang || []).map((x) => `${x.tgl}: ${x.judul} (${x.detail})`),
+            peristiwaResmi30hari: (ak0?.lampau || []).filter((x) => x.tgl >= new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 10)).map((x) => `${x.tgl}: ${x.judul}`)
         }, bulat);
             await buatInsight(config.dataDir, s, fakta, OfficeRoom.sharedLlm(), (p) => percakapan.sekali(roster().some((a) => a.id === 'trading') ? 'trading' : 'default', p));
         })().catch((e: any) => { insightGalat.set(s, String(e?.message || e)); }).finally(() => { insightJalan.delete(s); });

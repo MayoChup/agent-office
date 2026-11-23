@@ -3631,3 +3631,7 @@ body.no-office #phaser-container { visibility: hidden; }
 .hs-aksi-kosong { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 26px 0 18px; color: var(--muted); font-size: 13px; }
 .hs-aksi-kosong svg { opacity: .5; }
 @media (max-width: 720px) { .hs-aksi-r { grid-template-columns: 1fr; gap: 4px; } }
+.hs-ins-berita { margin: 6px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; line-height: 1.55; }
+.hs-ins-berita b { font-weight: 600; }
+.hs-ins-saran { margin-top: 14px; padding: 10px 14px 12px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.hs-ins-saran h4 { margin: 0 !important; color: var(--accent); }

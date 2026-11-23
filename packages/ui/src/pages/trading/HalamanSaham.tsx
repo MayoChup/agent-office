@@ -25,7 +25,7 @@ export function BarisStat({ x }: { x: K.Bacaan }) {
 }
 
 /* ── Weekly Insight ── */
-interface Insight { judul: string; ringkas: string; fundTek: string; pantau: string; dibuat: number }
+interface Insight { judul: string; ringkas: string; berita?: string[]; fundTek: string; pantau: string; saran?: string; dibuat: number }
 const ikonKilau = <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" aria-hidden><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" /><path d="M19 15l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z" /></svg>;
 export function WeeklyInsight({ s }: { s: string }) {
     const q = useApi<{ insight: Insight | null; jalan?: boolean; galat?: string }>(`/api/kantor/insight/${encodeURIComponent(s)}`, 0);
@@ -60,8 +60,10 @@ export function WeeklyInsight({ s }: { s: string }) {
                     {buka && (
                         <div className="hs-ins-isi">
                             <p>{x.ringkas}</p>
+                            {!!x.berita?.length && (<><h4>Berita paling berdampak</h4><ul className="hs-ins-berita">{x.berita.map((t, i) => { const [a, b] = t.split(/\s*(?:→|->)\s*/); return <li key={i}>{b ? <><b>{a}</b> → {b}</> : t}</li>; })}</ul></>)}
                             <h4>Fundamental & teknikal</h4><p>{x.fundTek}</p>
                             <h4>Yang perlu dipantau</h4><p>{x.pantau}</p>
+                            {x.saran && <div className="hs-ins-saran"><h4>Sikap kantor</h4><p>{x.saran.split(/(?=Sudah pegang:)/i).map((t, i) => <span key={i}>{i > 0 && <br />}{t.trim()}</span>)}</p></div>}
                             <small className="sb-note">Disusun AI dari data kantor untuk informasi saja, bukan saran keuangan.</small>
                         </div>
                     )}
