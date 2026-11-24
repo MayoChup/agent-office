@@ -44,7 +44,32 @@ export interface ItemBerita { id: string; judul: string; ringkas: string; url: s
 
 const gid = () => Math.random().toString(36).slice(2, 10);
 export const hariWib = (t = Date.now()) => new Date(t + 7 * 3600_000).toISOString().slice(0, 10);
-export function ambilJson(raw: string): any { const a = (raw || '').indexOf('{'), b = (raw || '').lastIndexOf('}'); if (a < 0 || b <= a) return null; try { return JSON.parse(raw.slice(a, b + 1)); } catch { return null; } }
+/**
+ * Ambil objek JSON dari jawaban AI. Tahan terhadap model "berpikir" yang menulis analisis panjang dulu
+ * (kadang dengan kurung kurawal di dalamnya), blok ```json, <think>…</think>, dan koma berlebih.
+ * Dicoba dari objek paling akhir yang lengkap; yang punya kunci data (post/game/desain/…) diutamakan.
+ */
+export function ambilJson(raw: string): any {
+    let t = String(raw || '').replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/```(?:json)?/gi, '');
+    if (!t.includes('{')) return null;
+    const coba = (x: string) => { try { return JSON.parse(x); } catch { try { return JSON.parse(x.replace(/,\s*([}\]])/g, '$1')); } catch { return null; } } };
+    const utuh = coba(t.slice(t.indexOf('{'), t.lastIndexOf('}') + 1)); if (utuh && typeof utuh === 'object') return utuh;
+    // Pindai semua objek seimbang tingkat atas.
+    const calon: any[] = [];
+    for (let i = 0; i < t.length; i++) {
+        if (t[i] !== '{') continue;
+        let d = 0, str = false, esc = false, j = i;
+        for (; j < t.length; j++) {
+            const c = t[j];
+            if (str) { if (esc) esc = false; else if (c === '\\') esc = true; else if (c === '"') str = false; continue; }
+            if (c === '"') str = true; else if (c === '{') d++; else if (c === '}') { d--; if (d === 0) break; }
+        }
+        if (d !== 0) continue;
+        const o = coba(t.slice(i, j + 1)); if (o && typeof o === 'object') { calon.push(o); i = j; }
+    }
+    const kunci = ['post', 'posts', 'game', 'games', 'desain', 'periksa', 'topik', 'tema'];
+    return [...calon].reverse().find((o) => kunci.some((k) => k in o)) || calon[calon.length - 1] || null;
+}
 const teks = (x: any, n: number) => String(x ?? '').replace(/\r/g, '').replace(/\s+/g, ' ').trim().slice(0, n);
 const normal = (s: string) => s.toLowerCase().normalize('NFKD').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
 /** Kemiripan judul (Jaccard kata ≥4 huruf). */
@@ -163,24 +188,27 @@ export class KnowledgeReels {
     private desainBerikut(i: number) { const n = this.st.post.length + i; return { t: TEMPLATE[(n * 7) % TEMPLATE.length], p: PALET[(n * 3 + Math.floor(n / TEMPLATE.length)) % PALET.length] }; }
     /** Ubah keluaran AI → postingan valid. Sumber hanya dari daftar yang diberikan (id) atau yang memang ada di jawaban & berbentuk tautan nyata. */
     terima(kat: Kat, raw: string, oleh: Post['oleh'], sumberBoleh: ItemBerita[] = [], sumberTetap?: (x: any) => Sumber[], kodeUS?: Set<string>): Post[] {
-        const j = ambilJson(raw); const arr = Array.isArray(j?.post) ? j.post : [];
+        const j = ambilJson(raw); const arr = Array.isArray(j?.post) ? j.post : Array.isArray(j?.posts) ? j.posts : Array.isArray(j) ? j : [];
         const out: Post[] = [];
         for (const x of arr.slice(0, 8)) {
-            const judul = teks(x?.judul, 90); if (!judul || this.sudahAda(kat, judul) || out.some((o) => mirip(o.judul, judul) >= 0.7)) continue;
-            const slide: Slide[] = (Array.isArray(x?.slide) ? x.slide : []).slice(0, 6).map((s: any) => ({ judul: teks(s?.judul, 70) || undefined, poin: (Array.isArray(s?.poin) ? s.poin : []).slice(0, 4).map((p: any) => teks(p, 160)).filter(Boolean), teks: teks(s?.teks, 260) || undefined }))
+            const judul = teks(x?.judul ?? x?.title, 90); if (!judul || this.sudahAda(kat, judul) || out.some((o) => mirip(o.judul, judul) >= 0.7)) continue;
+            const slide: Slide[] = (Array.isArray(x?.slide) ? x.slide : Array.isArray(x?.slides) ? x.slides : []).slice(0, 6).map((s: any) => typeof s === 'string' ? { teks: teks(s, 260) } : ({ judul: teks(s?.judul ?? s?.title, 70) || undefined, poin: (Array.isArray(s?.poin) ? s.poin : Array.isArray(s?.points) ? s.points : Array.isArray(s?.bullets) ? s.bullets : []).slice(0, 4).map((p: any) => teks(p, 160)).filter(Boolean), teks: teks(s?.teks ?? s?.text, 260) || undefined }))
                 .filter((s: Slide) => s.poin?.length || s.teks);
             if (slide.length < 2) continue;
             let sumber: Sumber[] = [];
             if (sumberBoleh.length) {
-                const ids: string[] = (Array.isArray(x?.sumber) ? x.sumber : []).map((s: any) => String(typeof s === 'object' ? s?.id : s));
-                sumber = sumberBoleh.filter((it) => ids.includes(it.id)).slice(0, 4).map((it) => ({ judul: it.judul, url: it.url, penerbit: it.penerbit, tgl: it.tgl }));
+                // "S3", "[S3]", "s3", 3 → semuanya dianggap S3.
+                const rapi = (v: any) => { const r = String(v ?? '').replace(/[^A-Za-z0-9]/g, '').toUpperCase(); return /^\d+$/.test(r) ? `S${r}` : r; };
+                const mentah = x?.sumber ?? x?.sources ?? x?.source ?? [];
+                const ids: string[] = (Array.isArray(mentah) ? mentah : String(mentah).split(/[,\s]+/)).map((s: any) => rapi(typeof s === 'object' ? s?.id : s));
+                sumber = sumberBoleh.filter((it) => ids.includes(rapi(it.id))).slice(0, 4).map((it) => ({ judul: it.judul, url: it.url, penerbit: it.penerbit, tgl: it.tgl }));
                 if (!sumber.length) continue; // berita wajib bersumber nyata
             } else if (sumberTetap) sumber = sumberTetap(x);
             const dampak: Dampak[] = (Array.isArray(x?.dampak) ? x.dampak : []).slice(0, 6).map((d: any) => {
                 const kode = String(d?.kode || '').toUpperCase().replace(/[^A-Z.]/g, '').slice(0, 6); const bursa: Dampak['bursa'] = String(d?.bursa || '').toUpperCase() === 'IDX' ? 'IDX' : 'US';
                 return { kode, bursa, arah: (['naik', 'turun', 'campur'].includes(d?.arah) ? d.arah : 'campur') as Dampak['arah'], alasan: teks(d?.alasan, 160) };
             }).filter((d: Dampak) => d.kode && d.alasan && (d.bursa === 'IDX' ? /^[A-Z]{4}$/.test(d.kode) : !kodeUS || kodeUS.has(d.kode)));
-            out.push({ id: gid(), kat, judul, sub: teks(x?.sub, 120) || undefined, slide, penutup: teks(x?.penutup, 220) || undefined, sumber, dampak: dampak.length ? dampak : undefined,
+            out.push({ id: gid(), kat, judul, sub: teks(x?.sub ?? x?.subtitle, 120) || undefined, slide, penutup: teks(x?.penutup ?? x?.closing, 220) || undefined, sumber, dampak: dampak.length ? dampak : undefined,
                 desain: this.desainBerikut(out.length), oleh, dibuat: Date.now(), tgl: hariWib(), kunci: normal(judul).slice(0, 80) });
         }
         return out;

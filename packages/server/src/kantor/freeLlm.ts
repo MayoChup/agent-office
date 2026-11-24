@@ -299,7 +299,8 @@ export class FreeLlm {
         const router = CadanganAi.router;
         if (router?.siap() && (this.backupCooldown.get('FreeLLM') || 0) <= Date.now()) {
             try {
-                const r = await router.chat(system, user, maxTokens);
+                // Model "berpikir" di FreeLLM menghabiskan banyak token untuk analisis dulu → beri ruang lebih supaya JSON-nya tidak terpotong.
+                const r = await router.chat(system, user, Math.max(maxTokens * 2, 6000));
                 if (r.teks.trim()) { this.lastProvider = `FreeLLM ${r.model}`; this.lastError = null; return r.teks; }
             } catch (e: any) {
                 galat.push(`FreeLLM: ${String(e?.message || e).slice(0, 80)}`);

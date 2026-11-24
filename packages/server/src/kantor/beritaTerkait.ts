@@ -10,6 +10,7 @@ import fs from 'fs';
 import path from 'path';
 import type { Faktor } from './skor';
 import { label } from './skor';
+import { ambilJson as ambilJsonKuat } from './kr';
 
 const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
 export interface InfoRiwayat { id: string; judul: string; ringkas: string; tgl: string; at: number; topik: string; artikel: Array<{ t: string; sumber: string; tgl: string; url: string; topik: string }>; dampak: Dampak[]; oleh: string }
@@ -76,14 +77,17 @@ export function susunPrompt(berita: JudulDunia[], sektor: string[], industri: st
 
 function ambilJson(raw: string): any {
     // Jawaban AI sering dibungkus ```json, diberi teks pembuka, ada koma berlebih, atau terpotong di tengah. Coba perbaiki bertahap.
-    const t = String(raw || '').replace(/```(?:json)?/gi, '');
+    // Model "berpikir" menulis analisis dulu (kadang dengan { } di dalamnya) → cari objek lengkap yang punya "tema" lebih dulu.
+    const kuat = ambilJsonKuat(raw); if (kuat && Array.isArray(kuat.tema) && kuat.tema.length) return kuat;
+    const t = String(raw || '').replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/```(?:json)?/gi, '');
     const a = t.indexOf('{'); if (a < 0) return null;
     const coba = (x: string) => { try { return JSON.parse(x.replace(/,\s*([}\]])/g, '$1')); } catch { return null; } };
     const b = t.lastIndexOf('}');
     const utuh = b > a ? coba(t.slice(a, b + 1)) : null;
     if (utuh) return utuh;
     // Terpotong: ambil semua objek tema yang lengkap, lalu tutup array & objeknya.
-    const mulai = t.indexOf('[', t.indexOf('"tema"')); if (mulai < 0) return null;
+    const kt = t.lastIndexOf('"tema"'); if (kt < 0) return null;
+    const mulai = t.indexOf('[', kt); if (mulai < 0) return null;
     let dalam = 0, str = false, esc = false, awal = -1; const tema: any[] = [];
     for (let i = mulai + 1; i < t.length; i++) {
         const c = t[i];
@@ -103,11 +107,15 @@ export function validasi(raw: string, berita: JudulDunia[], sektor: string[], in
     const cs = cari(sektor), ci = cari(industri), ct = cari(pantau);
     const out: Tema[] = [];
     for (const t of j.tema.slice(0, 12)) {
-        const bukti = (Array.isArray(t.bukti) ? t.bukti : []).map(String).filter((x: string) => ids.has(x)).slice(0, 15);
+        // "B3", "[B3]", "b3", 3 → B3
+        const rapi = (v: any) => { const r = String(v ?? '').replace(/[^A-Za-z0-9]/g, '').toUpperCase(); return /^\d+$/.test(r) ? `B${r}` : r; };
+        const bukti = [...new Set<string>((Array.isArray(t.bukti) ? t.bukti : String(t.bukti || '').split(/[,\s]+/)).map(rapi))].filter((x) => ids.has(x)).slice(0, 15);
         if (!bukti.length) continue; // tema tanpa bukti judul = ditolak
         const dampak: Dampak[] = [];
         for (const d of Array.isArray(t.dampak) ? t.dampak.slice(0, 12) : []) {
-            const arah = Math.max(-2, Math.min(2, Math.round(Number(d.arah) || 0))); if (!arah) continue;
+            const kata = String(d.arah ?? '').toLowerCase();
+            const angka = Number(d.arah) || (/(sangat|kuat).*(neg|turun|down)|(neg|turun|down).*(kuat|sangat)/.test(kata) ? -2 : /(sangat|kuat).*(pos|naik|up)|(pos|naik|up).*(kuat|sangat)/.test(kata) ? 2 : /neg|turun|down|bear/.test(kata) ? -1 : /pos|naik|up|bull/.test(kata) ? 1 : 0);
+            const arah = Math.max(-2, Math.min(2, Math.round(angka))); if (!arah) continue;
             const jenis = d.jenis === 'saham' ? 'saham' : d.jenis === 'industri' ? 'industri' : 'sektor';
             const nama = jenis === 'saham' ? ct(String(d.nama).toUpperCase()) || ct(d.nama) : jenis === 'industri' ? ci(d.nama) || cs(d.nama) : cs(d.nama) || ci(d.nama);
             if (!nama) continue;
@@ -145,9 +153,9 @@ export class BeritaTerkait {
             // Tiap bagian: coba AI berurutan (Nina → AI cadangan → kepala kantor) sampai ada peta dampak yang lolos pemeriksaan.
             const UK = 30, bagian: JudulDunia[][] = [];
             for (let i = 0; i < berita.length; i += UK) bagian.push(berita.slice(i, i + UK));
-            const gagal: string[] = []; const tema: Tema[] = []; const oleh = new Set<string>();
+            const gagal: string[] = []; const tema: Tema[] = []; const oleh = new Set<string>(); let okN = 0;
             for (const [n, bg] of bagian.entries()) {
-                const prompt = susunPrompt(bg, sektor, industri, pantau, 6);
+                const prompt = susunPrompt(bg, sektor, industri, pantau, 8);
                 let ok = false;
                 for (const f of tanya) {
                     try {
@@ -156,9 +164,14 @@ export class BeritaTerkait {
                         gagal.push(`bagian ${n + 1} · ${x.oleh}: jawaban tidak bisa dibaca sebagai peta dampak`);
                     } catch (e: any) { gagal.push(`bagian ${n + 1} · ${String(e?.message || e).slice(0, 140)}`); }
                 }
-                if (!ok) console.warn('[Berita terkait] bagian', n + 1, 'gagal');
+                if (ok) okN++; else console.warn('[Berita terkait] bagian', n + 1, 'gagal');
             }
             if (!tema.length) throw new Error(`AI tidak menghasilkan peta dampak yang valid (${gagal.slice(-3).join('; ')}).`);
+            // Kalau lebih dari separuh bagian gagal dan peta lama jauh lebih lengkap, peta lama tetap dipakai (jangan diganti peta yang bolong).
+            const lama = this.data;
+            if (okN * 2 < bagian.length && lama && !lama.galat?.startsWith('Sebagian') && lama.tema.length > tema.length * 2 && Date.now() - lama.at < 3 * 86400_000) {
+                throw new Error(`Sebagian besar gagal: hanya ${okN} dari ${bagian.length} bagian berhasil dipetakan, jadi peta sebelumnya tetap dipakai. (${gagal.slice(-2).join('; ')})`);
+            }
             const r = { oleh: [...oleh].join(' + ') };
             this.data = { at: Date.now(), oleh: r.oleh, tema, berita };
             fs.writeFileSync(this.file, JSON.stringify(this.data));
