@@ -57,10 +57,10 @@ export async function ambilJudulDunia(perTopik = 14): Promise<JudulDunia[]> {
     return out;
 }
 
-export function susunPrompt(berita: JudulDunia[], sektor: string[], industri: string[], pantau: string[]) {
+export function susunPrompt(berita: JudulDunia[], sektor: string[], industri: string[], pantau: string[], maksTema = 12) {
     return [
         'Kamu pembaca berita tim trading saham AS. Di bawah ada judul berita DUNIA 3 hari terakhir (bukan berita per saham).',
-        'Tugas: (1) KELOMPOKKAN judul yang membahas INFO/kejadian yang sama (sering diberitakan banyak media) jadi satu TEMA — satu info = satu tema; (2) ambil paling banyak 12 TEMA yang bisa berefek domino ke saham; (3) petakan dampaknya.',
+        `Tugas: (1) KELOMPOKKAN judul yang membahas INFO/kejadian yang sama (sering diberitakan banyak media) jadi satu TEMA — satu info = satu tema; (2) ambil paling banyak ${maksTema} TEMA yang bisa berefek domino ke saham; (3) petakan dampaknya.`,
         'ATURAN:',
         '- Pakai HANYA judul di bawah sebagai bukti. "bukti" = SEMUA id judul yang membahas info itu (dari media mana pun). Jangan menambah fakta atau angka yang tidak ada di judul.',
         '- "dampak" hanya boleh memakai nama PERSIS dari daftar SEKTOR / INDUSTRI / SAHAM di bawah.',
@@ -141,14 +141,25 @@ export class BeritaTerkait {
         try {
             const berita = await ambilJudulDunia();
             if (berita.length < 8) throw new Error('Judul berita dunia tidak bisa diambil (Google News menolak / kosong).');
-            // Coba tiap AI berurutan (Nina → AI cadangan) sampai ada peta dampak yang lolos pemeriksaan.
-            const prompt = susunPrompt(berita, sektor, industri, pantau), gagal: string[] = [];
-            let r: { teks: string; oleh: string } | null = null, tema: Tema[] = [];
-            for (const f of tanya) {
-                try { const x = await f(prompt); const t = validasi(x.teks, berita, sektor, industri, pantau); if (t.length) { r = x; tema = t; break; } gagal.push(`${x.oleh}: jawaban tidak bisa dibaca sebagai peta dampak`); }
-                catch (e: any) { gagal.push(String(e?.message || e).slice(0, 120)); }
+            // Tugas dipecah jadi beberapa bagian kecil (±30 judul) supaya muat di AI gratis berkapasitas kecil dan jawabannya tidak terpotong.
+            // Tiap bagian: coba AI berurutan (Nina → AI cadangan → kepala kantor) sampai ada peta dampak yang lolos pemeriksaan.
+            const UK = 30, bagian: JudulDunia[][] = [];
+            for (let i = 0; i < berita.length; i += UK) bagian.push(berita.slice(i, i + UK));
+            const gagal: string[] = []; const tema: Tema[] = []; const oleh = new Set<string>();
+            for (const [n, bg] of bagian.entries()) {
+                const prompt = susunPrompt(bg, sektor, industri, pantau, 6);
+                let ok = false;
+                for (const f of tanya) {
+                    try {
+                        const x = await f(prompt); const t = validasi(x.teks, bg, sektor, industri, pantau);
+                        if (t.length) { tema.push(...t); oleh.add(x.oleh); ok = true; break; }
+                        gagal.push(`bagian ${n + 1} · ${x.oleh}: jawaban tidak bisa dibaca sebagai peta dampak`);
+                    } catch (e: any) { gagal.push(`bagian ${n + 1} · ${String(e?.message || e).slice(0, 140)}`); }
+                }
+                if (!ok) console.warn('[Berita terkait] bagian', n + 1, 'gagal');
             }
-            if (!r || !tema.length) throw new Error(`AI tidak menghasilkan peta dampak yang valid (${gagal.join('; ')}).`);
+            if (!tema.length) throw new Error(`AI tidak menghasilkan peta dampak yang valid (${gagal.slice(-3).join('; ')}).`);
+            const r = { oleh: [...oleh].join(' + ') };
             this.data = { at: Date.now(), oleh: r.oleh, tema, berita };
             fs.writeFileSync(this.file, JSON.stringify(this.data));
             try { this.catatRiwayat(this.data); } catch (e: any) { console.warn('[Berita terkait] riwayat:', e?.message || e); }

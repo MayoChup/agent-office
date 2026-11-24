@@ -54,18 +54,32 @@ export function pasangKr(d: DepsKr) {
     const kr = new KnowledgeReels(d.dataDir);
     const nama = (id: string) => d.roster().find((x) => x.id === id)?.nama || TIM_KR[id]?.nama || id;
     const oleh = (...ids: string[]): Post['oleh'] => ids.map((id) => ({ id, nama: nama(id), peran: TIM_KR[id]?.peran || '' }));
-    let progres = '';
+    let progres = '', sibukSejak = 0;
 
-    /** Kerjakan lewat profil Hermes bila ada; kalau tidak, otak cadangan (AI gratis) — tetap tercatat atas nama AI tsb di Papan. */
+    /** Rantai kerja: profil Hermes AI itu (bila ada) → otak cadangan (AI gratis) → Joni/Kirana lewat Hermes.
+     *  Dulu hanya dua langkah pertama, jadi kalau AI gratis habis/ditolak semua sumbangan gagal dan feed cuma berisi brain game lokal. */
     async function kerja(aiId: string, judul: string, prompt: string, maks = 3200): Promise<string> {
+        const salah: string[] = [];
         if (d.roster().some((x) => x.id === aiId)) {
-            try { return await percakapan.tugas(aiId, `Knowledge Reels · ${judul}`, prompt, 'Sumbangan untuk feed Knowledge Reels.'); }
-            catch (e: any) { console.warn(`[KR] ${aiId} gagal, pakai otak cadangan:`, e?.message || e); }
+            try { const o = await percakapan.tugas(aiId, `Knowledge Reels · ${judul}`, prompt, 'Sumbangan untuk feed Knowledge Reels.'); if (String(o || '').trim()) return o; salah.push(`${nama(aiId)}: jawaban kosong`); }
+            catch (e: any) { salah.push(`${nama(aiId)}: ${String(e?.message || e).slice(0, 80)}`); console.warn(`[KR] ${aiId} gagal, pakai otak cadangan:`, e?.message || e); }
         }
-        return papan.jalankan({ ai: aiId, nama: `${nama(aiId)} · otak cadangan`, judul: `Knowledge Reels · ${judul}`, detail: 'Sumbangan untuk feed Knowledge Reels.', sumber: 'tugas' }, async () => {
-            const o = await d.llm()?.complete('Kamu redaktur konten edukasi yang teliti dan jujur. Ikuti format keluaran yang diminta persis; keluarkan JSON saja.', prompt, maks, 3);
-            if (!o) throw new Error('AI gratis tidak menjawab.'); return o;
-        });
+        try {
+            return await papan.jalankan({ ai: aiId, nama: `${nama(aiId)} · otak cadangan`, judul: `Knowledge Reels · ${judul}`, detail: 'Sumbangan untuk feed Knowledge Reels.', sumber: 'tugas' }, async () => {
+                const llm: any = d.llm();
+                const o = await llm?.complete('Kamu redaktur konten edukasi yang teliti dan jujur. Ikuti format keluaran yang diminta persis; keluarkan JSON saja.', prompt, maks, 3);
+                if (!o) throw new Error(`AI gratis tidak menjawab${llm?.snapshot?.()?.lastError ? ` (${String(llm.snapshot().lastError).slice(0, 90)})` : ''}.`); return o;
+            });
+        } catch (e: any) { salah.push(String(e?.message || e).slice(0, 120)); }
+        // Terakhir: AI Hermes lain yang pasti ada (Kirana, lalu Joni). Lebih lambat, tapi tidak bergantung kuota AI gratis.
+        for (const cad of [ID_KURATOR, 'default']) {
+            if (cad === aiId || !d.roster().some((x) => x.id === cad)) continue;
+            try {
+                const o = await percakapan.tugas(cad, `Knowledge Reels · ${judul} (menggantikan ${nama(aiId)})`, `${prompt}\n\nPENTING: balas dengan JSON SAJA sesuai format di atas, tanpa penjelasan, tanpa \`\`\`.`, 'Cadangan: AI utama & AI gratis tidak menjawab.');
+                if (String(o || '').trim()) return o;
+            } catch (e: any) { salah.push(`${nama(cad)}: ${String(e?.message || e).slice(0, 80)}`); }
+        }
+        throw new Error(salah.join(' · ') || 'Tidak ada AI yang bisa mengerjakan.');
     }
     const coba = async (label: string, fn: () => Promise<number>) => {
         progres = label;
@@ -207,7 +221,7 @@ export function pasangKr(d: DepsKr) {
     /* ── Edisi ── */
     async function edisi(jenis: 'pagi' | 'siang' | 'sore' | 'manual', hanya?: Kat) {
         if (kr.sibuk) throw new Error('Redaksi Knowledge Reels sedang bekerja.');
-        kr.sibuk = jenis; const awal = kr.st.post.length;
+        kr.sibuk = jenis; sibukSejak = Date.now(); const awal = kr.st.post.length;
         try {
             const hari = new Date(`${hariWib()}T00:00:00Z`).getUTCDay(), ganjil = new Date().getUTCDate() % 2 === 1;
             const ini = (k: Kat) => !hanya || hanya === k;
@@ -221,7 +235,8 @@ export function pasangKr(d: DepsKr) {
                 if (ini('funfact')) await coba('Tara: Fun fact', funfact);
                 if (ini('buku')) await coba('Dodi: Intisari buku', buku);
                 if (ini('tips')) { await coba(ganjil ? 'Lala: Tips & trik' : 'Dea: Tips & trik', () => tips(ganjil ? 'sosmed-penulis' : 'sosmed-komunitas')); if (!hanya && hari === 1) await coba('Laras: Tips keuangan', tipsUang); }
-                if (ini('game')) { await coba('Brain games harian', async () => gameHarian()); await coba('Sasa: Brain game logika', () => gameAi('logika')); await coba('Vino: Brain game imajinasi', () => gameAi('imajinasi')); }
+                const sudahAdaGame = jenis !== 'manual' && kr.st.post.some((p) => p.kat === 'game' && p.tgl === hariWib());
+                if (ini('game') && !sudahAdaGame) { await coba('Brain games harian', async () => gameHarian()); await coba('Sasa: Brain game logika', () => gameAi('logika')); await coba('Vino: Brain game imajinasi', () => gameAi('imajinasi')); }
             } else {
                 await coba('Kirana: Berita Indonesia (tambahan)', () => berita('lokal', 2));
                 await coba('Kirana: Berita Dunia (tambahan)', () => berita('global', 2));
@@ -229,19 +244,24 @@ export function pasangKr(d: DepsKr) {
             }
             const baru = kr.st.post.slice(awal);
             if (baru.length) { await coba('Eca: pemeriksaan mutu', () => periksaMutu(baru)); await coba('Putri: menata desain', () => tataDesain(kr.st.post.slice(awal))); }
-            if (jenis !== 'manual') kr.st.sesi[jenis] = hariWib();
+            const isi = kr.st.post.slice(awal).filter((p) => p.kat !== 'game').length;
+            // Edisi yang gagal total (cuma brain game lokal) tidak dianggap selesai → dicoba lagi 1 jam kemudian.
+            if (jenis !== 'manual') { if (isi) { kr.st.sesi[jenis] = hariWib(); delete kr.st.sesi[`${jenis}:gagal`]; } else kr.st.sesi[`${jenis}:gagal`] = String(Date.now()); }
             kr.catatLog(`Edisi ${jenis}: ${kr.st.post.length - awal} postingan baru.`); kr.simpan();
         } finally { kr.sibuk = ''; progres = ''; }
     }
     // Jadwal (WIB). Cek tiap 5 menit; edisi pagi juga dikejar kalau server baru menyala setelah jam 05.
     setInterval(() => {
+        // Pengaman: kalau redaksi tersangkut lebih dari 2 jam, lepaskan supaya jadwal berikutnya tetap jalan.
+        if (kr.sibuk && Date.now() - sibukSejak > 2 * 3600_000) { kr.catatLog(`Edisi ${kr.sibuk} tersangkut >2 jam, dilepas.`); kr.sibuk = ''; progres = ''; }
         if (kr.sibuk) return;
+        const bolehCoba = (j: string) => Date.now() - Number(kr.st.sesi[`${j}:gagal`] || 0) > 3600_000;
         const t = new Date(Date.now() + 7 * 3600_000), jam = t.getUTCHours(), mnt = t.getUTCMinutes(), hari = hariWib();
         const jalan = (j: 'pagi' | 'siang' | 'sore') => edisi(j).catch((e) => console.warn('[KR] edisi:', e?.message || e));
-        if (jam >= 5 && kr.st.sesi.pagi !== hari) return void jalan('pagi');
+        if (jam >= 5 && kr.st.sesi.pagi !== hari && bolehCoba('pagi')) return void jalan('pagi');
         if ((jam > 7 || (jam === 7 && mnt >= 15)) && kr.st.sesi.brief !== hari && kr.st.sesi.pagi === hari) { kr.st.sesi.brief = hari; kr.simpan(); ringkasanPagi().catch((e) => console.warn('[KR] ringkasan pagi:', e?.message || e)); return; }
-        if (jam >= 12 && kr.st.sesi.siang !== hari) return void jalan('siang');
-        if (jam >= 18 && kr.st.sesi.sore !== hari) return void jalan('sore');
+        if (jam >= 12 && kr.st.sesi.siang !== hari && bolehCoba('siang')) return void jalan('siang');
+        if (jam >= 18 && kr.st.sesi.sore !== hari && bolehCoba('sore')) return void jalan('sore');
     }, 300_000);
 
     /* ── Rute ── */

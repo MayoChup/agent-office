@@ -237,25 +237,21 @@ export class OfficeScene extends Phaser.Scene {
         this.layoutObjects = [];
         this.pcs.clear();
 
-        const W = layout.cols * T, H = layout.rows * T;
 
-        // Lantai dipanggang ke satu tekstur supaya ringan.
-        const rt = this.add.renderTexture(0, 0, W, H).setOrigin(0).setDepth(-10);
-        this.layoutObjects.push(rt);
+        // Lantai: satu TileSprite berulang per ruangan (bukan renderTexture). RenderTexture hilang isinya saat
+        // konteks WebGL direset (iPad/iPhone sering melakukannya saat aplikasi ditinggal), dan lantai jadi gelap.
         for (const room of layout.rooms) {
             const tint = room.kind === 'division' ? lighten(room.tint, 0.45) : hex(room.tint);
-            for (let y = room.y; y < room.y + room.h; y++) {
-                for (let x = room.x; x < room.x + room.w; x++) {
-                    rt.draw(`floor_${room.floor}`, x * T, y * T, 1, tint);
-                }
-            }
+            const ts = this.add.tileSprite(room.x * T, room.y * T, room.w * T, room.h * T, `floor_${room.floor}`)
+                .setOrigin(0).setDepth(-10).setTint(tint);
+            this.layoutObjects.push(ts);
         }
         // Lantai di ambang pintu (lantai yang tidak termasuk ruangan mana pun).
         for (let y = 0; y < layout.rows; y++) {
             for (let x = 0; x < layout.cols; x++) {
                 if (layout.tiles[y][x] !== 1) continue;
                 const inRoom = layout.rooms.some((r) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h);
-                if (!inRoom) rt.draw('floor_1', x * T, y * T, 1, 0x9aa3bd);
+                if (!inRoom) this.layoutObjects.push(this.add.image(x * T, y * T, 'floor_1').setOrigin(0).setDepth(-10).setTint(0x9aa3bd));
             }
         }
 

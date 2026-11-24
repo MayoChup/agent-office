@@ -978,17 +978,20 @@ screener.terkait = beritaTerkait;
 const ID_NINA = 'trading-berita';
 async function perbaruiBeritaTerkait(sebab: string) {
     if (beritaTerkait.sibuk) return;
-    const { sektor, industri } = screener.kelompok();
+    const { sektor, industri: indSemua } = screener.kelompok();
     if (!sektor.length) throw new Error('Ambil data pasar dulu (↻ di Trading).');
+    const industri = indSemua.slice(0, 35); // industri terbanyak saja — prompt ringkas supaya muat di AI gratis
     const st = tradingDesk.load();
     const pantau = Array.from(new Set([...st.positions.map((p) => p.symbol), ...st.watchlist])).slice(0, 40);
     const nina = roster().find((a) => a.id === ID_NINA);
     const kerjaCadangan = (prompt: string) => papan.jalankan({ ai: ID_NINA, nama: `${nina?.nama || 'Nina'} · otak cadangan`, judul: 'Memetakan berita dunia ke saham (berita terkait)', detail: `Mencari efek domino dari berita global (${sebab}).`, sumber: 'trading' },
-        async () => { const o = await OfficeRoom.sharedLlm()?.complete('Kamu analis berita pasar saham. Jawab hanya JSON valid, tanpa teks lain dan tanpa ```.', prompt, 3000, 3); if (!o) throw new Error('AI gratis tidak menjawab.'); return o; });
+        async () => { const llm: any = OfficeRoom.sharedLlm(); const o = await llm?.complete('Kamu analis berita pasar saham. Jawab hanya JSON valid, tanpa teks lain dan tanpa ```.', prompt, 1800, 3); if (!o) throw new Error(`AI gratis tidak menjawab${llm?.snapshot?.()?.lastError ? ` (${String(llm.snapshot().lastError).slice(0, 90)})` : ''}.`); return o; });
     await beritaTerkait.perbarui(sektor, industri, pantau, [
         // Utama: Nina (profil Hermes pembaca berita). Kalau jawabannya tidak bisa dibaca / gagal → otak AI gratis kantor.
         ...(nina ? [async (prompt: string) => ({ teks: await percakapan.tugas(ID_NINA, 'Memetakan berita dunia ke saham (berita terkait)', `${prompt}\n\nPENTING: balas dengan JSON SAJA, dimulai { dan diakhiri }, tanpa penjelasan, tanpa \`\`\`.`, `Mencari efek domino dari berita global (${sebab}).`, 'trading'), oleh: nina.nama })] : []),
-        async (prompt: string) => ({ teks: String(await kerjaCadangan(prompt)), oleh: `${nina?.nama || 'Nina'} (otak cadangan)` })
+        async (prompt: string) => ({ teks: String(await kerjaCadangan(prompt)), oleh: `${nina?.nama || 'Nina'} (otak cadangan)` }),
+        // Terakhir: kepala kantor (Hermes) — lebih lambat, tapi tidak bergantung kuota AI gratis.
+        ...(roster().some((a) => a.id === 'default') ? [async (prompt: string) => ({ teks: await percakapan.tugas('default', 'Membantu memetakan berita dunia ke saham', `${prompt}\n\nPENTING: balas dengan JSON SAJA, dimulai { dan diakhiri }, tanpa penjelasan, tanpa \`\`\`.`, `Cadangan terakhir pemetaan berita terkait (${sebab}).`, 'trading'), oleh: 'Joni (cadangan)' })] : [])
     ]);
     screener.bersihkanCache();
 }
