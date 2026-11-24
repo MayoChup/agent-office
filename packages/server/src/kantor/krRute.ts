@@ -87,7 +87,7 @@ export function pasangKr(d: DepsKr) {
     }
     const coba = async (label: string, fn: () => Promise<number>) => {
         progres = label;
-        try { const n = await fn(); kr.catatLog(n ? `${label}: +${n} postingan` : `${label}: tidak ada postingan baru`); return n; }
+        try { const n = await fn(); kr.catatLog(n ? `${label}: +${n} postingan` : `${label}: selesai, tidak ada tambahan`); return n; }
         catch (e: any) { console.warn(`[KR] ${label}:`, e?.message || e); kr.catatLog(`${label}: gagal (${String(e?.message || e).slice(0, 120)})`); return 0; }
     };
     const lama = (k: Kat) => { const j = kr.judulLama(k, 40); return j.length ? `\nJUDUL YANG SUDAH PERNAH (jangan diulang, cari sudut/topik lain):\n${j.map((x) => `- ${x}`).join('\n')}` : ''; };
