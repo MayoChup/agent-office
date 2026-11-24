@@ -68,7 +68,7 @@ export function backupProviders(env: Record<string, string | undefined>): Backup
  * (tempat kunci yang Pak Rico isi di aplikasi), dan diperbarui begitu kunci baru dipasang — tanpa restart.
  * router = FreeLLM di VPS (ratusan model gratis); dicoba sebelum kunci langsung.
  */
-export const CadanganAi: { env: Record<string, string | undefined> | null; router: { siap(): boolean; chat(sistem: string, prompt: string, maks?: number): Promise<{ teks: string; model: string }> } | null } = { env: null, router: null };
+export const CadanganAi: { env: Record<string, string | undefined> | null; router: { siap(): boolean; chat(sistem: string, prompt: string, maks?: number, model?: string, json?: boolean): Promise<{ teks: string; model: string }> } | null } = { env: null, router: null };
 
 export interface UsageSnapshot {
     date: string;
@@ -293,15 +293,16 @@ export class FreeLlm {
     }
 
     /** Coba penyedia cadangan satu per satu. Tidak memakai kuota OpenRouter. */
-    private async callBackups(system: string, user: string, maxTokens: number): Promise<string | null> {
+    private async callBackups(system: string, user: string, maxTokens: number, cek?: (teks: string) => boolean, mintaJson = false): Promise<string | null> {
         const galat: string[] = [];
         // FreeLLM di VPS lebih dulu: ia sendiri membagi beban ke banyak penyedia & model gratis.
         const router = CadanganAi.router;
         if (router?.siap() && (this.backupCooldown.get('FreeLLM') || 0) <= Date.now()) {
             try {
                 // Model "berpikir" di FreeLLM menghabiskan banyak token untuk analisis dulu → beri ruang lebih supaya JSON-nya tidak terpotong.
-                const r = await router.chat(system, user, Math.max(maxTokens * 2, 6000));
-                if (r.teks.trim()) { this.lastProvider = `FreeLLM ${r.model}`; this.lastError = null; return r.teks; }
+                const r = await router.chat(system, user, Math.max(maxTokens * 2, 6000), undefined, mintaJson);
+                if (r.teks.trim() && (!cek || cek(r.teks))) { this.lastProvider = `FreeLLM ${r.model}`; this.lastError = null; return r.teks; }
+                if (r.teks.trim()) galat.push(`FreeLLM ${r.model}: jawaban tidak sesuai format`);
             } catch (e: any) {
                 galat.push(`FreeLLM: ${String(e?.message || e).slice(0, 80)}`);
                 this.backupCooldown.set('FreeLLM', Date.now() + 2 * 60_000);
@@ -314,7 +315,7 @@ export class FreeLlm {
             try {
                 const controller = new AbortController();
                 const timer = setTimeout(() => controller.abort(), 40_000);
-                const res = await fetch(`${b.baseUrl}/chat/completions`, {
+                const kirim = (json: boolean) => fetch(`${b.baseUrl}/chat/completions`, {
                     method: 'POST',
                     signal: controller.signal,
                     headers: { Authorization: `Bearer ${b.apiKey}`, 'Content-Type': 'application/json' },
@@ -322,9 +323,13 @@ export class FreeLlm {
                         model,
                         messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
                         temperature: 0.8,
-                        max_tokens: maxTokens
+                        max_tokens: maxTokens,
+                        // Mode JSON (didukung Gemini/Groq/Cerebras/Mistral) memaksa jawaban langsung berupa JSON, tanpa analisis.
+                        ...(json ? { response_format: { type: 'json_object' } } : {})
                     })
                 });
+                let res = await kirim(mintaJson);
+                if (mintaJson && res.status === 400) res = await kirim(false); // penyedia yang tidak kenal mode JSON
                 clearTimeout(timer);
                 if (!res.ok) {
                     const body = (await res.text()).slice(0, 160);
@@ -336,7 +341,8 @@ export class FreeLlm {
                 }
                 const data: any = await res.json();
                 const text: string = data?.choices?.[0]?.message?.content || '';
-                if (!text.trim()) continue;
+                if (!text.trim()) { galat.push(`${b.name}: jawaban kosong`); continue; }
+                if (cek && !cek(text)) { galat.push(`${b.name}: jawaban tidak sesuai format`); continue; }
                 this.lastProvider = b.name;
                 this.lastError = null;
                 return text;
@@ -358,7 +364,13 @@ export class FreeLlm {
      * race = true (pesan pemilik): dua model OpenRouter dipanggil bersamaan, jawaban
      * tercepat dipakai. Kalau semua model OpenRouter sibuk, pindah ke penyedia cadangan.
      */
-    async complete(system: string, user: string, maxTokens = 350, attempts = 2, race = false): Promise<string | null> {
+    /**
+     * cek (opsional): pemeriksa jawaban. Jawaban yang tidak lolos (mis. model "berpikir" yang cuma menulis analisis tanpa JSON)
+     * TIDAK dikembalikan — otak berikutnya dicoba. Tanpa cek, jawaban tidak kosong pertama dipakai seperti dulu.
+     */
+    async complete(system: string, user: string, maxTokens = 350, attempts = 2, race = false, cek?: (teks: string) => boolean): Promise<string | null> {
+        const lolos = (t: string | null) => !!t && (!cek || cek(t));
+        const mintaJson = /\bJSON\b/.test(system); // hanya tugas yang sistemnya meminta JSON (bukan obrolan)
         const openRouterOk = Boolean(this.opts.apiKey) && this.remainingToday() > 0;
         if (!openRouterOk && !this.adaCadangan()) { this.lastError = 'Tidak ada otak AI yang bisa dipakai (OpenRouter habis & belum ada kunci cadangan).'; return null; }
         if (openRouterOk) await this.refreshModels();
@@ -377,7 +389,7 @@ export class FreeLlm {
                     let pending = 2;
                     for (const m of [a, b]) {
                         this.callOpenRouter(m, system, user, maxTokens, stop.signal).then((text) => {
-                            if (text) { stop.abort(); resolve(text); }
+                            if (lolos(text)) { stop.abort(); resolve(text); }
                             else if (--pending === 0) resolve(null);
                         });
                     }
@@ -397,11 +409,12 @@ export class FreeLlm {
             tried.push(model);
             left--;
             const text = await this.callOpenRouter(model, system, user, maxTokens);
-            if (text) return text;
+            if (lolos(text)) return text;
+            if (text) this.lastError = `OpenRouter ${model}: jawaban tidak sesuai format`;
         }
 
         // Semua model OpenRouter gagal / sibuk → penyedia cadangan (gratis, kuota terpisah).
-        return this.callBackups(system, user, maxTokens);
+        return this.callBackups(system, user, maxTokens, cek, mintaJson);
     }
 }
 

@@ -2814,6 +2814,14 @@ body.no-office #phaser-container { visibility: hidden; }
 .kr-hp .kr-pos.ig .kr-car { border-radius: 0; }
 .kr-hp .kr-panah, .kr-hp .krs-geser { display: none; }
 .kr-hp .kr-aksi .kr-lbl { font-size: 12px; }
+.kr-redaksi { width: min(470px, 100%); margin: 0 auto 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 6px 6px 12px; border-radius: 12px; background: var(--sb-soft); }
+.kr-redaksi-info { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; background: none; border: 0; padding: 0; color: var(--muted); font: inherit; font-size: 12.5px; text-align: left; cursor: pointer; }
+.kr-redaksi-label { color: var(--text); font-weight: 500; flex: none; }
+.kr-redaksi-teks { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kr-redaksi .btn.kecil { padding: 6px 12px; font-size: 12.5px; flex: none; }
+.kr-redaksi-log { flex-basis: 100%; list-style: none; margin: 4px 0 2px; padding: 8px 0 0; border-top: 1px solid var(--line, rgba(127,127,127,.15)); font-size: 12px; color: var(--muted); display: grid; gap: 6px; max-height: 240px; overflow: auto; }
+.kr-redaksi-log time { color: var(--text); font-variant-numeric: tabular-nums; margin-right: 4px; }
+.kr-hp .kr-redaksi { width: auto; margin-left: 12px; margin-right: 12px; }
 .kr-hp .kr-sibuk, .kr-hp .kr-habis { width: auto; margin-left: 12px; margin-right: 12px; }
 .kr-hp .kr-hal { color: var(--text); background: var(--panel-solid); height: 100%; padding: 16px 12px 40px; }
 .kr-hp:not(.kr-v-feed) { background: var(--panel-solid); color: var(--text); }

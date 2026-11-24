@@ -70,7 +70,7 @@ export function pasangKr(d: DepsKr) {
         try {
             return await papan.jalankan({ ai: aiId, nama: `${nama(aiId)} · otak cadangan`, judul: `Knowledge Reels · ${judul}`, detail: 'Sumbangan untuk feed Knowledge Reels.', sumber: 'tugas' }, async () => {
                 const llm: any = d.llm();
-                const o = await llm?.complete('Kamu redaktur konten edukasi yang teliti dan jujur. Ikuti format keluaran yang diminta persis. Jangan menulis analisis, rencana, atau penjelasan: jawabanmu langsung dimulai dengan { dan berakhir dengan }.', json ? `${prompt}\n\nKELUARKAN JSON SAJA (langsung mulai dengan {, tanpa analisis).` : prompt, maks, 3);
+                const o = await llm?.complete(json ? 'Kamu redaktur konten edukasi yang teliti dan jujur. Keluaranmu HANYA JSON valid sesuai format yang diminta. Jangan menulis analisis, rencana, atau penjelasan: jawabanmu langsung dimulai dengan { dan berakhir dengan }.' : 'Kamu redaktur konten edukasi yang teliti dan jujur.', json ? `${prompt}\n\nKELUARKAN JSON SAJA (langsung mulai dengan {, tanpa analisis).` : prompt, maks, 3, false, cek || undefined);
                 if (!o) throw new Error(`AI gratis tidak menjawab${llm?.snapshot?.()?.lastError ? ` (${String(llm.snapshot().lastError).slice(0, 90)})` : ''}.`);
                 if (cek && !cek(o)) throw new Error(`Jawaban AI gratis tidak bisa dipakai${ambilJson(o) ? ' (format/isi tidak sesuai)' : ' (bukan JSON)'}.`); return o;
             });

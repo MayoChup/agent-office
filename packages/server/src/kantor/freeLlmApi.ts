@@ -116,12 +116,14 @@ export class FreeLlmApi {
         return { teks, model: String(j?.model || 'auto') };
     }
     /** Panggilan teks (OpenAI-compatible). model "auto" = router memilih model gratis terbaik yang tersedia. */
-    async chat(sistem: string, prompt: string, maks = 4000, model = this.env.FREELLM_MODEL || 'auto'): Promise<{ teks: string; model: string }> {
+    async chat(sistem: string, prompt: string, maks = 4000, model = this.env.FREELLM_MODEL || 'auto', json = false): Promise<{ teks: string; model: string }> {
         if (!this.siap()) throw new Error(`FreeLLM belum siap (${this.status.pesan}).`);
-        const r = await fetch(`http://127.0.0.1:${this.port}/v1/chat/completions`, {
+        const kirim = (pakaiJson: boolean) => fetch(`http://127.0.0.1:${this.port}/v1/chat/completions`, {
             method: 'POST', signal: AbortSignal.timeout(120_000), headers: { Authorization: `Bearer ${this.kunciApi}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ model, messages: [{ role: 'system', content: sistem }, { role: 'user', content: prompt }], temperature: 0.7, max_tokens: maks })
+            body: JSON.stringify({ model, messages: [{ role: 'system', content: sistem }, { role: 'user', content: prompt }], temperature: 0.7, max_tokens: maks, ...(pakaiJson ? { response_format: { type: 'json_object' } } : {}) })
         });
+        let r = await kirim(json);
+        if (json && r.status === 400) r = await kirim(false);
         if (!r.ok) throw new Error(`FreeLLM: HTTP ${r.status} ${(await r.text()).slice(0, 160)}`);
         const j: any = await r.json();
         const teks = String(j?.choices?.[0]?.message?.content || '').trim();

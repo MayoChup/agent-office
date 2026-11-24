@@ -131,13 +131,31 @@ function Feed({ ctx, segmen, setSegmen, st }: { ctx: Ctx; segmen: string; setSeg
             </div>
             <div className={`kr-tarik ${tarik > 64 ? 'siap' : ''}`} style={{ height: tarik }} aria-hidden={!tarik}>{tarik > 0 && <span><Ikon e="↻" size={18} />{muat ? 'Memuat…' : tarik > 64 ? 'Lepas untuk memuat ulang' : 'Tarik untuk memuat ulang'}</span>}</div>
             <div className="kr-feed" ref={wadah} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
-                {st?.sibuk && <div className="kr-sibuk"><Ikon e="✍" /> Redaksi sedang menyiapkan postingan{st.progres ? ` · ${st.progres}` : ''}</div>}
+                {st?.sibuk ? <div className="kr-sibuk"><Ikon e="✍" /> Redaksi sedang menyiapkan postingan{st.progres ? ` · ${st.progres}` : ''}</div> : <BarRedaksi ctx={ctx} segmen={segmen} st={st} />}
                 {list.map((p) => <Pos key={p.id} p={p} ctx={ctx} ganti={ganti} />)}
                 <div ref={ujung} />
                 {muat && <div className="kr-akhir">Memuat…</div>}
                 {galat && <div className="kr-akhir"><Ikon e="⚠" /> {galat} <button className="btn" onClick={() => ambil(true)}>Coba lagi</button></div>}
                 {!muat && habis && <Habis ctx={ctx} kosong={!list.length} segmen={segmen} st={st} muatUlang={() => ambil(true)} />}
             </div>
+        </div>
+    );
+}
+/** Bar redaksi di atas feed: kabar terakhir redaksi + tombol buat postingan (dulu hanya ada di ujung feed). */
+function BarRedaksi({ ctx, segmen, st }: { ctx: Ctx; segmen: string; st: Status | null }) {
+    const [kirim, setKirim] = useState(false); const [buka, setBuka] = useState(false);
+    const kat = segmen === 'semua' || segmen === 'berita' ? '' : segmen;
+    const buat = async () => { setKirim(true); try { await apiPost('/api/kantor/kr/buat', { kat }); ctx.pesan('Redaksi mulai bekerja. Postingan baru muncul dalam beberapa menit.'); ctx.muatStatus(); } catch (e: any) { ctx.pesan(String(e?.message || e)); } setKirim(false); };
+    const log = st?.log || []; const akhir = log[0];
+    const jam = (t: number) => new Date(t).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    return (
+        <div className="kr-redaksi">
+            <button className="kr-redaksi-info" onClick={() => setBuka(!buka)} aria-expanded={buka} title="Lihat catatan redaksi">
+                <span className="kr-redaksi-label">Redaksi</span>
+                <span className="kr-redaksi-teks">{akhir ? `${jam(akhir.at)} · ${akhir.teks}` : 'Belum ada catatan'}</span>
+            </button>
+            <button className="btn primary kecil" disabled={kirim} onClick={buat}>{kirim ? 'Mengirim…' : 'Buat postingan'}</button>
+            {buka && <ul className="kr-redaksi-log">{log.slice(0, 12).map((l, i) => <li key={i}><time>{jam(l.at)}</time> {l.teks}</li>)}</ul>}
         </div>
     );
 }
