@@ -58,25 +58,28 @@ export function pasangKr(d: DepsKr) {
 
     /** Rantai kerja: profil Hermes AI itu (bila ada) → otak cadangan (AI gratis) → Joni/Kirana lewat Hermes.
      *  Dulu hanya dua langkah pertama, jadi kalau AI gratis habis/ditolak semua sumbangan gagal dan feed cuma berisi brain game lokal. */
-    async function kerja(aiId: string, judul: string, prompt: string, maks = 3200): Promise<string> {
+    async function kerja(aiId: string, judul: string, prompt: string, maks = 3200, json = true): Promise<string> {
         const salah: string[] = [];
+        // Jawaban yang bukan JSON (padahal diminta JSON) dianggap gagal → lanjut ke cadangan berikutnya.
+        const layak = (o: unknown, siapa: string) => { const t = String(o || '').trim(); if (!t) { salah.push(`${siapa}: jawaban kosong`); return false; } if (json && !ambilJson(t)) { salah.push(`${siapa}: jawaban bukan JSON`); return false; } return true; };
         if (d.roster().some((x) => x.id === aiId)) {
-            try { const o = await percakapan.tugas(aiId, `Knowledge Reels · ${judul}`, prompt, 'Sumbangan untuk feed Knowledge Reels.'); if (String(o || '').trim()) return o; salah.push(`${nama(aiId)}: jawaban kosong`); }
+            try { const o = await percakapan.tugas(aiId, `Knowledge Reels · ${judul}`, prompt, 'Sumbangan untuk feed Knowledge Reels.'); if (layak(o, nama(aiId))) return o; }
             catch (e: any) { salah.push(`${nama(aiId)}: ${String(e?.message || e).slice(0, 80)}`); console.warn(`[KR] ${aiId} gagal, pakai otak cadangan:`, e?.message || e); }
         }
         try {
             return await papan.jalankan({ ai: aiId, nama: `${nama(aiId)} · otak cadangan`, judul: `Knowledge Reels · ${judul}`, detail: 'Sumbangan untuk feed Knowledge Reels.', sumber: 'tugas' }, async () => {
                 const llm: any = d.llm();
                 const o = await llm?.complete('Kamu redaktur konten edukasi yang teliti dan jujur. Ikuti format keluaran yang diminta persis; keluarkan JSON saja.', prompt, maks, 3);
-                if (!o) throw new Error(`AI gratis tidak menjawab${llm?.snapshot?.()?.lastError ? ` (${String(llm.snapshot().lastError).slice(0, 90)})` : ''}.`); return o;
+                if (!o) throw new Error(`AI gratis tidak menjawab${llm?.snapshot?.()?.lastError ? ` (${String(llm.snapshot().lastError).slice(0, 90)})` : ''}.`);
+                if (json && !ambilJson(o)) throw new Error('Jawaban AI gratis bukan JSON.'); return o;
             });
         } catch (e: any) { salah.push(String(e?.message || e).slice(0, 120)); }
         // Terakhir: AI Hermes lain yang pasti ada (Kirana, lalu Joni). Lebih lambat, tapi tidak bergantung kuota AI gratis.
         for (const cad of [ID_KURATOR, 'default']) {
             if (cad === aiId || !d.roster().some((x) => x.id === cad)) continue;
             try {
-                const o = await percakapan.tugas(cad, `Knowledge Reels · ${judul} (menggantikan ${nama(aiId)})`, `${prompt}\n\nPENTING: balas dengan JSON SAJA sesuai format di atas, tanpa penjelasan, tanpa \`\`\`.`, 'Cadangan: AI utama & AI gratis tidak menjawab.');
-                if (String(o || '').trim()) return o;
+                const o = await percakapan.tugas(cad, `Knowledge Reels · ${judul} (menggantikan ${nama(aiId)})`, json ? `${prompt}\n\nPENTING: balas dengan JSON SAJA sesuai format di atas, tanpa penjelasan, tanpa \`\`\`.` : prompt, 'Cadangan: AI utama & AI gratis tidak menjawab.');
+                if (layak(o, nama(cad))) return o;
             } catch (e: any) { salah.push(`${nama(cad)}: ${String(e?.message || e).slice(0, 80)}`); }
         }
         throw new Error(salah.join(' · ') || 'Tidak ada AI yang bisa mengerjakan.');
@@ -213,7 +216,7 @@ export function pasangKr(d: DepsKr) {
         if (b.length < 2) return 0;
         const prompt = ['Tulis ringkasan pagi untuk Pak Rico dari judul Knowledge Reels hari ini: 4–6 poin paling penting (satu kalimat per poin), lalu satu kalimat "yang perlu diperhatikan hari ini". Bahasa Indonesia santai-sopan, tanpa JSON. Kalau ada dampak saham, akhiri dengan "Bukan saran keuangan."', '',
             b.map((p) => `- [${TEMA[p.kat].nama}] ${p.judul}${p.sub ? `: ${p.sub}` : ''}${p.dampak?.length ? ` (saham: ${p.dampak.map((x) => `${x.kode} ${x.arah}`).join(', ')})` : ''}`).join('\n')].join('\n');
-        const teks = String(await kerja('default', 'Ringkasan pagi', prompt, 900)).trim();
+        const teks = String(await kerja('default', 'Ringkasan pagi', prompt, 900, false)).trim();
         if (teks) await d.kabari(`☀️ Ringkasan pagi Knowledge Reels\n\n${teks.slice(0, 3000)}\n\nBuka Knowledge Reels untuk detail & sumbernya.`).catch(() => undefined);
         return 0;
     }
