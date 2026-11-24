@@ -44,8 +44,31 @@ export function backupProviders(env: Record<string, string | undefined>): Backup
         prefer: [/^llama-3\.3-70b/, /llama-4/, /gpt-oss-120b/, /qwen/, /llama/],
         avoid: /whisper|tts|guard|playai|vision|compound|distil|orpheus/i
     });
+    if (env.CEREBRAS_API_KEY) list.push({
+        name: 'Cerebras', baseUrl: 'https://api.cerebras.ai/v1', apiKey: env.CEREBRAS_API_KEY, model: env.CEREBRAS_MODEL,
+        prefer: [/gpt-oss-120b/, /llama-3\.3-70b/, /qwen-3-235b/, /llama/, /qwen/], avoid: /embed|vision|guard/i
+    });
+    if (env.MISTRAL_API_KEY) list.push({
+        name: 'Mistral', baseUrl: 'https://api.mistral.ai/v1', apiKey: env.MISTRAL_API_KEY, model: env.MISTRAL_MODEL,
+        prefer: [/^mistral-small-latest$/, /^mistral-medium-latest$/, /^open-mistral-nemo$/, /small/], avoid: /embed|moderation|ocr|codestral|pixtral|voxtral|devstral/i
+    });
+    if (env.NVIDIA_API_KEY) list.push({
+        name: 'NVIDIA', baseUrl: 'https://integrate.api.nvidia.com/v1', apiKey: env.NVIDIA_API_KEY, model: env.NVIDIA_MODEL,
+        prefer: [/^meta\/llama-3\.3-70b-instruct$/, /llama-3\.3-70b/, /llama-3\.1-70b/, /qwen2\.5-72b/, /llama/],
+        avoid: /embed|vision|vlm|guard|reward|rerank|parse|clip|retriever|safety|nemoretriever|deplot|kosmos|fuyu|neva|paligemma/i
+    });
+    if (env.ZHIPU_API_KEY) list.push({
+        name: 'Zhipu', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', apiKey: env.ZHIPU_API_KEY, model: env.ZHIPU_MODEL || 'glm-4-flash',
+        prefer: [/glm-4-flash/], avoid: /v$|vision/i
+    });
     return list;
 }
+/**
+ * Cadangan bersama untuk SEMUA otak gratis kantor. Diisi saat kantor menyala dari environment + .env Hermes
+ * (tempat kunci yang Pak Rico isi di aplikasi), dan diperbarui begitu kunci baru dipasang — tanpa restart.
+ * router = FreeLLM di VPS (ratusan model gratis); dicoba sebelum kunci langsung.
+ */
+export const CadanganAi: { env: Record<string, string | undefined> | null; router: { siap(): boolean; chat(sistem: string, prompt: string, maks?: number): Promise<{ teks: string; model: string }> } | null } = { env: null, router: null };
 
 export interface UsageSnapshot {
     date: string;
@@ -89,8 +112,16 @@ export class FreeLlm {
     }
 
     get enabled(): boolean {
-        return Boolean(this.opts.apiKey) || Boolean(this.opts.backups?.length);
+        return Boolean(this.opts.apiKey) || this.adaCadangan();
     }
+    private cacheCadangan: { env: object | null; list: BackupProvider[] } = { env: null, list: [] };
+    /** Penyedia cadangan yang berlaku sekarang: dari kunci bersama (kalau sudah dimuat), kalau belum dari opsi awal. */
+    private cadangan(): BackupProvider[] {
+        const env = CadanganAi.env; if (!env) return this.opts.backups || [];
+        if (this.cacheCadangan.env !== env) this.cacheCadangan = { env, list: backupProviders(env) };
+        return this.cacheCadangan.list;
+    }
+    private adaCadangan() { return this.cadangan().length > 0 || !!CadanganAi.router?.siap(); }
 
     snapshot(): UsageSnapshot {
         this.rollDay();
@@ -112,7 +143,7 @@ export class FreeLlm {
 
     /** Apakah boleh memanggil AI sekarang: OpenRouter masih ada kuota, atau ada penyedia cadangan. */
     canCall(): boolean {
-        return this.orCanCall() || Boolean(this.opts.backups?.length);
+        return this.orCanCall() || this.adaCadangan();
     }
 
     /** Kuota OpenRouter (harian & per menit). */
@@ -263,10 +294,22 @@ export class FreeLlm {
 
     /** Coba penyedia cadangan satu per satu. Tidak memakai kuota OpenRouter. */
     private async callBackups(system: string, user: string, maxTokens: number): Promise<string | null> {
-        for (const b of this.opts.backups || []) {
-            if ((this.backupCooldown.get(b.name) || 0) > Date.now()) continue;
+        const galat: string[] = [];
+        // FreeLLM di VPS lebih dulu: ia sendiri membagi beban ke banyak penyedia & model gratis.
+        const router = CadanganAi.router;
+        if (router?.siap() && (this.backupCooldown.get('FreeLLM') || 0) <= Date.now()) {
+            try {
+                const r = await router.chat(system, user, maxTokens);
+                if (r.teks.trim()) { this.lastProvider = `FreeLLM ${r.model}`; this.lastError = null; return r.teks; }
+            } catch (e: any) {
+                galat.push(`FreeLLM: ${String(e?.message || e).slice(0, 80)}`);
+                this.backupCooldown.set('FreeLLM', Date.now() + 2 * 60_000);
+            }
+        }
+        for (const b of this.cadangan()) {
+            if ((this.backupCooldown.get(b.name) || 0) > Date.now()) { galat.push(`${b.name}: istirahat sebentar`); continue; }
             const model = await this.backupModel(b);
-            if (!model) continue;
+            if (!model) { galat.push(`${b.name}: model tidak ditemukan`); continue; }
             try {
                 const controller = new AbortController();
                 const timer = setTimeout(() => controller.abort(), 40_000);
@@ -284,7 +327,7 @@ export class FreeLlm {
                 clearTimeout(timer);
                 if (!res.ok) {
                     const body = (await res.text()).slice(0, 160);
-                    this.lastError = `${b.name} ${model}: HTTP ${res.status} ${body}`;
+                    this.lastError = `${b.name} ${model}: HTTP ${res.status} ${body}`; galat.push(`${b.name}: HTTP ${res.status}`);
                     this.backupCooldown.set(b.name, Date.now() + (res.status === 429 ? 2 * 60_000 : res.status === 401 || res.status === 403 ? 6 * 3600_000 : 5 * 60_000));
                     if (res.status === 404 || res.status === 400) this.backupModels.delete(b.name);
                     console.warn('[FreeLlm]', this.lastError);
@@ -297,11 +340,13 @@ export class FreeLlm {
                 this.lastError = null;
                 return text;
             } catch (e: any) {
-                this.lastError = `${b.name}: ${e?.name === 'AbortError' ? 'timeout' : e?.message || e}`;
+                this.lastError = `${b.name}: ${e?.name === 'AbortError' ? 'timeout' : e?.message || e}`; galat.push(`${b.name}: ${e?.name === 'AbortError' ? 'timeout' : 'gagal'}`);
                 this.backupCooldown.set(b.name, Date.now() + 2 * 60_000);
                 console.warn('[FreeLlm]', this.lastError);
             }
         }
+        const semua = ['OpenRouter', ...galat];
+        this.lastError = galat.length ? `Semua otak dicoba: ${semua.join(' · ')}`.slice(0, 300) : `${this.lastError || 'OpenRouter sibuk/habis'} — belum ada kunci cadangan lain yang terbaca.`;
         return null;
     }
 
@@ -314,7 +359,7 @@ export class FreeLlm {
      */
     async complete(system: string, user: string, maxTokens = 350, attempts = 2, race = false): Promise<string | null> {
         const openRouterOk = Boolean(this.opts.apiKey) && this.remainingToday() > 0;
-        if (!openRouterOk && !this.opts.backups?.length) return null;
+        if (!openRouterOk && !this.adaCadangan()) { this.lastError = 'Tidak ada otak AI yang bisa dipakai (OpenRouter habis & belum ada kunci cadangan).'; return null; }
         if (openRouterOk) await this.refreshModels();
 
         const tried: string[] = [];

@@ -19,6 +19,7 @@ import path from 'path';
 import type { RequestHandler, Express } from 'express';
 import { ModelRouter } from './model';
 import { FreeLlmApi } from './freeLlmApi';
+import { CadanganAi } from './freeLlm';
 import type { Papan } from './papan';
 import type { Percakapan } from './percakapan';
 
@@ -118,6 +119,8 @@ export function pasangRutin(d: DepsRutin) {
         { nama: 'MISTRAL_API_KEY', label: 'Mistral', daftar: 'https://console.mistral.ai/api-keys', visi: false, pola: /^[A-Za-z0-9]{20,200}$/ }
     ];
     const envAktif: Record<string, string | undefined> = { ...envHermes, ...Object.fromEntries(Object.entries(process.env).filter(([k, v]) => v && BOLEH.test(k))) };
+    // Otak cadangan (AI gratis) memakai SEMUA kunci Pak Rico — termasuk yang diisi di aplikasi (.env Hermes) — dan FreeLLM di VPS.
+    CadanganAi.env = { ...envAktif }; CadanganAi.router = freellm;
     app.get('/api/kantor/kunci', requireToken, (_req, res) => { res.json({ ok: true, kunci: KUNCI_TAMBAH.map(({ nama, label, daftar, visi }) => ({ nama, label, daftar, visi, ada: !!envAktif[nama] })) }); });
     app.post('/api/kantor/kunci', requireToken, (req, res) => {
         const k = KUNCI_TAMBAH.find((x) => x.nama === String(req.body?.nama || ''));
@@ -131,7 +134,7 @@ export function pasangRutin(d: DepsRutin) {
             while (baris.length && !baris[baris.length - 1].trim()) baris.pop();
             fs.writeFileSync(f, [...baris, `${k.nama}=${nilai}`, ''].join('\n'), { mode: 0o600 }); fs.chmodSync(f, 0o600);
         } catch (e: any) { res.status(500).json({ ok: false, error: `Gagal menyimpan: ${String(e?.message || e).slice(0, 120)}` }); return; }
-        envAktif[k.nama] = nilai; router.setEnv(k.nama, nilai); freellm.muatUlang({ ...envAktif });
+        envAktif[k.nama] = nilai; router.setEnv(k.nama, nilai); freellm.muatUlang({ ...envAktif }); CadanganAi.env = { ...envAktif };
         d.papan.catat({ ai: d.idHr, nama: '', judul: `Memasang kunci ${k.label} untuk FreeLLM${k.visi ? ' (bisa membaca gambar)' : ''}`, sumber: 'sistem', status: 'selesai' });
         res.json({ ok: true });
     });
