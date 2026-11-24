@@ -56,7 +56,7 @@ export function TradingPage() {
     const team = agents.filter((a) => a.id === 'trading' || a.id.startsWith('trading-'));
     const [lap, setLap] = useState(0);
     type Tab = 'pasar' | 'pilihan' | 'diskon' | 'panas' | 'berita' | 'watchlist' | 'penyaring' | 'investigasi' | 'posisi' | 'uji' | 'history';
-    const TABS: Array<{ k: Tab; label: string }> = [{ k: 'pasar', label: 'Pasar' }, { k: 'pilihan', label: 'Pilihan sinyal' }, { k: 'diskon', label: 'Pantul' }, { k: 'panas', label: 'Peta panas' }, { k: 'berita', label: 'Peta berita' }, { k: 'watchlist', label: 'Watchlist' }, { k: 'penyaring', label: 'Penyaring' }, { k: 'investigasi', label: 'Investigasi' }, { k: 'posisi', label: 'Portofolio' }, { k: 'history', label: 'History' }, { k: 'uji', label: 'Uji & bukti' }];
+    const TABS: Array<{ k: Tab; label: string }> = [{ k: 'pasar', label: 'Pasar' }, { k: 'pilihan', label: 'Pilihan sinyal' }, { k: 'diskon', label: 'Pantul' }, { k: 'panas', label: 'Peta panas' }, { k: 'berita', label: 'Berita' }, { k: 'watchlist', label: 'Watchlist' }, { k: 'penyaring', label: 'Penyaring' }, { k: 'investigasi', label: 'Investigasi' }, { k: 'posisi', label: 'Portofolio' }, { k: 'history', label: 'History' }, { k: 'uji', label: 'Uji & bukti' }];
     const [tab, setTabState] = useState<Tab>(() => { try { const v = localStorage.getItem(LS_TAB) as Tab; return TABS.some((t) => t.k === v) ? v : 'pilihan'; } catch { return 'pilihan'; } });
     // Tab yang pernah dibuka tetap hidup (disembunyikan, bukan dibongkar): pindah tab tidak memuat ulang & filter tidak hilang.
     const [pernah, setPernah] = useState<Set<Tab>>(() => new Set([tab]));
@@ -133,7 +133,8 @@ export function TradingPage() {
     // 10 tab dikelompokkan jadi 4 supaya tidak membingungkan; isi tiap tab tetap sama.
     const GRUP: Array<{ g: string; label: string; ico: string; tabs: Tab[] }> = [
         { g: 'sinyal', label: 'Sinyal', ico: '🎯', tabs: ['pilihan', 'diskon', 'penyaring', 'watchlist'] },
-        { g: 'pasar', label: 'Pasar', ico: '🌐', tabs: ['pasar', 'panas', 'berita'] },
+        { g: 'pasar', label: 'Pasar', ico: '🌐', tabs: ['pasar', 'panas'] },
+        { g: 'berita', label: 'Berita', ico: '📰', tabs: ['berita'] },
         { g: 'porto', label: 'Portofolio', ico: '💼', tabs: ['posisi', 'history'] },
         { g: 'riset', label: 'Riset', ico: '🧪', tabs: ['investigasi', 'uji'] }
     ];

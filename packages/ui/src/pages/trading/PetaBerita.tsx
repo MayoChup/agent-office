@@ -192,7 +192,7 @@ export function PetaBerita({ onOpen }: { onOpen: (s: string) => void }) {
     return (
         <>
             <section className="sb-hero row-hero">
-                <div><h1>Peta berita</h1><p>Matahari = semua berita, titik <b style={{ color: KUNING }}>kuning</b> = news direct, titik <b style={{ color: BIRU }}>biru</b> = news related (info unik), titik pink = saham. Garis hijau = berdampak positif, merah = negatif. Seret untuk memutar, ketuk titik untuk detail.</p></div>
+                <div><h1>Berita</h1><p>Matahari = semua berita, titik <b style={{ color: KUNING }}>kuning</b> = news direct, titik <b style={{ color: BIRU }}>biru</b> = news related (info unik), titik pink = saham. Garis hijau = berdampak positif, merah = negatif. Seret untuk memutar, ketuk titik untuk detail.</p></div>
             </section>
             <div className="pb-saklar">
                 <div className="seg" role="radiogroup" aria-label="Jenis berita">
