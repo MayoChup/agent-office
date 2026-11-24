@@ -58,10 +58,11 @@ export function pasangKr(d: DepsKr) {
 
     /** Rantai kerja: profil Hermes AI itu (bila ada) → otak cadangan (AI gratis) → Joni/Kirana lewat Hermes.
      *  Dulu hanya dua langkah pertama, jadi kalau AI gratis habis/ditolak semua sumbangan gagal dan feed cuma berisi brain game lokal. */
-    async function kerja(aiId: string, judul: string, prompt: string, maks = 3200, json = true): Promise<string> {
+    async function kerja(aiId: string, judul: string, prompt: string, maks = 3200, cek: ((raw: string) => boolean) | false = (r) => Boolean(ambilJson(r))): Promise<string> {
+        const json = cek !== false;
         const salah: string[] = [];
         // Jawaban yang bukan JSON (padahal diminta JSON) dianggap gagal → lanjut ke cadangan berikutnya.
-        const layak = (o: unknown, siapa: string) => { const t = String(o || '').trim(); if (!t) { salah.push(`${siapa}: jawaban kosong`); return false; } if (json && !ambilJson(t)) { salah.push(`${siapa}: jawaban bukan JSON`); return false; } return true; };
+        const layak = (o: unknown, siapa: string) => { const t = String(o || '').trim(); if (!t) { salah.push(`${siapa}: jawaban kosong`); return false; } if (cek && !cek(t)) { salah.push(`${siapa}: jawaban tidak bisa dipakai${ambilJson(t) ? ' (format/isi tidak sesuai)' : ' (bukan JSON)'}`); return false; } return true; };
         if (d.roster().some((x) => x.id === aiId)) {
             try { const o = await percakapan.tugas(aiId, `Knowledge Reels · ${judul}`, prompt, 'Sumbangan untuk feed Knowledge Reels.'); if (layak(o, nama(aiId))) return o; }
             catch (e: any) { salah.push(`${nama(aiId)}: ${String(e?.message || e).slice(0, 80)}`); console.warn(`[KR] ${aiId} gagal, pakai otak cadangan:`, e?.message || e); }
@@ -71,7 +72,7 @@ export function pasangKr(d: DepsKr) {
                 const llm: any = d.llm();
                 const o = await llm?.complete('Kamu redaktur konten edukasi yang teliti dan jujur. Ikuti format keluaran yang diminta persis; keluarkan JSON saja.', prompt, maks, 3);
                 if (!o) throw new Error(`AI gratis tidak menjawab${llm?.snapshot?.()?.lastError ? ` (${String(llm.snapshot().lastError).slice(0, 90)})` : ''}.`);
-                if (json && !ambilJson(o)) throw new Error('Jawaban AI gratis bukan JSON.'); return o;
+                if (cek && !cek(o)) throw new Error(`Jawaban AI gratis tidak bisa dipakai${ambilJson(o) ? ' (format/isi tidak sesuai)' : ' (bukan JSON)'}.`); return o;
             });
         } catch (e: any) { salah.push(String(e?.message || e).slice(0, 120)); }
         // Terakhir: AI Hermes lain yang pasti ada (Kirana, lalu Joni). Lebih lambat, tapi tidak bergantung kuota AI gratis.
@@ -86,7 +87,7 @@ export function pasangKr(d: DepsKr) {
     }
     const coba = async (label: string, fn: () => Promise<number>) => {
         progres = label;
-        try { const n = await fn(); if (n) kr.catatLog(`${label}: +${n} postingan`); return n; }
+        try { const n = await fn(); kr.catatLog(n ? `${label}: +${n} postingan` : `${label}: tidak ada postingan baru`); return n; }
         catch (e: any) { console.warn(`[KR] ${label}:`, e?.message || e); kr.catatLog(`${label}: gagal (${String(e?.message || e).slice(0, 120)})`); return 0; }
     };
     const lama = (k: Kat) => { const j = kr.judulLama(k, 40); return j.length ? `\nJUDUL YANG SUDAH PERNAH (jangan diulang, cari sudut/topik lain):\n${j.map((x) => `- ${x}`).join('\n')}` : ''; };
@@ -110,8 +111,8 @@ export function pasangKr(d: DepsKr) {
             dampak ? `Tambahkan "dampak": saham yang mungkin terpengaruh, [{"kode":"BBRI","bursa":"IDX","arah":"naik|turun|campur","alasan":"…"}]. Saham Indonesia pakai kode 4 huruf BEI (bursa "IDX"); saham AS (bursa "US") hanya dari daftar ini: ${sahamInfo.simbol.slice(0, 160).join(', ')}. Hanya isi kalau hubungannya jelas; boleh kosong. Penutup postingan dengan dampak diakhiri "Bukan saran keuangan."` : '',
             FORMAT_POST, lama(kat), '', 'BAHAN:', bahan
         ].filter(Boolean).join('\n');
-        const raw = await kerja(ai, `${TEMA[kat].nama} (${n} postingan)`, prompt, 3800);
         const kodeUS = sahamInfo.simbol.length ? new Set(sahamInfo.simbol) : undefined;
+        const raw = await kerja(ai, `${TEMA[kat].nama} (${n} postingan)`, prompt, 3800, (r) => kr.terima(kat, r, [], items, undefined, kodeUS).length > 0);
         const posts = kr.terima(kat, raw, oleh(ai, ID_KURATOR), items, undefined, kodeUS).slice(0, n);
         kr.st.dipakai.push(...items.filter((it) => posts.some((p) => p.sumber.some((s) => s.url === it.url))).map((it) => it.url));
         return simpanPost(posts);
@@ -135,7 +136,7 @@ export function pasangKr(d: DepsKr) {
                 'Isi: apa bisnis perusahaannya (pengetahuan umum yang pasti saja), arti angka-angka di DATA dengan bahasa awam (mis. apa itu PER dan apa artinya angka ini), satu konsep investasi yang bisa dipelajari dari saham ini, dan risiko yang perlu diperhatikan.',
                 'Angka HANYA dari DATA, jangan mengarang angka lain. Jangan menyuruh beli/jual. Penutup diakhiri "Bukan saran keuangan."',
                 FORMAT_POST, '', 'DATA (screener kantor, hari ini):', data].join('\n');
-            const raw = await kerja('trading-fundamental', `Edukasi saham ${sym}`, prompt);
+            const raw = await kerja('trading-fundamental', `Edukasi saham ${sym}`, prompt, 3200, (r) => kr.terima('saham', r, [], []).length > 0);
             const posts = kr.terima('saham', raw, oleh('trading-fundamental'), [], () => [
                 { judul: `${b.nama || sym} (${sym}) — kutipan & statistik`, url: `https://finance.yahoo.com/quote/${encodeURIComponent(sym)}`, penerbit: 'Yahoo Finance', tgl: new Date().toISOString() },
                 { judul: 'Data screener Kantor Virtual (harga, teknikal, fundamental)', penerbit: 'Kantor Virtual', tgl: new Date().toISOString() }
@@ -149,7 +150,7 @@ export function pasangKr(d: DepsKr) {
     const cariWiki = (q: string): Sumber => ({ judul: `Wikipedia: ${q}`, url: `https://id.wikipedia.org/w/index.php?search=${encodeURIComponent(q)}`, penerbit: 'Wikipedia (pencarian)' });
     async function evergreen(kat: Kat, ai: string, n: number, arahan: string, sumberDari: (x: any) => Sumber[]) {
         const prompt = [arahan, 'Hanya fakta yang sudah mapan dan bisa diperiksa; kalau ragu, jangan dipakai. Jangan mengarang angka, kutipan, atau tautan.', FORMAT_POST.replace('"penutup":"satu kalimat penutup/kesimpulan"', '"penutup":"satu kalimat penutup","rujukan":"nama topik/artikel/buku untuk dicek"'), topikMinggu(kat), lama(kat)].join('\n');
-        const raw = await kerja(ai, `${TEMA[kat].nama} (${n})`, prompt);
+        const raw = await kerja(ai, `${TEMA[kat].nama} (${n})`, prompt, 3200, (r) => kr.terima(kat, r, [], []).length > 0);
         return simpanPost(kr.terima(kat, raw, oleh(ai), [], sumberDari).slice(0, n));
     }
     const funfact = () => evergreen('funfact', 'sosmed-riset', 3, 'Buat 3 postingan carousel FUN FACT yang unik, mengejutkan, dan berguna untuk bahan obrolan (sains, sejarah, tubuh manusia, alam, bahasa, teknologi, Indonesia). Tiap postingan satu topik, jelaskan "kenapa bisa begitu". Isi "rujukan" dengan judul artikel Wikipedia yang membahasnya.', (x) => (x?.rujukan ? [cariWiki(String(x.rujukan).slice(0, 80))] : []));
@@ -170,7 +171,7 @@ export function pasangKr(d: DepsKr) {
         const prompt = jenis === 'logika'
             ? `Buat 1 teka-teki LOGIKA singkat (tebak siapa/urutan/kebohongan/silogisme/teka-teki lateral) dengan 4 pilihan jawaban dan tepat SATU jawaban benar yang bisa dibuktikan. Format JSON: {"game":[{"judul":"…","soal":"…","pilihan":["…","…","…","…"],"jawaban":0,"penjelasan":"langkah penalaran singkat"}]} (jawaban = indeks 0–3).${lama('game')}`
             : `Buat 1 latihan IMAJINASI/kreativitas singkat (mis. "sebutkan 5 kegunaan lain dari…", "bayangkan kalau…, apa yang berubah?", "gabungkan dua benda jadi penemuan baru"). Tidak ada jawaban benar; beri contoh jawaban di "penjelasan". Format JSON: {"game":[{"judul":"…","soal":"…","penjelasan":"contoh jawaban kreatif"}]}${lama('game')}`;
-        const raw = await kerja(ai, `Brain game ${jenis}`, prompt, 1500);
+        const raw = await kerja(ai, `Brain game ${jenis}`, prompt, 1500, (r) => kr.terimaGame(r, [], jenis).length > 0);
         return simpanPost(kr.terimaGame(raw, oleh(ai), jenis));
     }
 
@@ -181,7 +182,7 @@ export function pasangKr(d: DepsKr) {
             `Template: ${TEMPLATE.join(', ')} (kertas = kolase kertas sobek, bentuk = shape geometris, majalah = sampul majalah, catatan = buku tulis bergaris, polaroid = foto polaroid, gradasi = gradasi lembut, grid = kotak-kotak rapi, stiker = stiker lucu, koran = kliping koran, malam = mode gelap tenang).`,
             `Palet: ${PALET.join(', ')} (semua lembut, tidak menyilaukan).`,
             'Format JSON: {"desain":[{"id":"…","t":"template","p":"palet"}]}', '', 'POSTINGAN:', posts.map((p) => `${p.id} | ${TEMA[p.kat].nama} | ${p.judul}`).join('\n')].join('\n');
-        const j = ambilJson(await kerja('eca-slides', `Menata desain ${posts.length} carousel`, prompt, 1500));
+        const j = ambilJson(await kerja('eca-slides', `Menata desain ${posts.length} carousel`, prompt, 1500, (r) => Array.isArray(ambilJson(r)?.desain)));
         let n = 0;
         for (const x of Array.isArray(j?.desain) ? j.desain : []) {
             const p = kr.st.post.find((q) => q.id === x?.id);
@@ -194,7 +195,7 @@ export function pasangKr(d: DepsKr) {
         const prompt = ['Periksa mutu postingan Knowledge Reels berikut. Tandai yang: berisi klaim meragukan/berlebihan, tidak netral (politik), menyuruh beli/jual saham, menyinggung SARA, atau isinya kosong/berulang.',
             'Perbaiki salah ketik ringan sendiri tidak perlu. Format JSON: {"periksa":[{"id":"…","buang":true,"alasan":"…"}]} — cantumkan HANYA yang bermasalah; kalau semua baik: {"periksa":[]}', '',
             cek.map((p) => `### ${p.id} [${TEMA[p.kat].nama}] ${p.judul}\n${p.slide.map((s) => `${s.judul ? `${s.judul}: ` : ''}${(s.poin || []).join(' / ')}${s.teks || ''}`).join('\n')}`).join('\n\n').slice(0, 14000)].join('\n');
-        const j = ambilJson(await kerja('eca', `Memeriksa mutu ${cek.length} postingan`, prompt, 1500));
+        const j = ambilJson(await kerja('eca', `Memeriksa mutu ${cek.length} postingan`, prompt, 1500, (r) => Array.isArray(ambilJson(r)?.periksa)));
         const buang = new Set((Array.isArray(j?.periksa) ? j.periksa : []).filter((x: any) => x?.buang && x?.id).map((x: any) => String(x.id)));
         for (const p of cek) if (!buang.has(p.id) && !p.oleh.some((o) => o.id === 'eca')) p.oleh.push(...oleh('eca'));
         if (buang.size) { kr.st.post = kr.st.post.filter((p) => !buang.has(p.id)); kr.catatLog(`Eca menahan ${buang.size} postingan bermasalah.`); }
@@ -206,7 +207,7 @@ export function pasangKr(d: DepsKr) {
         const prompt = ['Susun rencana topik Knowledge Reels untuk 7 hari ke depan supaya tidak berulang dan seimbang.',
             'Format JSON: {"topik":{"funfact":["7 topik"],"buku":["7 judul buku — penulis"],"tips":["7 topik tips"]}}',
             lama('funfact'), lama('buku'), lama('tips')].join('\n');
-        const j = ambilJson(await kerja('sosmed', 'Rencana topik mingguan', prompt, 1500));
+        const j = ambilJson(await kerja('sosmed', 'Rencana topik mingguan', prompt, 1500, (r) => Boolean(ambilJson(r)?.topik)));
         const t = j?.topik || {}; const ambil = (x: any) => (Array.isArray(x) ? x : []).slice(0, 10).map((s: any) => String(s).slice(0, 100)).filter(Boolean);
         kr.st.rencana = { minggu: hariWib(), topik: { funfact: ambil(t.funfact), buku: ambil(t.buku), tips: ambil(t.tips) } }; kr.simpan();
         return 0;
