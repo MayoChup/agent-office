@@ -31,14 +31,25 @@ export function ImporMutasi({ akun: daftarAkun, onClose, onSelesai }: { akun: st
             let isi: ArrayBuffer;
             try { isi = await file.arrayBuffer(); } catch { throw new Error('Berkas tidak bisa dibaca dari HP. Simpan/unduh dulu PDF-nya ke penyimpanan HP (bukan langsung dari Drive/WhatsApp), lalu pilih lagi.'); }
             const kirim = () => fetch(`${serverBase()}/api/kantor/keuangan/mutasi?akun=${encodeURIComponent(akun)}`, {
-                method: 'POST', headers: { Authorization: `Bearer ${tokenLogin()}`, 'Content-Type': 'application/pdf', ...(sandi ? { 'X-Pdf-Sandi': sandi } : {}) }, body: isi
+                method: 'POST', headers: { Authorization: `Bearer ${tokenLogin()}`, 'Content-Type': 'application/octet-stream', ...(sandi ? { 'X-Pdf-Sandi': sandi } : {}) }, body: isi
             });
+            // Cadangan: kirim sebagai JSON (base64) — jalur yang sama dengan permintaan biasa, tidak diblok proksi/jaringan.
+            const kirimJson = async () => {
+                const b = new Uint8Array(isi); let bin = '';
+                for (let i = 0; i < b.length; i += 0x8000) bin += String.fromCharCode(...b.subarray(i, i + 0x8000));
+                return fetch(`${serverBase()}/api/kantor/keuangan/mutasi-json`, {
+                    method: 'POST', headers: { Authorization: `Bearer ${tokenLogin()}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ akun, sandi: sandi || '', pdf: btoa(bin) })
+                });
+            };
             let res: Response;
             try { res = await kirim(); }
             catch {
-                // Sambungan putus (mis. server sedang memperbarui diri tiap ±3 menit) → coba sekali lagi.
-                await new Promise((r) => setTimeout(r, 4000));
-                try { res = await kirim(); } catch { throw new Error('Sambungan ke server kantor terputus saat mengirim PDF. Cek internet, tunggu ±1 menit (server mungkin sedang diperbarui), lalu tekan Baca mutasi lagi.'); }
+                try { res = await kirimJson(); }
+                catch {
+                    // Sambungan putus (mis. server sedang memperbarui diri tiap ±3 menit) → coba sekali lagi.
+                    await new Promise((r) => setTimeout(r, 4000));
+                    try { res = await kirimJson(); } catch { throw new Error('Sambungan ke server kantor terputus saat mengirim PDF. Cek internet, tunggu ±1 menit (server mungkin sedang diperbarui), lalu tekan Baca mutasi lagi.'); }
+                }
             }
             const d = await res.json().catch(() => ({}));
             if (!res.ok || d.ok === false) { if (d.butuhSandi) setPerluSandi(true); throw new Error(d.error || `HTTP ${res.status}`); }

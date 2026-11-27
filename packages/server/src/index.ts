@@ -257,6 +257,7 @@ app.set('trust proxy', true);
 // Catatan & berkas butuh batas lebih besar; route lain tetap 32 KB.
 app.use(['/api/kantor/catatan', '/api/kantor/berkas'], express.json({ limit: '12mb' }));
 app.use('/api/kantor/keuangan/mutasi/terapkan', express.json({ limit: '2mb' }));
+app.use('/api/kantor/keuangan/mutasi-json', express.json({ limit: '30mb' }));
 app.use(express.json({ limit: '32kb' }));
 // Kompres jawaban JSON besar (mis. data 500 saham ±1 MB → ±150 KB): jauh lebih cepat di jaringan HP.
 app.use('/api', (req, res, next) => {
@@ -436,30 +437,33 @@ function bacaPdfTerpisah(buf: Buffer, sandi: string): Promise<{ halaman: any[] }
         anak.stdin.end(buf);
     });
 }
+async function prosesMutasi(buf: Buffer, akunMinta: string, sandi: string) {
+    if (!Buffer.isBuffer(buf) || buf.length < 100 || buf.subarray(0, 5).toString() !== '%PDF-') throw new Error('Berkas bukan PDF.');
+    const akun = String(akunMinta || '').trim().slice(0, 30);
+    if (!akun) throw new Error('Pilih rekening/akunnya dulu.');
+    const { halaman } = await bacaPdfTerpisah(buf, sandi);
+    const hasil = urai(halaman, akun);
+    let ada: any[] = [];
+    try { ada = (await pencatat.report(true)).transaksi; } catch (e: any) { hasil.peringatan.push(`Belum bisa mengecek transaksi yang sudah tercatat (${e?.message || e}) — semua ditandai baru.`); }
+    // Transfer dari/ke nama Pak Rico sendiri = pindah dana antar rekening, bukan pengeluaran/pemasukan.
+    for (const t of hasil.transaksi as any[]) if (namaSendiri(`${t.pihak} ${t.ket}`, config.pencatat.ownerNames) && !(t.jenis === 'Keluar' && topUpDompet(`${t.pihak} ${t.ket}`, anggaran.get().akun))) t.arah = t.jenis;
+    const c = cocokkan(akun, hasil.transaksi, ada, hasil.periode);
+    const rules = config.pencatat.kategori;
+    return {
+        ok: true, ...hasil,
+        transaksi: await pencatat.lengkapiKategori(c.hasil.map((t: any) => t.arah
+            ? { ...t, jenis: 'Antar Rekening', kategori: t.arah === 'Masuk' ? KAT_TRANSFER_MASUK : KAT_TRANSFER_KELUAR }
+            : { ...t, kategori: t.jenis === 'Masuk' ? 'Pendapatan' : kategoriOf(`${t.pihak} ${t.ket}`, rules) })),
+        lebih: c.lebih,
+        saldoTercatat: anggaran.get().saldo?.[akun] || null
+    };
+}
 app.post('/api/kantor/keuangan/mutasi', requireToken, express.raw({ type: () => true, limit: '20mb' }), async (req, res) => {
-    try {
-        const buf = req.body as Buffer;
-        if (!Buffer.isBuffer(buf) || buf.length < 100 || buf.subarray(0, 5).toString() !== '%PDF-') throw new Error('Berkas bukan PDF.');
-        const akun = String(req.query.akun || '').trim().slice(0, 30);
-        if (!akun) throw new Error('Pilih rekening/akunnya dulu.');
-        const sandi = String(req.headers['x-pdf-sandi'] || '');
-        const { halaman } = await bacaPdfTerpisah(buf, sandi);
-        const hasil = urai(halaman, akun);
-        let ada: any[] = [];
-        try { ada = (await pencatat.report(true)).transaksi; } catch (e: any) { hasil.peringatan.push(`Belum bisa mengecek transaksi yang sudah tercatat (${e?.message || e}) — semua ditandai baru.`); }
-        // Transfer dari/ke nama Pak Rico sendiri = pindah dana antar rekening, bukan pengeluaran/pemasukan.
-        for (const t of hasil.transaksi as any[]) if (namaSendiri(`${t.pihak} ${t.ket}`, config.pencatat.ownerNames) && !(t.jenis === 'Keluar' && topUpDompet(`${t.pihak} ${t.ket}`, anggaran.get().akun))) t.arah = t.jenis;
-        const c = cocokkan(akun, hasil.transaksi, ada, hasil.periode);
-        const rules = config.pencatat.kategori;
-        res.json({
-            ok: true, ...hasil,
-            transaksi: await pencatat.lengkapiKategori(c.hasil.map((t: any) => t.arah
-                ? { ...t, jenis: 'Antar Rekening', kategori: t.arah === 'Masuk' ? KAT_TRANSFER_MASUK : KAT_TRANSFER_KELUAR }
-                : { ...t, kategori: t.jenis === 'Masuk' ? 'Pendapatan' : kategoriOf(`${t.pihak} ${t.ket}`, rules) })),
-            lebih: c.lebih,
-            saldoTercatat: anggaran.get().saldo?.[akun] || null
-        });
-    } catch (e) { keuErr(res, e); }
+    try { res.json(await prosesMutasi(req.body as Buffer, String(req.query.akun || ''), String(req.headers['x-pdf-sandi'] || ''))); } catch (e) { keuErr(res, e); }
+});
+/** Cadangan: PDF dikirim sebagai JSON base64 — untuk jaringan/proksi yang memutus unggahan berkas mentah. */
+app.post('/api/kantor/keuangan/mutasi-json', requireToken, async (req, res) => {
+    try { res.json(await prosesMutasi(Buffer.from(String(req.body?.pdf || ''), 'base64'), String(req.body?.akun || ''), String(req.body?.sandi || ''))); } catch (e) { keuErr(res, e); }
 });
 app.post('/api/kantor/keuangan/mutasi/terapkan', requireToken, async (req, res) => {
     try {

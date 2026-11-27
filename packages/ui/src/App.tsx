@@ -17,6 +17,7 @@ import { ChatPage } from './pages/ChatPage';
 import { ActivityPanel } from './components/ActivityPanel';
 import { AgentCard } from './components/AgentCard';
 import { Toasts } from './components/Toasts';
+import { VersiBaru } from './components/VersiBaru';
 import { LoginScreen } from './components/LoginScreen';
 import { KeuanganApp } from './pages/keuangan/KeuanganApp';
 import { CatatanPage } from './pages/catatan/CatatanPage';
@@ -174,6 +175,7 @@ export function App() {
             {page === 'kantor' && !panel && !agentId && <KendaliPeta go={go} />}
             {page === 'kantor' && <PengamatAmplop />}
             <Toasts />
+            <VersiBaru />
             <Nav page={page} panel={panel} onGo={go} hidup={hidup} />
         </>
     );
