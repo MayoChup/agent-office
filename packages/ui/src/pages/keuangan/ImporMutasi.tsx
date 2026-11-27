@@ -27,9 +27,19 @@ export function ImporMutasi({ akun: daftarAkun, onClose, onSelesai }: { akun: st
         if (!file || !akun) return;
         setBusy(true); setErr('');
         try {
-            const res = await fetch(`${serverBase()}/api/kantor/keuangan/mutasi?akun=${encodeURIComponent(akun)}`, {
-                method: 'POST', headers: { Authorization: `Bearer ${tokenLogin()}`, 'Content-Type': 'application/pdf', ...(sandi ? { 'X-Pdf-Sandi': sandi } : {}) }, body: file
+            // Baca berkas di HP dulu: berkas dari Drive/WhatsApp yang belum terunduh penuh sering gagal dibaca saat dikirim.
+            let isi: ArrayBuffer;
+            try { isi = await file.arrayBuffer(); } catch { throw new Error('Berkas tidak bisa dibaca dari HP. Simpan/unduh dulu PDF-nya ke penyimpanan HP (bukan langsung dari Drive/WhatsApp), lalu pilih lagi.'); }
+            const kirim = () => fetch(`${serverBase()}/api/kantor/keuangan/mutasi?akun=${encodeURIComponent(akun)}`, {
+                method: 'POST', headers: { Authorization: `Bearer ${tokenLogin()}`, 'Content-Type': 'application/pdf', ...(sandi ? { 'X-Pdf-Sandi': sandi } : {}) }, body: isi
             });
+            let res: Response;
+            try { res = await kirim(); }
+            catch {
+                // Sambungan putus (mis. server sedang memperbarui diri tiap ±3 menit) → coba sekali lagi.
+                await new Promise((r) => setTimeout(r, 4000));
+                try { res = await kirim(); } catch { throw new Error('Sambungan ke server kantor terputus saat mengirim PDF. Cek internet, tunggu ±1 menit (server mungkin sedang diperbarui), lalu tekan Baca mutasi lagi.'); }
+            }
             const d = await res.json().catch(() => ({}));
             if (!res.ok || d.ok === false) { if (d.butuhSandi) setPerluSandi(true); throw new Error(d.error || `HTTP ${res.status}`); }
             setH(d);

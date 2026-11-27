@@ -93,7 +93,18 @@ const kuotaBerat = new KuotaBerat(config.dataDir, config.berat.model, config.ber
 // Mode uji: `node kantor-server.js --uji-pencatat` → tampilkan transaksi yang AKAN dicatat, tanpa menulis apa pun.
 const tradingDeskDir = process.env.TRADER_DESK || path.join(os.homedir(), 'trader-desk');
 const tradingArg = process.argv.indexOf('--trading');
-if (process.argv.includes('--cek-fundamental')) {
+if (process.argv.includes('--baca-mutasi')) {
+    // Proses terpisah untuk membaca PDF mutasi: kalau pembaca PDF macet/crash, server utama tetap hidup.
+    // PDF masuk lewat stdin (tidak ditulis ke disk), kata sandi lewat env. Hasil ditulis setelah penanda.
+    const potong: Buffer[] = [];
+    process.stdin.on('data', (c: Buffer) => potong.push(c));
+    process.stdin.on('end', async () => {
+        let out: any;
+        try { const { halaman } = await bacaPdf(Buffer.concat(potong), process.env.MUTASI_SANDI || ''); out = { ok: true, halaman }; }
+        catch (e: any) { out = { ok: false, error: String(e?.message || e), butuhSandi: !!e?.butuhSandi }; }
+        process.stdout.write(`\n@@MUTASI@@${JSON.stringify(out)}`, () => process.exit(0));
+    });
+} else if (process.argv.includes('--cek-fundamental')) {
     // Diagnosa: node kantor-server.js --cek-fundamental AAPL
     const sy = (process.argv[process.argv.indexOf('--cek-fundamental') + 1] || 'AAPL').toUpperCase();
     (async () => {
@@ -231,6 +242,8 @@ function startWaChild() {
 }
 
 function startServer() {
+// Jaring pengaman: janji (promise) yang gagal tanpa ditangkap dicatat saja, jangan sampai mematikan seluruh kantor.
+process.on('unhandledRejection', (e: any) => console.warn('[Kantor] unhandledRejection:', e?.stack || e?.message || e));
 const auth = new KantorAuth(config.dataDir, config.password);
 OfficeRoom.config = config;
 OfficeRoom.auth = auth;
@@ -401,6 +414,28 @@ app.post('/api/kantor/keuangan/hapus', requireToken, async (req, res) => {
     } catch (e) { keuErr(res, e); }
 });
 // Impor PDF mutasi rekening: dibaca di VPS (tidak dikirim ke AI), dicocokkan dengan yang sudah tercatat, lalu ditinjau Pak Rico.
+/** Baca PDF di proses anak (batas 60 dtk, memori dibatasi) supaya PDF yang aneh tidak bisa menjatuhkan server. */
+function bacaPdfTerpisah(buf: Buffer, sandi: string): Promise<{ halaman: any[] }> {
+    return new Promise((resolve, reject) => {
+        const anak = spawn(process.execPath, ['--max-old-space-size=384', process.argv[1], '--baca-mutasi'], { env: { ...process.env, MUTASI_SANDI: sandi }, stdio: ['pipe', 'pipe', 'pipe'] });
+        let keluar = '', galat = '';
+        const batas = setTimeout(() => { anak.kill('SIGKILL'); reject(new Error('Membaca PDF terlalu lama (>60 detik). Coba PDF untuk periode yang lebih pendek.')); }, 60_000);
+        anak.stdout.on('data', (c: Buffer) => { keluar += c.toString(); if (keluar.length > 20e6) anak.kill('SIGKILL'); });
+        anak.stderr.on('data', (c: Buffer) => { galat = (galat + c.toString()).slice(-2000); });
+        anak.on('error', (e) => { clearTimeout(batas); reject(e); });
+        anak.on('close', (kode) => {
+            clearTimeout(batas);
+            const i = keluar.lastIndexOf('@@MUTASI@@');
+            if (i < 0) { console.warn('[Mutasi] pembaca PDF berhenti', kode, galat.slice(-500)); reject(new Error('Pembaca PDF berhenti saat membaca berkas ini (format PDF tidak biasa). Coba unduh ulang e-statement-nya dari m-banking, lalu impor lagi.')); return; }
+            try {
+                const j = JSON.parse(keluar.slice(i + 10));
+                if (j.ok) resolve({ halaman: j.halaman }); else { const e: any = new Error(j.error); e.butuhSandi = j.butuhSandi; reject(e); }
+            } catch { reject(new Error('Hasil pembaca PDF tidak terbaca.')); }
+        });
+        anak.stdin.on('error', () => undefined);
+        anak.stdin.end(buf);
+    });
+}
 app.post('/api/kantor/keuangan/mutasi', requireToken, express.raw({ type: () => true, limit: '20mb' }), async (req, res) => {
     try {
         const buf = req.body as Buffer;
@@ -408,7 +443,7 @@ app.post('/api/kantor/keuangan/mutasi', requireToken, express.raw({ type: () => 
         const akun = String(req.query.akun || '').trim().slice(0, 30);
         if (!akun) throw new Error('Pilih rekening/akunnya dulu.');
         const sandi = String(req.headers['x-pdf-sandi'] || '');
-        const { halaman } = await bacaPdf(buf, sandi);
+        const { halaman } = await bacaPdfTerpisah(buf, sandi);
         const hasil = urai(halaman, akun);
         let ada: any[] = [];
         try { ada = (await pencatat.report(true)).transaksi; } catch (e: any) { hasil.peringatan.push(`Belum bisa mengecek transaksi yang sudah tercatat (${e?.message || e}) — semua ditandai baru.`); }
