@@ -41,7 +41,7 @@ export const transferMasuk = (t: Tx) => transfer(t) && /masuk/i.test(t.kat || ''
 /** Pengaruh satu transaksi ke saldo rekeningnya sendiri. */
 export const efekSaldo = (t: Tx) => (t.jenis === 'Masuk' || transferMasuk(t) ? t.n : -t.n);
 /** Rekening tujuan/asal dari keterangan "ke Mandiri" / "dari BCA" (diisi saat transfer sendiri dipasangkan). */
-export const tujuanTransfer = (t: Tx) => (t.ket || '').match(/(?:^|\s)(?:ke|dari)\s+([^·]+?)\s*(?:·|$)/i)?.[1]?.trim() || '';
+export const tujuanTransfer = (t: Tx) => (t.ket || '').match(/^(?:ke|dari)\s+([^·]+?)\s*(?:·|$)/i)?.[1]?.trim() || '';
 const samaAkun = (a: string, b: string) => a.toLowerCase().replace(/\s/g, '') === b.toLowerCase().replace(/\s/g, '');
 /**
  * Saldo rekening = patokan (mutasi PDF) + semua transaksi rekening itu sesudah tanggal patokan,

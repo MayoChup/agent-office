@@ -547,7 +547,7 @@ async function rapikanTransfer() {
     transferJalan = true;
     try {
         return await papan.jalankan({ ai: AI_KEU(), nama: namaAiKeu(), judul: 'Merapikan transfer antar rekening sendiri', detail: 'Transfer ke/dari nama Pak Rico ditandai sebagai pindah dana, bukan pengeluaran.', sumber: 'tugas' },
-            () => pencatat.rapikanTransfer(config.pencatat.ownerNames), (r) => `${r.diubah} transaksi ditandai sebagai pindah dana antar rekening.`);
+            () => pencatat.rapikanTransfer(config.pencatat.ownerNames, anggaran.get().akun), (r) => `${r.diubah} transaksi ditandai sebagai pindah dana antar rekening.`);
     } catch (e: any) { console.warn('[Transfer sendiri]', e?.message || e); return null; } finally { transferJalan = false; }
 }
 setTimeout(() => void rapikanTransfer(), 4 * 60_000); setInterval(() => void rapikanTransfer(), 3 * 3600_000);

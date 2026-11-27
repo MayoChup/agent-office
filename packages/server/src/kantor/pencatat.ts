@@ -470,7 +470,7 @@ export class Pencatat {
      *  3. Pasangan: keluar dari rekening A & masuk ke rekening B dengan nominal sama (±1 hari), salah satunya sudah pasti
      *     transfer ke diri sendiri → keduanya ditandai, dan keterangannya diberi "ke B" / "dari A".
      */
-    async rapikanTransfer(nama: string[]): Promise<{ dicek: number; diubah: number }> {
+    async rapikanTransfer(nama: string[], akunSendiri: string[] = []): Promise<{ dicek: number; diubah: number }> {
         if (!this.cfg.spreadsheetId) return { dicek: 0, diubah: 0 };
         const rows = await this.existingRows();
         const tgl = (v: any) => typeof v === 'number' ? new Date(Math.round((v - 25569) * 86400_000)).toISOString().slice(0, 10) : String(v || '').slice(0, 10);
@@ -498,8 +498,18 @@ export class Pencatat {
             dipakai.add(k.row); dipakai.add(m.row);
             if (k.jenis !== 'Antar Rekening' || k.kat !== KAT_TRANSFER_KELUAR) { k.jenis = 'Antar Rekening'; k.kat = KAT_TRANSFER_KELUAR; k.ubah = true; }
             if (m.jenis !== 'Antar Rekening' || m.kat !== KAT_TRANSFER_MASUK) { m.jenis = 'Antar Rekening'; m.kat = KAT_TRANSFER_MASUK; m.ubah = true; }
-            if (!/\bke\s/i.test(k.ket)) { k.ket = `ke ${m.bank}${k.ket ? ` · ${k.ket}` : ''}`.slice(0, 200); k.ubah = true; }
-            if (!/\bdari\s/i.test(m.ket)) { m.ket = `dari ${k.bank}${m.ket ? ` · ${m.ket}` : ''}`.slice(0, 200); m.ubah = true; }
+            if (!/^ke\s/i.test(k.ket)) { k.ket = `ke ${m.bank}${k.ket ? ` · ${k.ket}` : ''}`.slice(0, 200); k.ubah = true; }
+            if (!/^dari\s/i.test(m.ket)) { m.ket = `dari ${k.bank}${m.ket ? ` · ${m.ket}` : ''}`.slice(0, 200); m.ubah = true; }
+        }
+        // Transfer sendiri yang belum punya pasangan: tujuan/asal ditebak dari nama rekening yang disebut di keterangan
+        // (mis. "TRSF KE KROM", "TOP UP JAGO") — berlaku untuk semua rekening Pak Rico, bukan cuma BCA & Mandiri.
+        const akunLain = akunSendiri.filter((a) => a && !/^cash$|^tunai$/i.test(a));
+        for (const x of b) {
+            if (x.jenis !== 'Antar Rekening' || dipakai.has(x.row) || /^(ke|dari)\s/i.test(x.ket)) continue;
+            const teks = ` ${`${x.pihak} ${x.ket}`.toUpperCase()} `;
+            const a = akunLain.find((n) => !sama(n, x.bank) && teks.includes(` ${n.toUpperCase()}`));
+            if (!a) continue;
+            x.ket = `${x.kat === KAT_TRANSFER_MASUK ? 'dari' : 'ke'} ${a}${x.ket ? ` · ${x.ket}` : ''}`.slice(0, 200); x.ubah = true;
         }
         const data = b.filter((x) => x.ubah).flatMap((x) => [
             { range: `'${this.cfg.sheetName}'!D${x.row}`, values: [[x.jenis]] },
