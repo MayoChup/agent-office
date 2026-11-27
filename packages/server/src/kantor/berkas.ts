@@ -101,26 +101,17 @@ export class Berkas {
     /** Unggah stream mentah: POST ?p=folder&nama=file&ukuran=byte. */
     async unggah(req: Request, res: Response) {
         try {
-            const x = await this.terima(req, String(req.query.p || ''), String(req.query.nama || 'berkas'), Number(req.query.ukuran || 0));
-            res.json({ ok: true, ...x });
-        } catch (e: any) {
-            res.status(400).json({ ok: false, error: String(e?.message || e) });
-        }
-    }
-    /** Simpan body request (stream mentah) ke folder Berkas dengan nama unik. Dipakai unggah biasa & hasil Studio lokal. */
-    async terima(req: Request, folderRel: string, namaMinta: string, ukuranMinta = 0): Promise<{ path: string; size: number }> {
-        const folder = this.aman(folderRel);
-        if (!fs.existsSync(folder)) throw new Error('Folder tidak ada');
-        const ukuran = Number(ukuranMinta || req.headers['content-length'] || 0);
-        if (this.terpakai() + ukuran > this.kuota) throw new Error(`Kuota ${(this.kuota / 1e9).toFixed(1)} GB penuh. Hapus berkas lain dulu.`);
-        const d = this.disk();
-        if (d && d.bebas - ukuran < 2e9) throw new Error('Sisa disk VPS hampir habis (disisakan 2 GB untuk sistem).');
-        const nama = this.namaAman(namaMinta || 'berkas');
-        let tujuan = path.join(folder, nama);
-        for (let i = 2; fs.existsSync(tujuan); i++) { const ext = path.extname(nama); tujuan = path.join(folder, `${path.basename(nama, ext)} (${i})${ext}`); }
-        const tmp = path.join(this.root, '.sampah', `.unggah-${crypto.randomBytes(6).toString('hex')}`);
-        let n = 0; let gagal = '';
-        try {
+            const folder = this.aman(String(req.query.p || ''));
+            if (!fs.existsSync(folder)) throw new Error('Folder tidak ada');
+            const ukuran = Number(req.query.ukuran || req.headers['content-length'] || 0);
+            if (this.terpakai() + ukuran > this.kuota) throw new Error(`Kuota ${(this.kuota / 1e9).toFixed(1)} GB penuh. Hapus berkas lain dulu.`);
+            const d = this.disk();
+            if (d && d.bebas - ukuran < 2e9) throw new Error('Sisa disk VPS hampir habis (disisakan 2 GB untuk sistem).');
+            let nama = this.namaAman(String(req.query.nama || 'berkas'));
+            let tujuan = path.join(folder, nama);
+            for (let i = 2; fs.existsSync(tujuan); i++) { const ext = path.extname(nama); tujuan = path.join(folder, `${path.basename(nama, ext)} (${i})${ext}`); }
+            const tmp = path.join(this.root, '.sampah', `.unggah-${crypto.randomBytes(6).toString('hex')}`);
+            let n = 0; let gagal = '';
             await new Promise<void>((resolve, reject) => {
                 const out = fs.createWriteStream(tmp);
                 req.on('data', (c: Buffer) => { n += c.length; if (this.terpakai() + n > this.kuota && !gagal) { gagal = 'Kuota penuh'; req.unpipe(out); out.destroy(); req.resume(); reject(new Error(gagal)); } });
@@ -128,10 +119,12 @@ export class Berkas {
                 out.on('finish', () => resolve());
                 out.on('error', reject); req.on('error', reject); req.on('aborted', () => reject(new Error('Unggahan terputus')));
             });
-        } catch (e) { try { fs.rmSync(tmp, { force: true }); } catch { /* */ } throw e; }
-        fs.renameSync(tmp, tujuan);
-        this.pakaiCache = null;
-        return { path: this.rel(tujuan), size: n };
+            fs.renameSync(tmp, tujuan);
+            this.pakaiCache = null;
+            res.json({ ok: true, path: this.rel(tujuan), size: n });
+        } catch (e: any) {
+            res.status(400).json({ ok: false, error: String(e?.message || e) });
+        }
     }
 
     /** Hapus PERMANEN (tanpa tempat sampah). Hanya dipakai aturan otomatis yang disetujui Pak Rico: video sosmed yang sudah terbit. */
