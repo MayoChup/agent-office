@@ -4,7 +4,7 @@ import { extractJson } from './freeLlm';
 
 /** Anggaran per kategori + awal periode gajian (mis. tanggal 25), disimpan di VPS. */
 export interface Saldo { nilai: number; tanggal: string; sumber: string }
-export interface Anggaran { mulai: number; batas: Record<string, number>; akun: string[]; saldo?: Record<string, Saldo> }
+export interface Anggaran { mulai: number; batas: Record<string, number>; akun: string[]; saldo?: Record<string, Saldo>; /** Nama Pak Rico seperti tertulis di rekening — transfer dari/ke nama ini = pindah dana, bukan pengeluaran. */ namaSendiri?: string[] }
 const BAWAAN: Anggaran = { mulai: 1, batas: {}, akun: ['Cash', 'BCA', 'Mandiri', 'Jago', 'Krom'] };
 
 export class AnggaranStore {
@@ -17,7 +17,8 @@ export class AnggaranStore {
         const batas: Record<string, number> = {};
         for (const [k, v] of Object.entries(x?.batas ?? cur.batas)) { const n = Math.round(Number(v)); if (k && n > 0) batas[String(k).slice(0, 40)] = n; }
         const akun = Array.isArray(x?.akun) ? x.akun.map((a: any) => String(a).trim().slice(0, 30)).filter(Boolean).slice(0, 20) : cur.akun;
-        const out: Anggaran = { mulai, batas, akun, saldo: cur.saldo || {} };
+        const namaSendiri = Array.isArray(x?.namaSendiri) ? x.namaSendiri.map((a: any) => String(a).replace(/\s+/g, ' ').trim().slice(0, 50)).filter((a: string) => a.length >= 3).slice(0, 6) : (cur.namaSendiri || []);
+        const out: Anggaran = { mulai, batas, akun, saldo: cur.saldo || {}, namaSendiri };
         fs.writeFileSync(this.file, JSON.stringify(out, null, 1));
         return out;
     }

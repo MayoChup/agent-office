@@ -8,13 +8,13 @@ import { apiGet, apiPost, serverBase, tokenLogin } from '../../kantor/connection
 import { ImporMutasi } from './ImporMutasi';
 import { RichText } from '../../components/common/RichText';
 import { Batang, Donat } from './Grafik';
-import { Tx, rp, rpk, ikon, warnaDari, periode, dalam, keluar, masuk, sum, kelompok, hariIni, tglPanjang, tglPendek } from './util';
+import { Tx, rp, rpk, ikon, warnaDari, periode, dalam, keluar, masuk, sum, kelompok, hariIni, tglPanjang, tglPendek, transfer, transferMasuk, tujuanTransfer, saldoKini } from './util';
 
 import { Ikon } from '../../components/Ikon';
 import { Hidup } from '../../components/Hidup';
 import { konfirmasi } from '../../components/Konfirmasi';
 interface Report { transaksi: Tx[]; sheetUrl: string; pencatat: { lastRun: number; lastError: string } }
-interface Anggaran { mulai: number; batas: Record<string, number>; akun: string[]; kategori: string[]; saldo?: Record<string, { nilai: number; tanggal: string; sumber: string }> }
+interface Anggaran { mulai: number; batas: Record<string, number>; akun: string[]; kategori: string[]; saldo?: Record<string, { nilai: number; tanggal: string; sumber: string }>; namaSendiri?: string[] }
 type Tab = 'beranda' | 'pengeluaran' | 'anggaran' | 'transaksi' | 'chat';
 const TABS: Array<{ k: Tab; ico: string; label: string }> = [
     { k: 'beranda', ico: '🏠', label: 'Beranda' }, { k: 'pengeluaran', ico: '🛒', label: 'Pengeluaran' }, { k: 'anggaran', ico: '🥧', label: 'Anggaran' },
@@ -92,7 +92,7 @@ export function KeuanganApp() {
 
 /* ── Beranda ─────────────────────────────────────────────── */
 function Beranda({ tx, p, mulai, ang, onTx, go, onTambah, lihat, onImpor }: { tx: Tx[]; p: ReturnType<typeof periode>; mulai: number; ang: Anggaran | null; onTx: (t: Tx) => void; go: (t: Tab) => void; onTambah: () => void; lihat: (f: any) => void; onImpor: () => void }) {
-    const saldo = Object.entries(ang?.saldo || {}).map(([a, s]) => ({ a, s, kini: s.nilai + tx.filter((t) => t.bank.toLowerCase() === a.toLowerCase() && t.d > s.tanggal).reduce((x, t) => x + (t.jenis === 'Masuk' ? t.n : -t.n), 0) }));
+    const saldo = Object.entries(ang?.saldo || {}).map(([a, s]) => ({ a, s, kini: saldoKini(a, s, tx) }));
     const today = hariIni();
     const hariIniKel = sum(tx.filter((t) => t.d === today && keluar(t)));
     const totalBatas = Object.values(ang?.batas || {}).reduce((a, b) => a + b, 0);
@@ -146,11 +146,16 @@ function Beranda({ tx, p, mulai, ang, onTx, go, onTambah, lihat, onImpor }: { tx
 }
 
 function TxRow({ t, onClick }: { t: Tx; onClick: () => void }) {
+    const pindah = transfer(t), tuju = tujuanTransfer(t);
+    // Nama merchant/pihak jadi judul supaya mudah dipilah; kategori & rekening di bawahnya.
+    const judul = pindah ? 'Pindah dana' : (t.pihak || t.ket || t.kat);
+    const sub = pindah ? (tuju ? (transferMasuk(t) ? `${tuju} → ${t.bank}` : `${t.bank} → ${tuju}`) : `${transferMasuk(t) ? 'masuk ke' : 'keluar dari'} ${t.bank}`)
+        : `${t.jenis === 'Masuk' ? 'Pemasukan' : t.kat} · ${t.bank}${t.status === 'Manual' ? ' · manual' : ''}`;
     return (
         <button className="k-tx" onClick={onClick}>
-            <span className="k-ico" style={{ background: `${warnaDari(t.kat, 0)}22` }}>{t.jenis === 'Masuk' ? <Ikon e="💰" /> : t.jenis === 'Antar Rekening' ? <Ikon e="🔁" /> : ikon(t.kat)}<i>{(t.bank || '?').slice(0, 1)}</i></span>
-            <span className="k-tx-main"><b>{t.jenis === 'Masuk' ? 'Pemasukan' : t.jenis === 'Antar Rekening' ? 'Antar rekening' : t.kat}</b><small>{t.bank}{t.status === 'Manual' ? ' · manual' : ''}</small><small>{t.pihak || t.ket}</small></span>
-            <span className={`k-tx-n mono ${t.jenis === 'Masuk' ? 'in' : t.jenis === 'Keluar' ? 'out' : ''}`}>{t.jenis === 'Masuk' ? '+ ' : t.jenis === 'Keluar' ? '− ' : ''}{rp(t.n)}</span>
+            <span className="k-ico" style={{ background: `${warnaDari(t.kat, 0)}22` }}>{t.jenis === 'Masuk' ? <Ikon e="💰" /> : pindah ? <Ikon e="🔁" /> : ikon(t.kat)}<i>{(t.bank || '?').slice(0, 1)}</i></span>
+            <span className="k-tx-main"><b>{judul}</b><small>{sub}</small>{!pindah && t.pihak && t.ket && t.ket !== t.pihak && <small>{t.ket}</small>}</span>
+            <span className={`k-tx-n mono ${t.jenis === 'Masuk' ? 'in' : t.jenis === 'Keluar' ? 'out' : ''}`}>{t.jenis === 'Masuk' ? '+ ' : t.jenis === 'Keluar' ? '− ' : '⇄ '}{rp(t.n)}</span>
         </button>
     );
 }
@@ -226,6 +231,7 @@ function AnggaranView({ tx, p, ang, simpan, lihat }: { tx: Tx[]; p: ReturnType<t
                     <button className="btn primary" onClick={async () => { await simpan({ mulai, batas: Object.fromEntries(Object.entries(draft).map(([k, v]) => [k, Number(v)])) }); setEdit(false); }}>Simpan anggaran</button>
                 </section>
             )}
+            <NamaSendiri ang={ang} simpan={simpan} />
             <section className="k-card k-span2">
                 <div className="k-card-h"><h3>Anggaran per kategori</h3><small>{p.label}</small></div>
                 {Object.keys(ang.batas).length === 0 && <div className="fin-empty">Belum ada anggaran. Tekan <b>Ubah</b> untuk mengatur batas per kategori.</div>}
@@ -241,6 +247,28 @@ function AnggaranView({ tx, p, ang, simpan, lihat }: { tx: Tx[]; p: ReturnType<t
                 })}
             </section>
         </div>
+    );
+}
+
+/** Nama Pak Rico di rekening: transfer ke/dari nama ini = pindah dana, bukan pengeluaran. */
+function NamaSendiri({ ang, simpan }: { ang: Anggaran; simpan: (x: any) => Promise<void> }) {
+    const [teks, setTeks] = useState((ang.namaSendiri || []).join(', '));
+    const [msg, setMsg] = useState(''); const [busy, setBusy] = useState(false);
+    const kosong = !(ang.namaSendiri || []).length;
+    return (
+        <section className={`k-card k-span2 ${kosong ? 'k-perlu' : ''}`}>
+            <div className="k-card-h"><h3>Transfer antar rekening sendiri</h3></div>
+            <p className="k-muted">Tulis nama Bapak seperti tertulis di rekening (pisahkan koma kalau ada beberapa versi, mis. nama lengkap dan singkatan). Transfer dari/ke nama ini, misalnya BCA → Mandiri, dicatat sebagai <b>pindah dana</b>: saldo pengirim berkurang, saldo penerima bertambah, dan tidak dihitung sebagai pengeluaran atau pemasukan.</p>
+            <div className="k-row-sb" style={{ gap: 8 }}>
+                <input className="input" value={teks} onChange={(e) => setTeks(e.target.value)} placeholder="mis. RICO SAPUTRA" aria-label="Nama di rekening" style={{ flex: 1 }} />
+                <button className="btn primary" disabled={busy} onClick={async () => {
+                    setBusy(true); setMsg('');
+                    try { await simpan({ namaSendiri: teks.split(',').map((x) => x.trim()).filter(Boolean) }); setMsg('Tersimpan. Transaksi lama sedang dirapikan, cek lagi dalam beberapa menit.'); } catch (e: any) { setMsg(String(e.message || e)); }
+                    setBusy(false);
+                }}>Simpan</button>
+            </div>
+            {msg && <small className="k-muted">{msg}</small>}
+        </section>
     );
 }
 
@@ -293,7 +321,7 @@ function Detail({ t, all, mulai, onClose, lihat, onUbah, onHapus }: { t: Tx; all
                     <small>{tglPanjang(t.d)} · {t.t}</small>
                 </div>
                 <div className="k-kv">
-                    <div><small>Kategori</small><b>{ikon(t.kat)} {t.kat}</b></div>
+                    <div><small>Kategori</small><b>{transfer(t) ? '🔁 Pindah dana antar rekening sendiri (bukan pengeluaran)' : <>{ikon(t.kat)} {t.kat}</>}</b></div>
                     <div><small>Akun</small><b>{t.bank}</b></div>
                     <div><small>Merchant / pihak</small><b>{t.pihak || '–'}</b></div>
                     <div><small>Catatan</small><b>{t.ket || '–'}</b></div>

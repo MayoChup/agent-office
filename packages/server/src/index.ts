@@ -18,7 +18,7 @@ import { envDipulihkan, loadConfig } from './kantor/config';
 import { KantorAuth } from './kantor/auth';
 import { KategoriAi } from './kantor/kategoriAi';
 import { Rem } from './kantor/rem';
-import { Pencatat, telegramNotifier, telegramRahasia, ringkasanKeuangan, telegramSebagai, sambilMengetik, kategoriOf } from './kantor/pencatat';
+import { Pencatat, telegramNotifier, telegramRahasia, ringkasanKeuangan, telegramSebagai, sambilMengetik, kategoriOf, namaSendiri, KAT_TRANSFER_MASUK, KAT_TRANSFER_KELUAR } from './kantor/pencatat';
 import { TradingDesk, tradingCli, fetchPrice, marketOpen } from './kantor/trading';
 import { Kalender } from './kantor/kalender';
 import { Percakapan, Anggota, KuotaBerat, hermesSekali, jalankan as jalankanHermes } from './kantor/percakapan';
@@ -372,8 +372,17 @@ app.post('/api/kantor/berkas/unggah', requireToken, (req, res) => { berkas.ungga
 app.get('/api/kantor/berkas/f/:t/:nama', (req, res) => berkas.kirim(String(req.params.t), res)); // tautan sekali pakai, tanpa login
 
 const anggaran = new AnggaranStore(config.dataDir);
+/* Nama Pak Rico di rekening (pengaturan Keuangan) + ownerNames dari config → transfer ke/dari nama ini = pindah dana antar rekening. */
+const namaAwalConfig = [...config.pencatat.ownerNames];
+const sinkronNamaSendiri = () => { config.pencatat.ownerNames = [...new Set([...namaAwalConfig, ...(anggaran.get().namaSendiri || [])])]; };
+sinkronNamaSendiri();
 app.get('/api/kantor/keuangan/anggaran', requireToken, (_req, res) => { res.json({ ok: true, ...anggaran.get(), kategori: Object.keys(config.pencatat.kategori).concat(['Lainnya']) }); });
-app.post('/api/kantor/keuangan/anggaran', requireToken, (req, res) => { res.json({ ok: true, ...anggaran.set(req.body), kategori: Object.keys(config.pencatat.kategori).concat(['Lainnya']) }); });
+app.post('/api/kantor/keuangan/anggaran', requireToken, (req, res) => {
+    const lama = JSON.stringify(anggaran.get().namaSendiri || []);
+    const a = anggaran.set(req.body); sinkronNamaSendiri();
+    if (JSON.stringify(a.namaSendiri || []) !== lama) void rapikanTransfer();
+    res.json({ ok: true, ...a, kategori: Object.keys(config.pencatat.kategori).concat(['Lainnya']) });
+});
 app.post('/api/kantor/keuangan/tambah', requireToken, async (req, res) => {
     try { res.json({ ok: true, tx: await pencatat.tambahManual(req.body || {}) }); }
     catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
@@ -403,11 +412,15 @@ app.post('/api/kantor/keuangan/mutasi', requireToken, express.raw({ type: () => 
         const hasil = urai(halaman, akun);
         let ada: any[] = [];
         try { ada = (await pencatat.report(true)).transaksi; } catch (e: any) { hasil.peringatan.push(`Belum bisa mengecek transaksi yang sudah tercatat (${e?.message || e}) — semua ditandai baru.`); }
+        // Transfer dari/ke nama Pak Rico sendiri = pindah dana antar rekening, bukan pengeluaran/pemasukan.
+        for (const t of hasil.transaksi as any[]) if (namaSendiri(`${t.pihak} ${t.ket}`, config.pencatat.ownerNames)) t.arah = t.jenis;
         const c = cocokkan(akun, hasil.transaksi, ada, hasil.periode);
         const rules = config.pencatat.kategori;
         res.json({
             ok: true, ...hasil,
-            transaksi: await pencatat.lengkapiKategori(c.hasil.map((t) => ({ ...t, kategori: t.jenis === 'Masuk' ? 'Pendapatan' : kategoriOf(`${t.pihak} ${t.ket}`, rules) }))),
+            transaksi: await pencatat.lengkapiKategori(c.hasil.map((t: any) => t.arah
+                ? { ...t, jenis: 'Antar Rekening', kategori: t.arah === 'Masuk' ? KAT_TRANSFER_MASUK : KAT_TRANSFER_KELUAR }
+                : { ...t, kategori: t.jenis === 'Masuk' ? 'Pendapatan' : kategoriOf(`${t.pihak} ${t.ket}`, rules) })),
             lebih: c.lebih,
             saldoTercatat: anggaran.get().saldo?.[akun] || null
         });
@@ -527,6 +540,17 @@ async function rapikanKategori() {
     } catch (e: any) { console.warn('[Kategori AI]', e?.message || e); return null; } finally { rapikanJalan = false; }
 }
 setTimeout(() => void rapikanKategori(), 6 * 60_000); setInterval(() => void rapikanKategori(), 3 * 3600_000);
+let transferJalan = false;
+/** Tandai pindah dana antar rekening sendiri pada transaksi yang sudah tercatat (tanpa AI). */
+async function rapikanTransfer() {
+    if (transferJalan || !config.pencatat.spreadsheetId) return null;
+    transferJalan = true;
+    try {
+        return await papan.jalankan({ ai: AI_KEU(), nama: namaAiKeu(), judul: 'Merapikan transfer antar rekening sendiri', detail: 'Transfer ke/dari nama Pak Rico ditandai sebagai pindah dana, bukan pengeluaran.', sumber: 'tugas' },
+            () => pencatat.rapikanTransfer(config.pencatat.ownerNames), (r) => `${r.diubah} transaksi ditandai sebagai pindah dana antar rekening.`);
+    } catch (e: any) { console.warn('[Transfer sendiri]', e?.message || e); return null; } finally { transferJalan = false; }
+}
+setTimeout(() => void rapikanTransfer(), 4 * 60_000); setInterval(() => void rapikanTransfer(), 3 * 3600_000);
 app.post('/api/kantor/keuangan/rapikan-kategori', requireToken, async (_req, res) => {
     const r = await rapikanKategori(); res.json({ ok: true, hasil: r, ingatan: kategoriAi.jumlah() });
 });

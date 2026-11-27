@@ -154,6 +154,20 @@ export function field(lines: string[], labels: string[], opts: { notFollowedBy?:
     return '';
 }
 
+/** Kategori khusus baris "Antar Rekening" (pindah dana antar rekening sendiri) — menentukan arah saldo. */
+export const KAT_TRANSFER_MASUK = 'Transfer masuk';
+export const KAT_TRANSFER_KELUAR = 'Transfer keluar';
+/** Apakah nama pihak = nama Pak Rico sendiri (dari pengaturan). Cocok kalau semua kata nama terdaftar ada di pihak. */
+export function namaSendiri(pihak: string, nama: string[]): boolean {
+    const kata = (t: string) => String(t || '').toUpperCase().replace(/[^A-Z ]+/g, ' ').trim().split(/\s+/).filter((x) => x.length >= 2);
+    const p = kata(pihak); if (!p.length) return false;
+    // Bank sering memotong nama ("RICO SAPUT") atau hanya menulis 2 kata pertama → cocok kalau kata pertama sama
+    // dan minimal 2 kata (atau semua, kalau namanya cuma 1–2 kata) cocok, termasuk potongan ≥ 3 huruf.
+    const pas = (w: string) => p.some((x) => x === w || (x.length >= 3 && w.startsWith(x)) || (w.length >= 3 && x.startsWith(w)));
+    return nama.some((n) => { const k = kata(n); if (!k.length || !pas(k[0])) return false; return k.filter(pas).length >= Math.min(2, k.length); });
+}
+const HINT_MASUK_KET = /\b(masuk|diterima|terima|received|incoming|dari|from|cr|kredit)\b/i;
+
 export function kategoriOf(pihak: string, rules: Record<string, string[]>): string {
     const up = ` ${pihak.toUpperCase()} `;
     for (const [kat, words] of Object.entries(rules)) {
@@ -239,11 +253,12 @@ export function parseEmail(input: { id: string; from: string; subject: string; h
     }
     if (!when) return null;
 
-    let jenis: ParsedTx['jenis'] = MASUK_HINT.test(all) ? 'Masuk' : 'Keluar';
-    const up = pihak.toUpperCase();
-    if (cfg.ownerNames.some((n) => n && up.includes(n.toUpperCase()))) jenis = 'Antar Rekening';
+    const masuk = MASUK_HINT.test(all);
+    let jenis: ParsedTx['jenis'] = masuk ? 'Masuk' : 'Keluar';
+    if (namaSendiri(pihak, cfg.ownerNames)) jenis = 'Antar Rekening';
 
-    const kategori = jenis === 'Masuk' ? 'Gaji/Pemasukan' : jenis === 'Antar Rekening' ? 'Lainnya'
+    // Pindah dana ke rekening sendiri: bukan pengeluaran/pemasukan. Arahnya dicatat di kolom kategori.
+    const kategori = jenis === 'Masuk' ? 'Gaji/Pemasukan' : jenis === 'Antar Rekening' ? (masuk ? KAT_TRANSFER_MASUK : KAT_TRANSFER_KELUAR)
         : /^Biaya /.test(pihak) ? 'Tagihan & Langganan' : kategoriOf(pihak, cfg.kategori);
     const ok = nominal !== null && nominal > 0 && !!pihak;
     return {
@@ -446,6 +461,55 @@ export class Pencatat {
             this.reportCache = null;
         }
         return { dicek: pakai.length, diubah: data.length };
+    }
+
+    /**
+     * Rapikan pindah dana antar rekening sendiri pada transaksi yang SUDAH tercatat:
+     *  1. Pihak = nama Pak Rico → jadi "Antar Rekening" (bukan pengeluaran/pemasukan) dengan arah masuk/keluar.
+     *  2. Baris "Antar Rekening" lama tanpa arah → arah ditebak dari keterangan (default keluar, seperti perhitungan lama).
+     *  3. Pasangan: keluar dari rekening A & masuk ke rekening B dengan nominal sama (±1 hari), salah satunya sudah pasti
+     *     transfer ke diri sendiri → keduanya ditandai, dan keterangannya diberi "ke B" / "dari A".
+     */
+    async rapikanTransfer(nama: string[]): Promise<{ dicek: number; diubah: number }> {
+        if (!this.cfg.spreadsheetId) return { dicek: 0, diubah: 0 };
+        const rows = await this.existingRows();
+        const tgl = (v: any) => typeof v === 'number' ? new Date(Math.round((v - 25569) * 86400_000)).toISOString().slice(0, 10) : String(v || '').slice(0, 10);
+        type B = { row: number; d: string; bank: string; jenis: string; n: number; pihak: string; kat: string; ket: string; ubah: boolean };
+        const b: B[] = rows.map((r, i) => ({ row: i + 2, d: tgl(r[0]), bank: String(r[2] || ''), jenis: String(r[3] || ''), n: Number(r[4]) || 0, pihak: String(r[5] || ''), kat: String(r[6] || ''), ket: String(r[7] || ''), ubah: false }));
+        const ARAH = [KAT_TRANSFER_MASUK, KAT_TRANSFER_KELUAR];
+        for (const x of b) {
+            if ((x.jenis === 'Keluar' || x.jenis === 'Masuk') && x.pihak && namaSendiri(x.pihak, nama)) {
+                x.kat = x.jenis === 'Masuk' ? KAT_TRANSFER_MASUK : KAT_TRANSFER_KELUAR; x.jenis = 'Antar Rekening'; x.ubah = true;
+            } else if (x.jenis === 'Antar Rekening' && !ARAH.includes(x.kat)) {
+                x.kat = HINT_MASUK_KET.test(`${x.ket} ${x.pihak}`) && !/\b(ke|to|db|debit)\b/i.test(x.ket) ? KAT_TRANSFER_MASUK : KAT_TRANSFER_KELUAR; x.ubah = true;
+            }
+        }
+        const hari = (a: string, c: string) => Math.abs(Date.parse(a) - Date.parse(c)) / 86400_000;
+        const sama = (a: string, c: string) => a.toLowerCase().replace(/\s/g, '') === c.toLowerCase().replace(/\s/g, '');
+        const dipakai = new Set<number>();
+        const keluar = b.filter((x) => x.jenis === 'Antar Rekening' && x.kat === KAT_TRANSFER_KELUAR || x.jenis === 'Keluar');
+        for (const k of keluar) {
+            if (dipakai.has(k.row)) continue;
+            const m = b.find((x) => !dipakai.has(x.row) && x.row !== k.row && !sama(x.bank, k.bank) && Math.abs(x.n - k.n) <= 1 && hari(x.d, k.d) <= 1
+                && (x.jenis === 'Antar Rekening' && x.kat === KAT_TRANSFER_MASUK || x.jenis === 'Masuk'));
+            if (!m) continue;
+            // Minimal salah satu sisi harus sudah pasti transfer ke diri sendiri (bukan kebetulan nominal sama).
+            if (k.jenis !== 'Antar Rekening' && m.jenis !== 'Antar Rekening') continue;
+            dipakai.add(k.row); dipakai.add(m.row);
+            if (k.jenis !== 'Antar Rekening' || k.kat !== KAT_TRANSFER_KELUAR) { k.jenis = 'Antar Rekening'; k.kat = KAT_TRANSFER_KELUAR; k.ubah = true; }
+            if (m.jenis !== 'Antar Rekening' || m.kat !== KAT_TRANSFER_MASUK) { m.jenis = 'Antar Rekening'; m.kat = KAT_TRANSFER_MASUK; m.ubah = true; }
+            if (!/\bke\s/i.test(k.ket)) { k.ket = `ke ${m.bank}${k.ket ? ` · ${k.ket}` : ''}`.slice(0, 200); k.ubah = true; }
+            if (!/\bdari\s/i.test(m.ket)) { m.ket = `dari ${k.bank}${m.ket ? ` · ${m.ket}` : ''}`.slice(0, 200); m.ubah = true; }
+        }
+        const data = b.filter((x) => x.ubah).flatMap((x) => [
+            { range: `'${this.cfg.sheetName}'!D${x.row}`, values: [[x.jenis]] },
+            { range: `'${this.cfg.sheetName}'!G${x.row}:H${x.row}`, values: [[x.kat, x.ket]] }
+        ]);
+        if (data.length) {
+            await this.g.call(`https://sheets.googleapis.com/v4/spreadsheets/${this.cfg.spreadsheetId}/values:batchUpdate`, { method: 'POST', body: JSON.stringify({ valueInputOption: 'USER_ENTERED', data }) });
+            this.reportCache = null;
+        }
+        return { dicek: b.length, diubah: data.length / 2 };
     }
 
     async runOnce(): Promise<number> {

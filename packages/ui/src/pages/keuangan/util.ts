@@ -35,6 +35,30 @@ export function periode(mulai: number, k = 0, acuan = hariIni()) {
 export const dalam = (t: Tx, p: { start: string; end: string }) => t.d >= p.start && t.d <= p.end;
 export const keluar = (t: Tx) => t.jenis === 'Keluar';
 export const masuk = (t: Tx) => t.jenis === 'Masuk';
+/** Pindah dana antar rekening sendiri: bukan pengeluaran/pemasukan; arahnya disimpan di kategori. */
+export const transfer = (t: Tx) => t.jenis === 'Antar Rekening';
+export const transferMasuk = (t: Tx) => transfer(t) && /masuk/i.test(t.kat || '');
+/** Pengaruh satu transaksi ke saldo rekeningnya sendiri. */
+export const efekSaldo = (t: Tx) => (t.jenis === 'Masuk' || transferMasuk(t) ? t.n : -t.n);
+/** Rekening tujuan/asal dari keterangan "ke Mandiri" / "dari BCA" (diisi saat transfer sendiri dipasangkan). */
+export const tujuanTransfer = (t: Tx) => (t.ket || '').match(/(?:^|\s)(?:ke|dari)\s+([^·]+?)\s*(?:·|$)/i)?.[1]?.trim() || '';
+const samaAkun = (a: string, b: string) => a.toLowerCase().replace(/\s/g, '') === b.toLowerCase().replace(/\s/g, '');
+/**
+ * Saldo rekening = patokan (mutasi PDF) + semua transaksi rekening itu sesudah tanggal patokan,
+ * termasuk dana pindahan dari rekening sendiri lain yang baru tercatat di sisi pengirim ("ke Mandiri" tanpa pasangan masuk di Mandiri).
+ */
+export function saldoKini(akun: string, patokan: { nilai: number; tanggal: string }, tx: Tx[]) {
+    const sesudah = tx.filter((t) => t.d > patokan.tanggal);
+    const milik = sesudah.filter((t) => samaAkun(t.bank, akun));
+    let n = patokan.nilai + milik.reduce((a, t) => a + efekSaldo(t), 0);
+    const hari = (a: string, b: string) => Math.abs(Date.parse(a) - Date.parse(b)) / 86400_000;
+    for (const t of sesudah) {
+        if (samaAkun(t.bank, akun) || !transfer(t) || transferMasuk(t) || !samaAkun(tujuanTransfer(t), akun)) continue;
+        const adaPasangan = milik.some((m) => transferMasuk(m) && Math.abs(m.n - t.n) <= 1 && hari(m.d, t.d) <= 1);
+        if (!adaPasangan) n += t.n;
+    }
+    return n;
+}
 export const sum = (xs: Tx[]) => xs.reduce((a, t) => a + t.n, 0);
 export function kelompok<T>(xs: T[], key: (x: T) => string) {
     const m = new Map<string, T[]>();

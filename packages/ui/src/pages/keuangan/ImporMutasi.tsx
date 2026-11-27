@@ -3,7 +3,7 @@ import { apiPost, serverBase, tokenLogin } from '../../kantor/connection';
 import { rp, tglPendek, ikon } from './util';
 
 import { Ikon } from '../../components/Ikon';
-interface MTx { idx: number; id: string; tanggal: string; jenis: 'Masuk' | 'Keluar'; nominal: number; saldo: number | null; ket: string; pihak: string; kategori: string; yakin: boolean; status: 'baru' | 'cocok'; cocok: { id: string; d: string; pihak: string } | null }
+interface MTx { idx: number; id: string; tanggal: string; jenis: 'Masuk' | 'Keluar' | 'Antar Rekening'; nominal: number; saldo: number | null; ket: string; pihak: string; kategori: string; yakin: boolean; status: 'baru' | 'cocok'; cocok: { id: string; d: string; pihak: string } | null }
 interface Lebih { id: string; d: string; jenis: string; n: number; pihak: string; ket: string }
 interface Hasil { periode: { dari: string; sampai: string }; saldoAwal: number | null; saldoAkhir: number | null; transaksi: MTx[]; lebih: Lebih[]; halaman: number; peringatan: string[] }
 
@@ -101,9 +101,10 @@ export function ImporMutasi({ akun: daftarAkun, onClose, onSelesai }: { akun: st
                                 <label key={t.id} className={`mt-row ${t.status}`}>
                                     <input type="checkbox" checked={!!pilih[t.id]} onChange={(e) => setPilih({ ...pilih, [t.id]: e.target.checked })} />
                                     <div className="mt-main">
-                                        <div className="mt-top"><b>{t.pihak || '(tanpa nama)'}</b><b className={`mono ${t.jenis === 'Masuk' ? 'in' : 'out'}`}>{t.jenis === 'Masuk' ? '+' : '−'}{rp(t.nominal)}{!t.yakin && <Ikon e="❓" />}</b></div>
+                                        <div className="mt-top"><b>{t.pihak || '(tanpa nama)'}</b><b className={`mono ${t.jenis === 'Masuk' ? 'in' : t.jenis === 'Keluar' ? 'out' : ''}`}>{t.jenis === 'Masuk' ? '+' : t.jenis === 'Keluar' ? '−' : '⇄ '}{rp(t.nominal)}{!t.yakin && <Ikon e="❓" />}</b></div>
                                         <small>{tglPendek(t.tanggal)} · {t.ket}</small>
                                         <div className="mt-bot">
+                                            {t.jenis === 'Antar Rekening' && <span className="mt-tag">🔁 pindah dana ({/masuk/i.test(t.kategori) ? 'masuk' : 'keluar'})</span>}
                                             {t.status === 'cocok' ? <span className="mt-tag ok">✓ sudah tercatat{t.cocok ? ` (${tglPendek(t.cocok.d)}${t.cocok.pihak ? `, ${t.cocok.pihak}` : ''})` : ''}</span> : <span className="mt-tag new">baru</span>}
                                             {t.jenis === 'Keluar' && pilih[t.id] && (
                                                 <select value={kat[t.id] || t.kategori} onClick={(e) => e.preventDefault()} onChange={(e) => setKat({ ...kat, [t.id]: e.target.value })}>
