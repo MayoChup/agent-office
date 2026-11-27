@@ -23,6 +23,7 @@ export interface PencatatConfig {
     intervalMinutes: number;
     dailySummaryHour: number;     // jam WIB, -1 = mati
     ownerNames: string[];         // untuk mengenali transfer ke rekening sendiri
+    akunSendiri?: string[];       // daftar rekening Pak Rico (dari pengaturan Keuangan) — top up ke sini = pindah dana
     kategori: Record<string, string[]>;
 }
 
@@ -59,6 +60,7 @@ export const DEFAULT_KATEGORI: Record<string, string[]> = {
     'Pulsa & Internet': ['TELKOMSEL', 'XL ', 'XLAXIATA', 'INDOSAT', 'IM3', 'SMARTFREN', 'AXIS', 'BY.U', 'PULSA', 'PAKET DATA'],
     'Kesehatan': ['APOTEK', 'APOTIK', 'KIMIA FARMA', 'K24', 'GUARDIAN', 'WATSONS', 'KLINIK', 'RUMAH SAKIT', 'RS ', 'HOSPITAL', 'HALODOC', 'ALODOKTER', 'LAB'],
     'Hiburan': ['CGV', 'XXI', 'CINEPOLIS', 'CINEMA', 'BIOSKOP', 'STEAM', 'PLAYSTATION', 'GAME', 'KARAOKE', 'TIMEZONE'],
+    'Top Up E-Wallet': ['TOP UP', 'TOPUP', 'E-WALLET', 'EWALLET', 'GOPAY', 'OVO ', 'SHOPEEPAY', 'LINKAJA', 'DANA ', 'FLAZZ', 'E-MONEY', 'EMONEY', 'BRIZZI', 'TAPCASH'],
     'Investasi': ['BIBIT', 'AJAIB', 'PLUANG', 'STOCKBIT', 'BAREKSA', 'IPOT', 'INDOPREMIER', 'TANAMDUIT', 'PINTU', 'INDODAX', 'TOKOCRYPTO', 'EMAS']
 };
 
@@ -166,6 +168,14 @@ export function namaSendiri(pihak: string, nama: string[]): boolean {
     const pas = (w: string) => p.some((x) => x === w || (x.length >= 3 && w.startsWith(x)) || (w.length >= 3 && x.startsWith(w)));
     return nama.some((n) => { const k = kata(n); if (!k.length || !pas(k[0])) return false; return k.filter(pas).length >= Math.min(2, k.length); });
 }
+/** Top up dompet digital (GoPay, OVO, DANA, e-money, …). Tetap dihitung PENGELUARAN walau atas nama sendiri,
+ *  karena dompet digital tidak dicatat sebagai rekening — kecuali yang dituju memang rekening Pak Rico (mis. "TOP UP JAGO"). */
+const E_WALLET = /\b(TOP ?UP|E-?WALLET|GOPAY|GO-?PAY|OVO|SHOPEE ?PAY|LINK ?AJA|DANA|FLAZZ|E-?MONEY|BRIZZI|TAP ?CASH|E-?TOLL)\b/i;
+export function topUpDompet(teks: string, akunSendiri: string[] = []): boolean {
+    if (!E_WALLET.test(teks)) return false;
+    const up = ` ${teks.toUpperCase()} `;
+    return !akunSendiri.some((a) => a && !/^cash$|^tunai$/i.test(a) && up.includes(` ${a.toUpperCase()}`));
+}
 const HINT_MASUK_KET = /\b(masuk|diterima|terima|received|incoming|dari|from|cr|kredit)\b/i;
 
 export function kategoriOf(pihak: string, rules: Record<string, string[]>): string {
@@ -195,7 +205,7 @@ function clean(s: string, max = 60) {
  * Mengembalikan null kalau email bukan notifikasi transaksi (mis. promo) atau transaksinya gagal.
  */
 export function parseEmail(input: { id: string; from: string; subject: string; html: string; text?: string; internalDate?: number },
-    cfg: Pick<PencatatConfig, 'ownerNames' | 'kategori'>): ParsedTx | null {
+    cfg: Pick<PencatatConfig, 'ownerNames' | 'kategori' | 'akunSendiri'>): ParsedTx | null {
     const bank = bankOf(input.from);
     if (!bank) return null;
     const lines = htmlToLines(input.html || (input.text || '').replace(/\n/g, '<br>'));
@@ -255,7 +265,7 @@ export function parseEmail(input: { id: string; from: string; subject: string; h
 
     const masuk = MASUK_HINT.test(all);
     let jenis: ParsedTx['jenis'] = masuk ? 'Masuk' : 'Keluar';
-    if (namaSendiri(pihak, cfg.ownerNames)) jenis = 'Antar Rekening';
+    if (namaSendiri(pihak, cfg.ownerNames) && !(jenis === 'Keluar' && topUpDompet(`${pihak} ${ket} ${input.subject}`, cfg.akunSendiri))) jenis = 'Antar Rekening';
 
     // Pindah dana ke rekening sendiri: bukan pengeluaran/pemasukan. Arahnya dicatat di kolom kategori.
     const kategori = jenis === 'Masuk' ? 'Gaji/Pemasukan' : jenis === 'Antar Rekening' ? (masuk ? KAT_TRANSFER_MASUK : KAT_TRANSFER_KELUAR)
@@ -478,6 +488,12 @@ export class Pencatat {
         const b: B[] = rows.map((r, i) => ({ row: i + 2, d: tgl(r[0]), bank: String(r[2] || ''), jenis: String(r[3] || ''), n: Number(r[4]) || 0, pihak: String(r[5] || ''), kat: String(r[6] || ''), ket: String(r[7] || ''), ubah: false }));
         const ARAH = [KAT_TRANSFER_MASUK, KAT_TRANSFER_KELUAR];
         for (const x of b) {
+            const dompet = topUpDompet(`${x.pihak} ${x.ket}`, akunSendiri);
+            if (x.jenis === 'Antar Rekening' && x.kat !== KAT_TRANSFER_MASUK && dompet) {
+                // Top up e-wallet yang dulu terbaca "antar rekening" → kembalikan jadi pengeluaran.
+                x.jenis = 'Keluar'; x.kat = kategoriOf(`${x.pihak} ${x.ket}`, this.cfg.kategori); x.ubah = true; continue;
+            }
+            if (x.jenis === 'Keluar' && dompet) continue;
             if ((x.jenis === 'Keluar' || x.jenis === 'Masuk') && x.pihak && namaSendiri(x.pihak, nama)) {
                 x.kat = x.jenis === 'Masuk' ? KAT_TRANSFER_MASUK : KAT_TRANSFER_KELUAR; x.jenis = 'Antar Rekening'; x.ubah = true;
             } else if (x.jenis === 'Antar Rekening' && !ARAH.includes(x.kat)) {

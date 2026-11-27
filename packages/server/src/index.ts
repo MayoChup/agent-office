@@ -18,7 +18,7 @@ import { envDipulihkan, loadConfig } from './kantor/config';
 import { KantorAuth } from './kantor/auth';
 import { KategoriAi } from './kantor/kategoriAi';
 import { Rem } from './kantor/rem';
-import { Pencatat, telegramNotifier, telegramRahasia, ringkasanKeuangan, telegramSebagai, sambilMengetik, kategoriOf, namaSendiri, KAT_TRANSFER_MASUK, KAT_TRANSFER_KELUAR } from './kantor/pencatat';
+import { Pencatat, telegramNotifier, telegramRahasia, ringkasanKeuangan, telegramSebagai, sambilMengetik, kategoriOf, namaSendiri, topUpDompet, KAT_TRANSFER_MASUK, KAT_TRANSFER_KELUAR } from './kantor/pencatat';
 import { TradingDesk, tradingCli, fetchPrice, marketOpen } from './kantor/trading';
 import { Kalender } from './kantor/kalender';
 import { Percakapan, Anggota, KuotaBerat, hermesSekali, jalankan as jalankanHermes } from './kantor/percakapan';
@@ -374,7 +374,7 @@ app.get('/api/kantor/berkas/f/:t/:nama', (req, res) => berkas.kirim(String(req.p
 const anggaran = new AnggaranStore(config.dataDir);
 /* Nama Pak Rico di rekening (pengaturan Keuangan) + ownerNames dari config → transfer ke/dari nama ini = pindah dana antar rekening. */
 const namaAwalConfig = [...config.pencatat.ownerNames];
-const sinkronNamaSendiri = () => { config.pencatat.ownerNames = [...new Set([...namaAwalConfig, ...(anggaran.get().namaSendiri || [])])]; };
+const sinkronNamaSendiri = () => { const a = anggaran.get(); config.pencatat.ownerNames = [...new Set([...namaAwalConfig, ...(a.namaSendiri || [])])]; config.pencatat.akunSendiri = a.akun; };
 sinkronNamaSendiri();
 app.get('/api/kantor/keuangan/anggaran', requireToken, (_req, res) => { res.json({ ok: true, ...anggaran.get(), kategori: Object.keys(config.pencatat.kategori).concat(['Lainnya']) }); });
 app.post('/api/kantor/keuangan/anggaran', requireToken, (req, res) => {
@@ -413,7 +413,7 @@ app.post('/api/kantor/keuangan/mutasi', requireToken, express.raw({ type: () => 
         let ada: any[] = [];
         try { ada = (await pencatat.report(true)).transaksi; } catch (e: any) { hasil.peringatan.push(`Belum bisa mengecek transaksi yang sudah tercatat (${e?.message || e}) — semua ditandai baru.`); }
         // Transfer dari/ke nama Pak Rico sendiri = pindah dana antar rekening, bukan pengeluaran/pemasukan.
-        for (const t of hasil.transaksi as any[]) if (namaSendiri(`${t.pihak} ${t.ket}`, config.pencatat.ownerNames)) t.arah = t.jenis;
+        for (const t of hasil.transaksi as any[]) if (namaSendiri(`${t.pihak} ${t.ket}`, config.pencatat.ownerNames) && !(t.jenis === 'Keluar' && topUpDompet(`${t.pihak} ${t.ket}`, anggaran.get().akun))) t.arah = t.jenis;
         const c = cocokkan(akun, hasil.transaksi, ada, hasil.periode);
         const rules = config.pencatat.kategori;
         res.json({
