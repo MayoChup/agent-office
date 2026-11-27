@@ -567,6 +567,9 @@ export function pasangStudio(d: DepsStudio) {
             await desainKonten(c, k, 'otomatis').then(() => kerjaSelesai(c, x)).catch((e) => kerjaSelesai(c, x, String(e?.message || e)));
         },
         gambarAi,
+        /** Untuk Studio Video lokal: aset konten (logo, maskot, foto, dll.) & brand akun. */
+        asetKonten: (c: Ctx, k: Konten) => asetKonten(c, k).map((x) => ({ id: x.id, jenis: NAMA_JENIS[x.jenis] || x.jenis, nama: x.nama, ket: x.ket, path: x.path })),
+        brand: (c: Ctx) => { const b = gudang(c).brand; return b ? { warna: b.warna, fontJudul: b.fontJudul, fontIsi: b.fontIsi } : null; },
         /** Langkah setup awal: brand kit (palet sementara dipasang otomatis). */
         brandSetup: (c: Ctx) => usulBrand(c, '', { lempar: true })
     };

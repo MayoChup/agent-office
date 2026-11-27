@@ -9,6 +9,7 @@ import { Beranda, type AkunInfo, type PlatInfo } from './sosmed/Beranda';
 import { GaleriPilih, PratinjauGaya } from './sosmed/Pratinjau';
 import { Starter, type JawabanStarter } from './sosmed/Starter';
 import { TabAset, StudioKonten, PilihPalet, type SaranAset } from './sosmed/Studio';
+import { KartuStudioLokal, StatusStudioLokal } from './sosmed/StudioLokal';
 
 import { Ikon } from '../components/Ikon';
 import { Hidup } from '../components/Hidup';
@@ -781,6 +782,7 @@ function TabAkun({ x, aksi, kabar, muat, keBeranda, bukaKuis }: P & { muat: () =
     const pkAkhir = x.pengikut.length ? x.pengikut[x.pengikut.length - 1] : null;
     return (<>
         <KartuAutopilot />
+        <KartuStudioLokal />
         <section className="sb-card">
             <div className="sd-h"><h3><Ikon e={pi?.ikon} /> Akun ini <small>{pi?.nama}</small></h3></div>
             <div className="sm-form">
@@ -1044,6 +1046,7 @@ function Produksi({ k, x, aksi, kabar }: { k: Konten; x: Data; aksi: Aksi; kabar
     let langkah = 1;
     return (<>
         {VIDEO(k.format) && <InfoGaya v={k} x={x} k={k} />}
+        {VIDEO(k.format) && <StatusStudioLokal akun={AKUN} kontenId={k.id} siap={k.status === 'prompt' && !k.aset} />}
         {!k.varian?.length && <PilihGaya k={k} x={x} aksi={aksi} onGanti={() => setGayaBaru(true)} />}
         {k.status !== 'terbit' && k.status !== 'mengunggah' && (k.naskah || k.promptVideo || k.promptGambar || k.promptEdit) && <div className="sm-aksi"><button className="btn small" onClick={() => setEdit(!edit)} aria-expanded={edit}>{edit ? 'Tutup editor' : <><Ikon e="✏" /> {'Edit / revisi paket'}</>}</button></div>}
         {edit && <EditPaket k={k} x={x} no={k.pilih ?? null} aksi={aksi} tutup={() => setEdit(false)} />}

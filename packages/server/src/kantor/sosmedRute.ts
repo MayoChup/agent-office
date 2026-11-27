@@ -9,6 +9,7 @@ import os from 'os';
 import path from 'path';
 import type { Request as Req, RequestHandler, Express } from 'express';
 import type { execFile } from 'child_process';
+import { pasangStudioLokal } from './studioLokal';
 import { pasangStudio } from './sosmedStudio';
 import type { ModelRouter } from './model';
 import type { ClaudeLangganan } from './claudeLangganan';
@@ -336,6 +337,10 @@ export function pasangSosmed(d: DepsSosmed) {
     studio = pasangStudio({ app, requireToken, berkas, papan, dataDir: d.dataDir, ctxReq: ctxReq as any, semua: semua as any, folderAkun: folderAkun as any, label: label as any,
         router: d.router || (() => undefined), claude: d.claude, kerjaSosmed: (ai, judul, prompt, detail) => kerjaSosmed(ai, judul, prompt, detail) });
     for (const c of semua()) studio.sambung(c);
+    /* Studio Video lokal (Remotion di PC Pak Rico) mengambil brief & aset sendiri, lalu mengunggah MP4 hasilnya. */
+    const studioLokal = pasangStudioLokal({ app, requireToken, dataDir: d.dataDir, berkas, semua: semua as any, folderAkun: folderAkun as any,
+        aset: (c, k) => studio!.asetKonten(c as any, k), brand: (c) => studio!.brand(c as any), kabar: (t) => { void d.kabari(t); } });
+    void studioLokal;
     const infoAkun = (a: AkunSosmed) => { const s = peta.get(a.id)!; return { ...a, tersambung: !!sambungan(a), siap: s.siap, sibuk: s.sibuk, pengikut: s.st.pengikut.length ? s.st.pengikut[s.st.pengikut.length - 1].n : null, menunggu: s.st.konten.filter((k) => k.tgl >= hariWib() && ['sketsa', 'prompt', 'aset', 'gagal'].includes(k.status)).length }; };
     const platformInfo = Object.fromEntries(Object.entries(P.PLATFORM).map(([id, p]) => [id, { nama: p.nama, ikon: p.ikon, format: p.format, label: p.label, kunci: p.kunci.map((x) => ({ k: x.k, label: x.label, rahasia: x.rahasia })), catatan: p.catatan }]));
 
