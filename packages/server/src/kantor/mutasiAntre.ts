@@ -13,7 +13,7 @@ import crypto from 'crypto';
 export type StatusAntre = 'antre' | 'proses' | 'siap' | 'gagal' | 'disimpan';
 export interface ItemAntre {
     id: string; nama: string; akun: string; akunOtomatis: boolean; status: StatusAntre; dibuat: number; selesai?: number;
-    error?: string; butuhSandi?: boolean; butuhAkun?: boolean; ringkas?: { total: number; baru: number; cocok: number; pindah: number; dari: string; sampai: string };
+    error?: string; butuhSandi?: boolean; butuhAkun?: boolean; pola?: string; ringkas?: { total: number; baru: number; cocok: number; pindah: number; dari: string; sampai: string };
     hasil?: any;
 }
 type Proses = (buf: Buffer, akun: string, sandi: string) => Promise<any & { akun: string }>;
@@ -41,7 +41,7 @@ export class AntreMutasi {
         for (const [id, v] of this.isi) if (v.sampai < kini) this.isi.delete(id);
     }
 
-    daftar() { return this.items.map(({ hasil: _h, ...x }) => x).sort((a, b) => b.dibuat - a.dibuat); }
+    daftar() { return this.items.map(({ hasil: _h, pola: _p, ...x }) => x).sort((a, b) => b.dibuat - a.dibuat); }
     ambil(id: string) { const x = this.items.find((i) => i.id === id); if (!x) throw new Error('Mutasi tidak ditemukan (mungkin sudah lewat 14 hari).'); return x; }
 
     tambah(buf: Buffer, nama: string, akun: string, sandi: string): ItemAntre {
@@ -82,7 +82,7 @@ export class AntreMutasi {
                     this.isi.delete(x.id); // PDF tidak diperlukan lagi
                     this.kabar(`📥 Mutasi ${x.akun}${x.ringkas.dari ? ` ${x.ringkas.dari} s/d ${x.ringkas.sampai}` : ''} siap ditinjau: ${x.ringkas.baru} baru, ${x.ringkas.cocok} sudah tercatat${x.ringkas.pindah ? `, ${x.ringkas.pindah} pindah dana` : ''}. Buka Keuangan → Beranda → "Mutasi menunggu ditinjau".`);
                 } catch (e: any) {
-                    x.status = 'gagal'; x.error = String(e?.message || e).slice(0, 300); x.butuhSandi = !!e?.butuhSandi; x.butuhAkun = !!e?.butuhAkun; x.selesai = Date.now();
+                    x.status = 'gagal'; x.error = String(e?.message || e).slice(0, 300); x.butuhSandi = !!e?.butuhSandi; x.butuhAkun = !!e?.butuhAkun; x.pola = e?.pola; x.selesai = Date.now();
                     if (x.butuhSandi || x.butuhAkun) { v.sampai = Date.now() + 3600_000; } else this.isi.delete(x.id);
                     this.kabar(`⚠️ Mutasi "${x.nama}" belum bisa dibaca: ${x.error}${x.butuhSandi ? ' Masukkan kata sandinya di Keuangan → Beranda.' : x.butuhAkun ? ' Pilih banknya di Keuangan → Beranda.' : ''}`);
                 }

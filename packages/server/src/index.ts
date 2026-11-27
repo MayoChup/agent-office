@@ -29,7 +29,7 @@ import { Catatan } from './kantor/catatan';
 import { Berkas } from './kantor/berkas';
 import { AnggaranStore, bacaTransaksi } from './kantor/anggaran';
 import { AntreMutasi, deteksiBank } from './kantor/mutasiAntre';
-import { bacaPdf, urai, cocokkan } from './kantor/mutasi';
+import { bacaPdf, urai, cocokkan, polaAnonim } from './kantor/mutasi';
 import { presetInfo, REKOMENDASI } from './kantor/preset';
 import { profil as nasdaqProfil, fundamentalNasdaq } from './kantor/nasdaq';
 import { simulasi, langkahDari, ringkasJalur } from './kantor/simulasi';
@@ -441,9 +441,10 @@ function bacaPdfTerpisah(buf: Buffer, sandi: string): Promise<{ halaman: any[] }
 async function prosesMutasi(buf: Buffer, akunMinta: string, sandi: string) {
     if (!Buffer.isBuffer(buf) || buf.length < 100 || buf.subarray(0, 5).toString() !== '%PDF-') throw new Error('Berkas bukan PDF.');
     const { halaman } = await bacaPdfTerpisah(buf, sandi);
+    const pola = polaAnonim(halaman as any);
     const akun = String(akunMinta || '').trim().slice(0, 30) || deteksiBank(halaman as any, anggaran.get().akun);
-    if (!akun) { const e: any = new Error('Bank PDF ini tidak terdeteksi otomatis. Pilih banknya.'); e.butuhAkun = true; throw e; }
-    const hasil = urai(halaman, akun);
+    if (!akun) { const e: any = new Error('Bank PDF ini tidak terdeteksi otomatis. Pilih banknya.'); e.butuhAkun = true; e.pola = pola; throw e; }
+    const hasil: any = urai(halaman, akun); hasil.pola = pola;
     let ada: any[] = [];
     try { ada = (await pencatat.report(true)).transaksi; } catch (e: any) { hasil.peringatan.push(`Belum bisa mengecek transaksi yang sudah tercatat (${e?.message || e}) — semua ditandai baru.`); }
     // Transfer dari/ke nama Pak Rico sendiri = pindah dana antar rekening, bukan pengeluaran/pemasukan.

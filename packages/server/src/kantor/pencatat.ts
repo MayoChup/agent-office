@@ -669,15 +669,18 @@ export class Pencatat {
         if (!this.cfg.spreadsheetId) throw new Error('Pencatat belum diatur (pencatat.spreadsheetId kosong).');
         const ada = new Set((await this.existingRows()).map((r) => String(r[8] || '')));
         const values: any[][] = [];
+        let dilewati = 0;
         for (const x of list) {
             const id = String(x.id || '').slice(0, 60);
             if (!id || ada.has(id)) continue;
+            let baris: any[];
+            try { baris = this.bersih(x); } catch { dilewati++; continue; } // mis. nominal 0 — jangan gagalkan semuanya
             ada.add(id);
-            values.push([...this.bersih(x), id, status]);
+            values.push([...baris, id, status]);
         }
         if (values.length) await this.g.call(`https://sheets.googleapis.com/v4/spreadsheets/${this.cfg.spreadsheetId}/values/${this.sheetRange('A1:J1')}:append?valueInputOption=USER_ENTERED&insertDataOption=OVERWRITE`, { method: 'POST', body: JSON.stringify({ values }) });
         this.reportCache = null;
-        return { ditambah: values.length };
+        return { ditambah: values.length, dilewati };
     }
 
     /** Data transaksi untuk laporan keuangan di tampilan kantor (dibaca dari Google Sheets, cache 60 detik). */

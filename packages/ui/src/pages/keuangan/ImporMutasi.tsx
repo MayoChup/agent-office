@@ -6,9 +6,16 @@ import { rp, tglPendek, ikon } from './util';
 import { Ikon } from '../../components/Ikon';
 interface MTx { idx: number; id: string; tanggal: string; jenis: 'Masuk' | 'Keluar' | 'Antar Rekening'; nominal: number; saldo: number | null; ket: string; pihak: string; kategori: string; yakin: boolean; status: 'baru' | 'cocok'; cocok: { id: string; d: string; pihak: string } | null }
 interface Lebih { id: string; d: string; jenis: string; n: number; pihak: string; ket: string }
-interface Hasil { periode: { dari: string; sampai: string }; saldoAwal: number | null; saldoAkhir: number | null; transaksi: MTx[]; lebih: Lebih[]; halaman: number; peringatan: string[] }
+interface Hasil { pola?: string; periode: { dari: string; sampai: string }; saldoAwal: number | null; saldoAkhir: number | null; transaksi: MTx[]; lebih: Lebih[]; halaman: number; peringatan: string[] }
 
-export interface ItemAntre { id: string; nama: string; akun: string; akunOtomatis: boolean; status: 'antre' | 'proses' | 'siap' | 'gagal' | 'disimpan'; dibuat: number; selesai?: number; error?: string; butuhSandi?: boolean; butuhAkun?: boolean; ringkas?: { total: number; baru: number; cocok: number; pindah: number; dari: string; sampai: string }; hasil?: any }
+export interface ItemAntre { id: string; nama: string; akun: string; akunOtomatis: boolean; status: 'antre' | 'proses' | 'siap' | 'gagal' | 'disimpan'; dibuat: number; selesai?: number; error?: string; butuhSandi?: boolean; butuhAkun?: boolean; ringkas?: { total: number; baru: number; cocok: number; pindah: number; dari: string; sampai: string }; hasil?: any; pola?: string }
+
+/** Salin pola tata letak PDF (tanpa data pribadi) supaya format bank yang belum terbaca bisa diperbaiki. */
+async function salinPola(pola?: string) {
+    if (!pola) { alert('Pola format belum tersedia untuk PDF ini.'); return; }
+    try { await navigator.clipboard.writeText(`Pola format mutasi (tanpa data pribadi: huruf → x, angka → 9)\n${pola}`); alert('Pola format tersalin. Tempel ke Claude supaya pembacanya diperbaiki.'); }
+    catch { alert('Tidak bisa menyalin otomatis di perangkat ini.'); }
+}
 
 /** Kirim satu PDF ke antrean server (berkas mentah; kalau diputus jaringan, lewat JSON base64). */
 async function kirimKeAntre(file: File, akun: string, sandi: string) {
@@ -112,6 +119,7 @@ export function AntreMutasiKartu({ akun: daftarAkun, onTinjau, sinyal }: { akun:
                             {x.status === 'siap' && <button className="btn small primary" disabled={busy === x.id} onClick={() => buka(x)}>Tinjau</button>}
                             {x.status === 'gagal' && x.butuhSandi && <><input className="input" type="password" autoComplete="off" placeholder="Kata sandi PDF" value={sandi[x.id] || ''} onChange={(e) => setSandi({ ...sandi, [x.id]: e.target.value })} /><button className="btn small primary" disabled={busy === x.id || !sandi[x.id]} onClick={() => aksi(x.id, 'ulangi', { sandi: sandi[x.id] })}>Coba lagi</button></>}
                             {x.status === 'gagal' && x.butuhAkun && <select className="input" value="" onChange={(e) => e.target.value && aksi(x.id, 'ulangi', { akun: e.target.value })}><option value="">Pilih bank…</option>{daftarAkun.filter((a) => a !== 'Cash').map((a) => <option key={a} value={a}>{a}</option>)}</select>}
+                            {x.status === 'gagal' && <button className="k-link" disabled={busy === x.id} onClick={async () => { try { const d: any = await (await fetch(`${serverBase()}/api/kantor/keuangan/mutasi-antre/${x.id}`, { headers: { Authorization: `Bearer ${tokenLogin()}` } })).json(); await salinPola(d.item?.pola || d.item?.hasil?.pola); } catch { /* */ } }}>Salin pola format</button>}
                             {(x.status === 'siap' || x.status === 'gagal') && <button className="k-link" disabled={busy === x.id} onClick={() => { if (confirm('Buang hasil baca PDF ini? Transaksi yang sudah tersimpan tidak ikut terhapus.')) void aksi(x.id, 'hapus'); }}>Buang</button>}
                         </div>
                     </div>
@@ -145,9 +153,9 @@ export function ImporMutasi({ tinjau, onClose, onSelesai }: { tinjau: ItemAntre;
                 akun,
                 tambah: dipilih.map((t) => ({ id: t.id, tanggal: t.tanggal, jenis: t.jenis, nominal: t.nominal, pihak: t.pihak, kategori: t.jenis === 'Masuk' ? 'Pendapatan' : kat[t.id] || t.kategori, keterangan: t.ket })),
                 hapus: Object.keys(hapus).filter((k) => hapus[k]),
-                saldo: pakaiSaldo && h.saldoAkhir != null && h.periode.sampai ? { nilai: h.saldoAkhir, tanggal: h.periode.sampai } : null
+                saldo: pakaiSaldo && h.saldoAkhir != null && !!h.periode.sampai ? { nilai: h.saldoAkhir, tanggal: h.periode.sampai } : null
             });
-            setHasilSimpan(`✅ ${r.ditambah || 0} transaksi ditambahkan${r.dihapus ? `, ${r.dihapus} dihapus` : ''}${r.saldo ? `, saldo ${akun} diperbarui` : ''}.`);
+            setHasilSimpan(`✅ ${r.ditambah || 0} transaksi ditambahkan${r.dilewati ? ` (${r.dilewati} dilewati karena nominalnya tidak valid)` : ''}${r.dihapus ? `, ${r.dihapus} dihapus` : ''}${r.saldo ? `, saldo ${akun} diperbarui` : ''}.`);
             try { await apiPost(`/api/kantor/keuangan/mutasi-antre/${tinjau.id}/selesai`, {}); } catch { /* tidak penting */ }
             onSelesai();
         } catch (e: any) { setErr(String(e?.message || e)); }
@@ -168,6 +176,7 @@ export function ImporMutasi({ tinjau, onClose, onSelesai }: { tinjau: ItemAntre;
                             {h.saldoAkhir != null && <div><small>Saldo akhir</small><b className="mono">{rp(h.saldoAkhir)}</b></div>}
                         </div>
                         {h.peringatan.map((p, i) => <div key={i} className="error"><Ikon e="⚠" /> {p}</div>)}
+                        {(h.peringatan.length > 0 || !tx.length) && h.pola && <p className="hint">Formatnya belum terbaca sempurna? <button className="k-link" onClick={() => salinPola(h.pola)}>Salin pola format (tanpa data pribadi)</button> lalu kirim ke Claude.</p>}
                         {ringkas.ragu > 0 && <div className="hint"><Ikon e="❓" /> {ringkas.ragu} transaksi arahnya (masuk/keluar) ditebak — cek tanda <Ikon e="❓" />.</div>}
                         <div className="mt-bar">
                             <b>Transaksi di mutasi</b>
@@ -211,13 +220,13 @@ export function ImporMutasi({ tinjau, onClose, onSelesai }: { tinjau: ItemAntre;
                                 </div>
                             </>
                         )}
-                        {h.saldoAkhir != null && (
+                        {h.saldoAkhir != null && !!h.periode.sampai && (
                             <label className="mt-saldo"><input type="checkbox" checked={pakaiSaldo} onChange={(e) => setPakaiSaldo(e.target.checked)} /> Samakan saldo {akun} dengan mutasi: <b className="mono">{rp(h.saldoAkhir)}</b> per {tglPendek(h.periode.sampai)}</label>
                         )}
                         {err && <div className="error">{err}</div>}
                         <div className="row" style={{ gap: 8 }}>
                             <button className="btn" onClick={onClose}>Nanti saja</button>
-                            <button className="btn primary k-save" style={{ flex: 1 }} disabled={busy || (!dipilih.length && !Object.values(hapus).some(Boolean) && !pakaiSaldo)} onClick={terapkan}>
+                            <button className="btn primary k-save" style={{ flex: 1 }} disabled={busy || (!dipilih.length && !Object.values(hapus).some(Boolean) && !(pakaiSaldo && !!h.periode.sampai))} onClick={terapkan}>
                                 {busy ? 'Menyimpan…' : `Simpan ${dipilih.length} transaksi${Object.values(hapus).filter(Boolean).length ? ` · hapus ${Object.values(hapus).filter(Boolean).length}` : ''}`}
                             </button>
                         </div>

@@ -58,12 +58,13 @@ export async function bacaPdf(buf: Buffer, password?: string): Promise<{ halaman
 
 /* ── 2. Angka & tanggal ── */
 const UANG = /^[-+]?(?:Rp\.?\s?)?(?:\d{1,3}(?:[.,]\d{3})+|\d+)(?:[.,]\d{2})?(?:\s?(?:CR|DB|Cr|Db|D|K))?$/;
-export function angkaUang(raw: string): { n: number; tanda: 'DB' | 'CR' | null; negatif: boolean } | null {
+export function angkaUang(raw: string): { n: number; tanda: 'DB' | 'CR' | null; negatif: boolean; positif?: boolean } | null {
     let s = raw.trim();
     let tanda: 'DB' | 'CR' | null = null;
     const m = /\s?(CR|DB|Cr|Db|D|K)$/.exec(s);
     if (m && /\d/.test(s.slice(0, m.index))) { tanda = /^(CR|K)$/i.test(m[1]) ? 'CR' : 'DB'; s = s.slice(0, m.index); }
     const negatif = /^-/.test(s) || /^\(.*\)$/.test(s);
+    const positif = /^\+/.test(s);
     s = s.replace(/^[-+(]|\)$/g, '').replace(/^Rp\.?\s?/i, '');
     if (!/\d/.test(s)) return null;
     let n: number;
@@ -71,10 +72,13 @@ export function angkaUang(raw: string): { n: number; tanda: 'DB' | 'CR' | null; 
     else if (/^\d{1,3}(\.\d{3})+(,\d{1,2})?$/.test(s) || /^\d+,\d{2}$/.test(s)) n = Number(s.replace(/\./g, '').replace(',', '.'));
     else if (/^\d+$/.test(s)) n = Number(s);
     else return null;
-    return Number.isFinite(n) ? { n, tanda, negatif } : null;
+    return Number.isFinite(n) ? { n, tanda, negatif, positif } : null;
 }
 /** Token yang "terlihat seperti uang": punya pemisah ribuan atau 2 desimal (supaya nomor referensi tidak ikut terbaca). */
-const tampakUang = (s: string) => UANG.test(s) && (/\d[.,]\d{3}/.test(s) || /[.,]\d{2}(\s?(CR|DB|D|K))?$/i.test(s));
+const tampakUang = (s: string) => UANG.test(s) && (/\d[.,]\d{3}/.test(s) || /[.,]\d{2}(\s?(CR|DB|D|K))?$/i.test(s) || /^[-+]?Rp/i.test(s));
+/** Jam "17.35" (sering diikuti WIB) mirip angka uang 2 desimal → bukan uang. */
+const tampakJam = (l: Baris, i: number) => /^\d{1,2}[.:]\d{2}$/.test(l[i].s) && +l[i].s.slice(0, l[i].s.search(/[.:]/)) < 24 && (/^(WIB|WITA|WIT)$/i.test(l[i + 1]?.s || '') || l.some((t) => /\bWI(B|TA|T)\b/.test(t.s)));
+const uangDi = (l: Baris, i: number) => tampakUang(l[i].s) && !tampakJam(l, i);
 
 const BLN: Record<string, number> = { jan: 1, feb: 2, mar: 3, apr: 4, mei: 5, may: 5, jun: 6, jul: 7, agu: 8, agt: 8, aug: 8, sep: 9, okt: 10, oct: 10, nov: 11, des: 12, dec: 12 };
 function tanggalDi(s: string, tahun: number): { iso: string; panjang: number } | null {
@@ -122,7 +126,7 @@ export function urai(halaman: Baris[][], bank = ''): HasilMutasi {
     }
 
     // Blok transaksi: baris diawali tanggal + baris lanjutan tanpa tanggal.
-    type Blok = { tgl: string; baris: Baris[] };
+    type Blok = { tgl: string; baris: Baris[]; tunggu?: boolean };
     const blok: Blok[] = [];
     let cur: Blok | null = null;
     let bulanTerakhir = 0, tahunJalan = thn;
@@ -130,7 +134,12 @@ export function urai(halaman: Baris[][], bank = ''): HasilMutasi {
         if (!l.length) continue;
         const s = l.map((t) => t.s).join(' ');
         const tg = tanggalDi(l[0].s.length >= 4 ? l[0].s : s, tahunJalan) || tanggalDi(s, tahunJalan);
-        const adaUang = l.some((t) => tampakUang(t.s));
+        const adaUang = l.some((_, i) => uangDi(l, i));
+        if (cur?.tunggu && adaUang && !tg && !BUKAN_TX.test(s)) { cur.baris.unshift(l); cur.tunggu = false; continue; }
+        if (tg && !adaUang && !BUKAN_TX.test(s) && /\d{1,2}\s*[A-Za-z]{3}|\d{1,2}[/\-.]\d{1,2}/.test(s.slice(0, 14))) {
+            // Baris diawali tanggal tapi angka uangnya ada di baris berikut.
+            cur = { tgl: tg.iso, baris: [l], tunggu: true }; blok.push(cur); continue;
+        }
         if (tg && adaUang && !BUKAN_TX.test(s)) {
             // Tahun berganti di tengah (Des → Jan) untuk format tanpa tahun.
             const b = +tg.iso.slice(5, 7);
@@ -138,7 +147,7 @@ export function urai(halaman: Baris[][], bank = ''): HasilMutasi {
             bulanTerakhir = b;
             cur = { tgl: tg.iso, baris: [l] };
             blok.push(cur);
-        } else if (cur && !BUKAN_TX.test(s) && cur.baris.length < 6 && !tg) {
+        } else if (cur && !BUKAN_TX.test(s) && cur.baris.length < 8 && !tg) {
             // Lanjutan keterangan, hanya kalau tidak berisi angka uang (baris ringkasan/halaman baru diabaikan).
             if (!adaUang) cur.baris.push(l); else cur = null;
         } else if (tg || BUKAN_TX.test(s)) cur = null;
@@ -147,8 +156,10 @@ export function urai(halaman: Baris[][], bank = ''): HasilMutasi {
     const out: MutasiTx[] = [];
     let saldoPrev = saldoAwal;
     blok.forEach((bk, idx) => {
+        if (bk.tunggu) return; // tanggal tanpa angka uang sama sekali
         const l0 = bk.baris[0];
-        const uangTok = l0.map((t, i) => ({ t, i, u: tampakUang(t.s) ? angkaUang(t.s) : null })).filter((x) => x.u && x.i > 0);
+        const pertama = tanggalDi(l0[0]?.s || '', thn) ? 1 : 0;
+        const uangTok = l0.map((t, i) => ({ t, i, u: uangDi(l0, i) ? angkaUang(t.s) : null })).filter((x) => x.u && x.i >= pertama);
         // Penanda DB/CR terpisah di token berikutnya.
         for (const x of uangTok) { const nx = l0[x.i + 1]; if (nx && /^(DB|CR|D|K)$/i.test(nx.s) && !x.u!.tanda) x.u!.tanda = /^(CR|K)$/i.test(nx.s) ? 'CR' : 'DB'; }
         const nz = uangTok.filter((x) => x.u!.n !== 0);
@@ -159,10 +170,12 @@ export function urai(halaman: Baris[][], bank = ''): HasilMutasi {
         let jenis: 'Masuk' | 'Keluar' | null = null, yakin = true;
         if (nominalTok.u!.tanda) jenis = nominalTok.u!.tanda === 'CR' ? 'Masuk' : 'Keluar';
         else if (nominalTok.u!.negatif) jenis = 'Keluar';
+        else if (nominalTok.u!.positif) jenis = 'Masuk';
         else if (saldoPrev != null && saldo != null && Math.abs(Math.abs(saldo - saldoPrev) - nominal) < 1) jenis = saldo > saldoPrev ? 'Masuk' : 'Keluar';
         else if (xDebet != null && xKredit != null) jenis = Math.abs(nominalTok.t.x - xKredit) < Math.abs(nominalTok.t.x - xDebet) ? 'Masuk' : 'Keluar';
-        const ketMentah = [...l0.filter((_, i) => i > 0 && !uangTok.some((x) => x.i === i) && !/^(DB|CR|D|K)$/i.test(l0[i].s)), ...bk.baris.slice(1).flat()].map((t) => t.s).join(' ').replace(/\s+/g, ' ').trim();
-        const ket = ketMentah.replace(/^\d{1,2}[/\-.]\d{1,2}([/\-.]\d{2,4})?\s*/, '').slice(0, 200);
+        const ketMentah = [...l0.filter((_, i) => i >= pertama && !uangTok.some((x) => x.i === i) && !/^(DB|CR|D|K)$/i.test(l0[i].s)), ...bk.baris.slice(1).flat()].map((t) => t.s).join(' ').replace(/\s+/g, ' ').trim();
+        const ket = ketMentah.replace(/^\d{1,2}[/\-.]\d{1,2}([/\-.]\d{2,4})?\s*/, '').replace(/\d{1,2}\s+[A-Za-z]{3}[a-z]*\s+\d{4}\s*/g, '').replace(/\b\d{1,2}[:.]\d{2}(?:[:.]\d{2})?\s*(?:WIB|WITA|WIT)?\b/gi, '').replace(/\s+/g, ' ').trim().slice(0, 200);
+        if (Math.round(nominal) < 1) return; // nominal 0 (mis. baris info) — lewati
         if (!jenis) {
             jenis = /\b(CR|KREDIT|SETORAN|BUNGA|TERIMA|DARI|INCOMING|REFUND)\b/i.test(ket) ? 'Masuk' : 'Keluar';
             yakin = false;
@@ -189,6 +202,16 @@ export function pihakDari(ket: string): string {
         .replace(/[^A-Za-z&' .]+/g, ' ').replace(/\s+/g, ' ').trim();
     const p = s.split(' ').slice(0, 5).join(' ').slice(0, 60);
     return p.length >= 3 ? p : ket.replace(/\s+/g, ' ').trim().slice(0, 40);
+}
+
+/**
+ * Pola tata letak PDF TANPA data pribadi, untuk memperbaiki pembaca bila format bank belum dikenali:
+ * huruf → x, angka → 9 (kecuali kata kunci umum bank seperti Saldo, DB, CR, WIB, nama bulan), posisi kolom dibulatkan.
+ */
+const KATA_AMAN = /^(DB|CR|D|K|Rp\.?|IDR|WIB|WITA|WIT|Debit|Debet|Kredit|Credit|Saldo|Awal|Akhir|Tanggal|Tgl|Date|Keterangan|Ket|Uraian|Deskripsi|Description|Mutasi|Masuk|Keluar|Jumlah|Nominal|Amount|Balance|Transaksi|Pembayaran|QRIS|Transfer|TRSF|TRF|Cashback|Bonus|Biaya|Admin|Bunga|Pajak|Periode|Period|Halaman|Page|Total|Jam|Waktu|Time|Jan|Feb|Mar|Apr|Mei|May|Jun|Jul|Agu|Agt|Aug|Sep|Okt|Oct|Nov|Des|Dec|Januari|Februari|Maret|April|Juni|Juli|Agustus|September|Oktober|November|Desember)$/i;
+export function polaAnonim(halaman: Baris[][]): string {
+    const samar = (s: string) => s.split(/(\s+)/).map((w) => { if (KATA_AMAN.test(w.replace(/[:.,]$/, ''))) return w; const m = /^([-+(]?)(Rp\.?)(.*)$/i.exec(w); return m ? m[1] + m[2] + m[3].replace(/[A-Za-z]/g, 'x').replace(/\d/g, '9') : w.replace(/[A-Za-z]/g, 'x').replace(/\d/g, '9'); }).join('');
+    return halaman.slice(0, 2).map((h, p) => `--- halaman ${p + 1}\n` + h.slice(0, 45).map((l) => l.map((t) => `${Math.round(t.x / 5) * 5}:${samar(t.s)}`).join(' | ')).join('\n')).join('\n');
 }
 
 /* ── 4. Cocokkan dengan transaksi yang sudah tercatat ── */
