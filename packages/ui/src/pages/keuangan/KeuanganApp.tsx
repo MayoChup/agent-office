@@ -5,7 +5,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSubNav } from '../../kantor/subnav';
 import { useApi } from '../../kantor/api';
 import { apiGet, apiPost, serverBase, tokenLogin } from '../../kantor/connection';
-import { ImporMutasi } from './ImporMutasi';
+import { ImporMutasi, UnggahMutasi, AntreMutasiKartu, type ItemAntre } from './ImporMutasi';
 import { RichText } from '../../components/common/RichText';
 import { Batang, Donat } from './Grafik';
 import { Tx, rp, rpk, ikon, warnaDari, periode, dalam, keluar, masuk, sum, kelompok, hariIni, tglPanjang, tglPendek, transfer, transferMasuk, tujuanTransfer, saldoKini } from './util';
@@ -31,6 +31,8 @@ export function KeuanganApp() {
     const [tambah, setTambah] = useState(false);
     const [ubah, setUbah] = useState<Tx | null>(null);
     const [impor, setImpor] = useState(false);
+    const [tinjau, setTinjau] = useState<ItemAntre | null>(null);
+    const [sinyalAntre, setSinyalAntre] = useState(0);
     const [detail, setDetail] = useState<Tx | null>(null);
     useKembali(tambah, () => setTambah(false));
     useKembali(!!detail, () => setDetail(null));
@@ -74,6 +76,7 @@ export function KeuanganApp() {
             {rep.error && <div className="error">Data keuangan belum bisa dibaca: {rep.error}</div>}
             {!rep.data && !rep.error && <div className="fin-empty">Memuat…</div>}
 
+            {tab === 'beranda' && <div className="k-antre-wrap"><AntreMutasiKartu akun={ang.data?.akun || []} onTinjau={setTinjau} sinyal={sinyalAntre} /></div>}
             {rep.data && tab === 'beranda' && <Beranda tx={tx} p={p} mulai={mulai} ang={ang.data} onTx={setDetail} go={setTab} onTambah={() => setTambah(true)} lihat={bukaTransaksi} onImpor={() => setImpor(true)} />}
             {rep.data && tab === 'pengeluaran' && <Pengeluaran tx={tx} mulai={mulai} geser={geser} lihat={bukaTransaksi} />}
             {rep.data && tab === 'anggaran' && <AnggaranView tx={diP} p={p} ang={ang.data} simpan={async (x) => { await apiPost('/api/kantor/keuangan/anggaran', x); ang.reload(); }} lihat={bukaTransaksi} />}
@@ -85,7 +88,8 @@ export function KeuanganApp() {
             {detail && <Detail t={detail} all={tx} mulai={mulai} onClose={() => setDetail(null)} lihat={(f) => { setDetail(null); bukaTransaksi(f); }}
                 onUbah={() => { setUbah(detail); setDetail(null); }} onHapus={async () => { await apiPost('/api/kantor/keuangan/hapus', { ids: [detail.id] }); setDetail(null); muat(); }} />}
             {ubah && <Tambah ang={ang.data} id={ubah.id} awal={{ jenis: ubah.jenis, nominal: ubah.n, akun: ubah.bank, kategori: ubah.kat, pihak: ubah.pihak, keterangan: ubah.ket, tanggal: ubah.d }} onClose={() => setUbah(null)} onSaved={() => { setUbah(null); muat(); }} />}
-            {impor && <ImporMutasi akun={ang.data?.akun || []} onClose={() => setImpor(false)} onSelesai={() => { muat(); ang.reload(); }} />}
+            {impor && <UnggahMutasi akun={ang.data?.akun || []} onClose={() => setImpor(false)} onTerkirim={() => setSinyalAntre((n) => n + 1)} />}
+            {tinjau && <ImporMutasi tinjau={tinjau} onClose={() => { setTinjau(null); setSinyalAntre((n) => n + 1); }} onSelesai={() => { muat(); ang.reload(); setSinyalAntre((n) => n + 1); }} />}
         </div>
     );
 }

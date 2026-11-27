@@ -28,6 +28,7 @@ import { WatchFolder } from './kantor/watchfolder';
 import { Catatan } from './kantor/catatan';
 import { Berkas } from './kantor/berkas';
 import { AnggaranStore, bacaTransaksi } from './kantor/anggaran';
+import { AntreMutasi, deteksiBank } from './kantor/mutasiAntre';
 import { bacaPdf, urai, cocokkan } from './kantor/mutasi';
 import { presetInfo, REKOMENDASI } from './kantor/preset';
 import { profil as nasdaqProfil, fundamentalNasdaq } from './kantor/nasdaq';
@@ -257,7 +258,7 @@ app.set('trust proxy', true);
 // Catatan & berkas butuh batas lebih besar; route lain tetap 32 KB.
 app.use(['/api/kantor/catatan', '/api/kantor/berkas'], express.json({ limit: '12mb' }));
 app.use('/api/kantor/keuangan/mutasi/terapkan', express.json({ limit: '2mb' }));
-app.use('/api/kantor/keuangan/mutasi-json', express.json({ limit: '30mb' }));
+app.use(['/api/kantor/keuangan/mutasi-json', '/api/kantor/keuangan/mutasi-antre-json'], express.json({ limit: '30mb' }));
 app.use(express.json({ limit: '32kb' }));
 // Kompres jawaban JSON besar (mis. data 500 saham ±1 MB → ±150 KB): jauh lebih cepat di jaringan HP.
 app.use('/api', (req, res, next) => {
@@ -439,9 +440,9 @@ function bacaPdfTerpisah(buf: Buffer, sandi: string): Promise<{ halaman: any[] }
 }
 async function prosesMutasi(buf: Buffer, akunMinta: string, sandi: string) {
     if (!Buffer.isBuffer(buf) || buf.length < 100 || buf.subarray(0, 5).toString() !== '%PDF-') throw new Error('Berkas bukan PDF.');
-    const akun = String(akunMinta || '').trim().slice(0, 30);
-    if (!akun) throw new Error('Pilih rekening/akunnya dulu.');
     const { halaman } = await bacaPdfTerpisah(buf, sandi);
+    const akun = String(akunMinta || '').trim().slice(0, 30) || deteksiBank(halaman as any, anggaran.get().akun);
+    if (!akun) { const e: any = new Error('Bank PDF ini tidak terdeteksi otomatis. Pilih banknya.'); e.butuhAkun = true; throw e; }
     const hasil = urai(halaman, akun);
     let ada: any[] = [];
     try { ada = (await pencatat.report(true)).transaksi; } catch (e: any) { hasil.peringatan.push(`Belum bisa mengecek transaksi yang sudah tercatat (${e?.message || e}) — semua ditandai baru.`); }
@@ -450,7 +451,7 @@ async function prosesMutasi(buf: Buffer, akunMinta: string, sandi: string) {
     const c = cocokkan(akun, hasil.transaksi, ada, hasil.periode);
     const rules = config.pencatat.kategori;
     return {
-        ok: true, ...hasil,
+        ok: true, ...hasil, akun,
         transaksi: await pencatat.lengkapiKategori(c.hasil.map((t: any) => t.arah
             ? { ...t, jenis: 'Antar Rekening', kategori: t.arah === 'Masuk' ? KAT_TRANSFER_MASUK : KAT_TRANSFER_KELUAR }
             : { ...t, kategori: t.jenis === 'Masuk' ? 'Pendapatan' : kategoriOf(`${t.pihak} ${t.ket}`, rules) })),
@@ -460,6 +461,26 @@ async function prosesMutasi(buf: Buffer, akunMinta: string, sandi: string) {
 }
 app.post('/api/kantor/keuangan/mutasi', requireToken, express.raw({ type: () => true, limit: '20mb' }), async (req, res) => {
     try { res.json(await prosesMutasi(req.body as Buffer, String(req.query.akun || ''), String(req.headers['x-pdf-sandi'] || ''))); } catch (e) { keuErr(res, e); }
+});
+/* Antrean: banyak PDF sekaligus, dibaca di belakang layar, dikabari saat siap ditinjau. */
+const antreMutasi = new AntreMutasi(config.dataDir, prosesMutasi, (t) => { void kabarDari(AI_KEU())(t).catch(() => undefined); });
+const keuErrAntre = (res: express.Response, e: any) => res.status(400).json({ ok: false, error: String(e?.message || e) });
+app.post('/api/kantor/keuangan/mutasi-antre', requireToken, express.raw({ type: () => true, limit: '20mb' }), (req, res) => {
+    try { res.json({ ok: true, item: antreMutasi.tambah(req.body as Buffer, String(req.query.nama || ''), String(req.query.akun || ''), String(req.headers['x-pdf-sandi'] || '')) }); } catch (e) { keuErrAntre(res, e); }
+});
+app.post('/api/kantor/keuangan/mutasi-antre-json', requireToken, (req, res) => {
+    try { res.json({ ok: true, item: antreMutasi.tambah(Buffer.from(String(req.body?.pdf || ''), 'base64'), String(req.body?.nama || ''), String(req.body?.akun || ''), String(req.body?.sandi || '')) }); } catch (e) { keuErrAntre(res, e); }
+});
+app.get('/api/kantor/keuangan/mutasi-antre', requireToken, (_req, res) => { res.json({ ok: true, items: antreMutasi.daftar() }); });
+app.get('/api/kantor/keuangan/mutasi-antre/:id', requireToken, (req, res) => { try { res.json({ ok: true, item: antreMutasi.ambil(String(req.params.id)) }); } catch (e) { keuErrAntre(res, e); } });
+app.post('/api/kantor/keuangan/mutasi-antre/:id/:aksi', requireToken, (req, res) => {
+    try {
+        const id = String(req.params.id), aksi = String(req.params.aksi);
+        if (aksi === 'ulangi') res.json({ ok: true, item: antreMutasi.ulangi(id, { sandi: req.body?.sandi, akun: req.body?.akun }) });
+        else if (aksi === 'selesai') { antreMutasi.tandaiDisimpan(id); res.json({ ok: true }); }
+        else if (aksi === 'hapus') { antreMutasi.hapus(id); res.json({ ok: true }); }
+        else throw new Error('Aksi tidak dikenal.');
+    } catch (e) { keuErrAntre(res, e); }
 });
 /** Cadangan: PDF dikirim sebagai JSON base64 — untuk jaringan/proksi yang memutus unggahan berkas mentah. */
 app.post('/api/kantor/keuangan/mutasi-json', requireToken, async (req, res) => {
