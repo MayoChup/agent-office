@@ -4,7 +4,7 @@ import { useApi } from '../../kantor/api';
 import { rp, tglPendek, ikon } from './util';
 
 import { Ikon } from '../../components/Ikon';
-interface MTx { idx: number; id: string; tanggal: string; jenis: 'Masuk' | 'Keluar' | 'Antar Rekening'; nominal: number; saldo: number | null; ket: string; pihak: string; kategori: string; yakin: boolean; status: 'baru' | 'cocok'; cocok: { id: string; d: string; pihak: string } | null }
+interface MTx { idx: number; id: string; tanggal: string; jenis: 'Masuk' | 'Keluar' | 'Antar Rekening'; nominal: number; saldo: number | null; ket: string; pihak: string; kategori: string; yakin: boolean; status: 'baru' | 'cocok' | 'ganti'; cocok: { id: string; d: string; pihak: string } | null; ganti?: { id: string; d: string; n: number; pihak: string; kat: string } }
 interface Lebih { id: string; d: string; jenis: string; n: number; pihak: string; ket: string }
 interface Hasil { pola?: string; periode: { dari: string; sampai: string }; saldoAwal: number | null; saldoAkhir: number | null; transaksi: MTx[]; lebih: Lebih[]; halaman: number; peringatan: string[] }
 
@@ -130,33 +130,36 @@ export function AntreMutasiKartu({ akun: daftarAkun, onTinjau, sinyal }: { akun:
 }
 
 /** Tinjau hasil baca satu PDF → simpan. */
-export function ImporMutasi({ tinjau, onClose, onSelesai }: { tinjau: ItemAntre; onClose: () => void; onSelesai: () => void }) {
+export function ImporMutasi({ tinjau, akunList = [], onClose, onSelesai }: { tinjau: ItemAntre; akunList?: string[]; onClose: () => void; onSelesai: () => void }) {
     const akun = tinjau.akun;
     const [busy, setBusy] = useState(false);
     const [err, setErr] = useState('');
     const awal: Hasil = tinjau.hasil;
     const [h, setH] = useState<Hasil | null>(awal);
-    const [pilih, setPilih] = useState<Record<string, boolean>>(() => Object.fromEntries((awal?.transaksi || []).map((t: MTx) => [t.id, t.status === 'baru'])));
+    const [pilih, setPilih] = useState<Record<string, boolean>>(() => Object.fromEntries((awal?.transaksi || []).map((t: MTx) => [t.id, t.status !== 'cocok'])));
     const [hapus, setHapus] = useState<Record<string, boolean>>({});
-    const [kat, setKat] = useState<Record<string, string>>(() => Object.fromEntries((awal?.transaksi || []).map((t: MTx) => [t.id, t.kategori])));
+    const [pindah, setPindah] = useState<Record<string, string>>({});
+    const [kat, setKat] = useState<Record<string, string>>(() => Object.fromEntries((awal?.transaksi || []).map((t: MTx) => [t.id, t.ganti?.kat && t.ganti.kat !== 'Lainnya' && t.jenis === 'Keluar' ? t.ganti.kat : t.kategori])));
     const [pakaiSaldo, setPakaiSaldo] = useState(true);
     const [hasilSimpan, setHasilSimpan] = useState('');
     void setH;
     const tx = h?.transaksi || [];
     const dipilih = tx.filter((t) => pilih[t.id]);
-    const ringkas = useMemo(() => ({ baru: tx.filter((t) => t.status === 'baru').length, cocok: tx.filter((t) => t.status === 'cocok').length, ragu: tx.filter((t) => !t.yakin).length }), [tx]);
+    const ringkas = useMemo(() => ({ baru: tx.filter((t) => t.status === 'baru').length, cocok: tx.filter((t) => t.status === 'cocok').length, ganti: tx.filter((t) => t.status === 'ganti').length, ragu: tx.filter((t) => !t.yakin).length }), [tx]);
     const terapkan = async () => {
         if (!h) return;
         setBusy(true); setErr('');
         try {
             const r: any = await apiPost('/api/kantor/keuangan/mutasi/terapkan', {
                 akun,
-                tambah: dipilih.map((t) => ({ id: t.id, tanggal: t.tanggal, jenis: t.jenis, nominal: t.nominal, pihak: t.pihak, kategori: t.jenis === 'Masuk' ? 'Pendapatan' : kat[t.id] || t.kategori, keterangan: t.ket })),
+                ganti: dipilih.filter((t) => t.status === 'ganti' && t.ganti).map((t) => ({ id: t.ganti!.id, tanggal: t.tanggal, jenis: t.jenis, nominal: t.nominal, pihak: t.pihak, kategori: t.jenis === 'Masuk' ? 'Pendapatan' : kat[t.id] || t.kategori, keterangan: t.ket })),
+                tambah: dipilih.filter((t) => t.status !== 'ganti').map((t) => ({ id: t.id, tanggal: t.tanggal, jenis: t.jenis, nominal: t.nominal, pihak: t.pihak, kategori: t.jenis === 'Masuk' ? 'Pendapatan' : kat[t.id] || t.kategori, keterangan: t.ket })),
                 hapus: Object.keys(hapus).filter((k) => hapus[k]),
+                pindah: Object.entries(pindah).filter(([, a]) => a).map(([id, a]) => ({ id, akun: a })),
                 sahkan: tx.filter((t) => t.status === 'cocok' && t.cocok?.id?.startsWith('auto-tf-')).map((t) => ({ id: t.cocok!.id, tanggal: t.tanggal })),
                 saldo: pakaiSaldo && h.saldoAkhir != null && !!h.periode.sampai ? { nilai: h.saldoAkhir, tanggal: h.periode.sampai } : null
             });
-            setHasilSimpan(`✅ ${r.ditambah || 0} transaksi ditambahkan${r.disahkan ? `, ${r.disahkan} pindah dana otomatis disahkan` : ''}${r.dilewati ? ` (${r.dilewati} dilewati karena nominalnya tidak valid)` : ''}${r.dihapus ? `, ${r.dihapus} dihapus` : ''}${r.saldo ? `, saldo ${akun} diperbarui` : ''}.`);
+            setHasilSimpan(`✅ ${r.ditambah || 0} transaksi ditambahkan${r.dipindah ? `, ${r.dipindah} dipindah rekening` : ''}${r.diganti ? `, ${r.diganti} catatan salah ketik dibetulkan sesuai mutasi` : ''}${r.disahkan ? `, ${r.disahkan} pindah dana otomatis disahkan` : ''}${r.dilewati ? ` (${r.dilewati} dilewati karena nominalnya tidak valid)` : ''}${r.dihapus ? `, ${r.dihapus} dihapus` : ''}${r.saldo ? `, saldo ${akun} diperbarui` : ''}.`);
             try { await apiPost(`/api/kantor/keuangan/mutasi-antre/${tinjau.id}/selesai`, {}); } catch { /* tidak penting */ }
             onSelesai();
         } catch (e: any) { setErr(String(e?.message || e)); }
@@ -174,6 +177,7 @@ export function ImporMutasi({ tinjau, onClose, onSelesai }: { tinjau: ItemAntre;
                             <div><small>Transaksi</small><b>{tx.length}</b></div>
                             <div><small>Sudah tercatat</small><b>{ringkas.cocok}</b></div>
                             <div><small>Baru</small><b className="in">{ringkas.baru}</b></div>
+                            {ringkas.ganti > 0 && <div><small>Dibetulkan</small><b>{ringkas.ganti}</b></div>}
                             {h.saldoAkhir != null && <div><small>Saldo akhir</small><b className="mono">{rp(h.saldoAkhir)}</b></div>}
                         </div>
                         {h.peringatan.map((p, i) => <div key={i} className="error"><Ikon e="⚠" /> {p}</div>)}
@@ -181,19 +185,19 @@ export function ImporMutasi({ tinjau, onClose, onSelesai }: { tinjau: ItemAntre;
                         {ringkas.ragu > 0 && <div className="hint"><Ikon e="❓" /> {ringkas.ragu} transaksi arahnya (masuk/keluar) ditebak — cek tanda <Ikon e="❓" />.</div>}
                         <div className="mt-bar">
                             <b>Transaksi di mutasi</b>
-                            <button className="k-link" onClick={() => setPilih(Object.fromEntries(tx.map((t) => [t.id, t.status === 'baru'])))}>Pilih yang baru</button>
+                            <button className="k-link" onClick={() => setPilih(Object.fromEntries(tx.map((t) => [t.id, t.status !== 'cocok'])))}>Pilih yang baru</button>
                             <button className="k-link" onClick={() => setPilih({})}>Kosongkan</button>
                         </div>
                         <div className="mt-list">
                             {tx.map((t) => (
-                                <label key={t.id} className={`mt-row ${t.status}`}>
+                                <label key={t.id} className={`mt-row ${t.status === 'ganti' ? 'baru' : t.status}`}>
                                     <input type="checkbox" checked={!!pilih[t.id]} onChange={(e) => setPilih({ ...pilih, [t.id]: e.target.checked })} />
                                     <div className="mt-main">
                                         <div className="mt-top"><b>{t.pihak || '(tanpa nama)'}</b><b className={`mono ${t.jenis === 'Masuk' ? 'in' : t.jenis === 'Keluar' ? 'out' : ''}`}>{t.jenis === 'Masuk' ? '+' : t.jenis === 'Keluar' ? '−' : '⇄ '}{rp(t.nominal)}{!t.yakin && <Ikon e="❓" />}</b></div>
                                         <small>{tglPendek(t.tanggal)} · {t.ket}</small>
                                         <div className="mt-bot">
                                             {t.jenis === 'Antar Rekening' && <span className="mt-tag">🔁 pindah dana ({/masuk/i.test(t.kategori) ? 'masuk' : 'keluar'})</span>}
-                                            {t.status === 'cocok' && t.cocok?.id?.startsWith('auto-tf-') ? <span className="mt-tag ok">✓ pindah dana otomatis, disahkan saat disimpan</span> : t.status === 'cocok' ? <span className="mt-tag ok">✓ sudah tercatat{t.cocok ? ` (${tglPendek(t.cocok.d)}${t.cocok.pihak ? `, ${t.cocok.pihak}` : ''})` : ''}</span> : <span className="mt-tag new">baru</span>}
+                                            {t.status === 'ganti' && t.ganti ? <span className="mt-tag ganti">↻ membetulkan catatan {rp(t.ganti.n)}{t.ganti.pihak ? ` "${t.ganti.pihak}"` : ''} ({tglPendek(t.ganti.d)}) jadi sesuai mutasi</span> : t.status === 'cocok' && t.cocok?.id?.startsWith('auto-tf-') ? <span className="mt-tag ok">✓ pindah dana otomatis, disahkan saat disimpan</span> : t.status === 'cocok' ? <span className="mt-tag ok">✓ sudah tercatat{t.cocok ? ` (${tglPendek(t.cocok.d)}${t.cocok.pihak ? `, ${t.cocok.pihak}` : ''})` : ''}</span> : <span className="mt-tag new">baru</span>}
                                             {t.jenis === 'Keluar' && pilih[t.id] && (
                                                 <select value={kat[t.id] || t.kategori} onClick={(e) => e.preventDefault()} onChange={(e) => setKat({ ...kat, [t.id]: e.target.value })}>
                                                     {Array.from(new Set(['Makan & Minum', 'Transport', 'Belanja', 'Tagihan & Langganan', 'Pulsa & Internet', 'Kesehatan', 'Hiburan', 'Investasi', 'Transfer Keluarga', 'Lainnya', kat[t.id] || t.kategori])).map((k) => <option key={k} value={k}>{ikon(k)} {k}</option>)}
@@ -207,16 +211,22 @@ export function ImporMutasi({ tinjau, onClose, onSelesai }: { tinjau: ItemAntre;
                         {h.lebih.length > 0 && (
                             <>
                                 <div className="mt-bar"><b>Tercatat di kantor tapi TIDAK ada di mutasi</b></div>
-                                <p className="hint">Untuk {akun} pada periode ini. Biasanya dobel atau salah pilih rekening. Centang untuk menghapus.</p>
+                                <p className="hint">Catatan {akun} pada periode ini yang tidak ada di mutasi bank. Biasanya salah pilih rekening (mis. ternyata bayar tunai) atau dobel. Pilih tindakannya; kalau dibiarkan, catatan tidak diubah.</p>
                                 <div className="mt-list">
                                     {h.lebih.map((t) => (
-                                        <label key={t.id} className="mt-row lebih">
-                                            <input type="checkbox" checked={!!hapus[t.id]} onChange={(e) => setHapus({ ...hapus, [t.id]: e.target.checked })} />
+                                        <div key={t.id} className="mt-row lebih">
                                             <div className="mt-main">
                                                 <div className="mt-top"><b>{t.pihak || '(tanpa nama)'}</b><b className={`mono ${t.jenis === 'Masuk' ? 'in' : 'out'}`}>{t.jenis === 'Masuk' ? '+' : '−'}{rp(t.n)}</b></div>
                                                 <small>{tglPendek(t.d)} · {t.ket || t.jenis}</small>
+                                                <div className="mt-bot">
+                                                    <select value={hapus[t.id] ? '__hapus' : pindah[t.id] || ''} onChange={(e) => { const v = e.target.value; setHapus({ ...hapus, [t.id]: v === '__hapus' }); setPindah({ ...pindah, [t.id]: v && v !== '__hapus' ? v : '' }); }} aria-label="Tindakan">
+                                                        <option value="">Biarkan</option>
+                                                        {akunList.filter((a) => a !== akun).map((a) => <option key={a} value={a}>Pindahkan ke {a}</option>)}
+                                                        <option value="__hapus">Hapus (dobel)</option>
+                                                    </select>
+                                                </div>
                                             </div>
-                                        </label>
+                                        </div>
                                     ))}
                                 </div>
                             </>
@@ -227,7 +237,7 @@ export function ImporMutasi({ tinjau, onClose, onSelesai }: { tinjau: ItemAntre;
                         {err && <div className="error">{err}</div>}
                         <div className="row" style={{ gap: 8 }}>
                             <button className="btn" onClick={onClose}>Nanti saja</button>
-                            <button className="btn primary k-save" style={{ flex: 1 }} disabled={busy || (!dipilih.length && !Object.values(hapus).some(Boolean) && !(pakaiSaldo && !!h.periode.sampai) && !tx.some((t) => t.cocok?.id?.startsWith('auto-tf-')))} onClick={terapkan}>
+                            <button className="btn primary k-save" style={{ flex: 1 }} disabled={busy || (!dipilih.length && !Object.values(hapus).some(Boolean) && !Object.values(pindah).some(Boolean) && !(pakaiSaldo && !!h.periode.sampai) && !tx.some((t) => t.cocok?.id?.startsWith('auto-tf-')))} onClick={terapkan}>
                                 {busy ? 'Menyimpan…' : `Simpan ${dipilih.length} transaksi${Object.values(hapus).filter(Boolean).length ? ` · hapus ${Object.values(hapus).filter(Boolean).length}` : ''}`}
                             </button>
                         </div>

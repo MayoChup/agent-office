@@ -89,7 +89,7 @@ export function KeuanganApp() {
                 onUbah={() => { setUbah(detail); setDetail(null); }} onHapus={async () => { await apiPost('/api/kantor/keuangan/hapus', { ids: [detail.id] }); setDetail(null); muat(); }} />}
             {ubah && <Tambah ang={ang.data} id={ubah.id} awal={{ jenis: ubah.jenis, nominal: ubah.n, akun: ubah.bank, kategori: ubah.kat, pihak: ubah.pihak, keterangan: ubah.ket, tanggal: ubah.d }} onClose={() => setUbah(null)} onSaved={() => { setUbah(null); muat(); }} />}
             {impor && <UnggahMutasi akun={ang.data?.akun || []} onClose={() => setImpor(false)} onTerkirim={() => setSinyalAntre((n) => n + 1)} />}
-            {tinjau && <ImporMutasi tinjau={tinjau} onClose={() => { setTinjau(null); setSinyalAntre((n) => n + 1); }} onSelesai={() => { muat(); ang.reload(); setSinyalAntre((n) => n + 1); }} />}
+            {tinjau && <ImporMutasi tinjau={tinjau} akunList={ang.data?.akun || []} onClose={() => { setTinjau(null); setSinyalAntre((n) => n + 1); }} onSelesai={() => { muat(); ang.reload(); setSinyalAntre((n) => n + 1); }} />}
         </div>
     );
 }

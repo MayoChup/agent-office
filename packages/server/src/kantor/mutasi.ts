@@ -215,7 +215,7 @@ export function polaAnonim(halaman: Baris[][]): string {
 }
 
 /* ── 4. Cocokkan dengan transaksi yang sudah tercatat ── */
-export interface TxAda { id: string; d: string; bank: string; jenis: string; n: number; pihak: string; ket: string; kat?: string }
+export interface TxAda { id: string; d: string; bank: string; jenis: string; n: number; pihak: string; ket: string; kat?: string; status?: string }
 export function cocokkan(akun: string, mut: MutasiTx[], ada: TxAda[], periode: { dari: string; sampai: string }) {
     const samaAkun = (b: string) => b.toLowerCase().replace(/\s/g, '') === akun.toLowerCase().replace(/\s/g, '');
     const kandidat = ada.filter((t) => samaAkun(t.bank));
@@ -227,8 +227,35 @@ export function cocokkan(akun: string, mut: MutasiTx[], ada: TxAda[], periode: {
         const c = kandidat.filter((t) => !dipakai.has(t.id) && Math.abs(t.n - m.nominal) <= 1 && arahCocok(t) && hari(t.d, m.tanggal) <= 3)
             .sort((a, b) => hari(a.d, m.tanggal) - hari(b.d, m.tanggal) || (a.id.startsWith('auto-tf-') ? -1 : 0))[0];
         if (c) dipakai.add(c.id);
-        return { ...m, status: c ? 'cocok' as const : 'baru' as const, cocok: c ? { id: c.id, d: c.d, pihak: c.pihak, ket: c.ket } : null, id: idMutasi(akun, m) };
+        return { ...m, status: (c ? 'cocok' : 'baru') as 'cocok' | 'baru' | 'ganti', cocok: c ? { id: c.id, d: c.d, pihak: c.pihak, ket: c.ket } : null, id: idMutasi(akun, m) };
     });
+    // Catatan yang MIRIP (salah ketik nominal/tanggal saat dicatat manual) → diganti dengan versi mutasi.
+    // Mutasi bank selalu dianggap benar. Catatan yang sudah berasal dari mutasi tidak pernah diganti.
+    const kata = (t: string) => new Set(String(t || '').toUpperCase().replace(/[^A-Z ]+/g, ' ').split(/\s+/).filter((w) => w.length >= 3));
+    const namaMirip = (a: string, b: string) => { const x = kata(a), y = kata(b); for (const w of x) if (y.has(w)) return true; return false; };
+    const angkaTypo = (a: number, b: number) => {
+        if (!a || !b) return false;
+        const r = a > b ? a / b : b / a;
+        if ([10, 100, 1000].some((k) => Math.abs(r - k) < 1e-9)) return true; // kelebihan/kekurangan nol
+        const sa = String(Math.round(a)), sb = String(Math.round(b));
+        if (sa.length !== sb.length) return false;
+        const beda = [...sa].map((c, i) => (c !== sb[i] ? i : -1)).filter((i) => i >= 0);
+        if (beda.length === 1) return true; // satu angka salah
+        return beda.length === 2 && beda[1] === beda[0] + 1 && sa[beda[0]] === sb[beda[1]] && sa[beda[1]] === sb[beda[0]]; // dua angka tertukar
+    };
+    for (const h of hasil) {
+        if (h.status !== 'baru') continue;
+        const arahOk = (t: TxAda) => t.jenis === h.jenis || (t.jenis === 'Antar Rekening' && (!t.kat || /masuk/i.test(t.kat) === (h.jenis === 'Masuk')));
+        const c = kandidat.filter((t) => !dipakai.has(t.id) && t.status !== 'Mutasi' && arahOk(t) && hari(t.d, h.tanggal) <= 3
+                && ((namaMirip(t.pihak + ' ' + t.ket, h.pihak + ' ' + h.ket) && (angkaTypo(t.n, h.nominal) || Math.abs(t.n - h.nominal) <= 1 || Math.abs(t.n - h.nominal) / Math.max(t.n, h.nominal) <= 0.3))
+                    || (angkaTypo(t.n, h.nominal) && hari(t.d, h.tanggal) <= 1)
+                    || (Math.abs(t.n - h.nominal) <= 1 && namaMirip(t.pihak, h.pihak))))
+            .sort((a, b) => hari(a.d, h.tanggal) - hari(b.d, h.tanggal))[0];
+        if (!c) continue;
+        dipakai.add(c.id);
+        (h as any).status = 'ganti';
+        (h as any).ganti = { id: c.id, d: c.d, n: c.n, pihak: c.pihak, kat: c.kat || '' };
+    }
     // Tercatat di kantor untuk akun & periode ini, tapi tidak ada di mutasi bank → mungkin dobel / salah akun.
     const lebih = periode.dari ? kandidat.filter((t) => !dipakai.has(t.id) && t.d >= periode.dari && t.d <= periode.sampai) : [];
     return { hasil, lebih };

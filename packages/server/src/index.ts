@@ -499,6 +499,15 @@ app.post('/api/kantor/keuangan/mutasi/terapkan', requireToken, async (req, res) 
         if (tambah.length) Object.assign(out, await pencatat.tambahBanyak(tambah, 'Mutasi'));
         const hapus = (Array.isArray(req.body?.hapus) ? req.body.hapus : []).map(String).filter(Boolean).slice(0, 500);
         if (hapus.length) Object.assign(out, await pencatat.hapus(hapus, path.join(config.dataDir, 'keuangan-terhapus.json')));
+        // Catatan salah ketik → diganti versi mutasi (mutasi dianggap benar).
+        const ganti = (Array.isArray(req.body?.ganti) ? req.body.ganti : []).slice(0, 500).map((x: any) => ({
+            id: String(x?.id || ''), tanggal: String(x?.tanggal || ''), akun, jenis: ['Masuk', 'Keluar', 'Antar Rekening'].includes(x?.jenis) ? x.jenis : 'Keluar',
+            nominal: Number(x?.nominal), pihak: String(x?.pihak || ''), kategori: String(x?.kategori || 'Lainnya'), keterangan: String(x?.keterangan || '')
+        })).filter((x: any) => x.id);
+        if (ganti.length) Object.assign(out, await pencatat.gantiDariMutasi(ganti));
+        // Tercatat di rekening ini tapi tidak ada di mutasi → dipindah ke rekening lain (mis. Cash).
+        const pindah = (Array.isArray(req.body?.pindah) ? req.body.pindah : []).slice(0, 500).map((x: any) => ({ id: String(x?.id || ''), akun: String(x?.akun || '').trim() })).filter((x: any) => x.id && x.akun && x.akun !== akun);
+        if (pindah.length) Object.assign(out, await pencatat.pindahAkun(pindah));
         // Pasangan transfer otomatis yang terbukti ada di mutasi → disahkan dengan tanggal dari mutasi.
         const sahkan = (Array.isArray(req.body?.sahkan) ? req.body.sahkan : []).slice(0, 500).map((x: any) => ({ id: String(x?.id || ''), tanggal: String(x?.tanggal || '') }));
         if (sahkan.length) Object.assign(out, await pencatat.sahkan(sahkan));

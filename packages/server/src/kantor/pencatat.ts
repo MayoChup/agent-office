@@ -664,6 +664,42 @@ export class Pencatat {
         this.reportCache = null;
         return { diubah: 1 };
     }
+    /** Ganti catatan yang salah ketik dengan data dari mutasi bank (mutasi dianggap benar). Kategori pilihan Pak Rico dipertahankan. */
+    async gantiDariMutasi(list: Array<{ id: string; tanggal: string; akun: string; jenis: string; nominal: number; pihak: string; kategori: string; keterangan: string }>) {
+        const rows = await this.existingRows();
+        const data: any[] = [];
+        for (const x of list) {
+            const m = /^baris-(\d+)$/.exec(x.id);
+            const i = m ? Number(m[1]) - 2 : rows.findIndex((r) => String(r[8] || '') === x.id);
+            if (i < 0 || !rows[i] || String(rows[i][9] || '') === 'Mutasi') continue;
+            let v: any[];
+            try { v = this.bersih({ ...x, jam: undefined }, rows[i]); } catch { continue; }
+            const katLama = String(rows[i][6] || '');
+            if (katLama && katLama !== 'Lainnya' && x.jenis === String(rows[i][3] || '')) v[6] = katLama;
+            data.push({ range: `'${this.cfg.sheetName}'!A${i + 2}:J${i + 2}`, values: [[...v, rows[i][8] || '', 'Mutasi']] });
+        }
+        if (data.length) {
+            await this.g.call(`https://sheets.googleapis.com/v4/spreadsheets/${this.cfg.spreadsheetId}/values:batchUpdate`, { method: 'POST', body: JSON.stringify({ valueInputOption: 'USER_ENTERED', data }) });
+            this.reportCache = null;
+        }
+        return { diganti: data.length };
+    }
+    /** Pindahkan catatan ke rekening lain (mis. ternyata dibayar tunai, bukan BCA). */
+    async pindahAkun(list: Array<{ id: string; akun: string }>) {
+        const rows = await this.existingRows();
+        const data: any[] = [];
+        for (const x of list) {
+            const m = /^baris-(\d+)$/.exec(x.id);
+            const i = m ? Number(m[1]) - 2 : rows.findIndex((r) => String(r[8] || '') === x.id);
+            if (i < 0 || !rows[i] || !x.akun) continue;
+            data.push({ range: `'${this.cfg.sheetName}'!C${i + 2}`, values: [[String(x.akun).slice(0, 30)]] });
+        }
+        if (data.length) {
+            await this.g.call(`https://sheets.googleapis.com/v4/spreadsheets/${this.cfg.spreadsheetId}/values:batchUpdate`, { method: 'POST', body: JSON.stringify({ valueInputOption: 'USER_ENTERED', data }) });
+            this.reportCache = null;
+        }
+        return { dipindah: data.length };
+    }
     /** Baris pasangan otomatis yang sudah terbukti di mutasi bank: samakan tanggal dengan mutasi & tandai "Mutasi". */
     async sahkan(list: Array<{ id: string; tanggal: string }>) {
         const rows = await this.existingRows();
