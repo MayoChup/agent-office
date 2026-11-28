@@ -47,6 +47,7 @@ export function UjiMundur({ sisipan }: { sisipan?: React.ReactNode } = {}) {
                 {d.data?.saran?.teks && <div className="su-ai-box"><b><Ikon e="✨" /> Ringkasan AI</b><p>{d.data.saran.teks}</p></div>}
             </section>
             {sisipan}
+            {(h as any)?.fundBanding && <BandingFundamental b={(h as any).fundBanding} />}
             {h && r && (<>
                 <div className="sb-seg scroll">{MODE.map((m) => <button key={m.H} className={H === m.H ? 'on' : ''} onClick={() => setH(m.H)}>{m.label}</button>)}</div>
                 <section className="sb-card">
@@ -148,6 +149,31 @@ function AmbangBeliKuat({ a }: { a: Ambang }) {
             <table className="um-t"><thead><tr><th>Skor gabungan ≥</th><th>Kasus</th><th>Rata-rata vs S&P 500 (20 hari)</th><th>Terbukti?</th></tr></thead>
                 <tbody>{a.uji.map((u) => <tr key={u.t} className={u.t === a.t && a.terbukti ? 'um-base' : ''}><td className="mono">{skor100(u.t)}/100</td><td className="mono">{u.n.toLocaleString('id-ID')}</td><td className={`mono ${kelasEx(u.rataEx)}`}>{p(u.rataEx)}</td><td>{u.terbukti ? '✓' : '–'}</td></tr>)}</tbody></table>
             <p className="sb-note">Diuji pada jendela bulanan 5 tahun (rata-rata semua saham {p(a.rataSemua ?? null)}). Berita & whales tidak punya riwayat 5 tahun, jadi kalibrasi memakai skor teknikal + fundamental; batas ini lalu dipakai untuk label gabungan keempat faktor. Diperbarui tiap uji mundur mingguan.</p>
+        </section>
+    );
+}
+
+/** Skor fundamental lama (batas tetap) vs relatif-industri, pada sampel uji mundur yang sama. */
+interface HasilF { n: number; beli: number | null; beliKuat: number | null; jual: number | null; semua: number | null; selisihKuintil: number | null; nBeli: number; nJual: number }
+function BandingFundamental({ b }: { b: { H: Record<string, { lama: HasilF; baru: HasilF }>; menang: boolean; alasan: string } }) {
+    const pp = (x: number | null) => (x == null ? '–' : `${x >= 0 ? '+' : '−'}${Math.abs(x).toLocaleString('id-ID', { maximumFractionDigits: 2 })}%`);
+    const baris: Array<[keyof HasilF, string, boolean]> = [['selisihKuintil', '20% skor teratas − 20% terbawah', true], ['beli', 'Rata-rata label Beli/Beli kuat', true], ['beliKuat', 'Rata-rata label Beli kuat', true], ['jual', 'Rata-rata label Jual/Jual kuat (makin minus makin tepat)', false]];
+    return (
+        <section className="sb-card">
+            <div className="sd-h"><h3><Ikon e="⚖" /> Skor fundamental: batas tetap vs dibanding industri</h3></div>
+            <p className={`um-vonis ${b.menang ? '' : ''}`}>{b.menang ? '✅ ' : '➖ '}{b.alasan} {b.menang ? 'Skor fundamental di aplikasi sekarang memakai perbandingan dengan median industri.' : ''}</p>
+            {['20', '60'].filter((k) => b.H[k]).map((k) => (
+                <div key={k}>
+                    <h4 className="um-sub">Posisi {k} hari bursa · {b.H[k].lama.n.toLocaleString('id-ID')} sampel</h4>
+                    <table className="um-t"><thead><tr><th>Ukuran</th><th>Batas tetap (lama)</th><th>Dibanding industri (baru)</th></tr></thead>
+                        <tbody>{baris.map(([key, label, naikBagus]) => {
+                            const a = b.H[k].lama[key] as number | null, c = b.H[k].baru[key] as number | null;
+                            const lebih = a != null && c != null && (naikBagus ? c > a : c < a);
+                            return <tr key={key}><td>{label}</td><td className="mono">{pp(a)}</td><td className={`mono ${lebih ? 'up' : ''}`}>{pp(c)}{lebih ? ' ✓' : ''}</td></tr>;
+                        })}</tbody></table>
+                </div>
+            ))}
+            <p className="sb-note">Hasil = rata-rata selisih dengan S&P 500 (disesuaikan risiko) selama posisi dipegang. Versi baru hanya dipakai kalau selisih 20% teratas − 20% terbawah lebih besar di KEDUA horison dan label Beli tidak lebih buruk. Pengelompokan industri memakai klasifikasi sekarang.</p>
         </section>
     );
 }

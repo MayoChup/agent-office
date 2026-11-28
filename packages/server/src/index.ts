@@ -900,11 +900,12 @@ async function buatSaran() {
  */
 function ujiDiThread(daftar: string[]): Promise<void> {
     const berkas = path.join(__dirname, 'kantor-uji-worker.js');
-    if (!fs.existsSync(berkas)) return ujiMundur(daftar, fileUji(config.dataDir), statusUji).then(() => undefined);
+    const kelompok = screener.kelompokSaham();
+    if (!fs.existsSync(berkas)) return ujiMundur(daftar, fileUji(config.dataDir), statusUji, undefined, undefined, kelompok).then(() => undefined);
     Object.assign(statusUji, { jalan: true, progres: 'memulai…', mulai: Date.now(), galat: '' });
     return new Promise<void>((ok, gagal) => {
         let beres = false;
-        const w = new Worker(berkas, { workerData: { daftar, file: fileUji(config.dataDir) }, resourceLimits: { maxOldGenerationSizeMb: 1536 } });
+        const w = new Worker(berkas, { workerData: { daftar, file: fileUji(config.dataDir), kelompok }, resourceLimits: { maxOldGenerationSizeMb: 1536 } });
         w.on('message', (m: any) => {
             if (m?.st) Object.assign(statusUji, m.st);
             if (m?.akhir) { beres = true; statusUji.jalan = false; if (m.akhir.ok) ok(); else { statusUji.galat = m.akhir.galat || 'gagal'; gagal(new Error(statusUji.galat)); } }

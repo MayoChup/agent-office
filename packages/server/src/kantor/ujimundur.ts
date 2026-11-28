@@ -8,6 +8,7 @@ import { fitur, ridge, nilaiMask, keSkor, FITUR, Model, statusModel } from './bo
 import { skorFundamental } from './skor';
 import { maskTeknikal, maskFundamental, cariKombinasi, PresetAi, ujiArsip, HasilCari } from './presetAi';
 import { bangunFundHistori } from './fundHistori';
+import { bandingFund, simpanBanding, type SampelF, type Kelompok } from './fundRelatif';
 import { galatSec } from './screener';
 import { cekDiskon, cekAmbilUntung, URUT_TAHAP } from './diskon';
 
@@ -39,7 +40,7 @@ export const kunciAlasan = (s: string) => `${s[0]} ${s.slice(1).replace(/\(.*$/,
 
 export interface StatusUji { jalan: boolean; progres: string; mulai: number; selesai: number; galat: string }
 
-export async function ujiMundur(semesta: string[], file: string, st: StatusUji, opsi = { tahun: 6.5, langkah: 5 }, ambil: (s: string, tahun: number) => Promise<Bar[]> = hargaPanjang) {
+export async function ujiMundur(semesta: string[], file: string, st: StatusUji, opsi = { tahun: 6.5, langkah: 5 }, ambil: (s: string, tahun: number) => Promise<Bar[]> = hargaPanjang, kelompok: Record<string, Kelompok> = {}) {
     st.jalan = true; st.mulai = Date.now(); st.galat = ''; st.progres = 'mengambil SPY…';
     try {
         const spy = await ambil('SPY', opsi.tahun);
@@ -62,6 +63,8 @@ export async function ujiMundur(semesta: string[], file: string, st: StatusUji, 
         const DK: Record<number, Record<string, Akum>> = {};
         for (const H of HS) DK[H] = Object.fromEntries(KUNCI_PT.map((k) => [k, akum()]));
         let nFund = 0;
+        // Pembanding skor fundamental lama vs relatif-industri (gaya 20 & 60 hari).
+        const FB: SampelF[] = [];
         // Sisi jual: apakah saham berskor lemah memang kalah dari pasar? (dasar keputusan short / "hindari")
         const JL: Record<number, Record<'semua' | 'tekJualKuat' | 'tekJual' | 'fundJual' | 'gabLemah', Akum>> = {};
         for (const H of HS) JL[H] = { semua: akum(), tekJualKuat: akum(), tekJual: akum(), fundJual: akum(), gabLemah: akum() };
@@ -118,7 +121,7 @@ export async function ujiMundur(semesta: string[], file: string, st: StatusUji, 
                     }
                     const z = S[H]; z.tgl.push(d[t].t); z.ex.push(ex); z.mask.push(mask); z.lama.push(f.skor);
                     const za = SA[H]; za.tgl.push(d[t].t); za.ex.push(ex); za.mask.push(maskA);
-                    if (rasio && SF[H]) { const zf = SF[H]; zf.tgl.push(d[t].t); zf.ex.push(ex); zf.mask.push(maskF); zf.dasar.push(dasarF); }
+                    if (rasio && SF[H]) { const zf = SF[H]; zf.tgl.push(d[t].t); zf.ex.push(ex); zf.mask.push(maskF); zf.dasar.push(dasarF); FB.push({ ym: d[t].t.slice(0, 7), s, H, f: rasio, ex }); }
                     sampel++;
                 }
                 if (!dari || d[t].t < dari) dari = d[t].t;
@@ -181,6 +184,9 @@ export async function ujiMundur(semesta: string[], file: string, st: StatusUji, 
             pai.perbarui('fundamental', H, c, Math.max(0, dasarUnggul), (a) => ujiArsip(path.dirname(file), 'fundamental', a, H));
             cariF[H] = ringkasCari(c);
         }
+        st.progres = 'membandingkan skor fundamental lama vs relatif-industri…';
+        await new Promise((r) => setImmediate(r));
+        try { const fb = bandingFund(FB, kelompok); (hasil as any).fundBanding = fb; simpanBanding(path.dirname(file), fb); } catch (e: any) { console.warn('[Uji mundur] banding fundamental:', e?.message || e); }
         (hasil as any).sisiJual = ringkasSisiJual(JL, KR, spyR);
         (hasil as any).diskon = Object.fromEntries(HS.map((H) => [H, Object.fromEntries(KUNCI_PT.map((k) => [k, ringkas(DK[H][k])]))]));
         (hasil as any).tanding = ujiTanding(KR, spyR);

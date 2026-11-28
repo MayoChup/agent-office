@@ -8,6 +8,6 @@ import { ujiMundur, type StatusUji } from './kantor/ujimundur';
 const st: StatusUji = { jalan: true, progres: 'memulai…', mulai: Date.now(), selesai: 0, galat: '' };
 const kirim = (akhir?: { ok: boolean; galat?: string }) => parentPort?.postMessage({ st: { ...st }, akhir });
 const t = setInterval(() => kirim(), 1000);
-ujiMundur(workerData.daftar as string[], workerData.file as string, st)
+ujiMundur(workerData.daftar as string[], workerData.file as string, st, undefined, undefined, workerData.kelompok || {})
     .then(() => { clearInterval(t); kirim({ ok: true }); })
     .catch((e: any) => { clearInterval(t); kirim({ ok: false, galat: String(e?.message || e) }); });

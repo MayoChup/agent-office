@@ -18,6 +18,7 @@ import { fundamentalNasdaq } from './nasdaq';
 import { bacaModel, hModel, skorModel, statusModel } from './bobot';
 import { BeritaTerkait, gabungBerita } from './beritaTerkait';
 import { cekDiskon, cekAmbilUntung, type Diskon } from './diskon';
+import { petaMedian, skorFundamentalRelatif, relatifAktif, type Kelompok } from './fundRelatif';
 export { yahooChart, statusHarga };
 const SEC_UA = 'KantorRico research kantor-rico@users.noreply.github.com';
 const SP500_CSV = 'https://raw.githubusercontent.com/datasets/s-and-p-500-companies/main/data/constituents.csv';
@@ -254,6 +255,16 @@ export class Screener {
         const hit = (k: 'sektor' | 'industri') => { const m = new Map<string, number>(); for (const b of this.st.baris) { const v = (b as any)[k]; if (v) m.set(v, (m.get(v) || 0) + 1); } return [...m.entries()].sort((a, b) => b[1] - a[1]).map(([n]) => n); };
         return { sektor: hit('sektor'), industri: hit('industri').slice(0, 70) };
     }
+    /** Industri & sektor tiap saham (untuk median pembanding skor fundamental relatif). */
+    kelompokSaham(): Record<string, Kelompok> { return Object.fromEntries(this.st.baris.map((b) => [b.s, { i: (b as any).industri || '', s: b.sektor || '' }])); }
+    private medianCache: { kunci: number; fn: ReturnType<typeof petaMedian> } | null = null;
+    /** Skor fundamental: relatif-industri kalau uji mundur terakhir membuktikannya lebih baik, selain itu skor lama. */
+    private fundSkor(b: Baris): Faktor | null {
+        if (!relatifAktif(this.dataDirS)) return skorFundamental(b);
+        const kunci = this.st.baris.length * 1e13 + (this.st.fundamentalAt || 0);
+        if (!this.medianCache || this.medianCache.kunci !== kunci) this.medianCache = { kunci, fn: petaMedian(this.st.baris.map((x) => ({ s: x.s, f: x.f as any, k: { i: (x as any).industri || '', s: x.sektor || '' } }))) };
+        return skorFundamentalRelatif(b as any, this.medianCache.fn({ i: (b as any).industri || '', s: b.sektor || '' }));
+    }
     hargaTerakhir(s: string) { return this.st.baris.find((b) => b.s === s) || null; }
     private segarkanHorison() { this.seri.clear(); this.proyCache.clear(); }
 
@@ -279,7 +290,7 @@ export class Screener {
     skor(b: Baris, sari = bacaLaporanSari(this.deskDir), H = 20, mode = '', pt = '', pf = ''): Record<string, Faktor | null> {
         const pr = this.proyeksiH(b, H);
         const f: Record<string, Faktor | null> = {
-            teknikal: this.teknikalDasar(b, H, mode, pr), fundamental: skorFundamental(b), berita: this.terkait ? gabungBerita(skorBerita(this.st.berita?.[b.s]), this.terkait.skor(b), this.terkait.atur) : skorBerita(this.st.berita?.[b.s]),
+            teknikal: this.teknikalDasar(b, H, mode, pr), fundamental: this.fundSkor(b), berita: this.terkait ? gabungBerita(skorBerita(this.st.berita?.[b.s]), this.terkait.skor(b), this.terkait.atur) : skorBerita(this.st.berita?.[b.s]),
             whales: skorWhales(b, b.x, this.st.orang?.[b.s], sari.get(b.s) || 0)
         };
         // Preset guru aktif: skor faktor ikut kepatuhan preset (tidak harus lolos semua kriteria).
@@ -358,7 +369,7 @@ export class Screener {
     sesiTeknikal() { return this.st.teknikalSesi; }
     spyHarga() { return this.st.spyC ?? null; }
     /** "Fundamental kuat · lagi diskon" untuk satu saham (rumus dasar fundamental, sama dengan uji mundur). */
-    diskonDari(b: any): Diskon | null { try { return cekDiskon(b, skorFundamental(b)?.skor ?? null); } catch { return null; } }
+    diskonDari(b: any): Diskon | null { try { return cekDiskon(b, this.fundSkor(b)?.skor ?? null); } catch { return null; } }
     /** Pantul turun → "Ambil untung sebagian" (untuk yang memegang; bukan short). */
     untungDari(b: any) { try { return cekAmbilUntung(b); } catch { return null; } }
     /** Tahap diskon untuk daftar simbol (dipakai pemberitahuan watchlist). */
