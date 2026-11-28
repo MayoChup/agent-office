@@ -6,8 +6,9 @@ export const IKON: Record<string, string> = {
     'Hiburan': '🎬', 'Investasi': '📈', 'Transfer Keluarga': '👨‍👩‍👧', 'Pendapatan': '💼', 'Gaji': '💼', 'Lainnya': '🔖'
 };
 export const WARNA: Record<string, string> = {
-    'Makan & Minum': '#f97316', 'Transport': '#0ea5e9', 'Belanja': '#ec4899', 'Tagihan & Langganan': '#8b5cf6', 'Pulsa & Internet': '#14b8a6',
-    'Kesehatan': '#22c55e', 'Hiburan': '#f59e0b', 'Investasi': '#6366f1', 'Transfer Keluarga': '#e11d48', 'Lainnya': '#64748b'
+    'Makan & Minum': '#f97316', 'Transport': '#0ea5e9', 'Belanja': '#ec4899', 'Tagihan & Langganan': '#a855f7', 'Pulsa & Internet': '#14b8a6',
+    'Kesehatan': '#22c55e', 'Hiburan': '#eab308', 'Investasi': '#6366f1', 'Transfer Keluarga': '#f43f5e', 'Top Up E-Wallet': '#06b6d4',
+    'Pendapatan': '#22c55e', 'Gaji': '#22c55e', 'Gaji/Pemasukan': '#22c55e', 'Lainnya': '#94a3b8'
 };
 const PALET = ['#2563eb', '#f97316', '#10b981', '#ec4899', '#8b5cf6', '#eab308', '#06b6d4', '#ef4444', '#84cc16', '#64748b'];
 export const warnaDari = (k: string, i: number) => WARNA[k] || PALET[i % PALET.length];
@@ -18,6 +19,8 @@ export const IKON_GARIS: Record<string, string> = {
     'Kesehatan': 'pill', 'Hiburan': 'film', 'Investasi': 'trending-up', 'Transfer Keluarga': 'users', 'Pendapatan': 'briefcase', 'Gaji': 'briefcase',
     'Gaji/Pemasukan': 'briefcase', 'Top Up E-Wallet': 'wallet', 'Transfer masuk': 'repeat', 'Transfer keluar': 'repeat', 'Lainnya': 'bookmark'
 };
+/** Warna kategori untuk ikon transaksi (pindah dana tetap netral). */
+export const warnaTx = (t: { jenis: string; kat: string }) => (t.jenis === 'Antar Rekening' ? '' : t.jenis === 'Masuk' ? '#22c55e' : WARNA[t.kat] || '#94a3b8');
 export const ikonGaris = (t: { jenis: string; kat: string }) => (t.jenis === 'Antar Rekening' ? 'repeat' : t.jenis === 'Masuk' ? 'arrow-down' : IKON_GARIS[t.kat] || 'bookmark');
 /** Rupiah ringkas untuk tabel & sumbu: 11,2 jt · 850 rb. */
 export const rpRingkas = (n: number) => { const a = Math.abs(n), t = n < 0 ? '−' : ''; return a >= 1e9 ? `${t}${(a / 1e9).toLocaleString('id-ID', { maximumFractionDigits: 1 })} M` : a >= 1e6 ? `${t}${(a / 1e6).toLocaleString('id-ID', { maximumFractionDigits: 1 })} jt` : a >= 1e3 ? `${t}${Math.round(a / 1e3)} rb` : `${t}${Math.round(a)}`; };

@@ -9,7 +9,8 @@ import { ImporMutasi, UnggahMutasi, AntreMutasiKartu, type ItemAntre } from './I
 import { RichText } from '../../components/common/RichText';
 import { Batang } from './Grafik';
 import { ArusKas } from './ArusKas';
-import { Tx, rp, ikon, warnaDari, periode, dalam, keluar, masuk, sum, kelompok, hariIni, tglPanjang, tglPendek, transfer, transferMasuk, tujuanTransfer, saldoKini, ikonGaris, arusTotal, samaAkun } from './util';
+import { Tx, rp, ikon, warnaDari, periode, dalam, keluar, masuk, sum, kelompok, hariIni, tglPanjang, tglPendek, transfer, transferMasuk, tujuanTransfer, saldoKini, ikonGaris, warnaTx, arusTotal, samaAkun } from './util';
+import { PocketBagian } from './Pocket';
 
 import { Ikon } from '../../components/Ikon';
 import { Hidup } from '../../components/Hidup';
@@ -137,8 +138,32 @@ function Beranda({ tx, semua, akun, p, ang, onTx, go, lihat, pilihAkun }: { tx: 
     const katMinggu = Array.from(kelompok(minggu, (t) => t.kat).entries()).map(([k, v]) => ({ k, v: sum(v) })).sort((a, b) => b.v - a.v);
     const terakhir = [...tx].sort((a, b) => (b.d + b.t).localeCompare(a.d + a.t)).slice(0, 6);
     const ubahMinggu = rata8 ? Math.round((sum(minggu) / rata8 - 1) * 100) : null;
+    // Sisa anggaran: hanya kategori yang punya batas, semua rekening.
+    const batas = ang?.batas || {};
+    const pakaiKat = (k: string) => sum(semua.filter((t) => dalam(t, p) && keluar(t) && t.kat === k));
+    const katAng = Object.entries(batas).map(([k, b]) => ({ k, b, u: pakaiKat(k) })).map((x) => ({ ...x, pc: Math.round((x.u / x.b) * 100) }));
+    const terpakai = katAng.reduce((a, x) => a + x.u, 0);
+    const pctAng = totalBatas ? Math.min(100, Math.round((terpakai / totalBatas) * 100)) : 0;
+    const genting = [...katAng].sort((a, b) => b.pc - a.pc).slice(0, 3);
     return (
         <div className="ku-grid">
+            <section className="ku-card ku-anggaran">
+                <div className="ku-card-h"><h3>Sisa anggaran</h3><button className="ku-link" onClick={() => go('anggaran')}>{totalBatas ? 'Lihat' : 'Atur'}</button></div>
+                {totalBatas > 0 ? (
+                    <>
+                        <b className={`ku-angka mono ${terpakai > totalBatas ? 'neg' : ''}`}>{rp(totalBatas - terpakai)}</b>
+                        <span className="ku-meter tebal"><i className={pctAng > 90 ? 'out' : ''} style={{ width: `${pctAng}%` }} /></span>
+                        <small className="ku-muted">Terpakai {rp(terpakai)} dari {rp(totalBatas)} · jatah {rp(jatah)}/hari sampai {tglPendek(p.end)}</small>
+                        <div className="ku-genting">{genting.map((x) => (
+                            <button key={x.k} onClick={() => lihat({ kat: x.k, jenis: 'Keluar' })} style={{ '--c': warnaDari(x.k, 0) } as React.CSSProperties}>
+                                <span className="ku-rinci-t"><b>{x.k}</b><span className={`mono ${x.pc > 100 ? 'neg' : ''}`}>{x.pc}%</span></span>
+                                <span className="ku-meter"><i className="kat" style={{ width: `${Math.min(100, x.pc)}%` }} /></span>
+                            </button>
+                        ))}</div>
+                    </>
+                ) : <p className="ku-muted">Belum ada anggaran. Atur batas per kategori supaya sisa dan jatah harian terlihat di sini.</p>}
+            </section>
+            <PocketBagian tx={semua} saldo={ang?.saldo || {}} akunList={Array.from(new Set([...(ang?.akun || []), ...Object.keys(ang?.saldo || {})]))} />
             {saldo.length > 0 && (
                 <section className="ku-card ku-saldo">
                     <div className="ku-card-h"><h3>Saldo rekening</h3><b className="mono">{rp(totalSaldo)}</b></div>
@@ -153,10 +178,8 @@ function Beranda({ tx, semua, akun, p, ang, onTx, go, lihat, pilihAkun }: { tx: 
             )}
             <section className="ku-card ku-hari">
                 <div className="ku-card-h"><h3>Keluar hari ini</h3><small>{tglPendek(today)}</small></div>
-                <b className="ku-angka mono">{rp(hariIniKel)}</b>
-                {totalBatas > 0
-                    ? <p className="ku-muted">Jatah harian sampai {tglPendek(p.end)} <b className={`mono ${hariIniKel > jatah ? 'neg' : ''}`}>{rp(jatah)}</b>{hariIniKel > jatah ? ' · sudah lewat' : ''}</p>
-                    : <p className="ku-muted">Atur anggaran supaya jatah harian terlihat. <button className="ku-link" onClick={() => go('anggaran')}>Atur anggaran</button></p>}
+                <b className={`ku-angka mono ${totalBatas > 0 && hariIniKel > jatah ? 'neg' : ''}`}>{rp(hariIniKel)}</b>
+                {totalBatas > 0 && <p className="ku-muted">{hariIniKel > jatah ? `Lewat ${rp(hariIniKel - jatah)} dari jatah harian` : `Masih ${rp(jatah - hariIniKel)} dari jatah harian`}</p>}
             </section>
             <section className="ku-card ku-minggu">
                 <div className="ku-card-h"><h3>Minggu ini</h3><small>sejak {tglPendek(senin)}</small></div>
@@ -165,7 +188,7 @@ function Beranda({ tx, semua, akun, p, ang, onTx, go, lihat, pilihAkun }: { tx: 
                     <div><small>Terbesar</small><b>{katMinggu[0]?.k || '–'}</b>{katMinggu[0] && <em className="mono">{rp(katMinggu[0].v)}</em>}</div>
                     <div><small>Transaksi</small><b className="mono">{minggu.length}</b>{minggu.length > 0 && <em>rata-rata {rp(sum(minggu) / minggu.length)}</em>}</div>
                 </div>
-                {katMinggu.length > 0 && <div className="ku-stack" aria-hidden>{katMinggu.slice(0, 6).map((k, i) => <i key={k.k} title={`${k.k}: ${rp(k.v)}`} style={{ flex: k.v, opacity: 1 - i * 0.14 }} onClick={() => lihat({ kat: k.k, jenis: 'Keluar' })} />)}</div>}
+                {katMinggu.length > 0 && <div className="ku-stack" aria-hidden>{katMinggu.slice(0, 6).map((k, i) => <i key={k.k} title={`${k.k}: ${rp(k.v)}`} style={{ flex: k.v, background: warnaDari(k.k, i) }} onClick={() => lihat({ kat: k.k, jenis: 'Keluar' })} />)}</div>}
             </section>
             <section className="ku-card ku-lebar">
                 <div className="ku-card-h"><h3>Transaksi terakhir</h3><button className="ku-link" onClick={() => go('transaksi')}>Lihat semua</button></div>
@@ -184,7 +207,7 @@ export function TxRow({ t, onClick }: { t: Tx; onClick: () => void }) {
     const auto = t.status === 'Otomatis';
     return (
         <button className="ku-tx" onClick={onClick}>
-            <span className={`ku-ico ${t.jenis === 'Masuk' ? 'in' : ''}`}><Ikon n={ikonGaris(t)} /></span>
+            <span className="ku-ico" style={warnaTx(t) ? { '--c': warnaTx(t) } as React.CSSProperties : undefined}><Ikon n={ikonGaris(t)} /></span>
             <span className="ku-tx-main"><b>{judul}</b><small>{sub}{auto ? ' · menunggu mutasi' : ''}</small></span>
             <span className={`ku-tx-n mono ${t.jenis === 'Masuk' ? 'in' : pindah ? 'pindah' : ''}`}>{t.jenis === 'Masuk' ? '+' : t.jenis === 'Keluar' ? '−' : ''}{rp(t.n)}</span>
         </button>
@@ -273,7 +296,7 @@ function AnggaranView({ tx, p, ang, simpan, lihat }: { tx: Tx[]; p: ReturnType<t
                     return (
                         <button key={k} className="k-budget" onClick={() => lihat({ kat: k, jenis: 'Keluar' })}>
                             <div className="k-row-sb"><b>{k}</b><span className={`mono ${pc > 100 ? 'down' : ''}`}>{pc}%</span></div>
-                            <div className="k-meter"><i style={{ width: `${Math.min(100, pc)}%`, background: pc > 100 ? 'var(--down)' : pc > 80 ? 'var(--warn, #d97706)' : 'var(--accent)' }} /></div>
+                            <div className="k-meter"><i style={{ width: `${Math.min(100, pc)}%`, background: pc > 100 ? 'var(--down)' : pc > 80 ? 'var(--warn, #d97706)' : warnaDari(k, 0) }} /></div>
                             <small>Terpakai {rp(u)} dari {rp(b)}{pc > 100 ? ` · lebih ${rp(u - b)}` : ` · sisa ${rp(b - u)}`}</small>
                         </button>
                     );
@@ -353,7 +376,7 @@ function Detail({ t, all, mulai, onClose, lihat, onUbah, onHapus }: { t: Tx; all
             <div className="k-sheet-in" onClick={(e) => e.stopPropagation()}>
                 <div className="k-sheet-h"><b>Detail transaksi</b><button onClick={onClose}>✕</button></div>
                 <div className="k-det-top">
-                    <span className={`ku-ico besar ${t.jenis === 'Masuk' ? 'in' : ''}`}><Ikon n={ikonGaris(t)} size={22} /></span>
+                    <span className="ku-ico besar" style={warnaTx(t) ? { '--c': warnaTx(t) } as React.CSSProperties : undefined}><Ikon n={ikonGaris(t)} size={22} /></span>
                     <b className={`mono ${t.jenis === 'Masuk' ? 'in' : 'out'}`}>{t.jenis === 'Masuk' ? '+ ' : t.jenis === 'Keluar' ? '− ' : ''}{rp(t.n)}</b>
                     <small>{tglPanjang(t.d)} · {t.t}</small>
                 </div>

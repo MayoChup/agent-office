@@ -3772,7 +3772,8 @@ body.no-office #phaser-container { visibility: hidden; }
 .ku-baris-main small, .ku-tx-main small, .ku-rank-main small, .ku-rank-n small { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ku-baris .ku-tag { width: 32px; height: 32px; border-radius: 10px; font-size: 13px; }
 .ku-ico { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; flex-shrink: 0; background: color-mix(in srgb, var(--text) 6%, transparent); color: var(--muted); }
-.ku-ico.in { color: var(--ku-in); background: color-mix(in srgb, var(--ku-in) 12%, transparent); }
+.ku-ico[style], .ku-pocket-kartu .ku-ico, .ku-pocket-det .ku-ico, .ku-pocket-kosong .ku-ico { background: color-mix(in srgb, var(--c) 16%, transparent); color: var(--c); }
+:root[data-theme="light"] .ku-ico[style], :root[data-theme="light"] .ku-pocket-kartu .ku-ico, :root[data-theme="light"] .ku-pocket-det .ku-ico { color: color-mix(in srgb, var(--c) 80%, #000); background: color-mix(in srgb, var(--c) 12%, transparent); }
 .ku-ico.besar { width: 52px; height: 52px; border-radius: 14px; }
 .ku-tx-n { font-size: 14px; white-space: nowrap; }
 .ku-tx-n.in { color: var(--ku-in); } .ku-tx-n.pindah { color: var(--muted); }
@@ -3847,3 +3848,61 @@ body.no-office #phaser-container { visibility: hidden; }
 .k-app.ku .k-avg { stroke: var(--muted); } .k-app.ku .k-avg-t { fill: var(--muted); }
 :root:root .k-app.ku .ku-fab { display: grid; place-items: center; }
 @media (max-width: 767px) { .k-app.ku .k-grid2 { grid-template-columns: minmax(0, 1fr); } }
+
+/* Sisa anggaran & pocket di Ringkasan */
+.ku-anggaran { grid-column: 1 / -1; }
+.ku-meter.tebal { height: 8px; border-radius: 4px; }
+.ku-meter.tebal i { border-radius: 4px; background: var(--accent); }
+.ku-meter i.out { background: var(--ku-out); }
+.ku-meter i.kat { background: var(--c); }
+.ku-genting { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; padding-top: 4px; }
+.ku-genting button { display: flex; flex-direction: column; gap: 6px; border: none; background: none; padding: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.ku-genting .ku-rinci-t { font-size: 13px; }
+@media (max-width: 560px) { .ku-genting { grid-template-columns: minmax(0, 1fr); gap: 10px; } }
+.ku-pocket-h { display: flex; align-items: center; gap: 12px; }
+.ku-pocket-h small { color: var(--muted); font-size: 13px; }
+.ku-pocket-h .ku-link, .ku-link { display: inline-flex; align-items: center; gap: 4px; }
+.ku-pocket-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.ku-pocket-grid:empty { display: none; }
+.ku-pocket-kartu { display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: 14px; border: 1px solid var(--ku-hair); background: color-mix(in srgb, var(--c) 5%, var(--ku-surf)); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.ku-pocket-kartu:hover { border-color: color-mix(in srgb, var(--c) 40%, transparent); }
+.ku-pocket-kartu .ku-meter i { background: var(--c); }
+.ku-pocket-atas { display: flex; align-items: center; gap: 10px; }
+.ku-pocket-nama { flex: 1; display: flex; flex-direction: column; gap: 2px; overflow: hidden; }
+.ku-pocket-nama b { font-weight: 500; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ku-pocket-nama small, .ku-pocket-ket { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ku-pocket-atas em { font-size: 13px; color: var(--c); flex-shrink: 0; }
+:root[data-theme="light"] .ku-pocket-atas em { color: color-mix(in srgb, var(--c) 80%, #000); }
+.ku-pocket-angka { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.ku-pocket-angka b { font-size: 18px; font-weight: 500; }
+.ku-pocket-angka small { color: var(--muted); font-size: 12px; }
+.ku-pocket-kosong { display: flex; align-items: center; gap: 12px; padding: 16px; border-radius: 14px; border: 1px dashed var(--ku-hair); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.ku-pocket-kosong span:last-child { display: flex; flex-direction: column; gap: 2px; }
+.ku-pocket-kosong b { font-weight: 500; font-size: 14px; } .ku-pocket-kosong small { color: var(--muted); font-size: 12px; }
+.ku-form { gap: 16px; }
+.ku-field { display: flex; flex-direction: column; gap: 8px; }
+.ku-field > span:first-child { font-size: 13px; color: var(--muted); }
+.ku-rp { display: flex; align-items: center; gap: 8px; }
+.ku-rp i { font-style: normal; color: var(--muted); font-size: 14px; }
+.ku-rp input { flex: 1; }
+.ku-baris-aksi { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.ku-seg.lebar { display: flex; } .ku-seg.lebar button { flex: 1; height: 34px; }
+.ku-pilih { display: flex; gap: 8px; flex-wrap: wrap; }
+.ku-pilih button { height: 32px; display: inline-flex; align-items: center; gap: 8px; padding: 0 12px 0 6px; border-radius: 999px; border: 1px solid var(--ku-hair); background: none; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; }
+.ku-pilih button.on { color: var(--accent); border-color: var(--aksen-garis, var(--accent)); background: var(--aksen-lembut, transparent); }
+.ku-pilih-ikon { display: grid; grid-template-columns: repeat(6, 40px); gap: 8px; }
+.ku-pilih-ikon button { width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--ku-hair); background: none; color: var(--muted); display: grid; place-items: center; cursor: pointer; }
+.ku-pilih-ikon button.on { color: var(--c); border-color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); }
+.ku-pilih-warna { display: flex; gap: 10px; flex-wrap: wrap; }
+.ku-pilih-warna button { width: 28px; height: 28px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; box-shadow: inset 0 0 0 2px var(--panel-solid); }
+.ku-pilih-warna button.on { border-color: var(--text); }
+.ku-pocket-det { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; padding: 4px 0; }
+.ku-pocket-det > b { font-size: 28px; font-weight: 500; }
+.ku-pocket-det small { color: var(--muted); font-size: 13px; }
+.ku-pocket-det .ku-meter { width: 100%; margin-top: 6px; }
+.ku-pocket-det .ku-meter i { background: var(--c); }
+.ku-gerak { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 12px; background: color-mix(in srgb, var(--text) 4%, transparent); }
+.ku-riwayat { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--ku-hair); }
+.ku-riwayat span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ku-riwayat span b { font-weight: 500; font-size: 14px; } .ku-riwayat small { color: var(--muted); font-size: 12px; }
+.ku-riwayat .pos { color: var(--ku-in); }

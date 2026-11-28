@@ -28,6 +28,7 @@ import { WatchFolder } from './kantor/watchfolder';
 import { Catatan } from './kantor/catatan';
 import { Berkas } from './kantor/berkas';
 import { AnggaranStore, bacaTransaksi } from './kantor/anggaran';
+import { PocketStore } from './kantor/pocket';
 import { AntreMutasi, deteksiBank } from './kantor/mutasiAntre';
 import { bacaPdf, urai, cocokkan, polaAnonim } from './kantor/mutasi';
 import { presetInfo, REKOMENDASI } from './kantor/preset';
@@ -398,6 +399,12 @@ app.post('/api/kantor/keuangan/anggaran', requireToken, (req, res) => {
     if (JSON.stringify(a.namaSendiri || []) !== lama) void rapikanTransfer();
     res.json({ ok: true, ...a, kategori: Object.keys(config.pencatat.kategori).concat(['Lainnya']) });
 });
+const pocket = new PocketStore(config.dataDir);
+const pocketJawab = (res: express.Response, f: () => any) => { try { res.json({ ok: true, ...(f() || {}), pocket: pocket.daftar() }); } catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); } };
+app.get('/api/kantor/keuangan/pocket', requireToken, (_req, res) => pocketJawab(res, () => ({})));
+app.post('/api/kantor/keuangan/pocket', requireToken, (req, res) => pocketJawab(res, () => ({ simpan: pocket.simpan(req.body || {}) })));
+app.post('/api/kantor/keuangan/pocket/:id/dana', requireToken, (req, res) => pocketJawab(res, () => ({ simpan: pocket.gerak(String(req.params.id), Number(req.body?.n), String(req.body?.ket || '')) })));
+app.post('/api/kantor/keuangan/pocket/:id/hapus', requireToken, (req, res) => pocketJawab(res, () => { pocket.hapus(String(req.params.id)); }));
 app.post('/api/kantor/keuangan/tambah', requireToken, async (req, res) => {
     try { res.json({ ok: true, tx: await pencatat.tambahManual(req.body || {}) }); }
     catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
