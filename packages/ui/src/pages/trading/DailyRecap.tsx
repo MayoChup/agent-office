@@ -6,18 +6,20 @@ import { Ikon } from '../../components/Ikon';
 interface CalonTop { s: string; nama: string; sektor: string; H: number; gaya: string; jenis: 'momentum' | 'pantul' | 'swing'; harga: number; skor: number; label: string;
     target: { nama: string; harga: number; pct: number; peluang: number; rr: number | null; harapan: number | null }; stop: { harga: number; pct: number }; masuk: [number, number]; bukti: boolean; tanda: string[]; faktor: Record<string, string | null> }
 interface Edisi {
+    id: string; jenis: 'pagi' | 'kilat'; topik?: string;
     tgl: string; dibuat: number; oleh: string; judul: string; subjudul: string; tldr: string[]; kutipan: string; badan: Array<{ id: string; judul: string; md: string }>;
     alasanTop: Record<string, string>; top: CalonTop[]; catatanTop: string; kode: Record<string, string>;
-    pasar: { spy: number | null; naik: number; turun: number; sektorAtas: Array<{ nama: string; chg: number }>; sektorBawah: Array<{ nama: string; chg: number }>; naikTerbesar: Array<{ s: string; nama: string; chg: number }>; turunTerbesar: Array<{ s: string; nama: string; chg: number }> };
+    pasar: null | { spy: number | null; naik: number; turun: number; sektorAtas: Array<{ nama: string; chg: number }>; sektorBawah: Array<{ nama: string; chg: number }>; naikTerbesar: Array<{ s: string; nama: string; chg: number }>; turunTerbesar: Array<{ s: string; nama: string; chg: number }> };
     sumber: Array<{ id: string; t: string; sumber: string; url: string }>;
 }
-interface Data { daftar: Array<{ tgl: string; judul: string }>; edisi: Edisi | null; kini: Record<string, number | null>; jalan: boolean; galat: string; sesi: string }
+interface Data { daftar: Array<{ id: string; tgl: string; judul: string; jenis: 'pagi' | 'kilat'; dibuat: number }>; edisi: Edisi | null; kini: Record<string, number | null>; jalan: boolean; galat: string; sesi: string }
 
 const HARI = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'], BLN = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 const tglPanjang = (t: string) => { const d = new Date(`${t}T12:00:00Z`); return `${HARI[d.getUTCDay()]}, ${d.getUTCDate()} ${BLN[d.getUTCMonth()]} ${d.getUTCFullYear()}`; };
 const tglPendek = (t: string) => { const d = new Date(`${t}T12:00:00Z`); return `${d.getUTCDate()} ${BLN[d.getUTCMonth()].slice(0, 3)}`; };
 const pct = (v: number | null | undefined, d = 2) => (v == null ? '–' : `${v >= 0 ? '+' : '−'}${Math.abs(v).toLocaleString('id-ID', { maximumFractionDigits: d })}%`);
 const usd = (v: number) => `$${v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const jamWib = (ms: number) => { const w = new Date(ms + 7 * 3600_000); return `${String(w.getUTCHours()).padStart(2, '0')}.${String(w.getUTCMinutes()).padStart(2, '0')}`; };
 const JENIS: Record<string, string> = { momentum: 'Momentum', pantul: 'Pantul', swing: 'Swing' };
 
 /** Teks ber-markdown kecil: **tebal**, *miring*, $KODE → tautan saham, [B12] → tautan sumber berita. */
@@ -60,7 +62,7 @@ function Md({ md, ctx, dropcap = false }: { md: string; ctx: Ctx; dropcap?: bool
 
 export function DailyRecap({ onOpen }: { onOpen: (s: string) => void }) {
     const [tgl, setTgl] = useState('');
-    const q = useApi<Data>(`/api/kantor/rekap${tgl ? `?tgl=${tgl}` : ''}`, 0);
+    const q = useApi<Data>(`/api/kantor/rekap${tgl ? `?id=${tgl}` : ''}`, 0);
     const [minta, setMinta] = useState(false); const [err, setErr] = useState('');
     const d = q.data, e = d?.edisi;
     const jalan = minta || !!d?.jalan;
@@ -68,22 +70,23 @@ export function DailyRecap({ onOpen }: { onOpen: (s: string) => void }) {
     useEffect(() => { if (minta && d && !d.jalan) { setMinta(false); setTgl(''); } }, [d]); // eslint-disable-line react-hooks/exhaustive-deps
     const buat = async () => { setErr(''); setMinta(true); try { await apiPost('/api/kantor/rekap/buat', {}); q.reload(); } catch (x: any) { setErr(String(x?.message || x)); setMinta(false); } };
     const ctx: Ctx = useMemo(() => ({ kode: e?.kode || {}, sumber: new Map((e?.sumber || []).map((s) => [s.id, s])), buka: onOpen }), [e, onOpen]);
-    const idx = d && e ? d.daftar.findIndex((x) => x.tgl === e.tgl) : -1;
+    const idx = d && e ? d.daftar.findIndex((x) => x.id === (e.id || e.tgl)) : -1;
     const kata = e ? [e.subjudul, ...e.badan.map((b) => b.md), ...Object.values(e.alasanTop)].join(' ').split(/\s+/).length : 0;
     const terbit = e ? new Date(e.dibuat + 7 * 3600_000) : null;
-    const belumTerbit = d && d.sesi && !d.daftar.some((x) => x.tgl === d.sesi);
+    const belumTerbit = d && d.sesi && !d.daftar.some((x) => x.jenis === 'pagi' && x.tgl === d.sesi);
+    const kilat = e?.jenis === 'kilat';
     const pasarId = e?.badan.findIndex((b) => b.id === 'berita') ?? -1;
 
     return (
         <div className="rk">
             <div className="rk-bar">
-                <div className="rk-bar-l"><small>Kabar pasar & dunia, terbit tiap pagi ±06.30 WIB</small></div>
+                <div className="rk-bar-l"><small>Kabar pasar & dunia, terbit tiap pagi ±06.30 WIB · edisi ⚡ Kilat bila ada berita urgen</small></div>
                 <div className="rk-bar-r">
                     {d && d.daftar.length > 0 && (
                         <div className="rk-nav">
-                            <button disabled={idx < 0 || idx >= d.daftar.length - 1} onClick={() => setTgl(d.daftar[idx + 1].tgl)} aria-label="Edisi sebelumnya"><Ikon n="chevron-left" /></button>
-                            <select value={e?.tgl || ''} onChange={(x) => setTgl(x.target.value)} aria-label="Pilih edisi">{d.daftar.map((x) => <option key={x.tgl} value={x.tgl}>{tglPendek(x.tgl)} · {x.judul.slice(0, 40)}</option>)}</select>
-                            <button disabled={idx <= 0} onClick={() => setTgl(d.daftar[idx - 1].tgl)} aria-label="Edisi berikutnya"><Ikon n="chevron-right" /></button>
+                            <button disabled={idx < 0 || idx >= d.daftar.length - 1} onClick={() => setTgl(d.daftar[idx + 1].id)} aria-label="Edisi sebelumnya"><Ikon n="chevron-left" /></button>
+                            <select value={e?.id || e?.tgl || ''} onChange={(x) => setTgl(x.target.value)} aria-label="Pilih edisi">{d.daftar.map((x) => <option key={x.id} value={x.id}>{tglPendek(x.tgl)}{x.jenis === 'kilat' ? ` ⚡ ${jamWib(x.dibuat)}` : ''} · {x.judul.slice(0, 40)}</option>)}</select>
+                            <button disabled={idx <= 0} onClick={() => setTgl(d.daftar[idx - 1].id)} aria-label="Edisi berikutnya"><Ikon n="chevron-right" /></button>
                         </div>
                     )}
                     <button className="btn" disabled={jalan} onClick={buat}>{jalan ? 'Menyusun… ±3–5 menit' : belumTerbit ? 'Buat edisi hari ini' : 'Buat ulang'}</button>
@@ -96,7 +99,7 @@ export function DailyRecap({ onOpen }: { onOpen: (s: string) => void }) {
             {e && (
                 <article className="rk-art">
                     <header className="rk-head">
-                        <div className="rk-kicker">Edisi {tglPanjang(e.tgl)} · ±{Math.max(2, Math.round(kata / 200))} menit baca</div>
+                        <div className="rk-kicker">{kilat ? <><span className="rk-kilat">⚡ Kilat</span>{tglPanjang(e.tgl)}, {jamWib(e.dibuat)} WIB</> : <>Edisi {tglPanjang(e.tgl)}</>} · ±{Math.max(1, Math.round(kata / 200))} menit baca</div>
                         <h1>{e.judul}</h1>
                         {e.subjudul && <p className="rk-sub">{e.subjudul}</p>}
                         <div className="rk-by">Ditulis {e.oleh} untuk Pak Rico{terbit ? ` · terbit ${terbit.getUTCDate()} ${BLN[terbit.getUTCMonth()].slice(0, 3)}, ${String(terbit.getUTCHours()).padStart(2, '0')}.${String(terbit.getUTCMinutes()).padStart(2, '0')} WIB` : ''}</div>
@@ -104,14 +107,14 @@ export function DailyRecap({ onOpen }: { onOpen: (s: string) => void }) {
 
                     {e.tldr.length > 0 && <aside className="rk-tldr"><b>TL;DR</b><ol>{e.tldr.map((t, i) => <li key={i}><Inline t={t} ctx={ctx} /></li>)}</ol></aside>}
 
-                    <section className="rk-pasar" aria-label="Pasar sekilas">
+                    {e.pasar && <section className="rk-pasar" aria-label="Pasar sekilas">
                         <div className="rk-angka"><small>S&P 500</small><b className={`mono ${(e.pasar.spy ?? 0) >= 0 ? 'up' : 'down'}`}>{pct(e.pasar.spy)}</b></div>
                         <div className="rk-angka"><small>Naik · turun</small><b className="mono">{e.pasar.naik} · {e.pasar.turun}</b></div>
                         <div className="rk-angka lebar"><small>Sektor terkuat</small><span>{e.pasar.sektorAtas.map((x) => <i key={x.nama} className="up">{x.nama} {pct(x.chg, 1)}</i>)}</span></div>
                         <div className="rk-angka lebar"><small>Sektor terlemah</small><span>{e.pasar.sektorBawah.map((x) => <i key={x.nama} className="down">{x.nama} {pct(x.chg, 1)}</i>)}</span></div>
                         <div className="rk-angka lebar"><small>Naik terbesar</small><span>{e.pasar.naikTerbesar.map((x) => <button key={x.s} className="up" onClick={() => onOpen(x.s)} title={x.nama}>{x.s} {pct(x.chg, 1)}</button>)}</span></div>
                         <div className="rk-angka lebar"><small>Turun terdalam</small><span>{e.pasar.turunTerbesar.map((x) => <button key={x.s} className="down" onClick={() => onOpen(x.s)} title={x.nama}>{x.s} {pct(x.chg, 1)}</button>)}</span></div>
-                    </section>
+                    </section>}
 
                     <div className="rk-isi">
                         {e.badan.map((b, i) => (
@@ -121,10 +124,10 @@ export function DailyRecap({ onOpen }: { onOpen: (s: string) => void }) {
                                     <Md md={b.md} ctx={ctx} dropcap={b.id === 'pembuka'} />
                                 </section>
                                 {i === pasarId && e.kutipan && <blockquote className="rk-kutip">{e.kutipan}</blockquote>}
-                                {b.id === 'agenda' && <TopLima e={e} kini={d?.kini || {}} ctx={ctx} lama={idx > 0} />}
+                                {b.id === 'agenda' && !kilat && <TopLima e={e} kini={d?.kini || {}} ctx={ctx} lama={idx > 0} />}
                             </React.Fragment>
                         ))}
-                        {!e.badan.some((b) => b.id === 'agenda') && <TopLima e={e} kini={d?.kini || {}} ctx={ctx} lama={idx > 0} />}
+                        {!kilat && !e.badan.some((b) => b.id === 'agenda') && <TopLima e={e} kini={d?.kini || {}} ctx={ctx} lama={idx > 0} />}
                     </div>
 
                     {e.sumber.length > 0 && (

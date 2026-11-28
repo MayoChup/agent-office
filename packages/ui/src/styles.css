@@ -4051,3 +4051,4 @@ body.no-office #phaser-container { visibility: hidden; }
 .rk-sumber a { color: var(--text); } .rk-sumber small { color: var(--muted); }
 .rk-disclaimer { margin-top: 20px !important; font-size: 12px; color: var(--muted); text-align: center; }
 @media (max-width: 520px) { .rk-isi { font-size: 16.5px; } .rk-kartu { padding: 14px 12px; gap: 10px; } .rk-no { font-size: 30px; width: 22px; } }
+.rk-kilat { display: inline-block; margin-right: 8px; padding: 1px 8px; border-radius: 99px; background: color-mix(in srgb, #f59e0b 18%, transparent); color: #d97706; font-weight: 700; }

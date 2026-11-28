@@ -50,3 +50,9 @@ export function makroMendatang(hari = 14): AcaraMakro[] {
 }
 /** Selisih hari kalender dari hari ini (waktu AS) ke tanggal. */
 export function hariLagi(tgl: string) { return Math.round((Date.parse(`${tgl}T00:00:00Z`) - Date.parse(`${hariIniEt()}T00:00:00Z`)) / 86400_000); }
+
+/** Waktu pengumuman (UTC ms): FOMC 14:00 ET, CPI & NFP 08:30 ET. */
+export function waktuMakro(a: AcaraMakro): number {
+    const [jam, menit] = a.jenis === 'fomc' ? [14, 0] : [8, 30];
+    return Date.UTC(+a.tgl.slice(0, 4), +a.tgl.slice(5, 7) - 1, +a.tgl.slice(8, 10), jam + selisihEt(a.tgl), menit);
+}

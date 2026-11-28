@@ -14,7 +14,7 @@ import { ambilJson as ambilJsonKuat } from './kr';
 
 const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
 export interface InfoRiwayat { id: string; judul: string; ringkas: string; tgl: string; at: number; topik: string; artikel: Array<{ t: string; sumber: string; tgl: string; url: string; topik: string }>; dampak: Dampak[]; oleh: string }
-export interface JudulDunia { id: string; t: string; sumber: string; tgl: string; url: string; topik: string }
+export interface JudulDunia { id: string; t: string; sumber: string; tgl: string; url: string; topik: string; /** waktu terbit (ms) */ at?: number }
 export interface Dampak { jenis: 'sektor' | 'industri' | 'saham'; nama: string; arah: number; alasan: string }
 export interface Tema { judul: string; ringkas: string; bukti: string[]; dampak: Dampak[] }
 export interface DataTerkait { at: number; oleh: string; tema: Tema[]; berita: JudulDunia[]; galat?: string }
@@ -54,7 +54,7 @@ export async function ambilJudulDunia(perTopik = 14, daftar: Array<[string, stri
                 const tgl = new Date(bersih(/<pubDate>([\s\S]*?)<\/pubDate>/.exec(it)?.[1] || '')).toISOString?.() || '';
                 if (tgl && Date.now() - Date.parse(tgl) > 4 * 86400_000) continue;
                 lihat.add(kunci);
-                out.push({ id: `B${out.length + 1}`, t: judul.slice(0, 180), sumber, tgl: tgl.slice(0, 10), url: bersih(/<link>([\s\S]*?)<\/link>/.exec(it)?.[1] || ''), topik });
+                out.push({ id: `B${out.length + 1}`, t: judul.slice(0, 180), sumber, tgl: tgl.slice(0, 10), url: bersih(/<link>([\s\S]*?)<\/link>/.exec(it)?.[1] || ''), topik, at: tgl ? Date.parse(tgl) : undefined });
                 if (++n >= perTopik) break;
             }
         } catch { /* topik ini dilewati */ }

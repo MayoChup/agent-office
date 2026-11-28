@@ -46,8 +46,8 @@ import { Kronos, BarK, hariBursaBerikut } from './kantor/kronos';
 import { KronosAntre, gayaDari, profilTerbaik } from './kantor/kronosAntre';
 import { PantauWatch } from './kantor/pantauWatch';
 import { LaporanPagi } from './kantor/laporanPagi';
-import { makroMendatang, hariLagi } from './kantor/acara';
-import { pilihTop, tulisEdisi, daftarEdisi, bacaEdisi, type Edisi } from './kantor/rekap';
+import { makroMendatang, hariLagi, semuaMakro, waktuMakro } from './kantor/acara';
+import { pilihTop, tulisEdisi, tulisKilat, deteksiUrgen, daftarEdisi, bacaEdisi, type Edisi } from './kantor/rekap';
 import { bacaPerintah, ringkasHari } from './kantor/perintahJadwal';
 import { UjiKertas } from './kantor/ujiKertas';
 import { kalenderLaba } from './kantor/nasdaq';
@@ -1618,14 +1618,15 @@ async function buatRekap(sebab: string): Promise<Edisi> {
         const orangDalam = screener.orangDalamTop(8).map((o) => `${o.s} (${o.nama}): orang dalam membeli bersih $${o.net.toLocaleString('en-US')} dalam 30 hari (${o.n} transaksi)`);
         const e = await tulisEdisi({ tgl, dataDir: config.dataDir, llm: OfficeRoom.sharedLlm(), cadangan: (p) => percakapan.sekali(roster().some((a) => a.id === 'trading') ? 'trading' : 'default', p), pasar, top, catatanTop: catatan, dunia, orang, tema: (beritaTerkait.data?.tema || []) as any, agenda, orangDalam, analis, kodeSah: Object.fromEntries((d20.baris as any[]).map((b) => [b.s, b.nama])) });
         console.log(`[Daily Recap] ${tgl} terbit (${sebab}), top ${top.length}`);
+        void kabarDari('trading-berita')(`📰 Daily Recap pagi ini sudah terbit: "${e.judul}". Buka Trading → Daily Recap.`).catch(() => undefined);
         return e;
     } catch (e: any) { rekapSt.galat = String(e?.message || e); throw e; }
     finally { rekapSt.jalan = false; }
 }
 app.get('/api/kantor/rekap', requireToken, (req, res) => {
     const daftar = daftarEdisi(config.dataDir);
-    const tgl = String(req.query.tgl || daftar[0]?.tgl || '');
-    const e = tgl ? bacaEdisi(config.dataDir, tgl) : null;
+    const id = String(req.query.id || req.query.tgl || daftar[0]?.id || '');
+    const e = id ? bacaEdisi(config.dataDir, id) : null;
     // Rapor Top 5: harga sekarang vs harga saat terbit.
     const kini = e ? Object.fromEntries(e.top.map((c) => [c.s, (screener.hargaTerakhir(c.s) as any)?.harga ?? null])) : {};
     res.json({ ok: true, daftar, edisi: e, kini, jalan: rekapSt.jalan, galat: rekapSt.galat, sesi: screener.sesiTeknikal() });
@@ -1642,6 +1643,49 @@ setInterval(() => {
     if (Date.now() - Date.parse(`${sesi}T20:00:00Z`) > 4 * 86400_000) return; // data basi: jangan terbitkan edisi lama
     if (rekapSt.galat && Date.now() - rekapSt.mulai < 3600_000) return; // gagal → coba lagi sejam kemudian
     buatRekap('otomatis pagi').catch((e) => console.warn('[Daily Recap]', e?.message || e));
+}, 10 * 60_000);
+// Edisi kilat: (1) ±40 menit setelah FOMC/CPI/NFP diumumkan, (2) berita mendadak yang diliput ≥3 media & bertopik besar. Maks 3 per hari.
+const fileKilat = path.join(config.dataDir, 'rekap-kilat.json');
+const bacaKilat = (): { makro: string[]; kunci: Array<{ k: string; at: number }>; hari: Record<string, number> } => { try { return JSON.parse(fs.readFileSync(fileKilat, 'utf8')); } catch { return { makro: [], kunci: [], hari: {} }; } };
+const simpanKilat = (x: ReturnType<typeof bacaKilat>) => fs.writeFileSync(fileKilat, JSON.stringify({ makro: x.makro.slice(-60), kunci: x.kunci.filter((k) => Date.now() - k.at < 48 * 3600_000), hari: Object.fromEntries(Object.entries(x.hari).slice(-10)) }));
+const kilatSt = { jalan: false };
+async function terbitKilat(topik: string, berita: any[], wajib: boolean) {
+    const w = new Date(Date.now() + 7 * 3600_000), tgl = w.toISOString().slice(0, 10);
+    const id = `${tgl}_k${String(w.getUTCHours()).padStart(2, '0')}${String(w.getUTCMinutes()).padStart(2, '0')}`;
+    const d20: any = screener.data(20);
+    const konteks = { sektorKemarin: d20.pasar?.sektor?.slice(0, 11), sp500Kemarin_persen: d20.baris.find((b: any) => b.s === 'SPY')?.chg1d ?? null, sesiDataHarga: screener.sesiTeknikal() };
+    const e = await tulisKilat({ id, tgl, topik, dataDir: config.dataDir, llm: OfficeRoom.sharedLlm(), cadangan: (p) => percakapan.sekali(roster().some((a) => a.id === 'trading') ? 'trading' : 'default', p), berita, kodeSah: Object.fromEntries((d20.baris as any[]).map((b) => [b.s, b.nama])), konteks, wajib });
+    if (!e) return null;
+    const st = bacaKilat(); st.hari[tgl] = (st.hari[tgl] || 0) + 1; simpanKilat(st);
+    console.log(`[Daily Recap] kilat terbit: ${e.judul}`);
+    void kabarDari('trading-berita')(`⚡ Daily Recap Kilat: "${e.judul}". Buka Trading → Daily Recap.`).catch(() => undefined);
+    return e;
+}
+setInterval(async () => {
+    if (kilatSt.jalan || rekapSt.jalan) return;
+    const st = bacaKilat(); const tglWib = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
+    if ((st.hari[tglWib] || 0) >= 3) return;
+    kilatSt.jalan = true;
+    try {
+        // (1) Terjadwal: acara makro yang baru diumumkan 40 menit – 8 jam lalu.
+        const a = semuaMakro().find((x) => { const t = waktuMakro(x); return Date.now() > t + 40 * 60_000 && Date.now() < t + 8 * 3600_000 && !st.makro.includes(`${x.jenis}:${x.tgl}`); });
+        if (a) {
+            st.makro.push(`${a.jenis}:${a.tgl}`); simpanKilat(st);
+            const berita = await ambilJudulDunia(8).catch(() => []);
+            await terbitKilat(`${a.judul} baru diumumkan (${a.tgl}, ${a.jamWib})`, berita.filter((b: any) => b.topik === 'Ekonomi & bank sentral').concat(berita.filter((b: any) => b.topik !== 'Ekonomi & bank sentral')), true);
+            return;
+        }
+        // (2) Mendadak: dicek tiap 30 menit.
+        if (Date.now() - ((kilatSt as any).cekAt || 0) < 30 * 60_000) return;
+        (kilatSt as any).cekAt = Date.now();
+        const judul = [...await ambilJudulDunia(10).catch(() => []), ...await ambilJudulDunia(10, TOPIK_ORANG).catch(() => [])];
+        const kandidat = deteksiUrgen(judul as any, new Set(st.kunci.map((k) => k.k)));
+        if (!kandidat.length) return;
+        const g = kandidat.sort((x, y) => y.judul.length - x.judul.length)[0];
+        st.kunci.push({ k: g.kunci, at: Date.now() }); simpanKilat(st); // dicatat walau AI menilai tidak urgen, supaya tidak diulang
+        await terbitKilat(`Berita mendadak: ${g.judul[0].t}`, [...g.judul, ...judul.filter((j: any) => !g.judul.includes(j)).slice(0, 10)], false);
+    } catch (e: any) { console.warn('[Daily Recap] kilat:', e?.message || e); }
+    finally { kilatSt.jalan = false; }
 }, 10 * 60_000);
 // ── Uji kertas & sisi jual: bukti apakah sinyal terkuat/terlemah benar-benar mengalahkan/kalah dari pasar ──
 const ujiKertas = new UjiKertas(config.dataDir, { sesi: () => screener.sesiTeknikal(), spy: () => screener.spyHarga(), baris: () => screener.data(20).baris as any });

@@ -13,6 +13,7 @@ export interface CalonTop { s: string; nama: string; sektor: string; H: number; 
     target: { nama: string; harga: number; pct: number; peluang: number; rr: number | null; harapan: number | null }; stop: { harga: number; pct: number }; masuk: [number, number];
     bukti: boolean; tanda: string[]; faktor: Record<string, string | null> }
 export interface Edisi {
+    /** nama berkas: YYYY-MM-DD (pagi) atau YYYY-MM-DD_kHHMM (kilat) */ id: string; jenis: 'pagi' | 'kilat'; topik?: string;
     tgl: string; dibuat: number; oleh: string;
     judul: string; subjudul: string; tldr: string[]; kutipan: string; badan: Array<{ id: string; judul: string; md: string }>;
     alasanTop: Record<string, string>; top: CalonTop[]; catatanTop: string;
@@ -141,7 +142,7 @@ export async function tulisEdisi(o: {
     ].filter((x) => x.md).map((x) => ({ ...x, md: rapikanKode(x.md, o.kodeSah) }));
     const dipakai = new Set((teks.match(/\[B\d+\]/g) || []).map((x) => x.slice(1, -1)));
     const e: Edisi = {
-        tgl: o.tgl, dibuat: Date.now(), oleh,
+        id: o.tgl, jenis: 'pagi', tgl: o.tgl, dibuat: Date.now(), oleh,
         judul: bagian(teks, 'JUDUL').replace(/\*\*/g, '').slice(0, 160), subjudul: bagian(teks, 'SUBJUDUL').replace(/\*\*/g, '').slice(0, 300),
         tldr: butir(bagian(teks, 'TLDR')).slice(0, 3), kutipan: bagian(teks, 'KUTIPAN').replace(/^["“]|["”]$/g, '').slice(0, 240), badan,
         alasanTop, top: o.top, catatanTop: o.catatanTop, pasar: o.pasar,
@@ -153,14 +154,64 @@ export async function tulisEdisi(o: {
 }
 
 const dir = (dataDir: string) => path.join(dataDir, 'rekap');
-export function simpanEdisi(dataDir: string, e: Edisi) { fs.mkdirSync(dir(dataDir), { recursive: true }); fs.writeFileSync(path.join(dir(dataDir), `${e.tgl}.json`), JSON.stringify(e)); }
-export function daftarEdisi(dataDir: string): Array<{ tgl: string; judul: string }> {
+const ID_OK = /^\d{4}-\d{2}-\d{2}(_k\d{4})?$/;
+export function simpanEdisi(dataDir: string, e: Edisi) { fs.mkdirSync(dir(dataDir), { recursive: true }); fs.writeFileSync(path.join(dir(dataDir), `${e.id || e.tgl}.json`), JSON.stringify(e)); }
+export function daftarEdisi(dataDir: string): Array<{ id: string; tgl: string; judul: string; jenis: 'pagi' | 'kilat'; dibuat: number }> {
     try {
-        return fs.readdirSync(dir(dataDir)).filter((f) => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort().reverse().slice(0, 120)
-            .map((f) => { try { const e = JSON.parse(fs.readFileSync(path.join(dir(dataDir), f), 'utf8')); return { tgl: e.tgl, judul: e.judul }; } catch { return null; } }).filter(Boolean) as any;
+        return fs.readdirSync(dir(dataDir)).filter((f) => ID_OK.test(f.replace(/\.json$/, ''))).map((f) => {
+            try { const e = JSON.parse(fs.readFileSync(path.join(dir(dataDir), f), 'utf8')); return { id: e.id || e.tgl, tgl: e.tgl, judul: e.judul, jenis: e.jenis || 'pagi', dibuat: e.dibuat || 0 }; } catch { return null; }
+        }).filter(Boolean).sort((a: any, b: any) => b.dibuat - a.dibuat).slice(0, 200) as any;
     } catch { return []; }
 }
-export function bacaEdisi(dataDir: string, tgl: string): Edisi | null {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(tgl)) return null;
-    try { return JSON.parse(fs.readFileSync(path.join(dir(dataDir), `${tgl}.json`), 'utf8')); } catch { return null; }
+export function bacaEdisi(dataDir: string, id: string): Edisi | null {
+    if (!ID_OK.test(id)) return null;
+    try { const e = JSON.parse(fs.readFileSync(path.join(dir(dataDir), `${id}.json`), 'utf8')); return { ...e, id: e.id || e.tgl, jenis: e.jenis || 'pagi' }; } catch { return null; }
+}
+
+/* ── Edisi kilat: terbit dalam hari yang sama untuk peristiwa terjadwal (FOMC/CPI/NFP) atau berita mendadak yang urgen ── */
+const KATA_URGEN = /\b(fed|federal reserve|powell|rate (cut|hike)|interest rates?|inflation|cpi|jobs report|payrolls|tariffs?|trade war|sanctions?|war|invasion|attack|missile|strike[sd]?|ceasefire|default|bankrupt(cy)?|collapse|crash|plunge|halt(ed)?|emergency|recession|ceo (resigns|steps down|ousted|fired)|scandal|fraud|indicted|probe|antitrust|ban(s|ned)?|export controls?|opec|earthquake|hurricane|shutdown)\b/i;
+const BUANG = new Set(['the', 'a', 'an', 'to', 'of', 'in', 'on', 'for', 'and', 'as', 'at', 'by', 'with', 'is', 'are', 'its', 'after', 'over', 'from', 'says', 'say', 'new', 'us', 'u.s.', 'amid', 'will', 'could', 'may', 'more', 'than', 'what', 'how', 'why', 'be', 'that', 'this', 'it', 'up', 'down']);
+const kata = (t: string) => new Set(t.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter((w) => w.length > 2 && !BUANG.has(w)).map((w) => (w.length > 4 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w)));
+/** Kelompok judul yang membahas peristiwa sama dalam 3 jam terakhir, diliput ≥3 media berbeda & bertopik besar. */
+export function deteksiUrgen(judul: JudulDunia[], kunciLama: Set<string>): Array<{ kunci: string; judul: JudulDunia[] }> {
+    const baru = judul.filter((j) => j.at && Date.now() - j.at < 3 * 3600_000);
+    const kelompok: Array<{ k: Set<string>; xs: JudulDunia[] }> = [];
+    for (const j of baru) {
+        const w = kata(j.t);
+        const g = kelompok.find((x) => { let sama = 0; for (const a of w) if (x.k.has(a)) sama++; return sama >= 3 || sama / Math.max(1, Math.min(w.size, x.k.size)) >= 0.5; });
+        if (g) { g.xs.push(j); for (const a of w) g.k.add(a); } else kelompok.push({ k: w, xs: [j] });
+    }
+    return kelompok
+        .filter((g) => new Set(g.xs.map((x) => x.sumber.toLowerCase())).size >= 3 && g.xs.some((x) => KATA_URGEN.test(x.t)))
+        .map((g) => ({ kunci: [...kata(g.xs[0].t)].sort().slice(0, 6).join(' '), judul: g.xs }))
+        .filter((g) => ![...kunciLama].some((k) => { const a = new Set(k.split(' ')); let sama = 0; for (const w of g.kunci.split(' ')) if (a.has(w)) sama++; return sama >= 3; }));
+}
+const SISTEM_KILAT = [
+    'Kamu penulis "Daily Recap · Kilat" di kantor Pak Rico: kabar kilat pasar saham AS berbahasa Indonesia untuk pembaca awam. Gaya santai, kalimat pendek, istilah dijelaskan singkat dalam kurung, **tebal** untuk poin penting. Ceritakan apa yang terjadi → kenapa penting → ke mana efeknya (sektor/saham). Setiap menyebut saham tulis $KODE (hanya kode di DATA). Setiap klaim dari berita beri penanda [Bxx].',
+    'KEJUJURAN: pakai HANYA fakta dari DATA. Jangan mengarang angka, nama, atau tanggal. Kalau angka resmi (mis. hasil CPI) tidak ada di judul berita, katakan angkanya belum tersedia di sumber kantor. Bukan saran keuangan.',
+    'Kalau setelah membaca DATA peristiwa ini ternyata TIDAK cukup penting untuk pasar saham AS (gosip kecil, berita lokal, berita lama), balas hanya: TIDAK_URGEN',
+    'Selain itu balas PERSIS dengan bagian berlabel: JUDUL: (maks 12 kata) / SUBJUDUL: (1 kalimat) / TLDR: (tepat 3 butir "- ") / ISI: (2–4 paragraf, boleh sub-bagian "### judul") / DAMPAK: (butir "- " sektor/saham yang kena, arah naik/turun, alasan) / PANTAU: (2–3 kalimat yang perlu dipantau berikutnya)'
+].join('\n');
+export async function tulisKilat(o: { id: string; tgl: string; topik: string; dataDir: string; llm: Llm; cadangan?: (prompt: string) => Promise<string>; berita: JudulDunia[]; kodeSah: Record<string, string>; konteks: Record<string, any>; wajib: boolean }): Promise<Edisi | null> {
+    const semua = o.berita.slice(0, 25).map((b, i) => ({ ...b, id: `B${i + 1}` }));
+    const data = JSON.stringify({ peristiwa: o.topik, waktuWib: new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 16).replace('T', ' '), berita: semua.map((b) => `[${b.id}] ${b.tgl} · ${b.sumber}: ${b.t}`), konteks: o.konteks });
+    let teks = '', oleh = 'AI kantor';
+    try { teks = String((o.llm ? await o.llm.complete(SISTEM_KILAT, `DATA:\n${data}`, 3000, 2) : '') || ''); } catch { /* cadangan */ }
+    if (!/ISI\s*:/i.test(teks) && !/TIDAK_URGEN/.test(teks) && o.cadangan) { try { teks = await o.cadangan(`${SISTEM_KILAT}\n\nDATA:\n${data}`); oleh = 'AI tim trading'; } catch { /* gagal */ } }
+    if (/TIDAK_URGEN/.test(teks) && !o.wajib) return null;
+    const b = (l: string) => { const m = teks.match(new RegExp(`(?:^|\\n)[*#\\s-]*${l}\\**\\s*:\\s*\\**\\s*([\\s\\S]*?)(?=\\n[*#\\s-]*(?:JUDUL|SUBJUDUL|TLDR|ISI|DAMPAK|PANTAU)\\**\\s*:|$)`, 'i')); return (m?.[1] || '').trim(); };
+    if (!b('ISI')) throw new Error('AI tidak memberi jawaban yang bisa dibaca untuk edisi kilat.');
+    const butir = (t: string) => t.split('\n').map((x) => x.replace(/^[\s*•\-–]+/, '').trim()).filter(Boolean);
+    const dipakai = new Set((teks.match(/\[B\d+\]/g) || []).map((x) => x.slice(1, -1)));
+    const kodeDi = [...new Set((teks.match(/\$([A-Z][A-Z0-9.-]{0,6})\b/g) || []).map((x) => x.slice(1)))].filter((k) => o.kodeSah[k]);
+    const e: Edisi = {
+        id: o.id, jenis: 'kilat', topik: o.topik, tgl: o.tgl, dibuat: Date.now(), oleh,
+        judul: b('JUDUL').replace(/\*\*/g, '').slice(0, 160), subjudul: b('SUBJUDUL').replace(/\*\*/g, '').slice(0, 300), tldr: butir(b('TLDR')).slice(0, 3), kutipan: '',
+        badan: [{ id: 'pembuka', judul: '', md: b('ISI') }, { id: 'dampak', judul: 'Ke mana efeknya', md: b('DAMPAK') }, { id: 'pantau', judul: 'Yang perlu dipantau', md: b('PANTAU') }].filter((x) => x.md).map((x) => ({ ...x, md: rapikanKode(x.md, o.kodeSah) })),
+        alasanTop: {}, top: [], catatanTop: '', pasar: null as any,
+        sumber: semua.filter((x) => dipakai.has(x.id)).map((x) => ({ id: x.id, t: x.t, sumber: x.sumber, url: x.url })),
+        kode: Object.fromEntries(kodeDi.map((k) => [k, o.kodeSah[k]]))
+    };
+    simpanEdisi(o.dataDir, e);
+    return e;
 }
