@@ -355,13 +355,16 @@ export async function ambilMusiman(s: string): Promise<Musiman> {
 }
 
 /* ── Weekly Insight (AI, dibuat manual, tersimpan 7 hari) ── */
-export interface Insight { s: string; judul: string; ringkas: string; berita?: string[]; fundTek: string; pantau: string; saran?: string; dibuat: number; model: string }
+export interface FundJudge { vonis: string; alasan: string; lemah: string[]; kuat: string[]; industri: string }
+export interface Insight { s: string; judul: string; ringkas: string; berita?: string[]; fundTek: string; pantau: string; saran?: string; dibuat: number; model: string;
+    /** Penilaian fundamental menyeluruh: titik lemah yang ditopang faktor lain, dan sebaliknya. */ fundJudge?: FundJudge | null;
+    teknikal?: string; beritaRinci?: string; whales?: string; /** tanggal laporan laba berikutnya saat insight dibuat (lewat = mungkin usang) */ labaBerikut?: string }
 const dirInsight = (dataDir: string) => path.join(dataDir, 'insight');
 export function bacaInsight(dataDir: string, s: string): Insight | null {
     try { const x = JSON.parse(fs.readFileSync(path.join(dirInsight(dataDir), `${s}.json`), 'utf8')) as Insight; return Date.now() - x.dibuat < 7 * 86400_000 ? x : null; } catch { return null; }
 }
 type Llm = { complete(system: string, user: string, maxTokens?: number, attempts?: number): Promise<string | null> } | null | undefined;
-export async function buatInsight(dataDir: string, s: string, fakta: string, llm: Llm, cadangan?: (prompt: string) => Promise<string>): Promise<Insight> {
+export async function buatInsight(dataDir: string, s: string, fakta: string, llm: Llm, cadangan?: (prompt: string) => Promise<string>, labaBerikut = ''): Promise<Insight> {
     if (!llm && !cadangan) throw new Error('AI belum tersedia');
     // Format berlabel (lebih tahan untuk AI gratis daripada JSON): JUDUL / RINGKAS / FUNDTEK / PANTAU. Dicoba hingga 2×.
     const sistem = [
@@ -384,27 +387,40 @@ export async function buatInsight(dataDir: string, s: string, fakta: string, llm
         'FUNDTEK: 4–5 kalimat: posisi teknikal (MA50/MA200 dalam %, golden/death cross, RSI, MACD, volume) lalu valuasi & kualitas (PER/forward PER/PEG, ROE, margin, pertumbuhan, utang) dibanding wajar',
         'PANTAU: 3–4 kalimat arahan: katalis bertanggal, level harga kunci + skenario tembus/jatuh, dan risiko utama',
         'SARAN: 2–3 kalimat sikap kantor: "Belum punya: …" dan "Sudah pegang: …", plus satu syarat yang membatalkan pandangan ini',
+        '',
+        'Lalu bagian rinci per faktor (dipakai di tab masing-masing). FUNDAMENTAL JUDGE = penilaian menyeluruh: rasio fundamental tidak pernah sempurna, jadi timbang mana yang lemah tapi DITOPANG rasio lain (mis. PBV mahal tapi wajar karena ROE & margin tinggi dan median PBV industri juga tinggi), dan mana yang kuat tapi PUNYA CATATAN (mis. pendapatan tumbuh tapi arus kas bebas turun / utang naik). Bandingkan selalu dengan "pembandingIndustri" (median saham sejenis di data) dan pakai "arusKas" (arus kas operasi vs laba bersih = kualitas laba, arus kas bebas, margin arus kas bebas). Kalau pembanding tidak ada, katakan tidak ada pembanding, jangan mengarang.',
+        'FJ_VONIS: tepat satu kata: Kuat / Cukup / Rapuh, lalu " — " dan 1–2 kalimat alasan utamanya',
+        'FJ_LEMAH: 2–4 butir, tiap butir diawali "- ": rasio yang terlihat lemah (sebut angkanya) → ditopang oleh … (sebut angka & pembanding industri), atau → tidak tertopang, risikonya …',
+        'FJ_KUAT: 2–4 butir, tiap butir diawali "- ": rasio yang kuat (sebut angkanya) → catatan/risiko yang perlu diperhatikan, atau → kokoh karena …',
+        'FJ_INDUSTRI: 2–3 kalimat: posisi valuasi & kualitas dibanding median industri/sektor di data, dan apakah premium/diskon valuasinya wajar',
+        'TEKNIKAL: 4–5 kalimat khusus teknikal: tren & posisi terhadap MA50/MA200 (dalam %), momentum (RSI, MACD), volume, level penyangga/hambatan dari data, dan apa yang mengonfirmasi atau membatalkan arah',
+        'BERITARINCI: 3–4 kalimat khusus berita: tema berita yang mendominasi, nada sentimen 7 hari, peristiwa resmi/katalis bertanggal, dan bagaimana pasar meresponsnya',
+        'WHALES: 3–4 kalimat khusus aliran dana besar: CMF & OBV (masuk/keluar), volume dibanding rata-rata, transaksi orang dalam (SEC), dan arti gabungannya; kalau datanya tipis, katakan',
         'Ini analisis, bukan saran keuangan.'
     ].join('\n');
     const bagian = (t: string, label: string) => {
-        const m = t.match(new RegExp(`(?:^|\\n)[*#\\s-]*${label}\\**\\s*:\\s*\\**\\s*([\\s\\S]*?)(?=\\n\\W*(?:JUDUL|RINGKAS|BERITA|FUNDTEK|PANTAU|SARAN)\\W*:|$)`, 'i'));
+        const m = t.match(new RegExp(`(?:^|\\n)[*#\\s-]*${label}(?![A-Z_])\\**\\s*:\\s*\\**\\s*([\\s\\S]*?)(?=\\n\\W*(?:JUDUL|RINGKAS|BERITA|FUNDTEK|PANTAU|SARAN|FJ_VONIS|FJ_LEMAH|FJ_KUAT|FJ_INDUSTRI|TEKNIKAL|BERITARINCI|WHALES)\\W*:|$)`, 'i'));
         return (m?.[1] || '').replace(/\*\*/g, '').trim();
     };
     let j: any = null, kosong = 0, galatCadangan = '';
     // Percobaan 1: AI gratis. Percobaan 2: AI tim trading lewat Hermes (jalur chat) — tidak bergantung kuota AI gratis.
     for (let coba = 0; coba < 2 && !j; coba++) {
         let out = '';
-        if (coba === 0 && llm) out = String((await llm.complete(sistem, fakta, 2200, 2)) || '');
+        if (coba === 0 && llm) out = String((await llm.complete(sistem, fakta, 4200, 2)) || '');
         else if (cadangan) { try { out = await cadangan(`${sistem}\n\nDATA:\n${fakta}`); } catch (e: any) { galatCadangan = String(e?.message || e).slice(0, 160); } }
-        else if (llm) out = String((await llm.complete(sistem, fakta, 2200, 2)) || '');
+        else if (llm) out = String((await llm.complete(sistem, fakta, 4200, 2)) || '');
         if (!out.trim()) { kosong++; continue; }
-        const r = { judul: bagian(out, 'JUDUL'), ringkas: bagian(out, 'RINGKAS'), berita: bagian(out, 'BERITA').split('\n').map((x) => x.replace(/^[\s*•\-–]+/, '').trim()).filter(Boolean).slice(0, 5), fundTek: bagian(out, 'FUNDTEK'), pantau: bagian(out, 'PANTAU'), saran: bagian(out, 'SARAN') };
+        const butir = (t: string) => t.split('\n').map((x) => x.replace(/^[\s*•\-–]+/, '').trim()).filter(Boolean).slice(0, 5);
+        const vonisT = bagian(out, 'FJ_VONIS'), vm = vonisT.match(/^(Kuat|Cukup|Rapuh)\b\s*[—–:-]?\s*([\s\S]*)$/i);
+        const fj = vonisT || bagian(out, 'FJ_LEMAH') ? { vonis: vm ? vm[1].charAt(0).toUpperCase() + vm[1].slice(1).toLowerCase() : '', alasan: (vm ? vm[2] : vonisT).trim(), lemah: butir(bagian(out, 'FJ_LEMAH')), kuat: butir(bagian(out, 'FJ_KUAT')), industri: bagian(out, 'FJ_INDUSTRI') } : null;
+        const r = { fundJudge: fj, teknikal: bagian(out, 'TEKNIKAL'), beritaRinci: bagian(out, 'BERITARINCI'), whales: bagian(out, 'WHALES'), judul: bagian(out, 'JUDUL'), ringkas: bagian(out, 'RINGKAS'), berita: bagian(out, 'BERITA').split('\n').map((x) => x.replace(/^[\s*•\-–]+/, '').trim()).filter(Boolean).slice(0, 5), fundTek: bagian(out, 'FUNDTEK'), pantau: bagian(out, 'PANTAU'), saran: bagian(out, 'SARAN') };
         if (r.ringkas) { j = r; break; }
         // Cadangan: AI membalas JSON.
         try { const m = out.match(/\{[\s\S]*\}/); const x = m ? JSON.parse(m[0]) : null; if (x?.ringkas) j = x; } catch { /* coba lagi */ }
     }
     if (!j) throw new Error(galatCadangan ? `AI gratis penuh dan AI tim trading gagal (${galatCadangan}). Coba lagi beberapa menit lagi.` : kosong === 2 ? 'AI sedang penuh. Coba lagi beberapa menit lagi.' : 'AI tidak memberi jawaban yang bisa dibaca. Coba lagi sebentar.');
-    const x: Insight = { s, judul: String(j.judul || '').slice(0, 180), ringkas: String(j.ringkas || ''), berita: Array.isArray(j.berita) ? j.berita.map(String) : [], fundTek: String(j.fundTek || ''), pantau: String(j.pantau || ''), saran: String(j.saran || ''), dibuat: Date.now(), model: 'AI kantor' };
+    const x: Insight = { s, judul: String(j.judul || '').slice(0, 180), ringkas: String(j.ringkas || ''), berita: Array.isArray(j.berita) ? j.berita.map(String) : [], fundTek: String(j.fundTek || ''), pantau: String(j.pantau || ''), saran: String(j.saran || ''), dibuat: Date.now(), model: 'AI kantor',
+        fundJudge: j.fundJudge || null, teknikal: String(j.teknikal || ''), beritaRinci: String(j.beritaRinci || ''), whales: String(j.whales || ''), labaBerikut };
     fs.mkdirSync(dirInsight(dataDir), { recursive: true });
     fs.writeFileSync(path.join(dirInsight(dataDir), `${s}.json`), JSON.stringify(x));
     return x;
@@ -516,4 +532,72 @@ export async function ambilAksi(s: string, harga: number | null): Promise<AksiDa
 export async function petaLaba(): Promise<Map<string, { tgl: string; waktu: string }>> {
     await labaUntuk('__');
     return labaCache?.m || new Map();
+}
+
+/* ── Arus kas perusahaan (SEC companyfacts: laporan resmi 10-K / 10-Q) ── */
+export interface PeriodeKas { label: string; akhir: string; ocf: number | null; inv: number | null; fin: number | null; capex: number | null; fcf: number | null; rev: number | null; ni: number | null }
+export interface ArusKas { tahunan: PeriodeKas[]; kuartal: PeriodeKas[]; ttm: { ocf: number; capex: number | null; fcf: number | null; rev: number | null; ni: number | null; dari: string } | null; sumber: string }
+type Fakta = { start?: string; end: string; val: number; form?: string; filed?: string; fy?: number; fp?: string };
+const hariAntara = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / 86400_000);
+export async function ambilArusKas(s: string): Promise<ArusKas> {
+    return simpan(`kas:${s}`, 12 * 3600_000, async () => {
+        const cik = await cikDari(s.toUpperCase());
+        if (!cik) throw new Error('Perusahaan ini tidak melapor ke SEC (mis. saham asing/ADR), jadi data arus kas tidak tersedia.');
+        const j = await secJson(`https://data.sec.gov/api/xbrl/companyfacts/CIK${String(cik).padStart(10, '0')}.json`);
+        if (!j) throw new Error('Laporan SEC belum bisa diambil. Coba lagi nanti.');
+        const g = j.facts?.['us-gaap'] || {};
+        const seri = (...konsep: string[]): Fakta[] => {
+            for (const k of konsep) { const u = g[k]?.units?.USD; if (Array.isArray(u) && u.length) return u.filter((x: any) => x.start && x.end && Number.isFinite(x.val) && /^10-[KQ]/.test(x.form || '')); }
+            return [];
+        };
+        // Satu nilai per (awal, akhir): ambil yang paling baru diserahkan (revisi).
+        const unik = (xs: Fakta[]) => { const m = new Map<string, Fakta>(); for (const x of xs) { const k = `${x.start}|${x.end}`; const a = m.get(k); if (!a || String(x.filed) > String(a.filed)) m.set(k, x); } return [...m.values()]; };
+        /** Nilai tahunan per tanggal akhir (durasi 350–380 hari). */
+        const tahunan = (xs: Fakta[]) => { const m = new Map<string, number>(); for (const x of unik(xs)) { const d = hariAntara(x.start!, x.end); if (d >= 350 && d <= 380) m.set(x.end, x.val); } return m; };
+        /** Nilai per kuartal: laporan arus kas biasanya kumulatif sejak awal tahun buku, jadi kuartal = selisih kumulatif berurutan. */
+        const kuartal = (xs: Fakta[]) => {
+            const m = new Map<string, number>(); const grup = new Map<string, Fakta[]>();
+            for (const x of unik(xs)) { const d = hariAntara(x.start!, x.end); if (!((d >= 80 && d <= 100) || (d >= 170 && d <= 195) || (d >= 260 && d <= 285) || (d >= 350 && d <= 380))) continue; grup.set(x.start!, [...(grup.get(x.start!) || []), x]); }
+            for (const xs2 of grup.values()) {
+                xs2.sort((a, b) => a.end.localeCompare(b.end));
+                let sebelum: Fakta | null = null;
+                for (const x of xs2) {
+                    const d = hariAntara(x.start!, x.end);
+                    if (!sebelum) { if (d <= 100) m.set(x.end, x.val); }
+                    else if (hariAntara(sebelum.end, x.end) >= 80 && hariAntara(sebelum.end, x.end) <= 100) m.set(x.end, x.val - sebelum.val);
+                    sebelum = x;
+                }
+            }
+            return m;
+        };
+        const K = {
+            ocf: seri('NetCashProvidedByUsedInOperatingActivities', 'NetCashProvidedByUsedInOperatingActivitiesContinuingOperations'),
+            inv: seri('NetCashProvidedByUsedInInvestingActivities', 'NetCashProvidedByUsedInInvestingActivitiesContinuingOperations'),
+            fin: seri('NetCashProvidedByUsedInFinancingActivities', 'NetCashProvidedByUsedInFinancingActivitiesContinuingOperations'),
+            capex: seri('PaymentsToAcquirePropertyPlantAndEquipment', 'PaymentsToAcquireProductiveAssets'),
+            rev: seri('Revenues', 'RevenueFromContractWithCustomerExcludingAssessedTax', 'SalesRevenueNet'),
+            ni: seri('NetIncomeLoss', 'ProfitLoss')
+        };
+        if (!K.ocf.length) throw new Error('Laporan arus kas perusahaan ini tidak ditemukan di data SEC.');
+        const susun = (f: (xs: Fakta[]) => Map<string, number>, n: number, label: (akhir: string) => string): PeriodeKas[] => {
+            const M = Object.fromEntries(Object.entries(K).map(([k, xs]) => [k, f(xs)])) as Record<keyof typeof K, Map<string, number>>;
+            const akhir = [...M.ocf.keys()].sort().slice(-n);
+            // Tanggal akhir pos lain bisa beda 1–3 hari dari arus kas operasi: cari yang terdekat (≤ 7 hari).
+            const ambil = (m: Map<string, number>, t: string) => { if (m.has(t)) return m.get(t)!; for (const [k, v] of m) if (Math.abs(hariAntara(k, t)) <= 7) return v; return null; };
+            return akhir.map((t) => {
+                const ocf = ambil(M.ocf, t), capex = ambil(M.capex, t);
+                return { label: label(t), akhir: t, ocf, inv: ambil(M.inv, t), fin: ambil(M.fin, t), capex, fcf: ocf != null && capex != null ? ocf - capex : ocf, rev: ambil(M.rev, t), ni: ambil(M.ni, t) };
+            });
+        };
+        const BLN = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+        const thn = susun(tahunan, 5, (t) => `FY${t.slice(2, 4)}`);
+        const kw = susun(kuartal, 8, (t) => `${BLN[Number(t.slice(5, 7)) - 1]} '${t.slice(2, 4)}`);
+        const empat = kw.slice(-4);
+        const jml = (k: keyof PeriodeKas) => (empat.length === 4 && empat.every((x) => x[k] != null) ? empat.reduce((a, x) => a + (x[k] as number), 0) : null);
+        const terakhirTh = thn[thn.length - 1];
+        const ttmOcf = jml('ocf');
+        const ttm = ttmOcf != null ? { ocf: ttmOcf, capex: jml('capex'), fcf: jml('fcf'), rev: jml('rev'), ni: jml('ni'), dari: `4 kuartal s/d ${empat[3].akhir}` }
+            : terakhirTh?.ocf != null ? { ocf: terakhirTh.ocf, capex: terakhirTh.capex, fcf: terakhirTh.fcf, rev: terakhirTh.rev, ni: terakhirTh.ni, dari: `tahun buku s/d ${terakhirTh.akhir}` } : null;
+        return { tahunan: thn, kuartal: kw, ttm, sumber: 'SEC (10-K / 10-Q)' };
+    });
 }

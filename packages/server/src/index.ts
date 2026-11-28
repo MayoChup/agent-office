@@ -69,7 +69,7 @@ import { HermesBridge } from './kantor/hermes';
 import { slidesCli } from './kantor/slides';
 import { WaJanji, WaReader, waLoginCli, waLogoutCli, waLinked } from './kantor/wa';
 import { FreeLlm } from './kantor/freeLlm';
-import { ambilEkstra, ambilAnalis, ambilSentimen, ambilMusiman, bacaInsight, buatInsight, ambilAksi, petaLaba } from './kantor/sahamEkstra';
+import { ambilEkstra, ambilAnalis, ambilSentimen, ambilMusiman, bacaInsight, buatInsight, ambilArusKas, ambilAksi, petaLaba } from './kantor/sahamEkstra';
 import { spawn } from 'child_process';
 import os from 'os';
 
@@ -803,6 +803,9 @@ app.get('/api/kantor/aksi-korporasi/:s', requireToken, async (req, res) => {
     const s = kodeOk(req.params.s);
     try { res.json({ ok: true, ...(await ambilAksi(s, (screener.detail(s)?.baris as any)?.harga ?? null)) }); } catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
 });
+app.get('/api/kantor/arus-kas/:s', requireToken, async (req, res) => {
+    try { res.json({ ok: true, ...(await ambilArusKas(kodeOk(req.params.s))) }); } catch (e: any) { res.status(400).json({ ok: false, error: String(e?.message || e) }); }
+});
 // Weekly Insight dibuat di latar (AI bisa butuh 1–2 menit); halaman memantau lewat GET sampai jadi.
 const insightJalan = new Map<string, { mulai: number }>(), insightGalat = new Map<string, string>();
 app.get('/api/kantor/insight/:s', requireToken, (req, res) => {
@@ -817,7 +820,7 @@ app.post('/api/kantor/insight/:s', requireToken, (req, res) => {
         const d: any = screener.detail(s);
         if (!d) throw new Error('Saham belum ada di data penyaring');
         const b = d.baris, f = b.f || {};
-        const [ek, an, se, ak, cs, cspy] = await Promise.allSettled([ambilEkstra(s, { per: f.per, epsCagr3: f.epsCagr3, revGrowth: f.revGrowth }), ambilAnalis(s, b.nama), ambilSentimen(s), ambilAksi(s, b.harga), ambilCandle(s, '3M'), ambilCandle('SPY', '3M')]);
+        const [ek, an, se, ak, cs, cspy, kas] = await Promise.allSettled([ambilEkstra(s, { per: f.per, epsCagr3: f.epsCagr3, revGrowth: f.revGrowth }), ambilAnalis(s, b.nama), ambilSentimen(s), ambilAksi(s, b.harga), ambilCandle(s, '3M'), ambilCandle('SPY', '3M'), ambilArusKas(s)]);
         const v = <T,>(x: PromiseSettledResult<T>) => (x.status === 'fulfilled' ? x.value : null);
         const bulat = (_k: string, x: any) => (typeof x === 'number' && !Number.isInteger(x) ? +x.toFixed(2) : x);
         const pct = (a: number | null | undefined, b: number | null | undefined) => (a != null && b ? +((a / b - 1) * 100).toFixed(2) : null);
@@ -830,6 +833,19 @@ app.post('/api/kantor/insight/:s', requireToken, (req, res) => {
         const sek = (screener.data(20) as any).baris.filter((x: any) => x.sektor && x.sektor === b.sektor && x.s !== s);
         const rata = (xs: number[]) => (xs.length ? +(xs.reduce((a2, c) => a2 + c, 0) / xs.length).toFixed(2) : null);
         const an0 = v(an), se0 = v(se), ak0 = v(ak), sk: any = d.skor || {};
+        // Pembanding: median rasio saham satu industri (cadangan: satu sektor) di data kantor — dasar AI menilai "wajar di industrinya".
+        const semuaB: any[] = (screener.data(20) as any).baris;
+        const sejenisI = semuaB.filter((x) => x.f && x.s !== s && b.industri && x.industri === b.industri);
+        const sejenis = sejenisI.length >= 5 ? sejenisI : semuaB.filter((x) => x.f && x.s !== s && x.sektor && x.sektor === b.sektor);
+        const median = (k: string) => { const xs = sejenis.map((x) => x.f?.[k]).filter((y: any) => typeof y === 'number' && Number.isFinite(y)).sort((p1: number, p2: number) => p1 - p2); return xs.length >= 3 ? +xs[Math.floor(xs.length / 2)].toFixed(2) : null; };
+        const pembanding = sejenis.length >= 3 ? { kelompok: sejenis === sejenisI ? `industri ${b.industri}` : `sektor ${b.sektor}`, jumlahSaham: sejenis.length, median_per: median('per'), median_pbv: median('pbv'), median_roe_persen: median('roe'), median_marginBersih_persen: median('npm'), median_der: median('der'), median_pertumbuhanPendapatan_persen: median('revGrowth'), contohSaham: sejenis.slice(0, 8).map((x) => x.s) } : null;
+        const kas0 = v(kas) as any;
+        const jt = (x: number | null | undefined) => (x == null ? null : Math.round(x / 1e6));
+        const arusKas = kas0 ? {
+            satuan: 'juta USD', ttm: kas0.ttm ? { dasar: kas0.ttm.dari, arusKasOperasi: jt(kas0.ttm.ocf), belanjaModal: jt(kas0.ttm.capex), arusKasBebas: jt(kas0.ttm.fcf), labaBersih: jt(kas0.ttm.ni), pendapatan: jt(kas0.ttm.rev), arusKasOperasiPerLaba: kas0.ttm.ni ? +(kas0.ttm.ocf / kas0.ttm.ni).toFixed(2) : null, marginArusKasBebas_persen: kas0.ttm.rev && kas0.ttm.fcf != null ? +((kas0.ttm.fcf / kas0.ttm.rev) * 100).toFixed(1) : null } : null,
+            tahunan: kas0.tahunan.map((x: any) => ({ tahun: x.label, operasi: jt(x.ocf), investasi: jt(x.inv), pendanaan: jt(x.fin), arusKasBebas: jt(x.fcf), labaBersih: jt(x.ni) }))
+        } : null;
+        const labaBerikut = ((v(ak) as any)?.akanDatang || []).find((x: any) => x.jenis === 'laba')?.tgl || '';
         const fakta = JSON.stringify({
             saham: `${b.nama} (${s})`, sektor: b.sektor, industri: b.industri, tanggalData: new Date().toISOString().slice(0, 10),
             harga_usd: b.harga,
@@ -842,6 +858,8 @@ app.post('/api/kantor/insight/:s', requireToken, (req, res) => {
                 tertinggi20hari_usd: k20.length ? Math.max(...k20.map((x) => x.h)) : null, terendah20hari_usd: k20.length ? Math.min(...k20.map((x) => x.l)) : null,
                 tertinggi52minggu_usd: b.sinyal?.hi52, terendah52minggu_usd: b.sinyal?.lo52, dariPuncak52_persen: pct(b.harga, b.sinyal?.hi52)
             },
+            pembandingIndustri: pembanding, arusKas,
+            whales: { cmf20: b.x?.cmf ?? null, obv20_relatif: b.x?.obv ?? null, volumeVsRata2: b.volX },
             fundamental: { per: f.per, forwardPer: v(ek)?.fwdPe, peg: v(ek)?.peg, pbv: f.pbv, roe_persen: f.roe, marginBersih_persen: f.npm, marginKotor_persen: f.gm, pertumbuhanPendapatan_persen: f.revGrowth, pertumbuhanLaba3th_persen: f.epsCagr3, der: f.der, eps_usd: v(ek)?.eps, dividendYield_persen: v(ek)?.yieldDiv, beta: v(ek)?.beta, kapitalisasi_jutaUsd: b.mcap ?? f.mcap },
             sinyalKantor4Faktor: Object.fromEntries(Object.entries(sk).filter(([, x]) => x).map(([k, x]: any) => [k, { label: x.asli || x.label, skor: x.skorAsli ?? x.skor, alasan: (x.alasan || []).slice(0, 4) }])),
             pantul: d.diskon ? { tahap: d.diskon.tahap === 'balik' ? 'Mulai berbalik' : d.diskon.tahap === 'zona' ? 'Zona beli' : 'Pantau', jenis: d.diskon.jenis === 'koreksi' ? 'koreksi di tren naik' : 'diskon dalam', alasan: d.diskon.alasan } : null,
@@ -853,7 +871,7 @@ app.post('/api/kantor/insight/:s', requireToken, (req, res) => {
             katalisAkanDatang: (ak0?.akanDatang || []).map((x) => `${x.tgl}: ${x.judul} (${x.detail})`),
             peristiwaResmi30hari: (ak0?.lampau || []).filter((x) => x.tgl >= new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 10)).map((x) => `${x.tgl}: ${x.judul}`)
         }, bulat);
-            await buatInsight(config.dataDir, s, fakta, OfficeRoom.sharedLlm(), (p) => percakapan.sekali(roster().some((a) => a.id === 'trading') ? 'trading' : 'default', p));
+            await buatInsight(config.dataDir, s, fakta, OfficeRoom.sharedLlm(), (p) => percakapan.sekali(roster().some((a) => a.id === 'trading') ? 'trading' : 'default', p), labaBerikut);
         })().catch((e: any) => { insightGalat.set(s, String(e?.message || e)); }).finally(() => { insightJalan.delete(s); });
     }
     res.json({ ok: true, jalan: true });

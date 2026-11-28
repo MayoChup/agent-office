@@ -3,7 +3,7 @@ import { apiGet, apiPost } from '../../kantor/connection';
 import { useApi, apiGetSimpan, simpanApi } from '../../kantor/api';
 import { GrafikSaham, DataCandle } from '../../components/GrafikSaham';
 import { TandaLaba } from './Acara';
-import { WeeklyInsight, MarketStats, FundLengkap, Experts, NewsSentiment, Seasonality, CorporateActions, DataEkstra } from './HalamanSaham';
+import { WeeklyInsight, MarketStats, FundLengkap, Experts, NewsSentiment, Seasonality, CorporateActions, DataEkstra, InsightFaktor, ArusKasPerusahaan } from './HalamanSaham';
 import { Baris, FAKTOR, FaktorKey, Label, kelas, usd, persen, kap, skorBar, rrTeks, harapanTeks } from './types';
 import { PresetPilih, PresetCek, PresetData, PresetEval } from './Preset';
 import { Simulasi } from './Simulasi';
@@ -97,7 +97,7 @@ export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPre
                     <div className="sd-score">
                         <div className={`sd-gauge ${kelas(all.label)}`} style={{ ['--p' as any]: skorBar(all.skor) }}><b className="mono">{skorBar(all.skor)}</b><small>/100</small></div>
                         <span className={`lb big ${kelas(all.label)}`}>{kalimat(all.label)}</span>
-                        <div className="sd-mini">{FAKTOR.filter((x) => x.k !== 'semua').map((x) => { const s = d.skor[x.k]; return <span key={x.k} className={`lb sm ${kelas(s?.label)}`} title={x.info}><Ikon e={x.ico} /> {s ? s.label : '–'}</span>; })}</div>
+                        <div className="sd-mini">{FAKTOR.filter((x) => x.k !== 'semua').map((x) => { const s = d.skor[x.k]; return <span key={x.k} className={`lb sm sd-mini-f ${kelas(s?.label)}`} title={x.info}><Ikon e={x.ico} /><small>{x.label}</small><b>{s ? s.label : '–'}</b></span>; })}</div>
                     </div>
                 )}
             </section>
@@ -216,6 +216,8 @@ export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPre
                                 </div>
                             )}
                             {tab === 'fundamental' && <FundLengkap b={b} e={ek.data?.ekstra} />}
+                            {tab === 'fundamental' && <ArusKasPerusahaan key={b.s} s={b.s} />}
+                            {(tab === 'fundamental' || tab === 'teknikal' || tab === 'berita' || tab === 'whales') && <InsightFaktor key={`${b.s}-${tab}`} s={b.s} jenis={tab} />}
                         </div>
                     );
                 })()}

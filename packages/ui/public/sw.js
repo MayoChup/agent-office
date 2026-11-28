@@ -2,7 +2,7 @@
  * - Halaman (HTML): ambil dari jaringan dulu (selalu versi terbaru); kalau offline pakai salinan terakhir.
  * - File /assets/ (namanya berubah tiap rilis): simpan & pakai dari cache.
  * - /api/ dan server lain TIDAK pernah disimpan (data pribadi tetap di server). */
-const CACHE = 'kantor-v2'; // v2: buang simpanan lama yang mungkin berisi halaman, bukan berkas aplikasi
+const CACHE = 'kantor-v3'; // v3: ikon & manifest biru (buang simpanan ikon hijau lama)
 self.addEventListener('install', (e) => { self.skipWaiting(); e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/', '/manifest.webmanifest', '/icon-192.png']).catch(() => {}))); });
 self.addEventListener('activate', (e) => { e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', (e) => {

@@ -26,32 +26,69 @@ export function BarisStat({ x }: { x: K.Bacaan }) {
 }
 
 /* ── Weekly Insight ── */
-interface Insight { judul: string; ringkas: string; berita?: string[]; fundTek: string; pantau: string; saran?: string; dibuat: number }
+interface FundJudge { vonis: string; alasan: string; lemah: string[]; kuat: string[]; industri: string }
+interface Insight { judul: string; ringkas: string; berita?: string[]; fundTek: string; pantau: string; saran?: string; dibuat: number; fundJudge?: FundJudge | null; teknikal?: string; beritaRinci?: string; whales?: string; labaBerikut?: string }
 const ikonKilau = <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" aria-hidden><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" /><path d="M19 15l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z" /></svg>;
-export function WeeklyInsight({ s }: { s: string }) {
+const BLN_I = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+/** "28 Nov 2026, 10.40 · 2 hari lalu" + apakah sudah mungkin usang (> 3 hari, atau laporan laba sudah lewat sejak dibuat). */
+function umurInsight(x: Insight) {
+    const d = new Date(x.dibuat + 7 * 3600_000);
+    const tgl = `${d.getUTCDate()} ${BLN_I[d.getUTCMonth()]} ${d.getUTCFullYear()}, ${String(d.getUTCHours()).padStart(2, '0')}.${String(d.getUTCMinutes()).padStart(2, '0')} WIB`;
+    const jam = (Date.now() - x.dibuat) / 3600_000;
+    const lalu = jam < 1 ? 'baru saja' : jam < 24 ? `${Math.floor(jam)} jam lalu` : `${Math.floor(jam / 24)} hari lalu`;
+    const hariIni = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
+    const labaLewat = !!x.labaBerikut && hariIni > x.labaBerikut;
+    const usang = jam > 72 || labaLewat;
+    return { teks: `${tgl} · ${lalu}`, usang, alasan: labaLewat ? `laporan laba ${x.labaBerikut} sudah keluar sesudah insight ini dibuat` : 'dibuat lebih dari 3 hari lalu' };
+}
+/** Satu sumber data insight untuk Overview & kartu per tab (dibuat di latar server, dipantau tiap 4 detik). */
+function useInsight(s: string) {
     const q = useApi<{ insight: Insight | null; jalan?: boolean; galat?: string }>(`/api/kantor/insight/${encodeURIComponent(s)}`, 0);
-    const [buka, setBuka] = useState(false);
     const [minta, setMinta] = useState(false);
     const [errKirim, setErrKirim] = useState('');
-    const x = q.data?.insight;
     const jalan = minta || !!q.data?.jalan;
-    const err = errKirim || (!jalan ? q.data?.galat || '' : '');
-    // Dibuat di latar server: pantau tiap 4 detik sampai selesai.
     React.useEffect(() => {
         if (!jalan) return;
         const t = setInterval(async () => { await q.reload(); }, 4000);
         return () => clearInterval(t);
     }, [jalan]); // eslint-disable-line react-hooks/exhaustive-deps
-    React.useEffect(() => { if (minta && q.data && !q.data.jalan) { setMinta(false); if (q.data.insight) setBuka(true); } }, [q.data]); // eslint-disable-line react-hooks/exhaustive-deps
+    React.useEffect(() => { if (minta && q.data && !q.data.jalan) setMinta(false); }, [q.data]); // eslint-disable-line react-hooks/exhaustive-deps
     const buat = async () => { setErrKirim(''); setMinta(true); try { await apiPost(`/api/kantor/insight/${encodeURIComponent(s)}`, {}); await q.reload(); } catch (e: any) { setErrKirim(String(e?.message || e)); setMinta(false); } };
-    const tgl = x ? new Date(x.dibuat).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+    return { x: q.data?.insight || null, jalan, err: errKirim || (!jalan ? q.data?.galat || '' : ''), buat };
+}
+function TanggalInsight({ x, jalan, buat }: { x: Insight; jalan: boolean; buat: () => void }) {
+    const u = umurInsight(x);
+    return (
+        <div className="hs-ins-tgl">
+            <small>Dibuat {u.teks}</small>
+            {u.usang && <span className="hs-usang" title={u.alasan}>Mungkin sudah usang</span>}
+            <button className="hs-link" disabled={jalan} onClick={buat}>{jalan ? 'Menyusun…' : 'Buat ulang'}</button>
+        </div>
+    );
+}
+function IsiJudge({ j }: { j: FundJudge }) {
+    return (
+        <div className="hs-judge">
+            {j.vonis && <div className={`hs-vonis v-${j.vonis.toLowerCase()}`}><b>Fundamental {j.vonis.toLowerCase()}</b>{j.alasan && <span>{j.alasan}</span>}</div>}
+            {!j.vonis && j.alasan && <p>{j.alasan}</p>}
+            {j.lemah.length > 0 && (<><h5>Terlihat lemah, tapi…</h5><ul>{j.lemah.map((t, i) => { const [a, b] = t.split(/\s*(?:→|->)\s*/); return <li key={i} className="lemah">{b ? <><b>{a}</b><span>{b}</span></> : t}</li>; })}</ul></>)}
+            {j.kuat.length > 0 && (<><h5>Terlihat kuat, catatannya…</h5><ul>{j.kuat.map((t, i) => { const [a, b] = t.split(/\s*(?:→|->)\s*/); return <li key={i} className="kuat">{b ? <><b>{a}</b><span>{b}</span></> : t}</li>; })}</ul></>)}
+            {j.industri && (<><h5>Dibanding industrinya</h5><p>{j.industri}</p></>)}
+        </div>
+    );
+}
+export function WeeklyInsight({ s }: { s: string }) {
+    const { x, jalan, err, buat } = useInsight(s);
+    const [buka, setBuka] = useState(false);
+    const sebelum = React.useRef(jalan);
+    React.useEffect(() => { if (sebelum.current && !jalan && x) setBuka(true); sebelum.current = jalan; }, [jalan, x]);
     return (
         <section className="sb-card hs-insight">
-            <div className="hs-ins-h"><span className="hs-ins-t">{ikonKilau} Weekly Insight</span>{x && <small>AI kantor · bukan saran</small>}</div>
+            <div className="hs-ins-h"><span className="hs-ins-t">{ikonKilau} Insight by AI</span>{x && <small>AI kantor · bukan saran</small>}</div>
             {!x ? (
                 <div className="hs-ins-kosong">
-                    <p>Ringkasan mingguan dari AI: apa yang terjadi minggu ini, posisi teknikal & fundamental, dan yang perlu dipantau. Disusun hanya dari data kantor.</p>
-                    <button className="btn primary" disabled={jalan} onClick={buat}>{jalan ? 'Menyusun insight… bisa sampai ±1–2 menit' : 'Buat insight'}</button>
+                    <p>Ringkasan dari AI: apa yang terjadi, posisi teknikal & fundamental, penilaian fundamental menyeluruh (Fundamental judge), dan yang perlu dipantau. Penjelasan per faktor juga muncul di tab Fundamentals, Technical, News & Whales. Disusun hanya dari data kantor.</p>
+                    <button className="btn primary" disabled={jalan} onClick={buat}>{jalan ? 'Menyusun insight… bisa sampai ±2–3 menit' : 'Buat insight'}</button>
                     {err && <small className="down">{err}</small>}
                 </div>
             ) : (
@@ -63,20 +100,113 @@ export function WeeklyInsight({ s }: { s: string }) {
                             <p>{x.ringkas}</p>
                             {!!x.berita?.length && (<><h4>Berita paling berdampak</h4><ul className="hs-ins-berita">{x.berita.map((t, i) => { const [a, b] = t.split(/\s*(?:→|->)\s*/); return <li key={i}>{b ? <><b>{a}</b> → {b}</> : t}</li>; })}</ul></>)}
                             <h4>Fundamental & teknikal</h4><p>{x.fundTek}</p>
+                            {x.fundJudge && (<><h4>Fundamental judge</h4><IsiJudge j={x.fundJudge} /></>)}
                             <h4>Yang perlu dipantau</h4><p>{x.pantau}</p>
                             {x.saran && <div className="hs-ins-saran"><h4>Sikap kantor</h4><p>{x.saran.split(/(?=Sudah pegang:)/i).map((t, i) => <span key={i}>{i > 0 && <br />}{t.trim()}</span>)}</p></div>}
                             <small className="sb-note">Disusun AI dari data kantor untuk informasi saja, bukan saran keuangan.</small>
                         </div>
                     )}
-                    <div className="hs-ins-kaki">
-                        <button className="hs-link" onClick={() => setBuka(!buka)}>{buka ? 'See less' : 'See more'}</button>
-                        <small>{tgl}</small>
-                        <button className="hs-link" disabled={jalan} onClick={buat}>{jalan ? 'Menyusun…' : 'Buat ulang'}</button>
-                    </div>
+                    <div className="hs-ins-kaki"><button className="hs-link" onClick={() => setBuka(!buka)}>{buka ? 'Lebih sedikit' : 'Selengkapnya'}</button></div>
+                    <TanggalInsight x={x} jalan={jalan} buat={buat} />
                     {err && <small className="down">{err}</small>}
                 </>
             )}
         </section>
+    );
+}
+
+/** Kartu penjelasan AI di bawah tab Fundamentals / Technical / News / Whales — isi dari insight yang sama. */
+const JUDUL_FAKTOR: Record<string, string> = { fundamental: 'Fundamental judge by AI', teknikal: 'Penjelasan teknikal by AI', berita: 'Penjelasan berita by AI', whales: 'Penjelasan whales by AI' };
+export function InsightFaktor({ s, jenis }: { s: string; jenis: 'fundamental' | 'teknikal' | 'berita' | 'whales' }) {
+    const { x, jalan, err, buat } = useInsight(s);
+    const teks = !x ? '' : jenis === 'teknikal' ? x.teknikal : jenis === 'berita' ? x.beritaRinci : jenis === 'whales' ? x.whales : '';
+    const ada = !!x && (jenis === 'fundamental' ? !!x.fundJudge : !!teks);
+    return (
+        <div className="hs-insf">
+            <div className="hs-ins-h"><span className="hs-ins-t">{ikonKilau} {JUDUL_FAKTOR[jenis]}</span></div>
+            {ada && x ? (
+                <>
+                    {jenis === 'fundamental' ? <IsiJudge j={x.fundJudge!} /> : <p className="hs-insf-p">{teks}</p>}
+                    <TanggalInsight x={x} jalan={jalan} buat={buat} />
+                </>
+            ) : (
+                <div className="hs-ins-kosong">
+                    <p>{x ? 'Insight yang ada dibuat sebelum bagian ini tersedia. Buat ulang supaya penjelasan ini muncul.' : jenis === 'fundamental' ? 'AI menimbang rasio yang lemah dan yang kuat, mana yang saling menopang, dibanding median industrinya.' : 'Penjelasan AI untuk faktor ini muncul setelah insight dibuat.'}</p>
+                    <button className="btn" disabled={jalan} onClick={buat}>{jalan ? 'Menyusun… bisa sampai ±2–3 menit' : x ? 'Buat ulang insight' : 'Buat insight'}</button>
+                </div>
+            )}
+            {err && <small className="down">{err}</small>}
+            <small className="sb-note">Disusun AI dari data kantor, bukan saran keuangan.</small>
+        </div>
+    );
+}
+
+/* ── Arus kas perusahaan (SEC) ── */
+interface PeriodeKas { label: string; akhir: string; ocf: number | null; inv: number | null; fin: number | null; capex: number | null; fcf: number | null; rev: number | null; ni: number | null }
+interface ArusKasData { tahunan: PeriodeKas[]; kuartal: PeriodeKas[]; ttm: { ocf: number; capex: number | null; fcf: number | null; rev: number | null; ni: number | null; dari: string } | null; sumber: string }
+const miliar = (v: number | null | undefined) => { if (v == null) return '–'; const a = Math.abs(v), t = v < 0 ? '−' : ''; return a >= 1e9 ? `${t}$${(a / 1e9).toLocaleString('id-ID', { maximumFractionDigits: 1 })} M` : `${t}$${Math.round(a / 1e6).toLocaleString('id-ID')} jt`; };
+export function ArusKasPerusahaan({ s }: { s: string }) {
+    const q = useApi<ArusKasData>(`/api/kantor/arus-kas/${encodeURIComponent(s)}`, 0);
+    const [mode, setMode] = useState<'tahunan' | 'kuartal'>('tahunan');
+    const d = q.data;
+    const xs = d ? (mode === 'tahunan' ? d.tahunan : d.kuartal) : [];
+    const t = d?.ttm;
+    const kualitas = t && t.ni ? t.ocf / t.ni : null;
+    const marginFcf = t && t.rev && t.fcf != null ? (t.fcf / t.rev) * 100 : null;
+    return (
+        <div className="hs-kas">
+            <div className="hs-kas-h">
+                <h4>Arus kas perusahaan <Info judul="Arus kas perusahaan" teks={'Dari laporan resmi ke SEC (10-K tahunan, 10-Q kuartalan).\n\nOperasi: kas dari bisnis inti. Sehat kalau positif dan tumbuh.\nInvestasi: belanja aset/akuisisi (biasanya negatif).\nPendanaan: utang, dividen, pembelian kembali saham (negatif = membayar ke pemegang saham/kreditur).\nArus kas bebas = operasi − belanja modal: uang yang benar-benar tersisa.\n\nArus kas operasi ÷ laba bersih ≥ 1 artinya laba didukung kas nyata (kualitas laba baik).'} /></h4>
+                <div className="sb-seg"><button className={mode === 'tahunan' ? 'on' : ''} onClick={() => setMode('tahunan')}>Tahunan</button><button className={mode === 'kuartal' ? 'on' : ''} onClick={() => setMode('kuartal')}>Kuartalan</button></div>
+            </div>
+            {q.error && <p className="sb-note">{q.error}</p>}
+            {!d && !q.error && <p className="sb-note">Memuat laporan arus kas…</p>}
+            {d && xs.length > 0 && (<>
+                <div className="hs-kas-leg"><span><i className="k-ocf" />Operasi</span><span><i className="k-inv" />Investasi</span><span><i className="k-fin" />Pendanaan</span><span><i className="k-fcf" />Arus kas bebas</span></div>
+                <GrafikKas xs={xs} />
+                {t && (
+                    <div className="hs-kas-stat">
+                        <div><small>Arus kas bebas 12 bln</small><b className={`mono ${t.fcf != null && t.fcf < 0 ? 'down' : ''}`}>{miliar(t.fcf)}</b></div>
+                        <div><small>Margin arus kas bebas</small><b className="mono">{marginFcf == null ? '–' : `${marginFcf.toLocaleString('id-ID', { maximumFractionDigits: 1 })}%`}</b></div>
+                        <div><small>Kas operasi ÷ laba</small><b className={`mono ${kualitas != null ? (kualitas >= 1 ? 'up' : 'down') : ''}`}>{kualitas == null ? '–' : `${kualitas.toLocaleString('id-ID', { maximumFractionDigits: 2 })}×`}</b><em>{kualitas == null ? '' : kualitas >= 1 ? 'laba didukung kas' : 'kas di bawah laba'}</em></div>
+                    </div>
+                )}
+                <small className="sb-note">Sumber: {d.sumber}{t ? ` · 12 bulan = ${t.dari}` : ''}</small>
+            </>)}
+        </div>
+    );
+}
+function GrafikKas({ xs }: { xs: PeriodeKas[] }) {
+    const ref = React.useRef<HTMLDivElement>(null);
+    const [W, setW] = useState(600);
+    React.useEffect(() => { const el = ref.current; if (!el) return; const u = () => setW(Math.max(280, el.clientWidth)); u(); const ro = new ResizeObserver(u); ro.observe(el); return () => ro.disconnect(); }, []);
+    const H = 220, kiri = 52, atas = 10, bawah = 22;
+    const nilai = xs.flatMap((x) => [x.ocf, x.inv, x.fin, x.fcf]).filter((v): v is number => v != null);
+    const maks = Math.max(1, ...nilai), min = Math.min(0, ...nilai);
+    const tinggi = H - atas - bawah, y = (v: number) => atas + ((maks - v) / (maks - min)) * tinggi, y0 = y(0);
+    const lebar = (W - kiri) / xs.length, bw = Math.min(14, lebar / 4.5);
+    const seri: Array<[keyof PeriodeKas, string]> = [['ocf', 'k-ocf'], ['inv', 'k-inv'], ['fin', 'k-fin']];
+    const titik = xs.map((x, i) => (x.fcf == null ? null : [kiri + i * lebar + lebar / 2, y(x.fcf)] as const));
+    const garis = titik.filter(Boolean).map((p) => p!.join(',')).join(' ');
+    const tik = [maks, min].filter((v) => Math.abs(v) > (maks - min) * 0.08);
+    return (
+        <div ref={ref} className="hs-kas-g">
+            <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Grafik arus kas">
+                {tik.map((v) => <g key={v}><line x1={kiri} x2={W} y1={y(v)} y2={y(v)} className="hk-kisi" /><text x={kiri - 6} y={y(v) + 4} textAnchor="end" className="hk-sumbu">{miliar(v)}</text></g>)}
+                <line x1={kiri} x2={W} y1={y0} y2={y0} className="hk-nol" /><text x={kiri - 6} y={y0 + 4} textAnchor="end" className="hk-sumbu">0</text>
+                {xs.map((x, i) => {
+                    const cx = kiri + i * lebar + lebar / 2;
+                    return (
+                        <g key={x.akhir}>
+                            {seri.map(([k, c], j) => { const v = x[k] as number | null; if (v == null) return null; const yy = y(v); return <rect key={k} x={cx + (j - 1.5) * bw * 1.1} y={Math.min(yy, y0)} width={bw} height={Math.max(1, Math.abs(yy - y0))} rx={2} className={c}><title>{`${x.label} · ${k === 'ocf' ? 'Operasi' : k === 'inv' ? 'Investasi' : 'Pendanaan'} ${miliar(v)}`}</title></rect>; })}
+                            <text x={cx} y={H - 6} textAnchor="middle" className="hk-sumbu">{x.label}</text>
+                        </g>
+                    );
+                })}
+                {garis && <polyline points={garis} className="hk-fcf" />}
+                {titik.map((p, i) => p && <circle key={i} cx={p[0]} cy={p[1]} r={3.5} className="hk-fcf-t"><title>{`${xs[i].label} · Arus kas bebas ${miliar(xs[i].fcf)}`}</title></circle>)}
+            </svg>
+        </div>
     );
 }
 

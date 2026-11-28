@@ -12,10 +12,11 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Kantor" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="theme-color" content="#0b0d14" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Silkscreen&family=Fraunces:ital,opsz,wght@0,9..144,400..800;1,9..144,400..700&family=Caveat:wght@500;700&display=swap" rel="stylesheet" />
-    <script>try { var t = localStorage.getItem('kantor:tema'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
+    <script>try { var t = localStorage.getItem('kantor:tema'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); document.querySelector('meta[name="theme-color"]').setAttribute('content', t === 'light' ? '#f5f7fa' : '#0b0d14'); } catch (e) {}</script>
   </head>
   <body>
     <div id="phaser-container"></div>
