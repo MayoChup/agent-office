@@ -423,6 +423,8 @@ export class Pencatat {
             const { html, text } = bodyOf(msg.payload);
             const tx = parseEmail({ id, from: header(msg, 'From'), subject: header(msg, 'Subject'), html, text, internalDate: Number(msg.internalDate) }, this.cfg);
             if (!tx) { skipped++; if (!dryRun) this.state.done.push(id); continue; }
+            // Email pemberitahuan tanpa nominal (aktivasi biometrik, login, promo) bukan transaksi.
+            if (!tx.nominal || tx.nominal <= 0) { skipped++; if (!dryRun) this.state.done.push(id); continue; }
             const key = `${tx.tanggal}|${tx.nominal || 0}|${tx.bank.toLowerCase()}`;
             if (knownKeys.has(key)) { skipped++; if (!dryRun) this.state.done.push(id); continue; }   // sudah dicatat (mis. oleh Uang)
             knownKeys.add(key);

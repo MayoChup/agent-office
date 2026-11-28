@@ -12,6 +12,27 @@ export const WARNA: Record<string, string> = {
 const PALET = ['#2563eb', '#f97316', '#10b981', '#ec4899', '#8b5cf6', '#eab308', '#06b6d4', '#ef4444', '#84cc16', '#64748b'];
 export const warnaDari = (k: string, i: number) => WARNA[k] || PALET[i % PALET.length];
 export const ikon = (k: string) => IKON[k] || '🔖';
+/** Ikon garis (Lucide) per kategori — pengganti emoji di daftar. */
+export const IKON_GARIS: Record<string, string> = {
+    'Makan & Minum': 'utensils', 'Transport': 'car', 'Belanja': 'shopping-cart', 'Tagihan & Langganan': 'receipt', 'Pulsa & Internet': 'smartphone',
+    'Kesehatan': 'pill', 'Hiburan': 'film', 'Investasi': 'trending-up', 'Transfer Keluarga': 'users', 'Pendapatan': 'briefcase', 'Gaji': 'briefcase',
+    'Gaji/Pemasukan': 'briefcase', 'Top Up E-Wallet': 'wallet', 'Transfer masuk': 'repeat', 'Transfer keluar': 'repeat', 'Lainnya': 'bookmark'
+};
+export const ikonGaris = (t: { jenis: string; kat: string }) => (t.jenis === 'Antar Rekening' ? 'repeat' : t.jenis === 'Masuk' ? 'arrow-down' : IKON_GARIS[t.kat] || 'bookmark');
+/** Rupiah ringkas untuk tabel & sumbu: 11,2 jt · 850 rb. */
+export const rpRingkas = (n: number) => { const a = Math.abs(n), t = n < 0 ? '−' : ''; return a >= 1e9 ? `${t}${(a / 1e9).toLocaleString('id-ID', { maximumFractionDigits: 1 })} M` : a >= 1e6 ? `${t}${(a / 1e6).toLocaleString('id-ID', { maximumFractionDigits: 1 })} jt` : a >= 1e3 ? `${t}${Math.round(a / 1e3)} rb` : `${t}${Math.round(a)}`; };
+/**
+ * Arus kas satu transaksi. Semua rekening: pindah dana antar rekening sendiri tidak dihitung (uangnya tidak ke mana-mana).
+ * Satu rekening: pindah dana masuk/keluar ikut dihitung karena memang mengubah isi rekening itu.
+ */
+export function arusDari(t: Tx, akun: string): { masuk: number; keluar: number } {
+    if (akun && t.bank.toLowerCase().replace(/\s/g, '') !== akun.toLowerCase().replace(/\s/g, '')) return { masuk: 0, keluar: 0 };
+    if (t.jenis === 'Masuk') return { masuk: t.n, keluar: 0 };
+    if (t.jenis === 'Keluar') return { masuk: 0, keluar: t.n };
+    if (!akun) return { masuk: 0, keluar: 0 };
+    return transferMasuk(t) ? { masuk: t.n, keluar: 0 } : { masuk: 0, keluar: t.n };
+}
+export function arusTotal(xs: Tx[], akun: string) { let m = 0, k = 0; for (const t of xs) { const a = arusDari(t, akun); m += a.masuk; k += a.keluar; } return { masuk: m, keluar: k, bersih: m - k }; }
 export const rp = (n: number) => `${n < 0 ? '−' : ''}Rp${Math.abs(Math.round(n)).toLocaleString('id-ID')}`;
 export const rpk = (n: number) => { const a = Math.abs(n); return a >= 1e9 ? `${(n / 1e9).toFixed(1)}M` : a >= 1e6 ? `${(n / 1e6).toFixed(1)}jt` : a >= 1e3 ? `${Math.round(n / 1e3)}rb` : String(Math.round(n)); };
 
@@ -42,7 +63,7 @@ export const transferMasuk = (t: Tx) => transfer(t) && /masuk/i.test(t.kat || ''
 export const efekSaldo = (t: Tx) => (t.jenis === 'Masuk' || transferMasuk(t) ? t.n : -t.n);
 /** Rekening tujuan/asal dari keterangan "ke Mandiri" / "dari BCA" (diisi saat transfer sendiri dipasangkan). */
 export const tujuanTransfer = (t: Tx) => (t.ket || '').match(/^(?:ke|dari)\s+([^·]+?)\s*(?:·|$)/i)?.[1]?.trim() || '';
-const samaAkun = (a: string, b: string) => a.toLowerCase().replace(/\s/g, '') === b.toLowerCase().replace(/\s/g, '');
+export const samaAkun = (a: string, b: string) => a.toLowerCase().replace(/\s/g, '') === b.toLowerCase().replace(/\s/g, '');
 /**
  * Saldo rekening = patokan (mutasi PDF) + semua transaksi rekening itu sesudah tanggal patokan,
  * termasuk dana pindahan dari rekening sendiri lain yang baru tercatat di sisi pengirim ("ke Mandiri" tanpa pasangan masuk di Mandiri).

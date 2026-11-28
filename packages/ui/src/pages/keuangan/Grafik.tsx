@@ -12,7 +12,7 @@ export function Batang({ data, rata, warna = 'var(--k-bar)', aktif }: { data: Ar
             {data.map((d, i) => {
                 const h = (d.v / max) * H;
                 return <g key={d.label}>
-                    <rect x={pad + i * bw + bw * 0.2} y={H - h} width={bw * 0.6} height={Math.max(0, h)} rx="4" fill={warna} opacity={aktif === undefined || aktif === i ? 1 : 0.45} />
+                    <rect x={pad + i * bw + bw * 0.2} y={H - h} width={bw * 0.6} height={Math.max(0, h)} rx="4" fill={warna} className={aktif === i ? 'on' : ''} opacity={aktif === undefined || aktif === i ? 1 : 0.45} />
                     <text x={pad + i * bw + bw / 2} y={H + 15} textAnchor="middle" className={`k-axis ${aktif === i ? 'on' : ''}`}>{d.label}</text>
                 </g>;
             })}
