@@ -153,9 +153,10 @@ export function ImporMutasi({ tinjau, onClose, onSelesai }: { tinjau: ItemAntre;
                 akun,
                 tambah: dipilih.map((t) => ({ id: t.id, tanggal: t.tanggal, jenis: t.jenis, nominal: t.nominal, pihak: t.pihak, kategori: t.jenis === 'Masuk' ? 'Pendapatan' : kat[t.id] || t.kategori, keterangan: t.ket })),
                 hapus: Object.keys(hapus).filter((k) => hapus[k]),
+                sahkan: tx.filter((t) => t.status === 'cocok' && t.cocok?.id?.startsWith('auto-tf-')).map((t) => ({ id: t.cocok!.id, tanggal: t.tanggal })),
                 saldo: pakaiSaldo && h.saldoAkhir != null && !!h.periode.sampai ? { nilai: h.saldoAkhir, tanggal: h.periode.sampai } : null
             });
-            setHasilSimpan(`✅ ${r.ditambah || 0} transaksi ditambahkan${r.dilewati ? ` (${r.dilewati} dilewati karena nominalnya tidak valid)` : ''}${r.dihapus ? `, ${r.dihapus} dihapus` : ''}${r.saldo ? `, saldo ${akun} diperbarui` : ''}.`);
+            setHasilSimpan(`✅ ${r.ditambah || 0} transaksi ditambahkan${r.disahkan ? `, ${r.disahkan} pindah dana otomatis disahkan` : ''}${r.dilewati ? ` (${r.dilewati} dilewati karena nominalnya tidak valid)` : ''}${r.dihapus ? `, ${r.dihapus} dihapus` : ''}${r.saldo ? `, saldo ${akun} diperbarui` : ''}.`);
             try { await apiPost(`/api/kantor/keuangan/mutasi-antre/${tinjau.id}/selesai`, {}); } catch { /* tidak penting */ }
             onSelesai();
         } catch (e: any) { setErr(String(e?.message || e)); }
@@ -192,7 +193,7 @@ export function ImporMutasi({ tinjau, onClose, onSelesai }: { tinjau: ItemAntre;
                                         <small>{tglPendek(t.tanggal)} · {t.ket}</small>
                                         <div className="mt-bot">
                                             {t.jenis === 'Antar Rekening' && <span className="mt-tag">🔁 pindah dana ({/masuk/i.test(t.kategori) ? 'masuk' : 'keluar'})</span>}
-                                            {t.status === 'cocok' ? <span className="mt-tag ok">✓ sudah tercatat{t.cocok ? ` (${tglPendek(t.cocok.d)}${t.cocok.pihak ? `, ${t.cocok.pihak}` : ''})` : ''}</span> : <span className="mt-tag new">baru</span>}
+                                            {t.status === 'cocok' && t.cocok?.id?.startsWith('auto-tf-') ? <span className="mt-tag ok">✓ pindah dana otomatis, disahkan saat disimpan</span> : t.status === 'cocok' ? <span className="mt-tag ok">✓ sudah tercatat{t.cocok ? ` (${tglPendek(t.cocok.d)}${t.cocok.pihak ? `, ${t.cocok.pihak}` : ''})` : ''}</span> : <span className="mt-tag new">baru</span>}
                                             {t.jenis === 'Keluar' && pilih[t.id] && (
                                                 <select value={kat[t.id] || t.kategori} onClick={(e) => e.preventDefault()} onChange={(e) => setKat({ ...kat, [t.id]: e.target.value })}>
                                                     {Array.from(new Set(['Makan & Minum', 'Transport', 'Belanja', 'Tagihan & Langganan', 'Pulsa & Internet', 'Kesehatan', 'Hiburan', 'Investasi', 'Transfer Keluarga', 'Lainnya', kat[t.id] || t.kategori])).map((k) => <option key={k} value={k}>{ikon(k)} {k}</option>)}
@@ -226,7 +227,7 @@ export function ImporMutasi({ tinjau, onClose, onSelesai }: { tinjau: ItemAntre;
                         {err && <div className="error">{err}</div>}
                         <div className="row" style={{ gap: 8 }}>
                             <button className="btn" onClick={onClose}>Nanti saja</button>
-                            <button className="btn primary k-save" style={{ flex: 1 }} disabled={busy || (!dipilih.length && !Object.values(hapus).some(Boolean) && !(pakaiSaldo && !!h.periode.sampai))} onClick={terapkan}>
+                            <button className="btn primary k-save" style={{ flex: 1 }} disabled={busy || (!dipilih.length && !Object.values(hapus).some(Boolean) && !(pakaiSaldo && !!h.periode.sampai) && !tx.some((t) => t.cocok?.id?.startsWith('auto-tf-')))} onClick={terapkan}>
                                 {busy ? 'Menyimpan…' : `Simpan ${dipilih.length} transaksi${Object.values(hapus).filter(Boolean).length ? ` · hapus ${Object.values(hapus).filter(Boolean).length}` : ''}`}
                             </button>
                         </div>

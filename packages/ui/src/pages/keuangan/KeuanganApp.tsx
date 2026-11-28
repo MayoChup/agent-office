@@ -155,10 +155,11 @@ function TxRow({ t, onClick }: { t: Tx; onClick: () => void }) {
     const judul = pindah ? 'Pindah dana' : (t.pihak || t.ket || t.kat);
     const sub = pindah ? (tuju ? (transferMasuk(t) ? `${tuju} → ${t.bank}` : `${t.bank} → ${tuju}`) : `${transferMasuk(t) ? 'masuk ke' : 'keluar dari'} ${t.bank}`)
         : `${t.jenis === 'Masuk' ? 'Pemasukan' : t.kat} · ${t.bank}${t.status === 'Manual' ? ' · manual' : ''}`;
+    const auto = t.status === 'Otomatis';
     return (
         <button className="k-tx" onClick={onClick}>
             <span className="k-ico" style={{ background: `${warnaDari(t.kat, 0)}22` }}>{t.jenis === 'Masuk' ? <Ikon e="💰" /> : pindah ? <Ikon e="🔁" /> : ikon(t.kat)}<i>{(t.bank || '?').slice(0, 1)}</i></span>
-            <span className="k-tx-main"><b>{judul}</b><small>{sub}</small>{!pindah && t.pihak && t.ket && t.ket !== t.pihak && <small>{t.ket}</small>}</span>
+            <span className="k-tx-main"><b>{judul}</b><small>{sub}{auto ? ' · otomatis, menunggu mutasi' : ''}</small>{!pindah && t.pihak && t.ket && t.ket !== t.pihak && <small>{t.ket}</small>}</span>
             <span className={`k-tx-n mono ${t.jenis === 'Masuk' ? 'in' : t.jenis === 'Keluar' ? 'out' : ''}`}>{t.jenis === 'Masuk' ? '+ ' : t.jenis === 'Keluar' ? '− ' : '⇄ '}{rp(t.n)}</span>
         </button>
     );

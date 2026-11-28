@@ -499,6 +499,10 @@ app.post('/api/kantor/keuangan/mutasi/terapkan', requireToken, async (req, res) 
         if (tambah.length) Object.assign(out, await pencatat.tambahBanyak(tambah, 'Mutasi'));
         const hapus = (Array.isArray(req.body?.hapus) ? req.body.hapus : []).map(String).filter(Boolean).slice(0, 500);
         if (hapus.length) Object.assign(out, await pencatat.hapus(hapus, path.join(config.dataDir, 'keuangan-terhapus.json')));
+        // Pasangan transfer otomatis yang terbukti ada di mutasi → disahkan dengan tanggal dari mutasi.
+        const sahkan = (Array.isArray(req.body?.sahkan) ? req.body.sahkan : []).slice(0, 500).map((x: any) => ({ id: String(x?.id || ''), tanggal: String(x?.tanggal || '') }));
+        if (sahkan.length) Object.assign(out, await pencatat.sahkan(sahkan));
+        setTimeout(() => void rapikanTransfer(), 5_000);
         const sd = req.body?.saldo;
         if (sd && Number.isFinite(Number(sd.nilai)) && /^\d{4}-\d{2}-\d{2}$/.test(String(sd.tanggal || ''))) { anggaran.setSaldo(akun, Number(sd.nilai), String(sd.tanggal)); out.saldo = true; }
         res.json({ ok: true, ...out });
@@ -611,7 +615,7 @@ async function rapikanTransfer() {
             () => pencatat.rapikanTransfer(config.pencatat.ownerNames, anggaran.get().akun), (r) => `${r.diubah} transaksi ditandai sebagai pindah dana antar rekening.`);
     } catch (e: any) { console.warn('[Transfer sendiri]', e?.message || e); return null; } finally { transferJalan = false; }
 }
-setTimeout(() => void rapikanTransfer(), 4 * 60_000); setInterval(() => void rapikanTransfer(), 3 * 3600_000);
+setTimeout(() => void rapikanTransfer(), 4 * 60_000); setInterval(() => void rapikanTransfer(), 30 * 60_000);
 app.post('/api/kantor/keuangan/rapikan-kategori', requireToken, async (_req, res) => {
     const r = await rapikanKategori(); res.json({ ok: true, hasil: r, ingatan: kategoriAi.jumlah() });
 });

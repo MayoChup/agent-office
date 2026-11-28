@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 /**
  * Pencatat transaksi otomatis — TANPA AI.
  *
@@ -484,8 +485,8 @@ export class Pencatat {
         if (!this.cfg.spreadsheetId) return { dicek: 0, diubah: 0 };
         const rows = await this.existingRows();
         const tgl = (v: any) => typeof v === 'number' ? new Date(Math.round((v - 25569) * 86400_000)).toISOString().slice(0, 10) : String(v || '').slice(0, 10);
-        type B = { row: number; d: string; bank: string; jenis: string; n: number; pihak: string; kat: string; ket: string; ubah: boolean };
-        const b: B[] = rows.map((r, i) => ({ row: i + 2, d: tgl(r[0]), bank: String(r[2] || ''), jenis: String(r[3] || ''), n: Number(r[4]) || 0, pihak: String(r[5] || ''), kat: String(r[6] || ''), ket: String(r[7] || ''), ubah: false }));
+        type B = { row: number; d: string; jam: any; bank: string; jenis: string; n: number; pihak: string; kat: string; ket: string; id: string; ubah: boolean };
+        const b: B[] = rows.map((r, i) => ({ row: i + 2, d: tgl(r[0]), jam: r[1], bank: String(r[2] || ''), jenis: String(r[3] || ''), n: Number(r[4]) || 0, pihak: String(r[5] || ''), kat: String(r[6] || ''), ket: String(r[7] || ''), id: String(r[8] || ''), ubah: false }));
         const ARAH = [KAT_TRANSFER_MASUK, KAT_TRANSFER_KELUAR];
         for (const x of b) {
             const dompet = topUpDompet(`${x.pihak} ${x.ket}`, akunSendiri);
@@ -527,6 +528,26 @@ export class Pencatat {
             if (!a) continue;
             x.ket = `${x.kat === KAT_TRANSFER_MASUK ? 'dari' : 'ke'} ${a}${x.ket ? ` · ${x.ket}` : ''}`.slice(0, 200); x.ubah = true;
         }
+        // Pasangan otomatis: transfer keluar "ke BCA" yang belum ada catatan masuknya di BCA → buat baris "Transfer masuk"
+        // di BCA (dan sebaliknya), supaya saldo kedua rekening langsung benar. Saat mutasi BCA diunggah, baris ini dicocokkan
+        // (tidak dobel) lalu disahkan dengan tanggal dari mutasi.
+        const pasangan: any[] = [];
+        const adaId = new Set(b.map((x) => x.id).filter(Boolean));
+        for (const x of b) {
+            if (x.jenis !== 'Antar Rekening' || x.n <= 0) continue;
+            const m = /^(ke|dari)\s+(.+?)\s*(?:·|$)/i.exec(x.ket); if (!m) continue;
+            const tuju = akunLain.find((a) => sama(a, m[2])); if (!tuju || sama(tuju, x.bank)) continue;
+            const keluarX = x.kat !== KAT_TRANSFER_MASUK;
+            const ada = b.some((y) => sama(y.bank, tuju) && Math.abs(y.n - x.n) <= 1 && hari(y.d, x.d) <= 1
+                && (keluarX ? (y.jenis === 'Masuk' || (y.jenis === 'Antar Rekening' && y.kat === KAT_TRANSFER_MASUK)) : (y.jenis === 'Keluar' || (y.jenis === 'Antar Rekening' && y.kat !== KAT_TRANSFER_MASUK))));
+            if (ada) continue;
+            const id = `auto-tf-${crypto.createHash('sha1').update(`${x.id || x.row}|${x.d}|${x.bank}|${x.n}`).digest('hex').slice(0, 12)}`;
+            if (adaId.has(id)) continue;
+            adaId.add(id);
+            const jam = typeof x.jam === 'number' ? `${String(Math.floor(x.jam * 24)).padStart(2, '0')}:${String(Math.round((x.jam * 1440) % 60)).padStart(2, '0')}` : String(x.jam || '00:00');
+            pasangan.push({ id, tanggal: x.d, jam, akun: tuju, jenis: 'Antar Rekening', nominal: x.n, pihak: x.pihak || 'Pindah dana', kategori: keluarX ? KAT_TRANSFER_MASUK : KAT_TRANSFER_KELUAR, keterangan: `${keluarX ? 'dari' : 'ke'} ${x.bank} · dibuat otomatis, menunggu mutasi ${tuju}` });
+        }
+        if (pasangan.length) await this.tambahBanyak(pasangan, 'Otomatis');
         const data = b.filter((x) => x.ubah).flatMap((x) => [
             { range: `'${this.cfg.sheetName}'!D${x.row}`, values: [[x.jenis]] },
             { range: `'${this.cfg.sheetName}'!G${x.row}:H${x.row}`, values: [[x.kat, x.ket]] }
@@ -535,7 +556,7 @@ export class Pencatat {
             await this.g.call(`https://sheets.googleapis.com/v4/spreadsheets/${this.cfg.spreadsheetId}/values:batchUpdate`, { method: 'POST', body: JSON.stringify({ valueInputOption: 'USER_ENTERED', data }) });
             this.reportCache = null;
         }
-        return { dicek: b.length, diubah: data.length / 2 };
+        return { dicek: b.length, diubah: data.length / 2 + pasangan.length };
     }
 
     async runOnce(): Promise<number> {
@@ -642,6 +663,22 @@ export class Pencatat {
         });
         this.reportCache = null;
         return { diubah: 1 };
+    }
+    /** Baris pasangan otomatis yang sudah terbukti di mutasi bank: samakan tanggal dengan mutasi & tandai "Mutasi". */
+    async sahkan(list: Array<{ id: string; tanggal: string }>) {
+        const rows = await this.existingRows();
+        const data: any[] = [];
+        for (const x of list) {
+            if (!/^auto-tf-/.test(x.id) || !/^\d{4}-\d{2}-\d{2}$/.test(x.tanggal)) continue;
+            const i = rows.findIndex((r) => String(r[8] || '') === x.id); if (i < 0) continue;
+            const ket = String(rows[i][7] || '').replace(/\s*·\s*dibuat otomatis, menunggu mutasi [^·]*$/, '');
+            data.push({ range: `'${this.cfg.sheetName}'!A${i + 2}`, values: [[x.tanggal]] }, { range: `'${this.cfg.sheetName}'!H${i + 2}`, values: [[ket]] }, { range: `'${this.cfg.sheetName}'!J${i + 2}`, values: [['Mutasi']] });
+        }
+        if (data.length) {
+            await this.g.call(`https://sheets.googleapis.com/v4/spreadsheets/${this.cfg.spreadsheetId}/values:batchUpdate`, { method: 'POST', body: JSON.stringify({ valueInputOption: 'USER_ENTERED', data }) });
+            this.reportCache = null;
+        }
+        return { disahkan: data.length / 3 };
     }
     /** Hapus beberapa transaksi sekaligus (dari bawah ke atas supaya nomor baris tidak bergeser). Salinannya disimpan dulu. */
     async hapus(ids: string[], arsipFile: string) {

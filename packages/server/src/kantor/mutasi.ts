@@ -215,16 +215,17 @@ export function polaAnonim(halaman: Baris[][]): string {
 }
 
 /* ── 4. Cocokkan dengan transaksi yang sudah tercatat ── */
-export interface TxAda { id: string; d: string; bank: string; jenis: string; n: number; pihak: string; ket: string }
+export interface TxAda { id: string; d: string; bank: string; jenis: string; n: number; pihak: string; ket: string; kat?: string }
 export function cocokkan(akun: string, mut: MutasiTx[], ada: TxAda[], periode: { dari: string; sampai: string }) {
     const samaAkun = (b: string) => b.toLowerCase().replace(/\s/g, '') === akun.toLowerCase().replace(/\s/g, '');
     const kandidat = ada.filter((t) => samaAkun(t.bank));
     const dipakai = new Set<string>();
     const hari = (a: string, b: string) => Math.abs(Date.parse(a) - Date.parse(b)) / 86400_000;
     const hasil = mut.map((m) => {
-        const arahCocok = (t: TxAda) => t.jenis === m.jenis || t.jenis === 'Antar Rekening';
+        // Pindah dana dicocokkan sesuai arahnya: "Transfer masuk" hanya dengan uang masuk di mutasi, dan sebaliknya.
+        const arahCocok = (t: TxAda) => t.jenis === m.jenis || (t.jenis === 'Antar Rekening' && (!t.kat || /masuk/i.test(t.kat) === (m.jenis === 'Masuk')));
         const c = kandidat.filter((t) => !dipakai.has(t.id) && Math.abs(t.n - m.nominal) <= 1 && arahCocok(t) && hari(t.d, m.tanggal) <= 3)
-            .sort((a, b) => hari(a.d, m.tanggal) - hari(b.d, m.tanggal))[0];
+            .sort((a, b) => hari(a.d, m.tanggal) - hari(b.d, m.tanggal) || (a.id.startsWith('auto-tf-') ? -1 : 0))[0];
         if (c) dipakai.add(c.id);
         return { ...m, status: c ? 'cocok' as const : 'baru' as const, cocok: c ? { id: c.id, d: c.d, pihak: c.pihak, ket: c.ket } : null, id: idMutasi(akun, m) };
     });
