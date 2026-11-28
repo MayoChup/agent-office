@@ -70,7 +70,7 @@ export function pilihTop(dataH: (H: number) => any, labaDalam: (s: string) => nu
     return { top, catatan };
 }
 
-const SISTEM = [
+const SISTEM_BARIS = [
     'Kamu penulis "Daily Recap" di kantor Pak Rico: newsletter pasar saham AS & dunia berbahasa Indonesia untuk pembaca awam yang sibuk.',
     '',
     'GAYA (wajib): santai seperti ngobrol dengan teman yang paham pasar — hidup, enak dibaca, menjaga perhatian. Kalimat pendek. Boleh sapaan ringan dan perumpamaan. Tiap istilah teknis dijelaskan singkat dalam kurung saat pertama muncul. Pakai **tebal** untuk poin penting dan *miring* untuk penekanan, secukupnya. Ceritakan SEBAB → AKIBAT: apa yang terjadi, kenapa, dan ke mana efeknya (sektor/saham mana naik atau turun).',
@@ -90,7 +90,16 @@ const SISTEM = [
     'AGENDA: butir diawali "- " untuk jadwal penting hari ini & minggu ini dari data (laporan laba, data ekonomi FOMC/CPI/NFP), dengan tanggal & kenapa perlu diperhatikan',
     'TOP5: satu baris per saham di daftar top, berbentuk "KODE: 2–3 kalimat santai kenapa saham ini masuk (pakai tanda & faktor dari data) dan satu risiko utamanya". Jangan menambah saham di luar daftar',
     'PENUTUP: 1 paragraf sikap umum hari ini + pengingat bijak soal risiko'
-].join('\n');
+];
+/** Artikel ditulis dalam 3 bagian kecil (lebih cepat & lebih tahan untuk AI gratis maupun cadangan). */
+const KEPALA = SISTEM_BARIS.slice(0, SISTEM_BARIS.findIndex((x) => x.startsWith('Balas PERSIS')));
+const barisLabel = (l: string) => SISTEM_BARIS.find((x) => x.startsWith(`${l}:`))!;
+const BAGIAN_TULIS: Array<{ label: string[]; kunci: string[]; token: number }> = [
+    { label: ['JUDUL', 'SUBJUDUL', 'TLDR', 'KUTIPAN', 'PEMBUKA', 'PASAR', 'BERITA'], kunci: ['tanggalSesi', 'pasarKemarin', 'beritaDunia', 'petaDampakDariTimBerita', 'top'], token: 3200 },
+    { label: ['ORANG', 'ANALIS', 'AGENDA'], kunci: ['tanggalSesi', 'beritaOrangKorporasi', 'orangDalamMembeli_SEC', 'analis', 'agenda'], token: 2000 },
+    { label: ['TOP5', 'PENUTUP'], kunci: ['tanggalSesi', 'pasarKemarin', 'top', 'catatanTop', 'agenda'], token: 2000 }
+];
+const sistemBagian = (labels: string[]) => [...KEPALA, 'Ini SATU BAGIAN dari artikel. Balas PERSIS dengan bagian berlabel berikut (huruf besar, diikuti titik dua), tanpa teks lain:', ...labels.map(barisLabel)].join('\n');
 
 const LABEL = ['JUDUL', 'SUBJUDUL', 'TLDR', 'KUTIPAN', 'PEMBUKA', 'PASAR', 'BERITA', 'ORANG', 'ANALIS', 'AGENDA', 'TOP5', 'PENUTUP'];
 function bagian(t: string, label: string) {
@@ -109,7 +118,7 @@ export async function tulisEdisi(o: {
 }): Promise<Edisi> {
     if (!o.llm && !o.cadangan) throw new Error('AI belum tersedia');
     const semuaBerita = [...o.dunia, ...o.orang].map((b, i) => ({ ...b, id: `B${i + 1}` }));
-    const data = JSON.stringify({
+    const dataObj: Record<string, any> = ({
         tanggalSesi: o.tgl, pasarKemarin: o.pasar,
         beritaDunia: semuaBerita.filter((b) => b.topik !== 'Orang & korporasi').map((b) => `[${b.id}] ${b.tgl} · ${b.topik} · ${b.sumber}: ${b.t}`),
         beritaOrangKorporasi: semuaBerita.filter((b) => b.topik === 'Orang & korporasi').map((b) => `[${b.id}] ${b.tgl} · ${b.sumber}: ${b.t}`),
@@ -120,13 +129,19 @@ export async function tulisEdisi(o: {
         top: o.top.map((c) => ({ kode: c.s, nama: c.nama, sektor: c.sektor, rencana: c.gaya, jenis: c.jenis, harga: c.harga, labelSinyal: c.label, skor: c.skor, target: `${c.target.nama} $${c.target.harga} (+${c.target.pct}%, peluang ${c.target.peluang}%)`, batasRugi: `$${c.stop.harga} (${c.stop.pct}%)`, rr: c.target.rr, harapan_persen: c.target.harapan, tanda: c.tanda, faktor: c.faktor })),
         catatanTop: o.catatanTop
     });
-    let teks = '', oleh = 'AI kantor', galat = '';
-    for (let coba = 0; coba < 2 && !bagian(teks, 'PEMBUKA'); coba++) {
-        try {
-            if (coba === 0 && o.llm) teks = String((await o.llm.complete(SISTEM, `DATA:\n${data}`, 6000, 2)) || '');
-            else if (o.cadangan) { teks = await o.cadangan(`${SISTEM}\n\nDATA:\n${data}`); oleh = 'AI tim trading'; }
-        } catch (e: any) { galat = String(e?.message || e).slice(0, 160); }
+    const potong = (kunci: string[]) => JSON.stringify(Object.fromEntries(kunci.map((k) => [k, dataObj[k]])));
+    let oleh = 'AI kantor', galat = '';
+    // Semua bagian dicoba di AI gratis bersamaan; bagian yang gagal dicoba satu per satu di AI tim trading.
+    const hasil = await Promise.all(BAGIAN_TULIS.map(async (bg) => {
+        const sis = sistemBagian(bg.label), cek = (t: string) => bg.label.every((l) => l === 'KUTIPAN' || l === 'TLDR' || new RegExp(`(?:^|\\n)[*#\\s-]*${l}(?![A-Z_0-9])\\**\\s*:`, 'i').test(t));
+        try { const t = o.llm ? String((await (o.llm as any).complete(sis, `DATA:\n${potong(bg.kunci)}`, bg.token, 2, false, cek)) || '') : ''; if (cek(t)) return t; } catch (e: any) { galat = String(e?.message || e).slice(0, 160); }
+        return '';
+    }));
+    for (let i = 0; i < hasil.length; i++) {
+        if (hasil[i] || !o.cadangan) continue;
+        try { hasil[i] = await o.cadangan(`${sistemBagian(BAGIAN_TULIS[i].label)}\n\nDATA:\n${potong(BAGIAN_TULIS[i].kunci)}`); oleh = 'AI tim trading'; } catch (e: any) { galat = String(e?.message || e).slice(0, 160); }
     }
+    const teks = hasil.join('\n');
     if (!bagian(teks, 'PEMBUKA')) throw new Error(galat ? `AI gagal menulis (${galat}). Coba lagi nanti.` : 'AI tidak memberi jawaban yang bisa dibaca. Coba lagi nanti.');
     const butir = (t: string) => t.split('\n').map((x) => x.replace(/^[\s*•\-–]+/, '').trim()).filter(Boolean);
     const alasanTop: Record<string, string> = {};
