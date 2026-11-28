@@ -4,7 +4,7 @@ import { apiPost } from '../../kantor/connection';
 import { Ikon } from '../../components/Ikon';
 
 interface CalonTop { s: string; nama: string; sektor: string; H: number; gaya: string; jenis: 'momentum' | 'pantul' | 'swing'; harga: number; skor: number; label: string;
-    target: { nama: string; harga: number; pct: number; peluang: number; rr: number | null; harapan: number | null }; stop: { harga: number; pct: number }; masuk: [number, number]; bukti: boolean; tanda: string[]; faktor: Record<string, string | null> }
+    target: { nama: string; harga: number; pct: number; peluang: number; rr: number | null; harapan: number | null }; stop: { harga: number; pct: number }; masuk: [number, number]; bukti: boolean; tanda: string[]; faktor: Record<string, string | null>; alasanData?: Array<{ jenis: string; teks: string }> }
 interface Edisi {
     id: string; jenis: 'pagi' | 'kilat'; topik?: string;
     tgl: string; dibuat: number; oleh: string; judul: string; subjudul: string; tldr: string[]; kutipan: string; badan: Array<{ id: string; judul: string; md: string }>;
@@ -163,6 +163,12 @@ function TopLima({ e, kini, ctx, lama }: { e: Edisi; kini: Record<string, number
                                     <span className="rk-chip">{c.gaya}</span>
                                 </div>
                                 {e.alasanTop[c.s] && <p className="rk-alasan"><Inline t={e.alasanTop[c.s]} ctx={ctx} /></p>}
+                                {!!c.alasanData?.length && (
+                                    <div className="rk-kenapa">
+                                        <b>Kenapa masuk</b>
+                                        <ul>{c.alasanData.map((a, j) => <li key={j}><span className={`rk-jenis j-${a.jenis.toLowerCase().replace(/\s+/g, '-')}`}>{a.jenis}</span><span>{a.teks}</span></li>)}</ul>
+                                    </div>
+                                )}
                                 <div className="rk-rencana">
                                     <div><small>Masuk sekitar</small><b className="mono">{usd(c.masuk[0])} – {usd(c.masuk[1])}</b></div>
                                     <div><small>Target {c.target.nama.toLowerCase()}</small><b className="mono up">{usd(c.target.harga)} <em>+{c.target.pct.toLocaleString('id-ID')}%</em></b></div>

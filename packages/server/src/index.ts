@@ -1618,6 +1618,22 @@ async function buatRekap(sebab: string): Promise<Edisi> {
         const analisHasil = await Promise.allSettled(kodeAnalis.map((s) => ambilAnalis(s, (kap.get(s) as any)?.nama || s)));
         const analis: Record<string, any> = {};
         analisHasil.forEach((r, i) => { if (r.status !== 'fulfilled' || !r.value) return; const a: any = r.value, h = (kap.get(kodeAnalis[i]) as any)?.harga; analis[kodeAnalis[i]] = { konsensus: a.konsensus, buy: a.buy, hold: a.hold, sell: a.sell, targetRata2_usd: a.target, hargaSekarang_usd: h, ruangKeTarget_persen: a.target && h ? +((a.target / h - 1) * 100).toFixed(1) : null, ratingTerbaru: (a.bank || []).slice(0, 4).map((x: any) => `${x.tgl} ${x.nama}: ${x.rating}${x.target ? `, target $${x.target}` : ''}`) }; });
+        // Alasan dari data untuk tiap saham Top 5 (bahasa awam) — dasar penjelasan AI & selalu tampil di kartu.
+        const bersihAlasan = (x: string) => x.replace(/^[+−-]\s*/, '').replace(/\s*·\s*belum terbukti.*$/, '').trim();
+        for (const c of top) {
+            const dt: any = screener.detail(c.s, c.H); if (!dt) continue;
+            const pos = (k: string) => ((dt.skor?.[k]?.alasan || []) as string[]).filter((x) => x.startsWith('+')).map(bersihAlasan).slice(0, 2);
+            const a: Array<{ jenis: string; teks: string }> = [];
+            const br = ((dt.berita?.judul || []) as any[]).filter((j) => j.s > 0).slice(0, 2);
+            if (br.length) a.push({ jenis: 'Berita', teks: br.map((j) => `“${j.t}”`).join(' · ') });
+            const wh = pos('whales'); if (wh.length) a.push({ jenis: 'Whales', teks: wh.join('; ') });
+            if (dt.orang && dt.orang.net > 0) a.push({ jenis: 'Orang dalam', teks: `membeli bersih $${Math.round(dt.orang.net).toLocaleString('en-US')} dalam 30 hari (laporan SEC)` });
+            if (dt.diskon && dt.diskon.tahap !== 'pantau') a.push({ jenis: 'Pantulan', teks: `${dt.diskon.tahap === 'balik' ? 'mulai berbalik naik' : 'di zona beli'}: ${(dt.diskon.alasan || []).slice(0, 2).join(', ')}` });
+            const an = analis[c.s]; if (an?.konsensus) a.push({ jenis: 'Analis', teks: `konsensus ${an.konsensus === 'BUY' ? 'Beli' : an.konsensus === 'SELL' ? 'Jual' : 'Tahan'}${an.targetRata2_usd ? `, target rata-rata $${an.targetRata2_usd}${an.ruangKeTarget_persen != null ? ` (${an.ruangKeTarget_persen >= 0 ? '+' : ''}${an.ruangKeTarget_persen}%)` : ''}` : ''}` });
+            const fu = pos('fundamental'); if (fu.length) a.push({ jenis: 'Fundamental', teks: fu.join('; ') });
+            const tk = pos('teknikal'); if (tk.length) a.push({ jenis: 'Teknikal', teks: tk.join('; ') });
+            c.alasanData = a.slice(0, 6);
+        }
         const orangDalam = screener.orangDalamTop(8).map((o) => `${o.s} (${o.nama}): orang dalam membeli bersih $${o.net.toLocaleString('en-US')} dalam 30 hari (${o.n} transaksi)`);
         fs.mkdirSync(path.join(config.dataDir, 'rekap-llm'), { recursive: true });
         const e = await tulisEdisi({ tgl, dataDir: config.dataDir, llm: llmRekap(), cadangan: (p) => percakapan.sekali(roster().some((a) => a.id === 'trading') ? 'trading' : 'default', p), pasar, top, catatanTop: catatan, dunia, orang, tema: (beritaTerkait.data?.tema || []) as any, agenda, orangDalam, analis, kodeSah: Object.fromEntries((d20.baris as any[]).map((b) => [b.s, b.nama])) });

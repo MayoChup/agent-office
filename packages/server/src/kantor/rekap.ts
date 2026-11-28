@@ -11,7 +11,8 @@ import type { JudulDunia } from './beritaTerkait';
 
 export interface CalonTop { s: string; nama: string; sektor: string; H: number; gaya: string; jenis: 'momentum' | 'pantul' | 'swing'; harga: number; skor: number; label: string; nilai: number;
     target: { nama: string; harga: number; pct: number; peluang: number; rr: number | null; harapan: number | null }; stop: { harga: number; pct: number }; masuk: [number, number];
-    bukti: boolean; tanda: string[]; faktor: Record<string, string | null> }
+    bukti: boolean; tanda: string[]; faktor: Record<string, string | null>;
+    /** alasan dari data (bahasa awam), diisi sesudah dipilih */ alasanData?: Array<{ jenis: string; teks: string }> }
 export interface Edisi {
     /** nama berkas: YYYY-MM-DD (pagi) atau YYYY-MM-DD_kHHMM (kilat) */ id: string; jenis: 'pagi' | 'kilat'; topik?: string;
     tgl: string; dibuat: number; oleh: string;
@@ -30,31 +31,37 @@ export function pilihTop(dataH: (H: number) => any, labaDalam: (s: string) => nu
     const terbaik = new Map<string, CalonTop>();
     for (const [H, gaya] of GAYA) {
         const d = dataH(H); const bukti = !!d?.teknikalBukti?.terbukti;
+        const calon: Array<{ c: CalonTop; eR: number; dasar: number }> = [];
         for (const b of d?.baris || []) {
             const g = b.skor?.semua; const pr = b.x?.proyeksi;
             if (!g || g.asli || !pr?.target?.length || g.skor < 0.15) continue; // minimal "Beli", sinyal tidak ditahan
             const hl = labaDalam(b.s); if (hl != null && hl >= 0 && hl <= 5) continue; // laporan laba ≤5 hari: terlalu liar
             if ((b.mcap ?? b.f?.mcap ?? 0) < 2000 || (b.volX ?? 1) < 0.3) continue; // terlalu kecil/sepi
-            const t = [...pr.target].sort((a: any, z: any) => (z.harapan ?? z.nilai) - (a.harapan ?? a.nilai))[0];
+            // Target realistis: harapan tertinggi di antara target yang peluangnya ≥ 25% (kalau tidak ada, yang peluangnya terbesar).
+            const urutT = [...pr.target].sort((a: any, z: any) => (z.harapan ?? z.nilai) - (a.harapan ?? a.nilai));
+            const t = urutT.find((x: any) => x.peluang >= 25) || [...pr.target].sort((a: any, z: any) => z.peluang - a.peluang)[0];
             const harapan = t.harapan ?? null; if (harapan == null || harapan <= 0) continue;
             const risk = Math.abs(pr.stop?.pct || 0) || 5;
-            const eR = Math.min(1, harapan / risk);                    // harapan dalam satuan risiko
             const dk = b.diskon, wh = b.skor?.whales?.skor ?? 0, br = b.skor?.berita?.skor ?? 0;
             const tanda: string[] = [];
-            let nilai = g.skor + eR * 1.5 + (t.peluang / 100) * 0.3 + (bukti ? 0.15 : -0.15);
-            if (dk && dk.tahap === 'balik') { nilai += 0.15; tanda.push('pantul: mulai berbalik'); } else if (dk && dk.tahap === 'zona') { nilai += 0.08; tanda.push('pantul: zona beli'); }
-            if (wh >= 0.15) { nilai += 0.1; tanda.push('dana besar masuk'); }
-            if (br >= 0.15) { nilai += 0.05; tanda.push('berita positif'); }
+            let dasar = g.skor + (t.peluang / 100) * 0.3 + (bukti ? 0.15 : -0.15);
+            if (dk && dk.tahap === 'balik') { dasar += 0.15; tanda.push('pantul: mulai berbalik'); } else if (dk && dk.tahap === 'zona') { dasar += 0.08; tanda.push('pantul: zona beli'); }
+            if (wh >= 0.15) { dasar += 0.1; tanda.push('dana besar masuk'); }
+            if (br >= 0.15) { dasar += 0.05; tanda.push('berita positif'); }
             if (bukti) tanda.push(`teknikal ±${H} hari terbukti di uji mundur`);
             const jenis: CalonTop['jenis'] = dk && dk.tahap !== 'pantau' ? 'pantul' : b.x?.trenLabel === 'Momentum' ? 'momentum' : 'swing';
-            const c: CalonTop = {
-                s: b.s, nama: b.nama, sektor: b.sektor || 'Lainnya', H, gaya, jenis, harga: b.harga, skor: Math.round((g.skor + 1) * 50), label: g.label, nilai: +nilai.toFixed(3),
+            calon.push({ eR: harapan / risk, dasar, c: {
+                s: b.s, nama: b.nama, sektor: b.sektor || 'Lainnya', H, gaya, jenis, harga: b.harga, skor: Math.round((g.skor + 1) * 50), label: g.label, nilai: 0,
                 target: { nama: t.nama, harga: t.harga, pct: t.pct, peluang: t.peluang, rr: t.rr ?? null, harapan },
                 stop: { harga: pr.stop.harga, pct: pr.stop.pct }, masuk: [+(b.harga - (b.x?.atr || 0) * 0.5).toFixed(2), b.harga], bukti, tanda,
                 faktor: Object.fromEntries(['teknikal', 'fundamental', 'berita', 'whales'].map((k) => [k, b.skor?.[k]?.label ?? null]))
-            };
-            const lama = terbaik.get(b.s); if (!lama || c.nilai > lama.nilai) terbaik.set(b.s, c);
+            } });
         }
+        // Harapan dibandingkan dengan saham lain di horison YANG SAMA (peringkat 0–1), supaya horison panjang tidak selalu menang
+        // hanya karena angka persennya lebih besar.
+        const urutE = [...calon].sort((a, z) => a.eR - z.eR);
+        urutE.forEach((x, i) => { const pr = urutE.length > 1 ? i / (urutE.length - 1) : 0.5; x.c.nilai = +(x.dasar + pr * 0.9).toFixed(3); });
+        for (const { c } of calon) { const lama = terbaik.get(c.s); if (!lama || c.nilai > lama.nilai) terbaik.set(c.s, c); }
     }
     const urut = [...terbaik.values()].sort((a, b) => b.nilai - a.nilai);
     const top: CalonTop[] = []; const perSektor = new Map<string, number>();
@@ -71,25 +78,36 @@ export function pilihTop(dataH: (H: number) => any, labaDalam: (s: string) => nu
 }
 
 const SISTEM_BARIS = [
-    'Kamu penulis "Daily Recap" di kantor Pak Rico: newsletter pasar saham AS & dunia berbahasa Indonesia untuk pembaca awam yang sibuk.',
+    'Kamu penulis "Daily Recap" di kantor Pak Rico: newsletter pasar saham AS & dunia berbahasa Indonesia untuk pembaca awam yang sibuk — gayanya seperti newsletter keuangan populer yang asyik dibaca, bukan laporan resmi.',
     '',
-    'GAYA (wajib): santai seperti ngobrol dengan teman yang paham pasar — hidup, enak dibaca, menjaga perhatian. Kalimat pendek. Boleh sapaan ringan dan perumpamaan. Tiap istilah teknis dijelaskan singkat dalam kurung saat pertama muncul. Pakai **tebal** untuk poin penting dan *miring* untuk penekanan, secukupnya. Ceritakan SEBAB → AKIBAT: apa yang terjadi, kenapa, dan ke mana efeknya (sektor/saham mana naik atau turun).',
-    'TAUTAN (wajib): setiap menyebut saham, tulis kodenya dengan format $KODE (mis. $NVDA, $AAPL) — hanya kode yang ada di DATA. Setiap klaim dari berita beri penanda sumber [Bxx] tepat setelah kalimatnya.',
-    'KEJUJURAN (wajib): pakai HANYA fakta dari DATA. Jangan mengarang peristiwa, nama orang, tanggal, atau angka. Setiap klaim dari berita beri penanda sumber seperti [B12] (id dari daftar berita). Kalau data suatu bagian kosong/tipis, tulis singkat saja atau lewati — jangan mengisi dengan karangan. Angka harga pakai $, perubahan pakai %. Ini analisis, bukan saran keuangan; jangan menjanjikan untung.',
+    'GAYA (wajib):',
+    '- Bahasa Indonesia sehari-hari yang luwes, seperti ngobrol dengan teman yang paham pasar. Pakai "kamu". Boleh kata santai (nih, sih, lho, bikin, ngebut) secukupnya.',
+    '- Kalimat pendek (maks ±20 kata). Satu paragraf maks 3 kalimat. Satu ide per paragraf.',
+    '- Mulai dari yang paling penting buat pembaca: "jadi apa artinya buat saham?", baru detailnya.',
+    '- Maksimal 2–3 angka per paragraf; pilih angka yang paling bercerita, jangan menumpuk daftar angka.',
+    '- Tiap istilah teknis dijelaskan singkat dalam kurung saat pertama muncul.',
+    '- Jangan menerjemahkan nama jabatan/lembaga secara harfiah. Pakai nama yang lazim: "The Fed", "Gubernur The Fed Michelle Bowman", "Kementerian Perdagangan AS". Kalau ragu, pakai istilah aslinya.',
+    '- Judul berita dari DATA berbahasa Inggris: ceritakan ulang dengan bahasamu sendiri, jangan terjemahan kata per kata.',
+    '- **Tebal** untuk 1 poin terpenting per paragraf. *Miring* untuk penekanan, jarang-jarang.',
+    'Contoh nada yang diinginkan: "Wall Street kemarin kayak habis minum kopi tiga gelas. $NVDA ngebut **+3%** setelah kabar permintaan chip AI masih tinggi [B4]. Buat kamu yang pegang saham chip, ini kabar enak — tapi ingat, yang naik cepat juga gampang dipakai ambil untung."',
+    '',
+    'TAUTAN: setiap menyebut saham tulis $KODE (mis. $NVDA) — hanya kode yang ada di DATA. Penanda sumber berita [Bxx] cukup 1 per paragraf, di akhir kalimat yang mengutip berita.',
+    'DILARANG: menulis nama kolom/label data atau kurung siku apa pun selain [Bxx] (mis. jangan menulis "[data pasar]", "[naikTerbesar]", "[petaDampak…]"). Jangan menulis tanggal format YYYY-MM-DD di dalam kalimat; tulis "kemarin", "Senin", atau "2 Des".',
+    'KEJUJURAN (wajib): pakai HANYA fakta dari DATA. Jangan mengarang peristiwa, nama orang, tanggal, atau angka. Kalau data suatu bagian kosong/tipis, tulis singkat saja. Harga pakai $, perubahan pakai %. Ini analisis, bukan saran keuangan; jangan menjanjikan untung.',
     '',
     'Balas PERSIS dengan bagian berlabel berikut (huruf besar, diikuti titik dua), tanpa teks lain:',
-    'JUDUL: headline yang menggoda dibaca, maks 12 kata',
+    'JUDUL: headline yang menggoda dibaca, maks 10 kata, bahasa santai',
     'SUBJUDUL: satu kalimat penjelas di bawah judul',
-    'TLDR: tepat 3 butir diawali "- ", masing-masing satu kalimat inti',
-    'KUTIPAN: satu kalimat paling "nempel" dari artikel ini (untuk kutipan sorotan), tanpa tanda kutip',
-    'PEMBUKA: 2–3 kalimat pembuka yang bikin penasaran',
-    'PASAR: 1 paragraf: gerak pasar kemarin (S&P 500, naik/turun, sektor terkuat & terlemah, saham yang paling bergerak) dan kenapa',
-    'BERITA: 3–5 sub-bagian, tiap sub-bagian diawali baris "### <judul menarik>" lalu 1–2 paragraf: apa yang terjadi [Bxx], kenapa penting, dan ke mana efeknya (sebut sektor/saham dari data)',
-    'ORANG: kabar orang penting & aksi korporasi (CEO mundur/diangkat, skandal, akuisisi, orang dalam membeli besar) dengan dampaknya; butir diawali "- ". Kalau tidak ada di data, tulis satu kalimat bahwa hari ini sepi',
-    'ANALIS: kata para analis/expert (bank & lembaga riset) dari data "analis": konsensus, target harga rata-rata vs harga sekarang, dan perubahan rating terbaru (sebut nama lembaganya & tanggal). 1 paragraf pendek + butir "- " per saham. Kalau data analis kosong, lewati dengan satu kalimat',
-    'AGENDA: butir diawali "- " untuk jadwal penting hari ini & minggu ini dari data (laporan laba, data ekonomi FOMC/CPI/NFP), dengan tanggal & kenapa perlu diperhatikan',
-    'TOP5: satu baris per saham di daftar top, berbentuk "KODE: 2–3 kalimat santai kenapa saham ini masuk (pakai tanda & faktor dari data) dan satu risiko utamanya". Jangan menambah saham di luar daftar',
-    'PENUTUP: 1 paragraf sikap umum hari ini + pengingat bijak soal risiko'
+    'TLDR: tepat 3 butir diawali "- ", masing-masing satu kalimat pendek dan jelas',
+    'KUTIPAN: satu kalimat paling "nempel" dari artikel ini (untuk kutipan sorotan), dalam bahasa Indonesia, tanpa tanda kutip dan tanpa [Bxx]',
+    'PEMBUKA: 2–3 kalimat pembuka yang bikin penasaran: suasana pasar kemarin dalam satu gambaran sederhana',
+    'PASAR: 2 paragraf pendek: (1) indeks & sektor terkuat/terlemah dan kenapa; (2) 2–3 saham yang paling bergerak dan pemicunya bila ada di berita',
+    'BERITA: 3–4 sub-bagian, tiap sub-bagian diawali baris "### <judul santai>" lalu 1–2 paragraf pendek: apa yang terjadi [Bxx] → kenapa penting → siapa yang untung/rugi (sektor/saham dari data). Pilih berita yang paling berdampak saja',
+    'ORANG: 2–4 butir diawali "- ": siapa, apa yang terjadi, dan kenapa penting buat sahamnya. Kalau tidak ada yang berarti, satu kalimat bahwa hari ini sepi',
+    'ANALIS: 1 kalimat pembuka lalu butir "- " per saham (maks 5): "$KODE — konsensus Beli/Tahan/Jual, target rata-rata $X (±Y% dari harga sekarang); terbaru: <lembaga> <naik/turunkan> target ke $Z". Ringkas, tanpa tanggal panjang',
+    'AGENDA: butir diawali "- " untuk jadwal penting hari ini & minggu ini (hari & tanggal singkat · apa · kenapa perlu diperhatikan). Maks 6 butir',
+    'TOP5: untuk SETIAP saham di daftar top, tulis blok yang diawali baris "### $KODE" lalu 2–4 kalimat gaya analis yang meyakinkan & bikin tertarik: kenapa saham ini menarik sekarang — gabungkan alasan dari "alasanData" (berita, aliran dana besar/whales, orang dalam, pantulan harga, analis, fundamental, teknikal), sebutkan rencananya secara singkat (masuk sekitar, target, batas rugi), lalu satu kalimat "Risikonya: …". Jangan menambah saham di luar daftar',
+    'PENUTUP: 1 paragraf pendek: sikap umum hari ini + pengingat bijak soal risiko'
 ];
 /** Artikel ditulis dalam 3 bagian kecil (lebih cepat & lebih tahan untuk AI gratis maupun cadangan). */
 const KEPALA = SISTEM_BARIS.slice(0, SISTEM_BARIS.findIndex((x) => x.startsWith('Balas PERSIS')));
@@ -110,7 +128,7 @@ function bagian(t: string, label: string) {
 }
 
 /** $KODE yang tidak ada di daftar saham kantor → teks biasa (supaya tidak jadi tautan ke halaman kosong). */
-function rapikanKode(md: string, sah: Record<string, string>) { return md.replace(/\$([A-Z][A-Z0-9.-]{0,6})\b/g, (m, k) => (sah[k] ? `$${k}` : k)); }
+function rapikanKode(md: string, sah: Record<string, string>) { return md.replace(/\[(?!B\d+\])[^\]\n]{2,80}\]/g, '').replace(/[ \t]+([.,;:])/g, '$1').replace(/\$([A-Z][A-Z0-9.-]{0,6})\b/g, (m, k) => (sah[k] ? `$${k}` : k)); }
 type Llm = { complete(system: string, user: string, maxTokens?: number, attempts?: number): Promise<string | null> } | null | undefined;
 export async function tulisEdisi(o: {
     tgl: string; dataDir: string; llm: Llm; cadangan?: (prompt: string) => Promise<string>;
@@ -127,7 +145,7 @@ export async function tulisEdisi(o: {
         orangDalamMembeli_SEC: o.orangDalam,
         analis: o.analis,
         agenda: o.agenda,
-        top: o.top.map((c) => ({ kode: c.s, nama: c.nama, sektor: c.sektor, rencana: c.gaya, jenis: c.jenis, harga: c.harga, labelSinyal: c.label, skor: c.skor, target: `${c.target.nama} $${c.target.harga} (+${c.target.pct}%, peluang ${c.target.peluang}%)`, batasRugi: `$${c.stop.harga} (${c.stop.pct}%)`, rr: c.target.rr, harapan_persen: c.target.harapan, tanda: c.tanda, faktor: c.faktor })),
+        top: o.top.map((c) => ({ kode: c.s, nama: c.nama, sektor: c.sektor, rencana: c.gaya, jenis: c.jenis, harga: c.harga, labelSinyal: c.label, skor: c.skor, target: `${c.target.nama} $${c.target.harga} (+${c.target.pct}%, peluang ${c.target.peluang}%)`, batasRugi: `$${c.stop.harga} (${c.stop.pct}%)`, rr: c.target.rr, harapan_persen: c.target.harapan, tanda: c.tanda, faktor: c.faktor, alasanData: (c.alasanData || []).map((a) => `${a.jenis}: ${a.teks}`) })),
         catatanTop: o.catatanTop
     });
     const potong = (kunci: string[]) => JSON.stringify(Object.fromEntries(kunci.map((k) => [k, dataObj[k]])));
@@ -158,7 +176,17 @@ export async function tulisEdisi(o: {
     if (!bagian(teks, 'PEMBUKA')) throw new Error(`AI gagal menulis bagian utama. ${catatan.join(' · ').slice(0, 600)}`);
     const butir = (t: string) => t.split('\n').map((x) => x.replace(/^[\s*•\-–]+/, '').trim()).filter(Boolean);
     const alasanTop: Record<string, string> = {};
-    for (const baris of bagian(teks, 'TOP5').split('\n')) { const m = baris.replace(/^[\s*•\-–#]+/, '').match(/^\**([A-Z][A-Z0-9.-]{0,6})\**\s*[:—–-]\s*(.+)$/); if (m && o.top.some((c) => c.s === m[1])) alasanTop[m[1]] = rapikanKode(m[2].trim(), o.kodeSah); }
+    {   // Blok per saham: "### $KODE" / "**KODE**:" / "1. KODE —" … sampai saham berikutnya.
+        const t5 = bagian(teks, 'TOP5'); const kodeTop = o.top.map((c) => c.s);
+        const re = new RegExp(`^\\s*(?:#{1,4}\\s*|\\d+[.)]\\s*|[-•*]\\s*)?\\**\\$?(${kodeTop.map((k) => k.replace(/[.-]/g, '\\$&')).join('|')})\\b\\**(?:\\s*\\([^)]*\\))?\\s*[:—–-]?\\s*`, 'i');
+        let kini = ''; const isi: Record<string, string[]> = {};
+        for (const baris of t5.split('\n')) {
+            const m = kodeTop.length ? baris.match(re) : null;
+            if (m) { kini = m[1].toUpperCase(); isi[kini] = []; const sisa = baris.slice(m[0].length).trim(); if (sisa) isi[kini].push(sisa); }
+            else if (kini && baris.trim()) isi[kini].push(baris.trim());
+        }
+        for (const [k, v] of Object.entries(isi)) if (v.length) alasanTop[k] = rapikanKode(v.join(' ').replace(/^#+\s*/, ''), o.kodeSah);
+    }
     const badan = [
         { id: 'pembuka', judul: '', md: bagian(teks, 'PEMBUKA') },
         { id: 'pasar', judul: 'Pasar kemarin', md: bagian(teks, 'PASAR') },
@@ -172,7 +200,7 @@ export async function tulisEdisi(o: {
     const e: Edisi = {
         id: o.tgl, jenis: 'pagi', tgl: o.tgl, dibuat: Date.now(), oleh,
         judul: bagian(teks, 'JUDUL').replace(/\*\*/g, '').slice(0, 160), subjudul: bagian(teks, 'SUBJUDUL').replace(/\*\*/g, '').slice(0, 300),
-        tldr: butir(bagian(teks, 'TLDR')).slice(0, 3), kutipan: bagian(teks, 'KUTIPAN').replace(/^["“]|["”]$/g, '').slice(0, 240), badan,
+        tldr: butir(bagian(teks, 'TLDR')).slice(0, 3).map((x) => rapikanKode(x, o.kodeSah)), kutipan: rapikanKode(bagian(teks, 'KUTIPAN'), {}).replace(/\[B\d+\]/g, '').replace(/^["“]|["”]$/g, '').trim().slice(0, 240), badan,
         alasanTop, top: o.top, catatanTop: o.catatanTop, pasar: o.pasar,
         sumber: semuaBerita.filter((b) => dipakai.has(b.id)).map((b) => ({ id: b.id, t: b.t, sumber: b.sumber, url: b.url })),
         kode: Object.fromEntries([...new Set([...(teks.match(/\$([A-Z][A-Z0-9.-]{0,6})\b/g) || []).map((x) => x.slice(1)), ...o.top.map((c) => c.s), ...o.pasar.naikTerbesar.map((x) => x.s), ...o.pasar.turunTerbesar.map((x) => x.s)])].filter((k) => o.kodeSah[k]).map((k) => [k, o.kodeSah[k]]))

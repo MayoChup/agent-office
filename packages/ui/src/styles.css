@@ -4052,3 +4052,16 @@ body.no-office #phaser-container { visibility: hidden; }
 .rk-disclaimer { margin-top: 20px !important; font-size: 12px; color: var(--muted); text-align: center; }
 @media (max-width: 520px) { .rk-isi { font-size: 16.5px; } .rk-kartu { padding: 14px 12px; gap: 10px; } .rk-no { font-size: 30px; width: 22px; } }
 .rk-kilat { display: inline-block; margin-right: 8px; padding: 1px 8px; border-radius: 99px; background: color-mix(in srgb, #f59e0b 18%, transparent); color: #d97706; font-weight: 700; }
+.rk-kenapa { display: flex; flex-direction: column; gap: 6px; }
+.rk-kenapa > b { font-size: 12px; font-weight: 700; color: var(--muted); }
+.rk-kenapa ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.rk-kenapa li { display: flex; gap: 8px; align-items: flex-start; font-size: 13.5px; line-height: 1.5; }
+.rk-kenapa li > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+.rk-jenis { flex-shrink: 0; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 6px; background: color-mix(in srgb, var(--text) 7%, transparent); color: var(--muted); min-width: 78px; text-align: center; }
+.rk-jenis.j-berita { background: color-mix(in srgb, #0ea5e9 14%, transparent); color: #0284c7; }
+.rk-jenis.j-whales, .rk-jenis.j-orang-dalam { background: color-mix(in srgb, #14b8a6 15%, transparent); color: #0d9488; }
+.rk-jenis.j-pantulan { background: color-mix(in srgb, #a855f7 14%, transparent); color: #9333ea; }
+.rk-jenis.j-analis { background: color-mix(in srgb, #f59e0b 16%, transparent); color: #b45309; }
+.rk-jenis.j-fundamental { background: color-mix(in srgb, #22c55e 14%, transparent); color: #15803d; }
+.rk-jenis.j-teknikal { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+.rk-isi { font-size: 17.5px; line-height: 1.8; } .rk-bag p { margin-bottom: 18px; }
