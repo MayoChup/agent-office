@@ -771,3 +771,5 @@ button.hz-tgl.on { background: var(--panel-solid); color: var(--text); }
 .oc-meter span { display: block; height: 100%; background: var(--aksen-isi); }
 .oc-langkah { display: grid; gap: 8px; margin-top: 8px; }
 .oc-langkah pre { margin: 0; padding: 10px 12px; border-radius: var(--r-kontrol); background: var(--naik); font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; white-space: pre-wrap; }
+/* Tombol tanggal kosong jangan ikut gaya "keadaan kosong" (.kosong) halaman */
+:root:root .tgl-tombol.kosong { padding: 0 12px; margin: 0; max-width: none; text-align: left; line-height: inherit; }

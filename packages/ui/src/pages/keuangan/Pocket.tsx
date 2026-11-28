@@ -105,7 +105,7 @@ function FormPocket({ awal, akunList, onClose, onSaved }: { awal: Partial<Pocket
                 <label className="ku-field"><span>Target</span><span className="ku-rp"><i>Rp</i><input className="input mono" inputMode="numeric" value={n ? n.toLocaleString('id-ID') : ''} onChange={(e) => setTarget(e.target.value)} placeholder="0" /></span></label>
                 <div className="ku-field"><span>Tenggat (boleh kosong)</span>
                     <div className="ku-baris-aksi">
-                        <TanggalInput value={tenggat} min={hariIni()} bisaKosong ariaLabel="Tenggat pocket" onChange={(v) => setTenggat(v || '')} tampil={tenggat ? tglIso(tenggat) : 'Pilih tanggal'} />
+                        <TanggalInput className="ku-tgl-btn" value={tenggat} min={hariIni()} bisaKosong ariaLabel="Tenggat pocket" onChange={(v) => setTenggat(v || '')} tampil={tenggat ? tglIso(tenggat) : 'Pilih tanggal'} />
                         {tenggat && <button type="button" className="ku-link" onClick={() => setTenggat('')}>Hapus tenggat</button>}
                     </div>
                 </div>

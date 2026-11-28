@@ -3906,3 +3906,6 @@ body.no-office #phaser-container { visibility: hidden; }
 .ku-riwayat span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .ku-riwayat span b { font-weight: 500; font-size: 14px; } .ku-riwayat small { color: var(--muted); font-size: 12px; }
 .ku-riwayat .pos { color: var(--ku-in); }
+.ku-baris-aksi > :has(> .ku-tgl-btn) { flex: 0 0 auto; }
+:root:root .ku-tgl-btn, :root:root .ku-tgl-btn.kosong { height: 40px; min-height: 0; padding: 0 14px; border-radius: 10px; display: inline-flex; align-items: center; gap: 8px; font-size: 14px; border: 1px solid var(--ku-hair); background: var(--bg); color: var(--text); width: auto; }
+:root:root .ku-tgl-btn.kosong { color: var(--muted); }
