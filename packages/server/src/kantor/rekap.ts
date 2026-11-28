@@ -94,10 +94,11 @@ const SISTEM_BARIS = [
 /** Artikel ditulis dalam 3 bagian kecil (lebih cepat & lebih tahan untuk AI gratis maupun cadangan). */
 const KEPALA = SISTEM_BARIS.slice(0, SISTEM_BARIS.findIndex((x) => x.startsWith('Balas PERSIS')));
 const barisLabel = (l: string) => SISTEM_BARIS.find((x) => x.startsWith(`${l}:`))!;
-const BAGIAN_TULIS: Array<{ label: string[]; kunci: string[]; token: number }> = [
-    { label: ['JUDUL', 'SUBJUDUL', 'TLDR', 'KUTIPAN', 'PEMBUKA', 'PASAR', 'BERITA'], kunci: ['tanggalSesi', 'pasarKemarin', 'beritaDunia', 'petaDampakDariTimBerita', 'top'], token: 3200 },
-    { label: ['ORANG', 'ANALIS', 'AGENDA'], kunci: ['tanggalSesi', 'beritaOrangKorporasi', 'orangDalamMembeli_SEC', 'analis', 'agenda'], token: 2000 },
-    { label: ['TOP5', 'PENUTUP'], kunci: ['tanggalSesi', 'pasarKemarin', 'top', 'catatanTop', 'agenda'], token: 2000 }
+const BAGIAN_TULIS: Array<{ nama: string; label: string[]; inti: string[]; kunci: string[]; token: number }> = [
+    { nama: 'pembuka & pasar', label: ['JUDUL', 'SUBJUDUL', 'TLDR', 'KUTIPAN', 'PEMBUKA', 'PASAR'], inti: ['PEMBUKA'], kunci: ['tanggalSesi', 'pasarKemarin', 'beritaDunia', 'top'], token: 1600 },
+    { nama: 'berita', label: ['BERITA'], inti: ['BERITA'], kunci: ['tanggalSesi', 'beritaDunia', 'petaDampakDariTimBerita', 'pasarKemarin'], token: 2000 },
+    { nama: 'orang, analis & agenda', label: ['ORANG', 'ANALIS', 'AGENDA'], inti: ['ORANG', 'ANALIS', 'AGENDA'], kunci: ['tanggalSesi', 'beritaOrangKorporasi', 'orangDalamMembeli_SEC', 'analis', 'agenda'], token: 1800 },
+    { nama: 'top 5 & penutup', label: ['TOP5', 'PENUTUP'], inti: ['TOP5'], kunci: ['tanggalSesi', 'pasarKemarin', 'top', 'catatanTop', 'agenda'], token: 1800 }
 ];
 const sistemBagian = (labels: string[]) => [...KEPALA, 'Ini SATU BAGIAN dari artikel. Balas PERSIS dengan bagian berlabel berikut (huruf besar, diikuti titik dua), tanpa teks lain:', ...labels.map(barisLabel)].join('\n');
 
@@ -130,19 +131,31 @@ export async function tulisEdisi(o: {
         catatanTop: o.catatanTop
     });
     const potong = (kunci: string[]) => JSON.stringify(Object.fromEntries(kunci.map((k) => [k, dataObj[k]])));
-    let oleh = 'AI kantor', galat = '';
+    let oleh = 'AI kantor';
+    const ada = (t: string, l: string) => new RegExp(`(?:^|\\n)[*#\\s-]*${l}(?![A-Z_0-9])\\**\\s*:`, 'i').test(t);
+    const catatan: string[] = []; // diagnosa per bagian, ikut di pesan galat
     // Semua bagian dicoba di AI gratis bersamaan; bagian yang gagal dicoba satu per satu di AI tim trading.
     const hasil = await Promise.all(BAGIAN_TULIS.map(async (bg) => {
-        const sis = sistemBagian(bg.label), cek = (t: string) => bg.label.every((l) => l === 'KUTIPAN' || l === 'TLDR' || new RegExp(`(?:^|\\n)[*#\\s-]*${l}(?![A-Z_0-9])\\**\\s*:`, 'i').test(t));
-        try { const t = o.llm ? String((await (o.llm as any).complete(sis, `DATA:\n${potong(bg.kunci)}`, bg.token, 2, false, cek)) || '') : ''; if (cek(t)) return t; } catch (e: any) { galat = String(e?.message || e).slice(0, 160); }
+        const sis = sistemBagian(bg.label), cek = (t: string) => bg.inti.some((l) => ada(t, l));
+        if (!o.llm) { catatan.push(`${bg.nama}: AI gratis tidak tersedia`); return ''; }
+        try {
+            const t = String((await (o.llm as any).complete(sis, `DATA:\n${potong(bg.kunci)}`, bg.token, 2, false, cek)) || '');
+            if (cek(t)) return t;
+            const lg = String((o.llm as any).snapshot?.()?.lastError || '').slice(0, 120);
+            catatan.push(`${bg.nama}: AI gratis ${t ? 'menjawab tanpa format' : 'tidak menjawab'}${lg ? ` (${lg})` : ''}`);
+        } catch (e: any) { catatan.push(`${bg.nama}: AI gratis galat (${String(e?.message || e).slice(0, 100)})`); }
         return '';
     }));
     for (let i = 0; i < hasil.length; i++) {
         if (hasil[i] || !o.cadangan) continue;
-        try { hasil[i] = await o.cadangan(`${sistemBagian(BAGIAN_TULIS[i].label)}\n\nDATA:\n${potong(BAGIAN_TULIS[i].kunci)}`); oleh = 'AI tim trading'; } catch (e: any) { galat = String(e?.message || e).slice(0, 160); }
+        try {
+            const t = await o.cadangan(`${sistemBagian(BAGIAN_TULIS[i].label)}\n\nDATA:\n${potong(BAGIAN_TULIS[i].kunci)}`);
+            if (BAGIAN_TULIS[i].inti.some((l) => ada(t, l))) { hasil[i] = t; oleh = 'AI tim trading'; } else catatan.push(`${BAGIAN_TULIS[i].nama}: AI tim trading menjawab tanpa format`);
+        } catch (e: any) { catatan.push(`${BAGIAN_TULIS[i].nama}: AI tim trading galat (${String(e?.message || e).slice(0, 100)})`); }
     }
     const teks = hasil.join('\n');
-    if (!bagian(teks, 'PEMBUKA')) throw new Error(galat ? `AI gagal menulis (${galat}). Coba lagi nanti.` : 'AI tidak memberi jawaban yang bisa dibaca. Coba lagi nanti.');
+    if (catatan.length) console.warn('[Daily Recap]', catatan.join(' | '));
+    if (!bagian(teks, 'PEMBUKA')) throw new Error(`AI gagal menulis bagian utama. ${catatan.join(' · ').slice(0, 600)}`);
     const butir = (t: string) => t.split('\n').map((x) => x.replace(/^[\s*•\-–]+/, '').trim()).filter(Boolean);
     const alasanTop: Record<string, string> = {};
     for (const baris of bagian(teks, 'TOP5').split('\n')) { const m = baris.replace(/^[\s*•\-–#]+/, '').match(/^\**([A-Z][A-Z0-9.-]{0,6})\**\s*[:—–-]\s*(.+)$/); if (m && o.top.some((c) => c.s === m[1])) alasanTop[m[1]] = rapikanKode(m[2].trim(), o.kodeSah); }

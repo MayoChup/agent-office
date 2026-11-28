@@ -1584,6 +1584,9 @@ app.get('/api/kantor/acara', requireToken, async (_req, res) => {
     const m = await petaLaba().catch(() => new Map());
     res.json({ ok: true, makro: makroMendatang(14), laba: Object.fromEntries(m) });
 });
+/** AI gratis untuk Daily Recap: pakai otak kantor kalau ruang kantor aktif, kalau tidak buat sendiri (OpenRouter + cadangan Gemini/Groq/dll). */
+let llmRekapSendiri: FreeLlm | null = null;
+const llmRekap = () => OfficeRoom.sharedLlm() || (llmRekapSendiri ||= new FreeLlm({ apiKey: config.openRouterApiKey, baseUrl: config.openRouterBaseUrl, model: config.model, dailyLimit: 80, perMinuteLimit: 6, dataDir: path.join(config.dataDir, 'rekap-llm'), backups: config.llmBackups }));
 // ── Daily Recap: artikel harian + Top 5 sinyal lintas rencana posisi. Terbit sekali per sesi bursa AS (≥ 06.30 WIB). ──
 const rekapSt = { jalan: false, galat: '', mulai: 0 };
 async function buatRekap(sebab: string): Promise<Edisi> {
@@ -1616,7 +1619,8 @@ async function buatRekap(sebab: string): Promise<Edisi> {
         const analis: Record<string, any> = {};
         analisHasil.forEach((r, i) => { if (r.status !== 'fulfilled' || !r.value) return; const a: any = r.value, h = (kap.get(kodeAnalis[i]) as any)?.harga; analis[kodeAnalis[i]] = { konsensus: a.konsensus, buy: a.buy, hold: a.hold, sell: a.sell, targetRata2_usd: a.target, hargaSekarang_usd: h, ruangKeTarget_persen: a.target && h ? +((a.target / h - 1) * 100).toFixed(1) : null, ratingTerbaru: (a.bank || []).slice(0, 4).map((x: any) => `${x.tgl} ${x.nama}: ${x.rating}${x.target ? `, target $${x.target}` : ''}`) }; });
         const orangDalam = screener.orangDalamTop(8).map((o) => `${o.s} (${o.nama}): orang dalam membeli bersih $${o.net.toLocaleString('en-US')} dalam 30 hari (${o.n} transaksi)`);
-        const e = await tulisEdisi({ tgl, dataDir: config.dataDir, llm: OfficeRoom.sharedLlm(), cadangan: (p) => percakapan.sekali(roster().some((a) => a.id === 'trading') ? 'trading' : 'default', p), pasar, top, catatanTop: catatan, dunia, orang, tema: (beritaTerkait.data?.tema || []) as any, agenda, orangDalam, analis, kodeSah: Object.fromEntries((d20.baris as any[]).map((b) => [b.s, b.nama])) });
+        fs.mkdirSync(path.join(config.dataDir, 'rekap-llm'), { recursive: true });
+        const e = await tulisEdisi({ tgl, dataDir: config.dataDir, llm: llmRekap(), cadangan: (p) => percakapan.sekali(roster().some((a) => a.id === 'trading') ? 'trading' : 'default', p), pasar, top, catatanTop: catatan, dunia, orang, tema: (beritaTerkait.data?.tema || []) as any, agenda, orangDalam, analis, kodeSah: Object.fromEntries((d20.baris as any[]).map((b) => [b.s, b.nama])) });
         console.log(`[Daily Recap] ${tgl} terbit (${sebab}), top ${top.length}`);
         void kabarDari('trading-berita')(`📰 Daily Recap pagi ini sudah terbit: "${e.judul}". Buka Trading → Daily Recap.`).catch(() => undefined);
         return e;
@@ -1654,7 +1658,8 @@ async function terbitKilat(topik: string, berita: any[], wajib: boolean) {
     const id = `${tgl}_k${String(w.getUTCHours()).padStart(2, '0')}${String(w.getUTCMinutes()).padStart(2, '0')}`;
     const d20: any = screener.data(20);
     const konteks = { sektorKemarin: d20.pasar?.sektor?.slice(0, 11), sp500Kemarin_persen: d20.baris.find((b: any) => b.s === 'SPY')?.chg1d ?? null, sesiDataHarga: screener.sesiTeknikal() };
-    const e = await tulisKilat({ id, tgl, topik, dataDir: config.dataDir, llm: OfficeRoom.sharedLlm(), cadangan: (p) => percakapan.sekali(roster().some((a) => a.id === 'trading') ? 'trading' : 'default', p), berita, kodeSah: Object.fromEntries((d20.baris as any[]).map((b) => [b.s, b.nama])), konteks, wajib });
+    fs.mkdirSync(path.join(config.dataDir, 'rekap-llm'), { recursive: true });
+    const e = await tulisKilat({ id, tgl, topik, dataDir: config.dataDir, llm: llmRekap(), cadangan: (p) => percakapan.sekali(roster().some((a) => a.id === 'trading') ? 'trading' : 'default', p), berita, kodeSah: Object.fromEntries((d20.baris as any[]).map((b) => [b.s, b.nama])), konteks, wajib });
     if (!e) return null;
     const st = bacaKilat(); st.hari[tgl] = (st.hari[tgl] || 0) + 1; simpanKilat(st);
     console.log(`[Daily Recap] kilat terbit: ${e.judul}`);
