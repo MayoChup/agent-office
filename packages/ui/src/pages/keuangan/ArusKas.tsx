@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Tx, periode, dalam, rp, rpRingkas, arusDari, arusTotal, transfer, tujuanTransfer, kelompok } from './util';
 
 type Bulan = { p: ReturnType<typeof periode>; masuk: number; keluar: number; bersih: number };
@@ -99,7 +99,15 @@ function Rincian({ judul, data, total, kelas, klik }: { judul: string; data: Arr
 
 /** Batang cermin: masuk ke atas, keluar ke bawah, garis bersih di atasnya. Satu skala untuk keduanya. */
 function GrafikArus({ data, aktif, pilih }: { data: Bulan[]; aktif: number; pilih: (i: number) => void }) {
-    const W = 640, H = 220, kiri = 48, atasPad = 8, bawahLabel = 24;
+    // Lebar SVG = lebar kotak sebenarnya, supaya teks sumbu tetap 11px di HP (tidak ikut mengecil).
+    const ref = useRef<HTMLDivElement>(null);
+    const [W, setW] = useState(640);
+    useEffect(() => {
+        const el = ref.current; if (!el) return;
+        const ukur = () => setW(Math.max(260, Math.round(el.clientWidth)));
+        ukur(); const ro = new ResizeObserver(ukur); ro.observe(el); return () => ro.disconnect();
+    }, []);
+    const H = W < 480 ? 200 : 240, kiri = 44, atasPad = 8, bawahLabel = 24;
     const maxIn = Math.max(0, ...data.map((d) => d.masuk)), maxOut = Math.max(0, ...data.map((d) => d.keluar));
     const skala = Math.max(1, maxIn, maxOut, ...data.map((d) => Math.abs(d.bersih)));
     const atasN = Math.max(maxIn, ...data.map((d) => d.bersih)), bawahN = Math.max(maxOut, ...data.map((d) => -d.bersih));
@@ -111,7 +119,7 @@ function GrafikArus({ data, aktif, pilih }: { data: Bulan[]; aktif: number; pili
     const tik = [Math.max(1, atasN), -Math.max(1, bawahN)].filter((v) => Math.abs(v) > skala * 0.05);
     const titik = data.map((d, i) => [kiri + i * lebar + lebar / 2, py(d.bersih)] as const);
     return (
-        <svg className="ku-grafik" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Grafik arus kas per bulan">
+        <div ref={ref} className="ku-grafik-wrap"><svg className="ku-grafik" width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Grafik arus kas per bulan">
             <line x1={kiri} x2={W} y1={y0} y2={y0} className="ku-nol" />
             {tik.map((v) => <g key={v}><line x1={kiri} x2={W} y1={py(v)} y2={py(v)} className="ku-kisi" /><text x={kiri - 6} y={py(v) + 4} textAnchor="end" className="ku-sumbu">{v < 0 ? '−' : ''}{rpRingkas(Math.abs(v))}</text></g>)}
             <text x={kiri - 6} y={y0 + 4} textAnchor="end" className="ku-sumbu">0</text>
@@ -130,6 +138,6 @@ function GrafikArus({ data, aktif, pilih }: { data: Bulan[]; aktif: number; pili
             })}
             <polyline points={titik.map((t) => t.join(',')).join(' ')} className="ku-bersih-garis" />
             {titik.map(([x, y], i) => <circle key={i} cx={x} cy={y} r={i === aktif ? 4.5 : 3} className={`ku-bersih-titik ${i === aktif ? 'on' : ''}`} />)}
-        </svg>
+        </svg></div>
     );
 }

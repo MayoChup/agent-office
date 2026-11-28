@@ -63,11 +63,14 @@ export function KeuanganApp() {
 
     return (
         <div className="pg k-app ku">
+            <nav className="ku-tabs" role="tablist" aria-label="Bagian keuangan">
+                {TABS.map((t) => <button key={t.k} role="tab" aria-selected={tab === t.k} className={tab === t.k ? 'on' : ''} onClick={() => { setTab(t.k); if (t.k !== 'transaksi') setFilter({}); }}>{t.label}</button>)}
+            </nav>
             <header className="ku-head">
                 <div className="ku-bar">
                     <div className="ku-per">
                         <button onClick={() => setGeser(geser - 1)} aria-label="Periode sebelumnya"><Ikon n="chevron-left" /></button>
-                        <b>{p.label}</b>
+                        <b title={p.label}>{mulai === 1 ? p.label : `${tglPendek(p.start)} – ${tglPendek(p.end)}`}</b>
                         <button onClick={() => setGeser(Math.min(0, geser + 1))} disabled={geser >= 0} aria-label="Periode berikutnya"><Ikon n="chevron-right" /></button>
                     </div>
                     <div className="ku-aksi">

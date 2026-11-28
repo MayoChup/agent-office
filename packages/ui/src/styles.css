@@ -3706,6 +3706,11 @@ body.no-office #phaser-container { visibility: hidden; }
 .ku em { font-style: normal; }
 
 /* Kepala */
+.ku-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--ku-hair); overflow-x: auto; scrollbar-width: none; }
+.ku-tabs button { height: 40px; padding: 0 12px; border: none; border-bottom: 2px solid transparent; margin-bottom: -1px; background: none; color: var(--muted); font: inherit; font-size: 14px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+.ku-tabs button:hover { color: var(--text); }
+.ku-tabs button.on { color: var(--text); border-bottom-color: var(--accent); }
+@media (max-width: 767px) { .ku-tabs { display: none; } }
 .ku-head { display: flex; flex-direction: column; gap: 16px; padding: 4px 0 0; }
 .ku-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .ku-per { display: flex; align-items: center; gap: 4px; min-width: 0; }
@@ -3722,8 +3727,8 @@ body.no-office #phaser-container { visibility: hidden; }
 .ku-akun::-webkit-scrollbar { display: none; }
 .ku-akun button { flex-shrink: 0; height: 32px; display: inline-flex; align-items: center; gap: 8px; padding: 0 12px 0 8px; border-radius: 999px; border: 1px solid var(--ku-hair); background: transparent; color: var(--muted); font-size: 13px; cursor: pointer; white-space: nowrap; }
 .ku-akun button:first-child { padding-left: 12px; }
-.ku-akun button.on { background: var(--text); color: var(--bg); border-color: var(--text); }
-.ku-akun button.on .ku-tag { background: color-mix(in srgb, var(--bg) 18%, transparent); color: var(--bg); }
+.ku-akun button.on { background: var(--aksen-lembut, color-mix(in srgb, var(--accent) 14%, transparent)); color: var(--accent); border-color: var(--aksen-garis, var(--accent)); }
+.ku-akun button.on .ku-tag { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
 .ku-tag { width: 20px; height: 20px; border-radius: 6px; display: inline-grid; place-items: center; font: 500 11px/1 var(--mono); font-style: normal; background: color-mix(in srgb, var(--text) 8%, transparent); color: var(--muted); flex-shrink: 0; text-transform: uppercase; }
 
 .ku-ringkas { background: var(--ku-surf); border: 1px solid var(--ku-hair); border-radius: 20px; padding: 20px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 16px 24px; align-items: end; }
@@ -3798,15 +3803,16 @@ body.no-office #phaser-container { visibility: hidden; }
 .ku-legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
 .ku-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .ku-garis { width: 14px; height: 2px; background: var(--text); display: inline-block; border-radius: 1px; }
-.ku-grafik { width: 100%; height: auto; display: block; overflow: visible; }
+.ku-grafik-wrap { width: 100%; }
+.ku-grafik { display: block; overflow: visible; max-width: 100%; }
 .ku-nol { stroke: color-mix(in srgb, var(--text) 30%, transparent); stroke-width: 1; }
 .ku-kisi { stroke: var(--ku-hair); stroke-dasharray: 2 4; }
 .ku-sumbu { fill: var(--muted); font: 11px var(--mono); }
 .ku-sumbu.on { fill: var(--text); }
 .ku-hit { fill: transparent; }
 .ku-kol { cursor: pointer; }
-.ku-b-in { fill: var(--ku-in); opacity: 0.4; transition: opacity 0.15s; }
-.ku-b-out { fill: var(--ku-out); opacity: 0.4; transition: opacity 0.15s; }
+.ku-b-in { fill: var(--ku-in); opacity: 0.5; transition: opacity 0.15s; }
+.ku-b-out { fill: var(--ku-out); opacity: 0.5; transition: opacity 0.15s; }
 .ku-kol.on .ku-b-in, .ku-kol.on .ku-b-out, .ku-kol:hover .ku-b-in, .ku-kol:hover .ku-b-out { opacity: 1; }
 .ku-kol.on .ku-hit { fill: color-mix(in srgb, var(--text) 4%, transparent); }
 .ku-bersih-garis { fill: none; stroke: var(--text); stroke-width: 1.5; stroke-linejoin: round; opacity: 0.7; pointer-events: none; }
@@ -3833,15 +3839,11 @@ body.no-office #phaser-container { visibility: hidden; }
 .ku-tr.on { background: color-mix(in srgb, var(--text) 5%, transparent); border-radius: 8px; }
 .ku-tr .pos { color: var(--ku-in); }
 
-/* Tombol tambah & lembar: ikut krom tenang */
-.k-app.ku .ku-fab { background: var(--text); color: var(--bg); box-shadow: 0 8px 20px -8px rgba(0, 0, 0, 0.45); display: grid; place-items: center; }
-.k-app.ku .k-sheet-in { border-radius: 20px 20px 0 0; }
-@media (min-width: 768px) { .k-app.ku .k-sheet-in { border-radius: 20px; } }
-.k-app.ku .k-seg button.on, .k-app.ku .k-akun button.on, .k-app.ku .k-kat button.on, .k-app.ku .k-tgl button.on { background: var(--text); color: var(--bg); border-color: var(--text); }
-.k-app.ku .k-save, .k-app.ku .k-chat .btn.primary, .k-app.ku .k-send { background: var(--text) !important; color: var(--bg) !important; }
+/* Lembar & grafik lama ikut krom tenang (tombol tambah tetap pakai aksen aplikasi) */
 .k-app.ku .k-card { border-radius: 16px; border-color: var(--ku-hair); }
 .k-app.ku .k-meter i { border-radius: 2px; }
 .k-app.ku .k-bar rect { fill: color-mix(in srgb, var(--text) 22%, transparent); opacity: 1; }
 .k-app.ku .k-bar rect.on { fill: var(--accent); }
 .k-app.ku .k-avg { stroke: var(--muted); } .k-app.ku .k-avg-t { fill: var(--muted); }
+:root:root .k-app.ku .ku-fab { display: grid; place-items: center; }
 @media (max-width: 767px) { .k-app.ku .k-grid2 { grid-template-columns: minmax(0, 1fr); } }
