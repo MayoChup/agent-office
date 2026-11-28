@@ -4,7 +4,7 @@ import { useApi, apiGetSimpan, simpanApi } from '../../kantor/api';
 import { GrafikSaham, DataCandle } from '../../components/GrafikSaham';
 import { TandaLaba } from './Acara';
 import { WeeklyInsight, MarketStats, FundLengkap, Experts, NewsSentiment, Seasonality, CorporateActions, DataEkstra } from './HalamanSaham';
-import { Baris, FAKTOR, FaktorKey, Label, kelas, usd, persen, kap, skorBar } from './types';
+import { Baris, FAKTOR, FaktorKey, Label, kelas, usd, persen, kap, skorBar, rrTeks, harapanTeks } from './types';
 import { PresetPilih, PresetCek, PresetData, PresetEval } from './Preset';
 import { Simulasi } from './Simulasi';
 import { Bintang, TombolFolder } from './Bintang';
@@ -128,7 +128,7 @@ export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPre
                         <div className={`sd-plan ${/Jual/.test(all?.label || '') ? 'warn' : ''}`}>
                             <div><small>Masuk sekitar</small><b className="mono">{usd(b.harga - atr * 0.5)} – {usd(b.harga)}</b></div>
                             <div><small>Stop loss</small><b className="mono down">{usd(pr.stop.harga)} <em>{pr.stop.pct}%</em></b><span>tersentuh {pr.stop.peluang}% kasus</span></div>
-                            <div className="hl"><small>Target utama ★ {best.nama}</small><b className="mono up">{usd(best.harga)} <em>+{best.pct}%</em></b><span>peluang {best.peluang}%</span></div>
+                            <div className="hl"><small>Target utama ★ {best.nama}</small><b className="mono up">{usd(best.harga)} <em>+{best.pct}%</em></b><span>peluang {best.peluang}%{best.harapan != null ? ` · harapan ${harapanTeks(best.harapan)}` : ''}</span></div>
                             <div><small>Risiko : hasil</small><b className="mono">1 : {pr.rr}</b><span>peluang naik {pr.peluangNaik}%</span></div>
                         </div>
                     )}
@@ -139,11 +139,11 @@ export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPre
                                 <div className="top"><b>{t.nama}{t.nama === pr.terbaik ? ' ★' : ''}</b><span className="mono">{usd(t.harga)}</span></div>
                                 <div className="mono up">+{t.pct.toFixed(1)}%</div>
                                 <div className="bar"><i style={{ width: `${t.peluang}%` }} /></div>
-                                <small>peluang tercapai <b>{t.peluang}%</b> · nilai harapan +{t.nilai.toFixed(2)}%</small>
+                                <small>peluang tercapai <b>{t.peluang}%</b>{t.rr != null ? <> · R:R {rrTeks(t.rr)} · harapan <b className={(t.harapan ?? 0) < 0 ? 'down' : 'up'}>{harapanTeks(t.harapan)}</b></> : <> · nilai harapan +{t.nilai.toFixed(2)}%</>}</small>
                             </div>
                         ))}
                     </div>
-                    <p className="sb-note">★ = target dengan <b>peluang × potensi</b> tertinggi. Peluang dihitung dari: pada hari-hari serupa setahun terakhir, seberapa sering harga sempat menyentuh level itu dalam {pr.horizon} sesi. Bukan jaminan.</p>
+                    <p className="sb-note">★ = target dengan <b>harapan</b> tertinggi. Peluang = seberapa sering, dalam setahun terakhir, harga menyentuh target lebih dulu sebelum batas rugi dalam {pr.horizon} sesi. Harapan = rata-rata hasil per transaksi (target, batas rugi, atau akhir horison). Bukan jaminan.</p>
                 </section>
             )}
 

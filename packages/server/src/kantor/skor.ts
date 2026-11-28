@@ -11,7 +11,7 @@ import path from 'path';
 
 export type Label = 'Jual kuat' | 'Jual' | 'Tahan' | 'Beli' | 'Beli kuat';
 export interface Faktor { skor: number; label: Label; alasan: string[]; /** faktor yang datanya belum siap (hanya di skor gabungan) */ kurang?: string[]; /** label sebelum ditahan karena data belum lengkap */ asli?: Label; /** skor sebelum ditahan */ skorAsli?: number }
-export interface Target { nama: 'Konservatif' | 'Moderat' | 'Agresif'; harga: number; pct: number; peluang: number; nilai: number }
+export interface Target { nama: 'Konservatif' | 'Moderat' | 'Agresif'; harga: number; pct: number; /** % target tersentuh sebelum batas rugi */ peluang: number; /** = harapan (untuk memilih ★) */ nilai: number; rr?: number; /** rata-rata hasil per transaksi, % */ harapan?: number }
 export interface Proyeksi { horizon: number; target: Target[]; stop: { harga: number; pct: number; peluang: number }; peluangNaik: number; terbaik: Target['nama']; rr: number }
 export interface Ekstra {
     spark: number[]; mom: { w1: number; m1: number; m3: number }; atr: number; cmf: number; obv: number; trenLabel: string; proyeksi: Proyeksi | null;
@@ -31,7 +31,8 @@ export function labelGabung(s: number): Label { return s >= ambangBeliKuat ? 'Be
 const pct = (a: number, b: number) => (b ? (a / b - 1) * 100 : 0);
 
 /* ── Ekstra dari OHLCV ─────────────────────────────────────── */
-export function ekstra(o: number[], h: number[], l: number[], c: number[], v: number[], ma50: number | null, ma200: number | null): Ekstra {
+/** ringan = untuk uji mundur: proyeksi hanya menghitung peluangNaik (target & simulasi dilewati supaya cepat). */
+export function ekstra(o: number[], h: number[], l: number[], c: number[], v: number[], ma50: number | null, ma200: number | null, ringan = false): Ekstra {
     const n = c.length;
     // ATR 14
     const tr: number[] = [];
@@ -59,37 +60,58 @@ export function ekstra(o: number[], h: number[], l: number[], c: number[], v: nu
         : ma50 && ma200 && last < ma50 && ma50 < ma200 ? 'Tren turun'
             : ma200 && last > ma200 && mom.m1 < -3 ? 'Koreksi'
                 : ma200 && last < ma200 && mom.m1 > 3 ? 'Pemulihan' : 'Konsolidasi';
-    return { spark, mom, atr: +atr.toFixed(3), cmf: +cmf.toFixed(3), obv: +obvN.toFixed(3), trenLabel, proyeksi: proyeksi(h, l, c, atr) };
+    return { spark, mom, atr: +atr.toFixed(3), cmf: +cmf.toFixed(3), obv: +obvN.toFixed(3), trenLabel, proyeksi: proyeksi(h, l, c, atr, 20, ringan) };
 }
 
-/** Peluang historis: dari setiap hari dalam ±1 tahun terakhir, seberapa jauh harga sempat naik/turun dalam 20 sesi berikutnya. */
-export function proyeksi(h: number[], l: number[], c: number[], atr: number, H = 20): Proyeksi | null {
+/**
+ * Target & peluang historis.
+ * Target dipasang dari volatilitas saham (kelipatan ATR, disesuaikan panjang horison), batas rugi dari titik terendah
+ * belakangan (struktur harga), jadi R:R berbeda tiap saham. Lalu untuk tiap hari dalam ±1 tahun terakhir diuji:
+ * kalau beli hari itu dengan target & batas rugi yang sama (dalam persen), mana yang tersentuh lebih dulu dalam H sesi?
+ *   peluang = seberapa sering target tersentuh SEBELUM batas rugi
+ *   harapan = rata-rata hasil per transaksi (target, batas rugi, atau harga penutupan di akhir horison)
+ * Kalau target & batas rugi tersentuh di hari yang sama, dianggap kena batas rugi (konservatif).
+ */
+export function proyeksi(h: number[], l: number[], c: number[], atr: number, H = 20, ringan = false): Proyeksi | null {
     const n = c.length;
-    const ups: number[] = [], downs: number[] = []; let naik = 0;
-    for (let i = Math.max(0, n - 1 - 250); i < n - H; i++) {
-        let mx = -Infinity, mn = Infinity;
-        for (let k = i + 1; k <= i + H; k++) { if (h[k] > mx) mx = h[k]; if (l[k] < mn) mn = l[k]; }
-        ups.push(mx / c[i] - 1); downs.push(mn / c[i] - 1);
-        if (c[i + H] > c[i]) naik++;
-    }
-    if (ups.length < 60) return null;
-    const sorted = [...ups].sort((a, b) => a - b);
-    const q = (p: number) => sorted[Math.min(sorted.length - 1, Math.max(0, Math.floor(p * sorted.length)))];
-    const peluang = (g: number) => ups.filter((u) => u >= g).length / ups.length;
+    const awal: number[] = []; let naik = 0;
+    for (let i = Math.max(0, n - 1 - 250); i < n - H; i++) { awal.push(i); if (c[i + H] > c[i]) naik++; }
+    if (awal.length < 60 || !(atr > 0)) return null;
     const last = c[n - 1];
-    const mk = (nama: Target['nama'], p: number): Target => {
-        const g = Math.max(0.005, q(p));
-        const pl = peluang(g);
-        return { nama, harga: +(last * (1 + g)).toFixed(2), pct: +(g * 100).toFixed(1), peluang: Math.round(pl * 100), nilai: +(pl * g * 100).toFixed(2) };
+    if (ringan) return { horizon: H, target: [], stop: { harga: last, pct: 0, peluang: 0 }, peluangNaik: Math.round((naik / awal.length) * 100), terbaik: 'Moderat', rr: 0 };
+    // Batas rugi: di bawah titik terendah belakangan (min. 1 ATR di bawah harga), maksimal 25%.
+    const jendela = Math.max(10, Math.min(60, H * 2));
+    let rendah = Infinity; for (let i = Math.max(0, n - jendela); i < n; i++) rendah = Math.min(rendah, l[i]);
+    const stopHarga = Math.min(last - atr, rendah - 0.25 * atr);
+    const risk = Math.min(0.25, Math.max(0.005, 1 - stopHarga / last));
+    // Satuan target: gerak wajar dalam H sesi ≈ ATR × √H × 0,6.
+    const u = (atr / last) * Math.sqrt(H) * 0.6;
+    const uji = (g: number) => {
+        let kena = 0, jumlah = 0;
+        for (const i of awal) {
+            const up = c[i] * (1 + g), dn = c[i] * (1 - risk);
+            let hasil: number | null = null;
+            for (let k = i + 1; k <= i + H; k++) {
+                if (l[k] <= dn) { hasil = -risk; break; }
+                if (h[k] >= up) { hasil = g; kena++; break; }
+            }
+            jumlah += hasil ?? (c[i + H] / c[i] - 1);
+        }
+        return { peluang: kena / awal.length, harapan: jumlah / awal.length };
     };
-    const target = [mk('Konservatif', 0.3), mk('Moderat', 0.5), mk('Agresif', 0.72)];
-    const risk = Math.min(0.25, (2 * atr) / last);
-    const stopHit = downs.filter((d) => d <= -risk).length / downs.length;
+    const mk = (nama: Target['nama'], m: number): Target => {
+        const g = Math.max(0.005, u * m);
+        const r = uji(g);
+        return { nama, harga: +(last * (1 + g)).toFixed(2), pct: +(g * 100).toFixed(1), peluang: Math.round(r.peluang * 100), nilai: +(r.harapan * 100).toFixed(2), rr: +(g / risk).toFixed(2), harapan: +(r.harapan * 100).toFixed(2) };
+    };
+    const target = [mk('Konservatif', 0.75), mk('Moderat', 1.5), mk('Agresif', 2.5)];
+    let stopKena = 0;
+    for (const i of awal) { const dn = c[i] * (1 - risk); for (let k = i + 1; k <= i + H; k++) if (l[k] <= dn) { stopKena++; break; } }
     const terbaik = target.reduce((a, t) => (t.nilai > a.nilai ? t : a), target[0]);
     return {
         horizon: H, target,
-        stop: { harga: +(last * (1 - risk)).toFixed(2), pct: +(-risk * 100).toFixed(1), peluang: Math.round(stopHit * 100) },
-        peluangNaik: Math.round((naik / ups.length) * 100), terbaik: terbaik.nama, rr: +(terbaik.pct / (risk * 100)).toFixed(2)
+        stop: { harga: +(last * (1 - risk)).toFixed(2), pct: +(-risk * 100).toFixed(1), peluang: Math.round((stopKena / awal.length) * 100) },
+        peluangNaik: Math.round((naik / awal.length) * 100), terbaik: terbaik.nama, rr: terbaik.rr ?? +(terbaik.pct / (risk * 100)).toFixed(2)
     };
 }
 

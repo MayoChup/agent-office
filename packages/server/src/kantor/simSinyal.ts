@@ -47,9 +47,9 @@ export async function simulasiSinyal(o: OpsiSim, progres: (t: string) => void, a
             if (d[t].t < awal) continue;
             const cs = c.slice(0, t + 1), vs = v.slice(0, t + 1), hs = h.slice(0, t + 1), ls = l.slice(0, t + 1), os = op.slice(0, t + 1);
             const a = analisis(cs, vs);
-            const x = ekstra(os, hs, ls, cs, vs, a.ma50, a.ma200);
+            const x = ekstra(os, hs, ls, cs, vs, a.ma50, a.ma200, true);
             const b = { sinyal: a.sinyal, rsi: a.rsi, ma200: a.ma200, chg1m: a.chg1m, chg1d: a.chg1d, volX: a.volX, x };
-            const f = skorTeknikal(b, o.H, o.H === 20 ? x.proyeksi : proyeksi(hs, ls, cs, x.atr, o.H));
+            const f = skorTeknikal(b, o.H, o.H === 20 ? x.proyeksi : proyeksi(hs, ls, cs, x.atr, o.H, true));
             let lolos = true;
             if (preset) {
                 const js = spyIdx.get(d[t].t);

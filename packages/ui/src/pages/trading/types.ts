@@ -7,7 +7,7 @@ export interface DiskonB { tahap: Tahap; jenis?: 'koreksi' | 'diskon'; dariPunca
 export interface AmbilUntungB { tahap: Tahap; diAtasMa50: number; alasan: string[] }
 export interface RaporTanding { bulan: number; berisi: number; total: number; perBulan: number; winrate: number; pf: number | null; ddMaks: number; vsSpyPerBulan: number; unggulTerbukti: boolean }
 export interface UjiAkum { n: number; rataEx: number | null; menang: number | null; galatStd: number | null }
-export interface Target { nama: 'Konservatif' | 'Moderat' | 'Agresif'; harga: number; pct: number; peluang: number; nilai: number }
+export interface Target { nama: 'Konservatif' | 'Moderat' | 'Agresif'; harga: number; pct: number; peluang: number; nilai: number; rr?: number; harapan?: number }
 export interface Proyeksi { horizon: number; target: Target[]; stop: { harga: number; pct: number; peluang: number }; peluangNaik: number; terbaik: Target['nama']; rr: number }
 export interface Ekstra { spark: number[]; mom: { w1: number; m1: number; m3: number }; atr: number; cmf: number; obv: number; trenLabel: string; proyeksi: Proyeksi | null }
 export interface F { roe: number | null; roa: number | null; pbv: number | null; per: number | null; der: number | null; npm: number | null; revGrowth: number | null; mcap: number | null; tahun: string }
@@ -44,3 +44,8 @@ export const persen = (n: number | null | undefined, d = 2) => (n == null ? '–
 export const kap = (jt: number | null | undefined) => (jt == null ? '–' : jt >= 1e6 ? `$${(jt / 1e6).toFixed(2)} T` : jt >= 1e3 ? `$${(jt / 1e3).toFixed(1)} M` : `$${jt} jt`);
 export const vol = (v?: number) => (v == null ? '–' : v >= 1e9 ? `${(v / 1e9).toFixed(1)} M` : v >= 1e6 ? `${(v / 1e6).toFixed(1)} jt` : v >= 1e3 ? `${(v / 1e3).toFixed(0)} rb` : String(v));
 export const skorBar = (s: number) => Math.round((s + 1) * 50); // −1..1 → 0..100
+
+/** "1:2,1" dan "+1,8%" untuk kotak target (kosong kalau data lama belum punya R:R/harapan). */
+export const rrTeks = (rr?: number) => (rr == null ? '' : `1:${rr.toLocaleString('id-ID', { maximumFractionDigits: 1 })}`);
+export const harapanTeks = (h?: number) => (h == null ? '' : `${h >= 0 ? '+' : '−'}${Math.abs(h).toLocaleString('id-ID', { maximumFractionDigits: 1 })}%`);
+export const INFO_TARGET = (H: number) => `Tiga target untuk ${H} hari bursa ke depan, dipasang dari gerak wajar saham ini (ATR). Batas rugi di bawah titik terendah belakangan.\n\nPeluang: dari tiap hari dalam setahun terakhir, seberapa sering harga menyentuh target LEBIH DULU sebelum menyentuh batas rugi dalam ${H} hari bursa.\n\nR:R (risiko : hasil): jarak ke target dibanding jarak ke batas rugi. 1:2 = risiko 1 untuk potensi 2.\n\nHarapan: rata-rata hasil per transaksi kalau di setiap hari serupa beli lalu ditutup di target, batas rugi, atau akhir horison (mana yang duluan). Minus = rata-rata rugi.\n\n★ = target dengan harapan tertinggi. Prediksi statistik, bukan saran beli/jual.`;

@@ -80,7 +80,7 @@ export async function ujiMundur(semesta: string[], file: string, st: StatusUji, 
                 const js = spyIdx.get(d[t].t); if (js == null) continue;
                 const cs = c.slice(0, t + 1), vs = v.slice(0, t + 1), hs = h.slice(0, t + 1), ls = l.slice(0, t + 1), os = o.slice(0, t + 1);
                 const a = analisis(cs, vs);
-                const x = ekstra(os, hs, ls, cs, vs, a.ma50, a.ma200);
+                const x = ekstra(os, hs, ls, cs, vs, a.ma50, a.ma200, true);
                 const b = { sinyal: a.sinyal, rsi: a.rsi, ma200: a.ma200, chg1m: a.chg1m, chg1d: a.chg1d, volX: a.volX, x };
                 const spyS = spy.slice(0, js + 1).map((z) => z.c);
                 const sm50 = spyS.slice(-50).reduce((p, q) => p + q, 0) / 50;
@@ -100,7 +100,7 @@ export async function ujiMundur(semesta: string[], file: string, st: StatusUji, 
                     // Hasil: tutup t → tutup t+H, dikurangi hasil SPY periode yang sama (selisih vs pasar).
                     // Disesuaikan risiko: saham yang biasanya bergerak 1,5× pasar dibandingkan dengan 1,5× hasil SPY.
                     const ex = (c[t + H] / c[t] - 1) - beta * (spy[js + H].c / spy[js].c - 1);
-                    const pr = H === 20 ? x.proyeksi : proyeksi(hs, ls, cs, x.atr, H);
+                    const pr = H === 20 ? x.proyeksi : proyeksi(hs, ls, cs, x.atr, H, true);
                     const f = skorTeknikal(b, H, pr);
                     const r = R[H];
                     tambah(r.semua, ex); tambah(r.label[label(f.skor)], ex);

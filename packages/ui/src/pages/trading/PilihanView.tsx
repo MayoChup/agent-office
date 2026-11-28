@@ -1,7 +1,7 @@
 import { Bintang } from './Bintang';
 import { LencanaKronos, PanelKronos } from './Kronos';
 import React, { useMemo, useState } from 'react';
-import { Baris, FaktorKey, FAKTOR, LABELS, Label, ScreenerData, kelas, usd, persen, skorBar } from './types';
+import { Baris, FaktorKey, FAKTOR, LABELS, Label, ScreenerData, kelas, usd, persen, skorBar, rrTeks, harapanTeks, INFO_TARGET } from './types';
 import { Sparkline, Mom } from './Sparkline';
 
 import { Ikon } from '../../components/Ikon';
@@ -210,7 +210,7 @@ export function Kartu({ b, faktor, onOpen, kronos = 'lencana', posisi }: { b: Ba
             <FaktorBars b={b} />
             {pr && (
                 <div className="sb-proj">
-                    <small className="sb-sub">Target sinyal · ≤{pr.horizon} hari bursa <Info judul="Target sinyal" teks={`Tiga level target untuk ${pr.horizon} hari bursa ke depan. Peluang dihitung dari pergerakan harga pada hari-hari serupa dalam setahun terakhir: seberapa sering harga sempat menyentuh level itu. ★ = kombinasi peluang × potensi terbaik.`} /></small>
+                    <small className="sb-sub">Target sinyal · ≤{pr.horizon} hari bursa <Info judul="Target sinyal" teks={INFO_TARGET(pr.horizon)} kini={`Batas rugi ${usd(pr.stop.harga)} (${pr.stop.pct}%).`} /></small>
                     <div className="sb-targets">
                         {pr.target.map((t) => (
                             <div key={t.nama} className={t.nama === pr.terbaik ? 'best' : ''}>
@@ -218,6 +218,7 @@ export function Kartu({ b, faktor, onOpen, kronos = 'lencana', posisi }: { b: Ba
                                 <b className="mono">{usd(t.harga)}</b>
                                 <em className="mono up">+{t.pct.toFixed(1)}%</em>
                                 <span className="mono">peluang {t.peluang}%</span>
+                                {t.rr != null && <span className="sb-rr mono"><span>R:R {rrTeks(t.rr)}</span><span>harapan <i className={(t.harapan ?? 0) < 0 ? 'down' : 'up'}>{harapanTeks(t.harapan)}</i></span></span>}
                             </div>
                         ))}
                     </div>
