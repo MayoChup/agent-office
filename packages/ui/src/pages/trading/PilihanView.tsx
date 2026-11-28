@@ -14,6 +14,18 @@ import { TandaLemah, useUntungTerbukti } from './SisiJual';
 /** Label sinyal dalam huruf kalimat (Beli kuat, Tahan, …). */
 const kalimat = (l: string) => l.charAt(0).toUpperCase() + l.slice(1).toLowerCase();
 type Urut = 'skor' | 'chg1d' | 'potensi' | 'peluang' | 'rsi' | 's';
+const INFO_URUT = 'Urutkan menentukan saham mana yang tampil paling atas.\n\nSkor: skor sinyal 0–100 untuk faktor yang dipilih di Filter. Paling atas = sinyal beli terkuat, paling bawah = sinyal jual terkuat.\n\nPotensi naik: persen jarak harga sekarang ke target terbaik (★) dalam horison sinyal. Paling atas = ruang naik terbesar, tapi belum tentu peluangnya tinggi.\n\nPeluang: seberapa sering harga naik dalam horison sinyal pada hari-hari dengan kondisi serupa setahun terakhir. Paling atas = paling sering naik.\n\nPerubahan: naik/turun pada penutupan terakhir. Paling atas = naik paling besar, paling bawah = turun paling dalam.\n\nRSI: momentum 0–100. Paling atas = RSI tertinggi (di atas 70 = jenuh beli, rawan koreksi). Paling bawah = RSI terendah (di bawah 30 = jenuh jual, bisa pantul).\n\nKode: urut abjad.\n\nTiap kartu menampilkan posisinya: urutan ke berapa dan angka yang dipakai untuk mengurutkan. Prediksi statistik, bukan saran beli/jual.';
+const INFO_FILTER = 'Filter menyaring saham yang tampil.\n\nFaktor: dasar skor sinyal. Semua = gabungan teknikal, fundamental, berita & whales. Pilih satu faktor untuk melihat sinyal dari sudut itu saja.\n\nSinyal: hanya tampilkan label tertentu (Beli kuat, Beli, Tahan, Jual, Jual kuat).\n\nSektor: Sorotan = saham di watchlist + 18 saham dengan sinyal paling kuat (beli maupun jual). Semua = seluruh saham. Atau pilih satu sektor.\n\nKotak "Sembunyikan yang laporan labanya ≤ 5 hari" menyembunyikan saham yang sebentar lagi rilis laporan laba, karena harganya bisa bergerak liar.';
+/** Kenapa saham ini berada di urutan ke-n: angka yang dipakai untuk mengurutkan + artinya. */
+function alasanUrut(b: Baris, urut: Urut, faktor: FaktorKey): string {
+    const pr = b.x?.proyeksi, best = pr?.target.find((t) => t.nama === pr.terbaik);
+    if (urut === 'skor') { const sk = b.skor?.[faktor]; return sk ? `skor ${skorBar(sk.skor)}/100 · ${kalimat(sk.label).toLowerCase()}` : 'skor belum ada'; }
+    if (urut === 'potensi') return best && pr ? `potensi +${best.pct.toLocaleString('id-ID', { maximumFractionDigits: 1 })}% ke target ${best.nama.toLowerCase()} (peluang ${best.peluang}%)` : 'target belum ada';
+    if (urut === 'peluang') return pr ? `peluang naik ${pr.peluangNaik}% dalam ${pr.horizon} hari bursa` : 'peluang belum ada';
+    if (urut === 'chg1d') return `${b.chg1d >= 0 ? 'naik' : 'turun'} ${Math.abs(b.chg1d).toLocaleString('id-ID', { maximumFractionDigits: 2 })}% di penutupan terakhir`;
+    if (urut === 'rsi') { const r = b.rsi; return r == null ? 'RSI belum ada' : `RSI ${Math.round(r)} · ${r >= 70 ? 'jenuh beli, rawan koreksi' : r <= 30 ? 'jenuh jual, bisa pantul' : r >= 55 ? 'momentum naik' : r <= 45 ? 'momentum melemah' : 'netral'}`; }
+    return 'urut abjad';
+}
 const URUT: Array<{ k: Urut; label: string }> = [{ k: 'skor', label: 'Skor' }, { k: 'potensi', label: 'Potensi naik' }, { k: 'peluang', label: 'Peluang' }, { k: 'chg1d', label: 'Perubahan' }, { k: 'rsi', label: 'RSI' }, { k: 's', label: 'Kode' }];
 
 export function PilihanView({ data, faktor, setFaktor, onOpen, watchlist }: { data: ScreenerData; faktor: FaktorKey; setFaktor: (f: FaktorKey) => void; onOpen: (s: string) => void; watchlist: string[] }) {
@@ -64,7 +76,7 @@ export function PilihanView({ data, faktor, setFaktor, onOpen, watchlist }: { da
 
             <div className="sb-layout">
                 <aside className={`sb-card sb-filter ${filterHp ? 'open' : ''}`}>
-                    <div className="sb-filter-head"><b>Filter</b><button onClick={() => { setLabel('Semua'); setSektor('Sorotan'); setQ(''); }}>Atur ulang</button></div>
+                    <div className="sb-filter-head"><b>Filter <Info judul="Arti filter" teks={INFO_FILTER} /></b><button onClick={() => { setLabel('Semua'); setSektor('Sorotan'); setQ(''); }}>Atur ulang</button></div>
                     <div className="sb-filter-sec">
                         <h4>Faktor</h4>
                         <div className="sb-faktor-list">{FAKTOR.map((f) => <button key={f.k} className={faktor === f.k ? 'on' : ''} onClick={() => setFaktor(f.k)} title={f.info}><span><Ikon e={f.ico} /></span>{f.label}</button>)}</div>
@@ -88,13 +100,16 @@ export function PilihanView({ data, faktor, setFaktor, onOpen, watchlist }: { da
                     <div className="sb-tools">
                         <div className="sb-search"><span><Ikon e="⌕" /></span><input placeholder="Cari kode atau nama saham" value={q} onChange={(e) => setQ(e.target.value)} /></div>
                         <button className="sb-filter-btn" onClick={() => setFilterHp(!filterHp)}><Ikon e="☰" /> Filter</button>
-                        <div className="sb-seg scroll"><span className="sb-seg-lbl">Urutkan</span>{URUT.map((u) => <button key={u.k} className={urut === u.k ? 'on' : ''} onClick={() => setUrut(u.k)}>{u.label}</button>)}</div>
+                        <div className="sb-urut">
+                            <div className="sb-seg scroll"><span className="sb-seg-lbl">Urutkan</span>{URUT.map((u) => <button key={u.k} className={urut === u.k ? 'on' : ''} onClick={() => setUrut(u.k)}>{u.label}</button>)}</div>
+                            <Info judul="Arti urutan" teks={INFO_URUT} kini={`Sekarang diurutkan menurut ${URUT.find((u) => u.k === urut)?.label.toLowerCase()}${urut === 'skor' ? ` (faktor ${FAKTOR.find((f) => f.k === faktor)?.label.toLowerCase()})` : ''}.`} />
+                        </div>
                         <div className="sb-seg icons"><button className={mode === 'grid' ? 'on' : ''} onClick={() => setMode('grid')} aria-label="Kartu"><Ikon e="▦" /></button><button className={mode === 'list' ? 'on' : ''} onClick={() => setMode('list')} aria-label="Daftar"><Ikon e="☰" /></button></div>
                     </div>
                     {faktor === 'semua' && !!data.ditahan?.n && <div className="sb-tahan-ringkas" role="status">{data.ditahan.n} sinyal ditahan karena datanya belum lengkap ({Object.entries(data.ditahan.per).map(([k, n]) => `${k} ${n}`).join(', ')}). Sinyal hanya keluar kalau teknikal, fundamental, berita &amp; whales semuanya siap.</div>}
                     <div className="sb-meta"><b>{list.length} saham</b> · faktor {FAKTOR.find((f) => f.k === faktor)?.label.toLowerCase()} <span>Data per {data.teknikalSesi || '–'}</span></div>
                     <div className={mode === 'grid' ? 'sb-grid' : 'sb-rows'}>
-                        {list.slice(0, batas).map((b) => mode === 'grid' ? <Kartu key={b.s} b={b} faktor={faktor} onOpen={onOpen} /> : <BarisKecil key={b.s} b={b} faktor={faktor} onOpen={onOpen} />)}
+                        {list.slice(0, batas).map((b, i) => { const pos = `#${i + 1} · ${alasanUrut(b, urut, faktor)}`; return mode === 'grid' ? <Kartu key={b.s} b={b} faktor={faktor} onOpen={onOpen} posisi={pos} /> : <BarisKecil key={b.s} b={b} faktor={faktor} onOpen={onOpen} posisi={pos} />; })}
                     </div>
                     {list.length > batas && <button className="sb-more" onClick={() => setBatas(batas + 24)}>Tampilkan lagi ({list.length - batas} tersisa)</button>}
                     {list.length === 0 && (q.trim() ? <TambahSaham q={q} onSelesai={(x) => { setQ(''); onOpen(x); }} /> : <div className="fin-empty">Tidak ada saham yang cocok.</div>)}
@@ -171,7 +186,7 @@ function Sekilas({ b }: { b: Baris }) {
     );
 }
 
-export function Kartu({ b, faktor, onOpen, kronos = 'lencana' }: { b: Baris; faktor: FaktorKey; onOpen: (s: string) => void; kronos?: 'panel' | 'lencana' }) {
+export function Kartu({ b, faktor, onOpen, kronos = 'lencana', posisi }: { b: Baris; faktor: FaktorKey; onOpen: (s: string) => void; kronos?: 'panel' | 'lencana'; posisi?: string }) {
     const sk = b.skor?.[faktor];
     const pr = b.x?.proyeksi;
     return (
@@ -180,6 +195,7 @@ export function Kartu({ b, faktor, onOpen, kronos = 'lencana' }: { b: Baris; fak
                 <div className="kc-l"><b className="mono">{b.s}</b><small>{b.nama}{b.luar ? <em className="kc-luar" title={b.luar === 'ADR' ? 'Perusahaan asing yang sahamnya diperdagangkan di bursa AS (ADR). Data fundamental bisa kurang lengkap.' : 'Di luar S&P 500'}> · {b.luar}</em> : null}</small>{kronos === 'lencana' && <LencanaKronos s={b.s} />}<TandaLemah s={b.s} /><TandaUntung b={b} /><TandaLaba s={b.s} /></div>
                 <div className="kc-r"><LabelSkor sk={sk} /><Bintang s={b.s} /></div>
             </header>
+            {posisi && <div className="sb-posisi" title="Posisi saham ini menurut urutan yang dipilih">{posisi}</div>}
             {faktor === 'semua' && sk?.asli && <div className="sb-tahan" title="Sinyal hanya keluar kalau teknikal, fundamental, berita & whales lengkap">Sinyal {sk.asli.toLowerCase()} ditahan · menunggu data {sk.kurang?.join(', ')}</div>}
             <div className="sb-price">
                 <div><small>Penutupan terakhir</small><b className="mono">{usd(b.harga)}</b><em className={`mono ${b.chg1d >= 0 ? 'up' : 'down'}`}>{persen(b.chg1d)}</em></div>
@@ -212,13 +228,13 @@ export function Kartu({ b, faktor, onOpen, kronos = 'lencana' }: { b: Baris; fak
     );
 }
 
-function BarisKecil({ b, faktor, onOpen }: { b: Baris; faktor: FaktorKey; onOpen: (s: string) => void }) {
+function BarisKecil({ b, faktor, onOpen, posisi }: { b: Baris; faktor: FaktorKey; onOpen: (s: string) => void; posisi?: string }) {
     const sk = b.skor?.[faktor];
     const pr = b.x?.proyeksi;
     const best = pr?.target.find((t) => t.nama === pr.terbaik);
     return (
         <div className="sb-row" onClick={() => onOpen(b.s)}>
-            <div className="c1 c1-b"><Bintang s={b.s} /><div><b className="mono">{b.s} <LencanaKronos s={b.s} /></b><small>{b.nama}</small></div></div>
+            <div className="c1 c1-b"><Bintang s={b.s} /><div><b className="mono">{b.s} <LencanaKronos s={b.s} /></b><small>{b.nama}</small>{posisi && <small className="sb-posisi kecil">{posisi}</small>}</div></div>
             <div className="c2 mono">{usd(b.harga)} <em className={b.chg1d >= 0 ? 'up' : 'down'}>{persen(b.chg1d)}</em></div>
             <div className="c3">{b.x && <Sparkline data={b.x.spark} w={90} h={28} />}</div>
             <div className="c4 mono">{best ? <>→ {usd(best.harga)} <small>({best.peluang}%)</small></> : '–'}</div>
