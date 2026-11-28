@@ -66,13 +66,36 @@ function TanggalInsight({ x, jalan, buat }: { x: Insight; jalan: boolean; buat: 
         </div>
     );
 }
+/** "DER 2,1× (…) → Wajar: …" / "→ Hati-hati: …" / "→ Kokoh: …" / "→ Catatan: …" jadi butir bertanda. */
+const TANDA: Record<string, { kelas: string; label: string }> = { wajar: { kelas: 'wajar', label: 'Wajar' }, 'hati-hati': { kelas: 'awas', label: 'Hati-hati' }, kokoh: { kelas: 'kokoh', label: 'Kokoh' }, catatan: { kelas: 'catatan', label: 'Catatan' } };
+function ButirJudge({ t, dasar }: { t: string; dasar: 'lemah' | 'kuat' }) {
+    const [a, ...sisa] = t.split(/\s*(?:→|->)\s*/); const b = sisa.join(' → ');
+    const m = b.match(/^\s*(Wajar|Hati-hati|Hati hati|Kokoh|Catatan)\s*[:—–-]\s*([\s\S]*)$/i);
+    const tanda = m ? TANDA[m[1].toLowerCase().replace(' ', '-')] : null;
+    return (
+        <li className={tanda ? tanda.kelas : dasar}>
+            {b ? <><b>{a}</b><span>{tanda && <em className={`hs-tanda ${tanda.kelas}`}>{tanda.kelas === 'awas' ? '⚠ ' : ''}{tanda.label}</em>}{m ? m[2] : b}</span></> : t}
+        </li>
+    );
+}
+/** Paragraf AI: kalimat "Hati-hati: …" dipisah jadi kotak peringatan. */
+function ParagrafAi({ teks }: { teks: string }) {
+    const bagian = teks.split(/(?=Hati-hati\s*:)/i).map((x) => x.trim()).filter(Boolean);
+    return (
+        <>
+            {bagian.map((b, i) => /^Hati-hati\s*:/i.test(b)
+                ? <div key={i} className="hs-awas"><b>⚠ Hati-hati</b><span>{b.replace(/^Hati-hati\s*:\s*/i, '')}</span></div>
+                : <p key={i} className="hs-insf-p">{b}</p>)}
+        </>
+    );
+}
 function IsiJudge({ j }: { j: FundJudge }) {
     return (
         <div className="hs-judge">
             {j.vonis && <div className={`hs-vonis v-${j.vonis.toLowerCase()}`}><b>Fundamental {j.vonis.toLowerCase()}</b>{j.alasan && <span>{j.alasan}</span>}</div>}
             {!j.vonis && j.alasan && <p>{j.alasan}</p>}
-            {j.lemah.length > 0 && (<><h5>Terlihat lemah, tapi…</h5><ul>{j.lemah.map((t, i) => { const [a, b] = t.split(/\s*(?:→|->)\s*/); return <li key={i} className="lemah">{b ? <><b>{a}</b><span>{b}</span></> : t}</li>; })}</ul></>)}
-            {j.kuat.length > 0 && (<><h5>Terlihat kuat, catatannya…</h5><ul>{j.kuat.map((t, i) => { const [a, b] = t.split(/\s*(?:→|->)\s*/); return <li key={i} className="kuat">{b ? <><b>{a}</b><span>{b}</span></> : t}</li>; })}</ul></>)}
+            {j.lemah.length > 0 && (<><h5>Yang terlihat jelek</h5><ul>{j.lemah.map((t, i) => <ButirJudge key={i} t={t} dasar="lemah" />)}</ul></>)}
+            {j.kuat.length > 0 && (<><h5>Yang terlihat bagus</h5><ul>{j.kuat.map((t, i) => <ButirJudge key={i} t={t} dasar="kuat" />)}</ul></>)}
             {j.industri && (<><h5>Dibanding industrinya</h5><p>{j.industri}</p></>)}
         </div>
     );
@@ -126,7 +149,7 @@ export function InsightFaktor({ s, jenis }: { s: string; jenis: 'fundamental' | 
             <div className="hs-ins-h"><span className="hs-ins-t">{ikonKilau} {JUDUL_FAKTOR[jenis]}</span></div>
             {ada && x ? (
                 <>
-                    {jenis === 'fundamental' ? <IsiJudge j={x.fundJudge!} /> : <p className="hs-insf-p">{teks}</p>}
+                    {jenis === 'fundamental' ? <IsiJudge j={x.fundJudge!} /> : <ParagrafAi teks={teks || ''} />}
                     <TanggalInsight x={x} jalan={jalan} buat={buat} />
                 </>
             ) : (
