@@ -31,9 +31,14 @@ const TOPIK: Array<[string, string]> = [
 ];
 const bersih = (s: string) => s.replace(/<!\[CDATA\[|\]\]>/g, '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s+/g, ' ').trim();
 
-export async function ambilJudulDunia(perTopik = 14): Promise<JudulDunia[]> {
+/** Kabar orang penting & aksi korporasi (untuk Daily Recap). */
+export const TOPIK_ORANG: Array<[string, string]> = [
+    ['Orang & korporasi', 'https://news.google.com/rss/search?q=CEO+(resigns+OR+%22steps+down%22+OR+appointed+OR+fired)+OR+%22accounting+scandal%22+OR+%22SEC+investigation%22+OR+%22agrees+to+acquire%22+OR+%22merger+deal%22+when:2d&hl=en-US&gl=US&ceid=US:en'],
+    ['Pasar saham AS', 'https://news.google.com/rss/search?q=%22stock+market%22+OR+%22Wall+Street%22+OR+%22S%26P+500%22+OR+Nasdaq+when:1d&hl=en-US&gl=US&ceid=US:en']
+];
+export async function ambilJudulDunia(perTopik = 14, daftar: Array<[string, string]> = TOPIK): Promise<JudulDunia[]> {
     const out: JudulDunia[] = []; const lihat = new Set<string>();
-    for (const [topik, url] of TOPIK) {
+    for (const [topik, url] of daftar) {
         try {
             const res = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(15_000) });
             if (!res.ok) continue;

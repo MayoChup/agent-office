@@ -367,6 +367,11 @@ export class Screener {
     presetSaham(b: Baris) { return PRESET.map((p) => ({ ...evaluasi(p, p.jenis === 'teknikal' ? b.ind : b.f), jenis: p.jenis })); }
 
     sesiTeknikal() { return this.st.teknikalSesi; }
+    /** Pembelian bersih orang dalam terbesar (Form 4 SEC, 30 hari) — untuk Daily Recap. */
+    orangDalamTop(n = 8) {
+        return Object.entries(this.st.orang || {}).filter(([, o]) => o && o.net > 0).sort((a, b) => b[1].net - a[1].net).slice(0, n)
+            .map(([s, o]) => ({ s, nama: this.st.baris.find((b) => b.s === s)?.nama || s, net: Math.round(o.net), beli: Math.round(o.beli), n: o.n }));
+    }
     spyHarga() { return this.st.spyC ?? null; }
     /** "Fundamental kuat · lagi diskon" untuk satu saham (rumus dasar fundamental, sama dengan uji mundur). */
     diskonDari(b: any): Diskon | null { try { return cekDiskon(b, this.fundSkor(b)?.skor ?? null); } catch { return null; } }

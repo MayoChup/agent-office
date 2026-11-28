@@ -46,11 +46,12 @@ import { Kronos, BarK, hariBursaBerikut } from './kantor/kronos';
 import { KronosAntre, gayaDari, profilTerbaik } from './kantor/kronosAntre';
 import { PantauWatch } from './kantor/pantauWatch';
 import { LaporanPagi } from './kantor/laporanPagi';
-import { makroMendatang } from './kantor/acara';
+import { makroMendatang, hariLagi } from './kantor/acara';
+import { pilihTop, tulisEdisi, daftarEdisi, bacaEdisi, type Edisi } from './kantor/rekap';
 import { bacaPerintah, ringkasHari } from './kantor/perintahJadwal';
 import { UjiKertas } from './kantor/ujiKertas';
 import { kalenderLaba } from './kantor/nasdaq';
-import { BeritaTerkait } from './kantor/beritaTerkait';
+import { BeritaTerkait, ambilJudulDunia, TOPIK_ORANG } from './kantor/beritaTerkait';
 import ATUR_HR from './kantor/skrip/atur-hr.sh';
 import ATUR_SOSMED from './kantor/skrip/atur-sosmed.sh';
 import { pasangSosmed } from './kantor/sosmedRute';
@@ -1583,6 +1584,65 @@ app.get('/api/kantor/acara', requireToken, async (_req, res) => {
     const m = await petaLaba().catch(() => new Map());
     res.json({ ok: true, makro: makroMendatang(14), laba: Object.fromEntries(m) });
 });
+// ── Daily Recap: artikel harian + Top 5 sinyal lintas rencana posisi. Terbit sekali per sesi bursa AS (≥ 06.30 WIB). ──
+const rekapSt = { jalan: false, galat: '', mulai: 0 };
+async function buatRekap(sebab: string): Promise<Edisi> {
+    if (rekapSt.jalan) throw new Error('Daily Recap sedang disusun.');
+    Object.assign(rekapSt, { jalan: true, galat: '', mulai: Date.now() });
+    try {
+        const tgl = screener.sesiTeknikal();
+        if (!tgl) throw new Error('Data pasar belum ada. Ambil data di Trading dulu.');
+        const laba = await petaLaba().catch(() => new Map<string, { tgl: string; waktu: string }>());
+        const labaDalam = (s: string) => { const x = laba.get(s); return x ? hariLagi(x.tgl) : null; };
+        const { top, catatan } = pilihTop((H) => screener.data(H), labaDalam);
+        const d20: any = screener.data(20);
+        const besar = (d20.baris as any[]).filter((b) => (b.mcap ?? b.f?.mcap ?? 0) >= 10_000);
+        const pasar = {
+            spy: d20.baris.find((b: any) => b.s === 'SPY')?.chg1d ?? null, naik: d20.pasar.naik, turun: d20.pasar.turun,
+            sektorAtas: d20.pasar.sektor.slice(0, 3).map((x: any) => ({ nama: x.nama, chg: x.chg })), sektorBawah: d20.pasar.sektor.slice(-3).reverse().map((x: any) => ({ nama: x.nama, chg: x.chg })),
+            naikTerbesar: [...besar].sort((a, b) => b.chg1d - a.chg1d).slice(0, 5).map((b) => ({ s: b.s, nama: b.nama, chg: +b.chg1d.toFixed(2) })),
+            turunTerbesar: [...besar].sort((a, b) => a.chg1d - b.chg1d).slice(0, 5).map((b) => ({ s: b.s, nama: b.nama, chg: +b.chg1d.toFixed(2) }))
+        };
+        const [dunia, orang] = await Promise.all([ambilJudulDunia(6).catch(() => []), ambilJudulDunia(10, TOPIK_ORANG).catch(() => [])]);
+        const kap = new Map((d20.baris as any[]).map((b) => [b.s, b]));
+        const agenda = [
+            ...makroMendatang(7).map((m) => `${m.tgl} ${m.jamWib} WIB · ${m.judul}${m.catatan ? ` (${m.catatan})` : ''}`),
+            ...[...laba.entries()].filter(([s, x]) => { const h = hariLagi(x.tgl); const b: any = kap.get(s); return h >= 0 && h <= 7 && (b?.mcap ?? b?.f?.mcap ?? 0) >= 50_000; })
+                .sort((a, b) => a[1].tgl.localeCompare(b[1].tgl)).slice(0, 15).map(([s, x]) => `${x.tgl} · laporan laba ${s} (${(kap.get(s) as any)?.nama || s})${x.waktu ? `, ${x.waktu}` : ''}`)
+        ];
+        // Kata analis (expert say) untuk Top 5 & saham yang paling bergerak.
+        const kodeAnalis = [...new Set([...top.map((c) => c.s), ...pasar.naikTerbesar.slice(0, 3).map((x) => x.s), ...pasar.turunTerbesar.slice(0, 3).map((x) => x.s)])].slice(0, 10);
+        const analisHasil = await Promise.allSettled(kodeAnalis.map((s) => ambilAnalis(s, (kap.get(s) as any)?.nama || s)));
+        const analis: Record<string, any> = {};
+        analisHasil.forEach((r, i) => { if (r.status !== 'fulfilled' || !r.value) return; const a: any = r.value, h = (kap.get(kodeAnalis[i]) as any)?.harga; analis[kodeAnalis[i]] = { konsensus: a.konsensus, buy: a.buy, hold: a.hold, sell: a.sell, targetRata2_usd: a.target, hargaSekarang_usd: h, ruangKeTarget_persen: a.target && h ? +((a.target / h - 1) * 100).toFixed(1) : null, ratingTerbaru: (a.bank || []).slice(0, 4).map((x: any) => `${x.tgl} ${x.nama}: ${x.rating}${x.target ? `, target $${x.target}` : ''}`) }; });
+        const orangDalam = screener.orangDalamTop(8).map((o) => `${o.s} (${o.nama}): orang dalam membeli bersih $${o.net.toLocaleString('en-US')} dalam 30 hari (${o.n} transaksi)`);
+        const e = await tulisEdisi({ tgl, dataDir: config.dataDir, llm: OfficeRoom.sharedLlm(), cadangan: (p) => percakapan.sekali(roster().some((a) => a.id === 'trading') ? 'trading' : 'default', p), pasar, top, catatanTop: catatan, dunia, orang, tema: (beritaTerkait.data?.tema || []) as any, agenda, orangDalam, analis, kodeSah: Object.fromEntries((d20.baris as any[]).map((b) => [b.s, b.nama])) });
+        console.log(`[Daily Recap] ${tgl} terbit (${sebab}), top ${top.length}`);
+        return e;
+    } catch (e: any) { rekapSt.galat = String(e?.message || e); throw e; }
+    finally { rekapSt.jalan = false; }
+}
+app.get('/api/kantor/rekap', requireToken, (req, res) => {
+    const daftar = daftarEdisi(config.dataDir);
+    const tgl = String(req.query.tgl || daftar[0]?.tgl || '');
+    const e = tgl ? bacaEdisi(config.dataDir, tgl) : null;
+    // Rapor Top 5: harga sekarang vs harga saat terbit.
+    const kini = e ? Object.fromEntries(e.top.map((c) => [c.s, (screener.hargaTerakhir(c.s) as any)?.harga ?? null])) : {};
+    res.json({ ok: true, daftar, edisi: e, kini, jalan: rekapSt.jalan, galat: rekapSt.galat, sesi: screener.sesiTeknikal() });
+});
+app.post('/api/kantor/rekap/buat', requireToken, (_req, res) => {
+    if (!rekapSt.jalan) buatRekap('manual').catch((e) => console.warn('[Daily Recap]', e?.message || e));
+    res.json({ ok: true, jalan: true });
+});
+// Tiap 10 menit: kalau sudah ≥ 06.30 WIB dan sesi bursa terbaru belum punya edisi → terbitkan.
+setInterval(() => {
+    const wib = new Date(Date.now() + 7 * 3600_000); const menit = wib.getUTCHours() * 60 + wib.getUTCMinutes();
+    const sesi = screener.sesiTeknikal();
+    if (menit < 6 * 60 + 30 || !sesi || rekapSt.jalan || screener.sibuk || bacaEdisi(config.dataDir, sesi)) return;
+    if (Date.now() - Date.parse(`${sesi}T20:00:00Z`) > 4 * 86400_000) return; // data basi: jangan terbitkan edisi lama
+    if (rekapSt.galat && Date.now() - rekapSt.mulai < 3600_000) return; // gagal → coba lagi sejam kemudian
+    buatRekap('otomatis pagi').catch((e) => console.warn('[Daily Recap]', e?.message || e));
+}, 10 * 60_000);
 // ── Uji kertas & sisi jual: bukti apakah sinyal terkuat/terlemah benar-benar mengalahkan/kalah dari pasar ──
 const ujiKertas = new UjiKertas(config.dataDir, { sesi: () => screener.sesiTeknikal(), spy: () => screener.spyHarga(), baris: () => screener.data(20).baris as any });
 app.get('/api/kantor/sisi-jual', requireToken, (_req, res) => {

@@ -26,6 +26,7 @@ import { Portofolio } from './trading/Portofolio';
 import { BeritaTerkaitKartu } from './trading/BeritaTerkait';
 import { PetaPanas } from './trading/PetaPanas';
 import { PetaBerita } from './trading/PetaBerita';
+import { DailyRecap } from './trading/DailyRecap';
 import { WatchlistView } from './trading/WatchlistView';
 import { FaktorKey, ScreenerData } from './trading/types';
 
@@ -55,8 +56,8 @@ export function TradingPage() {
     const agents = useKantor((s) => s.agents);
     const team = agents.filter((a) => a.id === 'trading' || a.id.startsWith('trading-'));
     const [lap, setLap] = useState(0);
-    type Tab = 'pasar' | 'pilihan' | 'diskon' | 'panas' | 'berita' | 'watchlist' | 'penyaring' | 'investigasi' | 'posisi' | 'uji' | 'history';
-    const TABS: Array<{ k: Tab; label: string }> = [{ k: 'pasar', label: 'Pasar' }, { k: 'pilihan', label: 'Pilihan sinyal' }, { k: 'diskon', label: 'Pantul' }, { k: 'panas', label: 'Peta panas' }, { k: 'berita', label: 'Berita' }, { k: 'watchlist', label: 'Watchlist' }, { k: 'penyaring', label: 'Penyaring' }, { k: 'investigasi', label: 'Investigasi' }, { k: 'posisi', label: 'Portofolio' }, { k: 'history', label: 'History' }, { k: 'uji', label: 'Uji & bukti' }];
+    type Tab = 'pasar' | 'pilihan' | 'diskon' | 'panas' | 'berita' | 'rekap' | 'watchlist' | 'penyaring' | 'investigasi' | 'posisi' | 'uji' | 'history';
+    const TABS: Array<{ k: Tab; label: string }> = [{ k: 'pasar', label: 'Pasar' }, { k: 'pilihan', label: 'Pilihan sinyal' }, { k: 'diskon', label: 'Pantul' }, { k: 'panas', label: 'Peta panas' }, { k: 'berita', label: 'Berita' }, { k: 'rekap', label: 'Daily Recap' }, { k: 'watchlist', label: 'Watchlist' }, { k: 'penyaring', label: 'Penyaring' }, { k: 'investigasi', label: 'Investigasi' }, { k: 'posisi', label: 'Portofolio' }, { k: 'history', label: 'History' }, { k: 'uji', label: 'Uji & bukti' }];
     const [tab, setTabState] = useState<Tab>(() => { try { const v = localStorage.getItem(LS_TAB) as Tab; return TABS.some((t) => t.k === v) ? v : 'pilihan'; } catch { return 'pilihan'; } });
     // Tab yang pernah dibuka tetap hidup (disembunyikan, bukan dibongkar): pindah tab tidak memuat ulang & filter tidak hilang.
     const [pernah, setPernah] = useState<Set<Tab>>(() => new Set([tab]));
@@ -128,13 +129,14 @@ export function TradingPage() {
     React.useEffect(() => { if (!scData?.sibuk || !terlihat) return; const t = setInterval(() => sc.reload(), 8000); return () => clearInterval(t); }, [scData?.sibuk, terlihat]);
     const setTab = (t: Tab) => { setSaham(null); setTabState(t); try { localStorage.setItem(LS_TAB, t); } catch { /* */ } document.querySelector('.page:not([hidden]) .pg')?.scrollTo({ top: 0 }); };
     // Menu bawah HP: yang paling sering dipakai di depan, sisanya masuk "Lainnya".
-    const IKON: Record<Tab, string> = { pilihan: '🎯', diskon: '🔄', watchlist: '⭐', panas: '🟩', berita: '🪐', pasar: '🌐', penyaring: '🔍', investigasi: '🕵️', posisi: '💼', history: '📜', uji: '🧪' };
+    const IKON: Record<Tab, string> = { pilihan: '🎯', diskon: '🔄', watchlist: '⭐', panas: '🟩', berita: '🪐', rekap: '📰', pasar: '🌐', penyaring: '🔍', investigasi: '🕵️', posisi: '💼', history: '📜', uji: '🧪' };
     const PENDEK: Partial<Record<Tab, string>> = { pilihan: 'Sinyal', panas: 'Heatmap', berita: 'Berita', posisi: 'Portofolio' };
     // 10 tab dikelompokkan jadi 4 supaya tidak membingungkan; isi tiap tab tetap sama.
     const GRUP: Array<{ g: string; label: string; ico: string; tabs: Tab[] }> = [
         { g: 'sinyal', label: 'Sinyal', ico: '🎯', tabs: ['pilihan', 'diskon', 'penyaring', 'watchlist'] },
         { g: 'pasar', label: 'Pasar', ico: '🌐', tabs: ['pasar', 'panas'] },
         { g: 'berita', label: 'Berita', ico: '📰', tabs: ['berita'] },
+        { g: 'rekap', label: 'Daily Recap', ico: '📜', tabs: ['rekap'] },
         { g: 'porto', label: 'Portofolio', ico: '💼', tabs: ['posisi', 'history'] },
         { g: 'riset', label: 'Riset', ico: '🧪', tabs: ['investigasi', 'uji'] }
     ];
@@ -207,6 +209,7 @@ export function TradingPage() {
             {!saham && tab === 'diskon' && scData && scData.baris.length > 0 && <DiskonView data={scData} onOpen={buka} H={H} keRiset={() => setTab('uji')} />}
             {!saham && tab === 'pilihan' && scData && scData.baris.length > 0 && <PilihanView data={scData} faktor={faktor} setFaktor={setF} onOpen={buka} watchlist={[...(data?.watchlist || []), ...(data?.positions || []).map((p) => p.symbol)]} />}
             {!saham && tab === 'panas' && scData && scData.baris.length > 0 && <PetaPanas data={scData} onOpen={buka} watch={[...(data?.watchlist || []), ...(data?.positions || []).map((p) => p.symbol)]} />}
+            {simpanHidup('rekap', <DailyRecap onOpen={buka} />)}
             {simpanHidup('berita', <><BeritaTerkaitKartu onUbah={() => sc.reload()} /><PetaBerita onOpen={buka} /></>)}
             {!saham && tab === 'watchlist' && scData && <WatchlistView data={scData} faktor={faktor} onOpen={buka} />}
             {simpanHidup('investigasi', <InvestigasiView />)}
