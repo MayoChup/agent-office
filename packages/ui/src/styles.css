@@ -3977,3 +3977,7 @@ body.no-office #phaser-container { visibility: hidden; }
 .hs-awas { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; padding: 8px 10px; border-radius: 8px; border-left: 3px solid var(--down); background: color-mix(in srgb, var(--down) 7%, transparent); font-size: 13px; line-height: 1.55; }
 .hs-awas b { color: var(--down); font-size: 12px; }
 .um-sub { margin: 12px 0 6px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.bk-catatan { margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--text) 4%, transparent); font-size: 12.5px; line-height: 1.5; }
+.bk-catatan b { font-size: 13px; } .bk-catatan small { color: var(--muted); font-size: 11.5px; }
+.bk-catatan ul { margin: 6px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.bk-catatan li { color: var(--muted); } .bk-catatan .bk-tanda { margin-right: 6px; }

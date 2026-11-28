@@ -196,8 +196,17 @@ export function SahamDetail({ simbol, onBack, H = 20, q = 'h=20', preset, setPre
                                     </div>
                                 );
                             })()}
-                            <ul className="sd-alasan">{(s?.alasan || ['Data untuk faktor ini belum tersedia.']).map((a, i) => { const bk = tab === 'teknikal' ? d.buktiTeknikal?.[i] : null; return <li key={i} className={a.startsWith('+') ? 'pos' : a.startsWith('−') ? 'neg' : ''}>{a.replace(/^[+−]\s*/, '')}{bk && bk.status !== 'belum' && <span className={`bk-tanda ${bk.cocok ? 'ok' : bk.status === 'tidak' ? 'no' : 'lawan'}`} title={bk.cocok ? 'Uji mundur 5 tahun membuktikan sinyal ini searah dengan hasilnya.' : bk.status === 'tidak' ? 'Uji mundur belum membuktikan sinyal ini berguna (bisa kebetulan).' : 'Uji mundur menunjukkan hasilnya justru berlawanan dengan arah skor ini.'}>{bk.cocok ? '✓ terbukti' : bk.status === 'tidak' ? 'belum terbukti' : '⚠ berlawanan'}</span>}</li>; })}</ul>
-                            {tab === 'teknikal' && !!d.buktiTeknikal?.some((x) => x && x.status !== 'belum') && <small className="sb-note">Tanda di tiap alasan = hasil uji mundur 5 tahun untuk sinyal itu (Riset → Uji mundur).</small>}
+                            <ul className="sd-alasan">{(s?.alasan || ['Data untuk faktor ini belum tersedia.']).map((a, i) => { const bk = tab === 'teknikal' ? d.buktiTeknikal?.[i] : null; return <li key={i} className={a.startsWith('+') ? 'pos' : a.startsWith('−') ? 'neg' : ''}>{a.replace(/^[+−]\s*/, '')}{bk && bk.status !== 'belum' && <span className={`bk-tanda ${bk.cocok ? 'ok' : bk.status === 'tidak' ? 'no' : 'lawan'}`} title={bk.cocok ? 'Uji mundur 5 tahun membuktikan sinyal ini searah dengan hasilnya.' : bk.status === 'tidak' ? 'Uji mundur belum membuktikan sinyal ini berguna (bisa kebetulan).' : 'Uji mundur menunjukkan hasilnya justru berlawanan dengan arah skor ini.'}>{bk.cocok ? '✓ terbukti' : bk.status === 'tidak' ? 'belum terbukti' : `⚠ berlawanan · sering berbalik ${a.startsWith('−') ? 'naik' : 'turun'}`}</span>}</li>; })}</ul>
+                            {tab === 'teknikal' && !!d.buktiTeknikal?.some((x) => x && x.status !== 'belum') && (
+                                <div className="bk-catatan">
+                                    <b>Arti tanda</b> <small>(hasil uji mundur 5 tahun di semua saham, Riset → Uji mundur)</small>
+                                    <ul>
+                                        <li><span className="bk-tanda ok">✓ terbukti</span> dulu memang searah dengan hasilnya.</li>
+                                        <li><span className="bk-tanda no">belum terbukti</span> tidak jelas bedanya, bisa jadi kebetulan.</li>
+                                        <li><span className="bk-tanda lawan">⚠ berlawanan</span> dulu justru lebih sering berbalik arah. Mis. tanda turun (▼) yang berlawanan = saham seperti ini lebih sering memantul naik sesudahnya. Ini peluang, bukan pasti — jangan jadikan alasan jual/beli sesuai arah panahnya.</li>
+                                    </ul>
+                                </div>
+                            )}
                             {tab === 'berita' && d.berita && d.berita.judul.length > 0 && (
                                 <div className="sd-news">{d.berita.judul.map((j, i) => (
                                     <a key={i} href={j.url} target="_blank" rel="noreferrer"><span className={`sent ${j.s > 0 ? 'pos' : j.s < 0 ? 'neg' : ''}`}>{j.s > 0 ? 'Positif' : j.s < 0 ? 'Negatif' : 'Netral'}</span><b>{j.t}</b><small>{j.tgl}</small></a>
